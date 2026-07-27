@@ -17,7 +17,7 @@ final class ChatStore: ObservableObject {
     private var syncCursor: String?
     private var syncTask: Task<Void, Never>?
 
-    private let syncIntervalNs: UInt64 = 2_000_000_000
+    private let syncIntervalNs: UInt64 = 1_000_000_000
 
     var filteredConversations: [ConversationSummary] {
         guard !searchText.isEmpty else { return conversations }
@@ -109,6 +109,7 @@ final class ChatStore: ObservableObject {
         messages.append(assistant)
         let assistantID = assistant.id
 
+        let isStartingNewChat = activeConversationId == nil
         var conversationId = activeConversationId
 
         do {
@@ -131,7 +132,7 @@ final class ChatStore: ObservableObject {
                 messages[idx].isStreaming = false
             }
 
-            await resolveConversationId(conversationId)
+            await resolveConversationId(conversationId, preferLatest: isStartingNewChat)
             await syncFromServer()
             HapticService.success()
         } catch {
@@ -152,9 +153,7 @@ final class ChatStore: ObservableObject {
         HapticService.prepare()
         HapticService.rigid()
 
-        if activeConversationId == nil {
-            _ = await newConversation()
-        }
+        let isStartingNewChat = activeConversationId == nil
 
         let userText = caption?.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty == false
             ? caption!.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -185,6 +184,7 @@ final class ChatStore: ObservableObject {
                 HapticService.messageReceived()
             }
 
+            await resolveConversationId(activeConversationId, preferLatest: isStartingNewChat)
             await syncFromServer()
             HapticService.success()
         } catch {
@@ -205,15 +205,23 @@ final class ChatStore: ObservableObject {
         HapticService.medium()
     }
 
-    private func resolveConversationId(_ known: String?) async {
+    private func resolveConversationId(_ known: String?, preferLatest: Bool = false) async {
         if let known, !known.isEmpty {
             activeConversationId = known
             persistActiveConversation()
             return
         }
         await loadConversations()
+        if preferLatest, let latest = conversations.sorted(by: {
+            ($0.updatedAt ?? "") > ($1.updatedAt ?? "")
+        }).first {
+            activeConversationId = latest.id
+            persistActiveConversation()
+            return
+        }
         if activeConversationId == nil, let latest = conversations.first {
             activeConversationId = latest.id
+            persistActiveConversation()
         }
     }
 

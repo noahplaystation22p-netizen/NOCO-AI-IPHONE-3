@@ -1,4 +1,5 @@
 import SwiftUI
+import UIKit
 
 struct ChatHubView: View {
     @EnvironmentObject private var connection: ConnectionStore
@@ -77,6 +78,8 @@ struct ChatHubView: View {
                 await connection.chat.loadConversations()
                 if let id = connection.chat.activeConversationId {
                     await connection.chat.loadMessages(for: id)
+                } else if let first = connection.chat.conversations.first {
+                    await connection.chat.selectConversation(first.id)
                 }
             }
         }

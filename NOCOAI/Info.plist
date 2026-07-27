@@ -1,0 +1,25 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<key>CFBundleDevelopmentRegion</key>
+	<string>de</string>
+	<key>CFBundleLocalizations</key>
+	<array>
+		<string>de</string>
+	</array>
+	<key>NSAppTransportSecurity</key>
+	<dict>
+		<key>NSAllowsLocalNetworking</key>
+		<true/>
+	</dict>
+	<key>NSCameraUsageDescription</key>
+	<string>NOCO AI benötigt die Kamera für Bildanalyse über deinen PC.</string>
+	<key>NSMicrophoneUsageDescription</key>
+	<string>NOCO AI benötigt das Mikrofon für Sprachmodus über deinen PC.</string>
+	<key>NSPhotoLibraryUsageDescription</key>
+	<string>NOCO AI benötigt Fotos für Bild-Uploads an deinen PC.</string>
+	<key>UILaunchScreen</key>
+	<dict/>
+</dict>
+</plist>

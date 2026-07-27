@@ -1,0 +1,8 @@
+NOCO AI – SideStore / Sideloading
+
+1. IPA von GitHub Actions herunterladen (Artifact: NOCO-AI-ipa)
+2. ZIP entpacken → NOCO-AI.ipa in SideStore importieren
+3. Bundle-ID: de.noco.nocoai
+4. PC und iPhone im gleichen WLAN, NOCO AI auf dem PC starten
+
+Die App heißt auf dem Homescreen "NOCO AI".

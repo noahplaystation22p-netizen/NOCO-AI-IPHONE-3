@@ -191,8 +191,8 @@ struct ServerStatus: Decodable, Equatable {
             ramUsedGB = ramObj.usedGB ?? ramObj.used
             ramTotalGB = ramObj.totalGB ?? ramObj.total
         } else if let sys = try? c.decode(SystemMetric.self, forKey: .system) {
-            cpuPercent = cpuPercent ?? sys.cpuPercent
-            gpuPercent = gpuPercent ?? sys.gpuPercent
+            if cpuPercent == nil { cpuPercent = sys.cpuPercent }
+            if gpuPercent == nil { gpuPercent = sys.gpuPercent }
             ramUsedGB = sys.ramUsedGB
             ramTotalGB = sys.ramTotalGB
         } else {

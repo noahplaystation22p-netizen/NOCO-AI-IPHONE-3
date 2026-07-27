@@ -168,37 +168,39 @@ struct ServerStatus: Decodable, Equatable {
         requestCount = try c.decodeIfPresent(Int.self, forKey: .requestCount)
         tokenCount = try c.decodeIfPresent(Int.self, forKey: .tokenCount)
 
+        var decodedGPU: Double?
         if let gpu = try? c.decode(Double.self, forKey: .gpuPercent) {
-            gpuPercent = gpu
+            decodedGPU = gpu
         } else if let gpuObj = try? c.decode(GPUMetric.self, forKey: .gpu) {
-            gpuPercent = gpuObj.percent ?? gpuObj.usage
-        } else {
-            gpuPercent = nil
+            decodedGPU = gpuObj.percent ?? gpuObj.usage
         }
 
+        var decodedCPU: Double?
         if let cpu = try? c.decode(Double.self, forKey: .cpuPercent) {
-            cpuPercent = cpu
+            decodedCPU = cpu
         } else if let cpuObj = try? c.decode(CPUMetric.self, forKey: .cpu) {
-            cpuPercent = cpuObj.percent ?? cpuObj.usage
-        } else {
-            cpuPercent = nil
+            decodedCPU = cpuObj.percent ?? cpuObj.usage
         }
 
+        var decodedRAMUsed: Double?
+        var decodedRAMTotal: Double?
         if let used = try? c.decode(Double.self, forKey: .ramUsedGB) {
-            ramUsedGB = used
-            ramTotalGB = try c.decodeIfPresent(Double.self, forKey: .ramTotalGB)
+            decodedRAMUsed = used
+            decodedRAMTotal = try c.decodeIfPresent(Double.self, forKey: .ramTotalGB)
         } else if let ramObj = try? c.decode(RAMMetric.self, forKey: .ram) {
-            ramUsedGB = ramObj.usedGB ?? ramObj.used
-            ramTotalGB = ramObj.totalGB ?? ramObj.total
+            decodedRAMUsed = ramObj.usedGB ?? ramObj.used
+            decodedRAMTotal = ramObj.totalGB ?? ramObj.total
         } else if let sys = try? c.decode(SystemMetric.self, forKey: .system) {
-            if cpuPercent == nil { cpuPercent = sys.cpuPercent }
-            if gpuPercent == nil { gpuPercent = sys.gpuPercent }
-            ramUsedGB = sys.ramUsedGB
-            ramTotalGB = sys.ramTotalGB
-        } else {
-            ramUsedGB = nil
-            ramTotalGB = nil
+            decodedCPU = decodedCPU ?? sys.cpuPercent
+            decodedGPU = decodedGPU ?? sys.gpuPercent
+            decodedRAMUsed = sys.ramUsedGB
+            decodedRAMTotal = sys.ramTotalGB
         }
+
+        gpuPercent = decodedGPU
+        cpuPercent = decodedCPU
+        ramUsedGB = decodedRAMUsed
+        ramTotalGB = decodedRAMTotal
     }
 
     private struct ActiveModelInfo: Decodable {

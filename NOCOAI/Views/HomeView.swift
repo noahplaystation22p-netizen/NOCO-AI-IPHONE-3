@@ -46,7 +46,8 @@ struct HomeView: View {
     private var header: some View {
         GlassCard {
             VStack(alignment: .leading, spacing: 16) {
-                HStack {
+                HStack(spacing: 14) {
+                    BrandLogo(size: 52)
                     VStack(alignment: .leading, spacing: 4) {
                         Text(connection.isOnline ? "Online" : "Offline")
                             .font(.title.bold())

@@ -15,12 +15,7 @@ struct PairingView: View {
         ScrollView {
             VStack(spacing: 24) {
                 VStack(spacing: 12) {
-                    Image(systemName: "cpu.fill")
-                        .font(.system(size: 56))
-                        .foregroundStyle(
-                            LinearGradient(colors: [NOCOAITheme.accent, NOCOAITheme.accentSecondary], startPoint: .topLeading, endPoint: .bottomTrailing)
-                        )
-                        .symbolEffect(.pulse, options: .repeating)
+                    BrandLogo(size: 96)
 
                     Text("NOCO AI")
                         .font(.largeTitle.bold())

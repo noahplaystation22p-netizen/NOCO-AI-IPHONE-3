@@ -22,7 +22,10 @@ struct PairingView: View {
             .padding(20)
         }
         .nocoBackground()
-        .onAppear(perform: applyStoredValues)
+        .onAppear {
+            applyStoredValues()
+            connection.prepareLocalNetworkAccess(host: host.isEmpty ? "192.168.0.1" : host, port: Int(port) ?? 4747)
+        }
         .onChange(of: connection.pendingDeepLink?.host) { _, _ in
             applyDeepLinkIfNeeded()
         }
@@ -68,14 +71,17 @@ struct PairingView: View {
                     .font(.footnote)
                     .foregroundStyle(NOCOAITheme.secondaryText(for: scheme))
 
-                TextField("PC-IP (z. B. 192.168.178.197)", text: $host)
+                TextField("Nur IP — z. B. 192.168.178.197", text: $host)
                     .textInputAutocapitalization(.never)
                     .autocorrectionDisabled()
-                    .keyboardType(.decimalPad)
+                    .keyboardType(.numbersAndPunctuation)
                     .focused($focusedField, equals: .host)
                     .textFieldStyle(.plain)
                     .padding(12)
                     .background(fieldBackground)
+                    .onChange(of: host) { _, newValue in
+                        sanitizeHostField(newValue)
+                    }
 
                 HStack(spacing: 12) {
                     TextField("Port", text: $port)
@@ -92,6 +98,12 @@ struct PairingView: View {
                         .textFieldStyle(.plain)
                         .padding(12)
                         .background(fieldBackground)
+                }
+
+                if let hint = connection.localNetworkHint {
+                    Text(hint)
+                        .font(.caption)
+                        .foregroundStyle(NOCOAITheme.accent)
                 }
 
                 Text("Die PIN wechselt alle 15 Minuten. Bei Fehler neue PIN in NOCO AI holen.")
@@ -190,8 +202,18 @@ struct PairingView: View {
         message.contains("✓") ? NOCOAITheme.success : NOCOAITheme.danger
     }
 
+    private func sanitizeHostField(_ value: String) {
+        guard value.contains("http") || value.contains("/") || value.contains(":") else { return }
+        if let parsed = HostSanitizer.parse(value, defaultPort: Int(port) ?? 4747) {
+            host = parsed.host
+            if let parsedPort = parsed.port {
+                port = String(parsedPort)
+            }
+        }
+    }
+
     private func applyStoredValues() {
-        if host.isEmpty { host = connection.serverHost }
+        if host.isEmpty { host = HostSanitizer.hostOnly(connection.serverHost) }
         if port == "4747", connection.serverPort != 4747 {
             port = String(connection.serverPort)
         }

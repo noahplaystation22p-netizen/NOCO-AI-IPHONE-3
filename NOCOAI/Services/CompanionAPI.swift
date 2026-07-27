@@ -5,6 +5,7 @@ enum CompanionAPIError: LocalizedError {
     case unauthorized
     case invalidPIN
     case unreachable
+    case badHost
     case server(String)
     case network(Error)
     case decoding
@@ -19,6 +20,8 @@ enum CompanionAPIError: LocalizedError {
             return "PIN ungültig oder abgelaufen. Hole eine neue PIN in NOCO AI (Statusleiste → iPhone). Die PIN wechselt alle 15 Min."
         case .unreachable:
             return "PC nicht erreichbar. Gleiches WLAN? Firewall Port 4747? NOCO AI läuft?"
+        case .badHost:
+            return "Ungültige IP — nur die Adresse eingeben, z. B. 192.168.178.197 (ohne http://)"
         case .server(let msg):
             return msg
         case .network(let err):
@@ -204,6 +207,9 @@ struct CompanionAPI {
         if let urlError = error as? URLError,
            urlError.code == .cannotConnectToHost || urlError.code == .timedOut || urlError.code == .networkConnectionLost {
             return CompanionAPIError.unreachable
+        }
+        if let urlError = error as? URLError, urlError.code == .cannotFindHost {
+            return CompanionAPIError.badHost
         }
         return CompanionAPIError.network(error)
     }

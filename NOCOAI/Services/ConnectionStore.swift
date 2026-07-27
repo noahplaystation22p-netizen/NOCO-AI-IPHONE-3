@@ -16,6 +16,7 @@ final class ConnectionStore: ObservableObject {
     @Published var messages: [ChatMessage] = []
     @Published var isSending = false
     @Published var pendingDeepLink: PairingDeepLink?
+    @Published var localNetworkHint: String?
 
     private var token: String?
     private var pollTask: Task<Void, Never>?
@@ -52,20 +53,35 @@ final class ConnectionStore: ObservableObject {
         api = CompanionAPI(baseURL: url, token: token)
     }
 
+    func prepareLocalNetworkAccess(host: String, port: Int) {
+        let parsed = resolveHostPort(host: host, port: port)
+        guard let parsed else { return }
+        localNetworkHint = "iOS fragt ggf. nach „Lokales Netzwerk“ — bitte erlauben."
+        LocalNetworkService.warmUp(targetHost: parsed.host, port: parsed.port)
+    }
+
     func testConnection(host: String, port: Int) async -> Bool {
-        let trimmedHost = host.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !trimmedHost.isEmpty,
-              let url = URL(string: "http://\(trimmedHost):\(port)/api/v1") else {
+        guard let parsed = resolveHostPort(host: host, port: port) else {
+            pingMessage = "Ungültige Adresse — nur IP eingeben, z. B. 192.168.178.197"
+            return false
+        }
+
+        prepareLocalNetworkAccess(host: parsed.host, port: parsed.port)
+
+        guard let url = URL(string: "http://\(parsed.host):\(parsed.port)/api/v1") else {
             pingMessage = "Ungültige Adresse"
             return false
         }
 
         isPinging = true
         pingMessage = nil
+        lastError = nil
         defer { isPinging = false }
 
         do {
             try await CompanionAPI(baseURL: url, token: nil).ping()
+            serverHost = parsed.host
+            serverPort = parsed.port
             pingMessage = "PC erreichbar ✓"
             HapticService.success()
             return true
@@ -78,19 +94,27 @@ final class ConnectionStore: ObservableObject {
     }
 
     func pair(host: String, port: Int, pin: String) async {
-        serverHost = host.trimmingCharacters(in: .whitespacesAndNewlines)
-        serverPort = port
+        guard let parsed = resolveHostPort(host: host, port: port) else {
+            lastError = "Ungültige IP — nur 192.168.x.x eingeben (ohne http://)"
+            return
+        }
+
+        serverHost = parsed.host
+        serverPort = parsed.port
         lastError = nil
+        prepareLocalNetworkAccess(host: parsed.host, port: parsed.port)
         rebuildAPI()
-        guard let api else {
+
+        guard let url = URL(string: baseURLString) else {
             lastError = "Ungültige Adresse"
             return
         }
+
         isRefreshing = true
         defer { isRefreshing = false }
 
         do {
-            let client = CompanionAPI(baseURL: URL(string: baseURLString)!, token: nil)
+            let client = CompanionAPI(baseURL: url, token: nil)
             try await client.ping()
             let response = try await client.pair(pin: pin, deviceName: deviceName)
             token = response.token
@@ -191,6 +215,11 @@ final class ConnectionStore: ObservableObject {
         isOnline = false
         KeychainService.delete(account: Keys.token)
         rebuildAPI()
+    }
+
+    private func resolveHostPort(host: String, port: Int) -> (host: String, port: Int)? {
+        guard let parsed = HostSanitizer.parse(host, defaultPort: port) else { return nil }
+        return (parsed.host, parsed.port ?? port)
     }
 
     private func startPolling() {

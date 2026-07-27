@@ -14,7 +14,11 @@
 		<true/>
 	</dict>
 	<key>NSLocalNetworkUsageDescription</key>
-	<string>NOCO AI verbindet sich mit deinem Windows-PC im lokalen WLAN.</string>
+	<string>NOCO AI verbindet sich mit deinem Windows-PC im lokalen WLAN. Ohne diese Berechtigung funktioniert die Kopplung nicht.</string>
+	<key>NSBonjourServices</key>
+	<array>
+		<string>_noco._tcp</string>
+	</array>
 	<key>NSCameraUsageDescription</key>
 	<string>NOCO AI nutzt die Kamera zum Scannen des Kopplungs-QR-Codes von deinem PC.</string>
 	<key>NSMicrophoneUsageDescription</key>

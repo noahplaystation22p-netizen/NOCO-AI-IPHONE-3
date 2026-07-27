@@ -30,7 +30,7 @@ struct HomeView: View {
             .toolbar {
                 ToolbarItem(placement: .topBarTrailing) {
                     Button {
-                        Task { await connection.refreshStatus() }
+                        Task { await connection.refreshStatus(showLoading: true) }
                     } label: {
                         Image(systemName: "arrow.clockwise")
                     }
@@ -38,7 +38,7 @@ struct HomeView: View {
                 }
             }
             .refreshable {
-                await connection.refreshStatus()
+                await connection.refreshStatus(showLoading: true)
             }
         }
     }

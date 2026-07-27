@@ -20,7 +20,7 @@ struct SettingsView: View {
 
                 Section {
                     Button("Status aktualisieren") {
-                        Task { await connection.refreshStatus() }
+                        Task { await connection.refreshStatus(showLoading: true) }
                     }
                     Button("Verbindung trennen", role: .destructive) {
                         connection.disconnect()

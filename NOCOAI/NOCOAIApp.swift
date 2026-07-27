@@ -8,6 +8,9 @@ struct NOCOAIApp: App {
         WindowGroup {
             RootView()
                 .environmentObject(connection)
+                .onOpenURL { url in
+                    connection.handleIncomingURL(url)
+                }
         }
     }
 }

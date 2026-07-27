@@ -13,13 +13,26 @@
 		<key>NSAllowsLocalNetworking</key>
 		<true/>
 	</dict>
+	<key>NSLocalNetworkUsageDescription</key>
+	<string>NOCO AI verbindet sich mit deinem Windows-PC im lokalen WLAN.</string>
 	<key>NSCameraUsageDescription</key>
-	<string>NOCO AI benötigt die Kamera für Bildanalyse über deinen PC.</string>
+	<string>NOCO AI nutzt die Kamera zum Scannen des Kopplungs-QR-Codes von deinem PC.</string>
 	<key>NSMicrophoneUsageDescription</key>
 	<string>NOCO AI benötigt das Mikrofon für Sprachmodus über deinen PC.</string>
 	<key>NSPhotoLibraryUsageDescription</key>
 	<string>NOCO AI benötigt Fotos für Bild-Uploads an deinen PC.</string>
 	<key>UILaunchScreen</key>
 	<dict/>
+	<key>CFBundleURLTypes</key>
+	<array>
+		<dict>
+			<key>CFBundleURLName</key>
+			<string>de.noco.nocoai</string>
+			<key>CFBundleURLSchemes</key>
+			<array>
+				<string>nocoai</string>
+			</array>
+		</dict>
+	</array>
 </dict>
 </plist>

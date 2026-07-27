@@ -1,42 +1,65 @@
 import Foundation
 
+struct PingResponse: Decodable {
+    let ok: Bool?
+    let pong: Bool?
+
+    var isAlive: Bool { ok == true || pong == true }
+}
+
 struct PairingInfo: Decodable, Equatable {
     let ip: String
     let pin: String
     let port: Int?
     let qrData: String?
+    let pairUrl: String?
     let hostname: String?
 
     enum CodingKeys: String, CodingKey {
-        case ip, pin, port, hostname
+        case ip, host, pin, port, hostname
         case qrData = "qr_data"
         case qr = "qr"
+        case qrPayload
+        case pairUrl
+        case pair_url
     }
 
-    init(ip: String, pin: String, port: Int? = 4747, qrData: String? = nil, hostname: String? = nil) {
+    init(ip: String, pin: String, port: Int? = 4747, qrData: String? = nil, pairUrl: String? = nil, hostname: String? = nil) {
         self.ip = ip
         self.pin = pin
         self.port = port
         self.qrData = qrData
+        self.pairUrl = pairUrl
         self.hostname = hostname
     }
 
     init(from decoder: Decoder) throws {
         let c = try decoder.container(keyedBy: CodingKeys.self)
-        ip = try c.decode(String.self, forKey: .ip)
+        if let v = try c.decodeIfPresent(String.self, forKey: .ip) {
+            ip = v
+        } else if let v = try c.decodeIfPresent(String.self, forKey: .host) {
+            ip = v
+        } else {
+            throw DecodingError.dataCorrupted(.init(codingPath: c.codingPath, debugDescription: "ip/host fehlt"))
+        }
         pin = try c.decode(String.self, forKey: .pin)
         port = try c.decodeIfPresent(Int.self, forKey: .port)
         hostname = try c.decodeIfPresent(String.self, forKey: .hostname)
         qrData = try c.decodeIfPresent(String.self, forKey: .qrData)
             ?? c.decodeIfPresent(String.self, forKey: .qr)
+            ?? c.decodeIfPresent(String.self, forKey: .qrPayload)
+        pairUrl = try c.decodeIfPresent(String.self, forKey: .pairUrl)
+            ?? c.decodeIfPresent(String.self, forKey: .pair_url)
     }
 
+    var resolvedPort: Int { port ?? 4747 }
+
     var baseURL: URL {
-        URL(string: "http://\(ip):\(port ?? 4747)/api/v1")!
+        URL(string: "http://\(ip):\(resolvedPort)/api/v1")!
     }
 }
 
-struct PairRequest: Codable {
+struct PairRequest: Encodable {
     let pin: String
     let deviceName: String
 
@@ -46,13 +69,21 @@ struct PairRequest: Codable {
     }
 }
 
-struct PairResponse: Codable {
+struct PairResponse: Decodable {
     let token: String
     let deviceId: String?
 
     enum CodingKeys: String, CodingKey {
         case token
-        case deviceId = "device_id"
+        case deviceId
+        case device_id
+    }
+
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        token = try c.decode(String.self, forKey: .token)
+        deviceId = try c.decodeIfPresent(String.self, forKey: .deviceId)
+            ?? c.decodeIfPresent(String.self, forKey: .device_id)
     }
 }
 
@@ -82,9 +113,9 @@ struct ServerStatus: Decodable, Equatable {
         case lastActivity = "last_activity"
         case requestCount = "request_count"
         case tokenCount = "token_count"
-        case gpu = "gpu"
-        case ram = "ram"
-        case cpu = "cpu"
+        case gpu, ram, cpu
+        case activeModel = "active_model"
+        case system
     }
 
     init(
@@ -118,7 +149,17 @@ struct ServerStatus: Decodable, Equatable {
     init(from decoder: Decoder) throws {
         let c = try decoder.container(keyedBy: CodingKeys.self)
         online = try c.decodeIfPresent(Bool.self, forKey: .online) ?? true
-        model = try c.decodeIfPresent(String.self, forKey: .model)
+
+        if let flat = try? c.decode(String.self, forKey: .model) {
+            model = flat
+        } else if let active = try? c.decode(String.self, forKey: .activeModel) {
+            model = active
+        } else if let activeObj = try? c.decode(ActiveModelInfo.self, forKey: .activeModel) {
+            model = activeObj.name ?? activeObj.model
+        } else {
+            model = nil
+        }
+
         temperatureC = try c.decodeIfPresent(Double.self, forKey: .temperatureC)
             ?? c.decodeIfPresent(Double.self, forKey: .temperature)
         responseTimeMs = try c.decodeIfPresent(Double.self, forKey: .responseTimeMs)
@@ -149,23 +190,47 @@ struct ServerStatus: Decodable, Equatable {
         } else if let ramObj = try? c.decode(RAMMetric.self, forKey: .ram) {
             ramUsedGB = ramObj.usedGB ?? ramObj.used
             ramTotalGB = ramObj.totalGB ?? ramObj.total
+        } else if let sys = try? c.decode(SystemMetric.self, forKey: .system) {
+            cpuPercent = cpuPercent ?? sys.cpuPercent
+            gpuPercent = gpuPercent ?? sys.gpuPercent
+            ramUsedGB = sys.ramUsedGB
+            ramTotalGB = sys.ramTotalGB
         } else {
             ramUsedGB = nil
             ramTotalGB = nil
         }
     }
 
-    private struct GPUMetric: Codable {
+    private struct ActiveModelInfo: Decodable {
+        let name: String?
+        let model: String?
+    }
+
+    private struct SystemMetric: Decodable {
+        let cpuPercent: Double?
+        let gpuPercent: Double?
+        let ramUsedGB: Double?
+        let ramTotalGB: Double?
+
+        enum CodingKeys: String, CodingKey {
+            case cpuPercent = "cpu_percent"
+            case gpuPercent = "gpu_percent"
+            case ramUsedGB = "ram_used_gb"
+            case ramTotalGB = "ram_total_gb"
+        }
+    }
+
+    private struct GPUMetric: Decodable {
         let percent: Double?
         let usage: Double?
     }
 
-    private struct CPUMetric: Codable {
+    private struct CPUMetric: Decodable {
         let percent: Double?
         let usage: Double?
     }
 
-    private struct RAMMetric: Codable {
+    private struct RAMMetric: Decodable {
         let usedGB: Double?
         let totalGB: Double?
         let used: Double?
@@ -179,7 +244,7 @@ struct ServerStatus: Decodable, Equatable {
     }
 }
 
-struct ChatRequest: Codable {
+struct ChatRequest: Encodable {
     let message: String
     let conversationId: String?
 
@@ -189,9 +254,60 @@ struct ChatRequest: Codable {
     }
 }
 
-struct ChatStreamChunk: Codable {
+struct ChatStreamChunk: Decodable {
     let content: String?
-    let delta: String?
     let done: Bool?
     let error: String?
+}
+
+struct PairingDeepLink {
+    let host: String
+    let port: Int
+    let pin: String?
+
+    static func parse(from raw: String) -> PairingDeepLink? {
+        let trimmed = raw.trimmingCharacters(in: .whitespacesAndNewlines)
+        if let url = URL(string: trimmed), url.scheme?.lowercased() == "nocoai" {
+            return from(url: url)
+        }
+        if trimmed.hasPrefix("{"), let data = trimmed.data(using: .utf8),
+           let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any] {
+            return from(json: json)
+        }
+        if let url = URL(string: trimmed), let host = url.host ?? url.queryItem("host") {
+            return PairingDeepLink(
+                host: host,
+                port: Int(url.queryItem("port") ?? "4747") ?? 4747,
+                pin: url.queryItem("pin")
+            )
+        }
+        return nil
+    }
+
+    static func from(url: URL) -> PairingDeepLink? {
+        guard url.scheme?.lowercased() == "nocoai" else { return nil }
+        let host = url.queryItem("host") ?? url.queryItem("ip") ?? url.host
+        guard let host, !host.isEmpty else { return nil }
+        return PairingDeepLink(
+            host: host,
+            port: Int(url.queryItem("port") ?? "4747") ?? 4747,
+            pin: url.queryItem("pin")
+        )
+    }
+
+    private static func from(json: [String: Any]) -> PairingDeepLink? {
+        guard let host = json["host"] as? String ?? json["ip"] as? String else { return nil }
+        let port = json["port"] as? Int ?? Int(json["port"] as? String ?? "4747") ?? 4747
+        let pin = json["pin"] as? String
+        return PairingDeepLink(host: host, port: port, pin: pin)
+    }
+}
+
+private extension URL {
+    func queryItem(_ name: String) -> String? {
+        URLComponents(url: self, resolvingAgainstBaseURL: false)?
+            .queryItems?
+            .first(where: { $0.name == name })?
+            .value
+    }
 }

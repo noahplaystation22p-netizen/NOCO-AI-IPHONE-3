@@ -10,9 +10,12 @@ final class ConnectionStore: ObservableObject {
     @Published var status = ServerStatus()
     @Published var isOnline = false
     @Published var isRefreshing = false
+    @Published var isPinging = false
+    @Published var pingMessage: String?
     @Published var lastError: String?
     @Published var messages: [ChatMessage] = []
     @Published var isSending = false
+    @Published var pendingDeepLink: PairingDeepLink?
 
     private var token: String?
     private var pollTask: Task<Void, Never>?
@@ -49,6 +52,31 @@ final class ConnectionStore: ObservableObject {
         api = CompanionAPI(baseURL: url, token: token)
     }
 
+    func testConnection(host: String, port: Int) async -> Bool {
+        let trimmedHost = host.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmedHost.isEmpty,
+              let url = URL(string: "http://\(trimmedHost):\(port)/api/v1") else {
+            pingMessage = "Ungültige Adresse"
+            return false
+        }
+
+        isPinging = true
+        pingMessage = nil
+        defer { isPinging = false }
+
+        do {
+            try await CompanionAPI(baseURL: url, token: nil).ping()
+            pingMessage = "PC erreichbar ✓"
+            HapticService.success()
+            return true
+        } catch {
+            pingMessage = (error as? LocalizedError)?.errorDescription
+                ?? "PC nicht erreichbar. Gleiches WLAN? Firewall Port 4747? NOCO AI läuft?"
+            HapticService.error()
+            return false
+        }
+    }
+
     func pair(host: String, port: Int, pin: String) async {
         serverHost = host.trimmingCharacters(in: .whitespacesAndNewlines)
         serverPort = port
@@ -60,8 +88,11 @@ final class ConnectionStore: ObservableObject {
         }
         isRefreshing = true
         defer { isRefreshing = false }
+
         do {
-            let response = try await api.pair(pin: pin, deviceName: deviceName)
+            let client = CompanionAPI(baseURL: URL(string: baseURLString)!, token: nil)
+            try await client.ping()
+            let response = try await client.pair(pin: pin, deviceName: deviceName)
             token = response.token
             KeychainService.save(response.token, account: Keys.token)
             UserDefaults.standard.set(serverHost, forKey: Keys.host)
@@ -73,36 +104,39 @@ final class ConnectionStore: ObservableObject {
             await refreshStatus()
             startPolling()
         } catch {
-            lastError = error.localizedDescription
+            lastError = (error as? LocalizedError)?.errorDescription ?? error.localizedDescription
             HapticService.error()
         }
     }
 
-    func discoverAndPair(pin: String) async {
-        lastError = nil
-        isRefreshing = true
-        defer { isRefreshing = false }
-
-        if !serverHost.isEmpty, let url = URL(string: baseURLString) {
-            let probe = CompanionAPI(baseURL: url, token: nil)
-            do {
-                _ = try await probe.fetchPairing()
-                rebuildAPI()
-                await pair(host: serverHost, port: serverPort, pin: pin)
-                return
-            } catch {
-                // fall through to manual host requirement
-            }
-        }
-
-        lastError = "Bitte PC-IP eingeben und PIN aus NOCO AI übernehmen."
-        HapticService.error()
+    func applyDeepLink(_ link: PairingDeepLink) {
+        pendingDeepLink = link
+        serverHost = link.host
+        serverPort = link.port
     }
 
-    func refreshStatus() async {
+    func handleIncomingURL(_ url: URL) {
+        guard let link = PairingDeepLink.from(url: url) else { return }
+        applyDeepLink(link)
+        if isPaired, let pin = link.pin, !pin.isEmpty {
+            Task { await pair(host: link.host, port: link.port, pin: pin) }
+        }
+    }
+
+    func applyQRCode(_ raw: String) {
+        guard let link = PairingDeepLink.parse(from: raw) else {
+            lastError = "QR-Code konnte nicht gelesen werden"
+            return
+        }
+        applyDeepLink(link)
+        HapticService.light()
+    }
+
+    func refreshStatus(showLoading: Bool = false) async {
         guard let api else { return }
-        isRefreshing = true
-        defer { isRefreshing = false }
+        if showLoading { isRefreshing = true }
+        defer { if showLoading { isRefreshing = false } }
+
         do {
             let newStatus = try await api.fetchStatus()
             status = newStatus
@@ -140,10 +174,10 @@ final class ConnectionStore: ObservableObject {
             await refreshStatus()
         } catch {
             if let idx = messages.firstIndex(where: { $0.id == assistantID }) {
-                messages[idx].text = "Fehler: \(error.localizedDescription)"
+                messages[idx].text = "Fehler: \((error as? LocalizedError)?.errorDescription ?? error.localizedDescription)"
                 messages[idx].isStreaming = false
             }
-            lastError = error.localizedDescription
+            lastError = (error as? LocalizedError)?.errorDescription ?? error.localizedDescription
             HapticService.error()
         }
         isSending = false

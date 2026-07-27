@@ -3,17 +3,30 @@ import Foundation
 enum CompanionAPIError: LocalizedError {
     case invalidURL
     case unauthorized
+    case invalidPIN
+    case unreachable
     case server(String)
     case network(Error)
     case decoding
 
     var errorDescription: String? {
         switch self {
-        case .invalidURL: return "Ungültige Server-Adresse"
-        case .unauthorized: return "Kopplung ungültig – bitte erneut verbinden"
-        case .server(let msg): return msg
-        case .network(let err): return err.localizedDescription
-        case .decoding: return "Antwort konnte nicht gelesen werden"
+        case .invalidURL:
+            return "Ungültige Server-Adresse"
+        case .unauthorized:
+            return "Kopplung ungültig – bitte erneut verbinden"
+        case .invalidPIN:
+            return "PIN ungültig oder abgelaufen. Hole eine neue PIN in NOCO AI (Statusleiste → iPhone). Die PIN wechselt alle 15 Min."
+        case .unreachable:
+            return "PC nicht erreichbar. Gleiches WLAN? Firewall Port 4747? NOCO AI läuft?"
+        case .server(let msg):
+            return msg
+        case .network(let err):
+            return (err as? URLError)?.code == .timedOut
+                ? CompanionAPIError.unreachable.errorDescription
+                : err.localizedDescription
+        case .decoding:
+            return "Antwort konnte nicht gelesen werden"
         }
     }
 }
@@ -24,9 +37,9 @@ struct CompanionAPI {
 
     private let session: URLSession = {
         let config = URLSessionConfiguration.default
-        config.timeoutIntervalForRequest = 30
+        config.timeoutIntervalForRequest = 15
         config.timeoutIntervalForResource = 300
-        config.waitsForConnectivity = true
+        config.waitsForConnectivity = false
         return URLSession(configuration: config)
     }()
 
@@ -36,10 +49,25 @@ struct CompanionAPI {
         return d
     }()
 
+    private let encoder: JSONEncoder = {
+        let e = JSONEncoder()
+        e.keyEncodingStrategy = .convertToSnakeCase
+        return e
+    }()
+
+    func ping() async throws {
+        let url = baseURL.appendingPathComponent("ping")
+        let (data, response) = try await session.data(from: url)
+        try validate(response: response, data: data, isPairRequest: false)
+        if let ping = try? decoder.decode(PingResponse.self, from: data), !ping.isAlive {
+            throw CompanionAPIError.server("Server antwortet, aber Ping fehlgeschlagen")
+        }
+    }
+
     func fetchPairing() async throws -> PairingInfo {
         let url = baseURL.appendingPathComponent("pairing")
         let (data, response) = try await session.data(from: url)
-        try validate(response: response, data: data)
+        try validate(response: response, data: data, isPairRequest: false)
         return try decoder.decode(PairingInfo.self, from: data)
     }
 
@@ -48,18 +76,20 @@ struct CompanionAPI {
         var request = URLRequest(url: url)
         request.httpMethod = "POST"
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
-        request.httpBody = try JSONEncoder().encode(PairRequest(pin: pin, deviceName: deviceName))
+        request.httpBody = try encoder.encode(PairRequest(pin: pin, deviceName: deviceName))
         let (data, response) = try await session.data(for: request)
-        try validate(response: response, data: data)
+        try validate(response: response, data: data, isPairRequest: true)
         return try decoder.decode(PairResponse.self, from: data)
     }
 
     func fetchStatus() async throws -> ServerStatus {
         let url = baseURL.appendingPathComponent("status")
         var request = URLRequest(url: url)
-        if let token { request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization") }
+        if let token {
+            request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
+        }
         let (data, response) = try await session.data(for: request)
-        try validate(response: response, data: data)
+        try validate(response: response, data: data, isPairRequest: false)
         return try decoder.decode(ServerStatus.self, from: data)
     }
 
@@ -72,8 +102,10 @@ struct CompanionAPI {
                     request.httpMethod = "POST"
                     request.setValue("application/json", forHTTPHeaderField: "Content-Type")
                     request.setValue("text/event-stream", forHTTPHeaderField: "Accept")
-                    if let token { request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization") }
-                    request.httpBody = try JSONEncoder().encode(ChatRequest(message: message, conversationId: conversationId))
+                    if let token {
+                        request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
+                    }
+                    request.httpBody = try encoder.encode(ChatRequest(message: message, conversationId: conversationId))
 
                     let (bytes, response) = try await session.bytes(for: request)
                     guard let http = response as? HTTPURLResponse else {
@@ -84,52 +116,95 @@ struct CompanionAPI {
                         throw CompanionAPIError.server("Chat-Fehler (\(http.statusCode))")
                     }
 
-                    var buffer = ""
+                    var lineBuffer = ""
                     for try await byte in bytes {
                         let char = Character(UnicodeScalar(byte))
-                        buffer.append(char)
-                        while let range = buffer.range(of: "\n") {
-                            let line = String(buffer[..<range.lowerBound]).trimmingCharacters(in: .whitespacesAndNewlines)
-                            buffer.removeSubrange(..<range.upperBound)
-                            if let chunk = parseSSELine(line) {
-                                if let error = chunk.error, !error.isEmpty {
-                                    throw CompanionAPIError.server(error)
-                                }
-                                if let text = chunk.delta ?? chunk.content, !text.isEmpty {
-                                    continuation.yield(text)
-                                }
-                                if chunk.done == true {
-                                    continuation.finish()
-                                    return
-                                }
-                            }
+                        if char == "\n" {
+                            try processSSELine(lineBuffer, continuation: continuation)
+                            lineBuffer = ""
+                        } else if char != "\r" {
+                            lineBuffer.append(char)
                         }
+                    }
+                    if !lineBuffer.isEmpty {
+                        try processSSELine(lineBuffer, continuation: continuation)
                     }
                     continuation.finish()
                 } catch {
-                    continuation.finish(throwing: error)
+                    continuation.finish(throwing: mapNetworkError(error))
                 }
             }
             continuation.onTermination = { _ in task.cancel() }
         }
     }
 
-    private func parseSSELine(_ line: String) -> ChatStreamChunk? {
-        guard line.hasPrefix("data:") else { return nil }
-        let payload = line.dropFirst(5).trimmingCharacters(in: .whitespaces)
-        if payload == "[DONE]" { return ChatStreamChunk(content: nil, delta: nil, done: true, error: nil) }
-        guard let data = payload.data(using: .utf8) else { return nil }
-        return try? decoder.decode(ChatStreamChunk.self, from: data)
+    private func processSSELine(_ line: String, continuation: AsyncThrowingStream<String, Error>.Continuation) throws {
+        let trimmed = line.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard trimmed.hasPrefix("data:") else { return }
+
+        let payload = trimmed.dropFirst(5).trimmingCharacters(in: .whitespaces)
+        if payload == "[DONE]" {
+            continuation.finish()
+            return
+        }
+
+        guard let data = payload.data(using: .utf8),
+              let chunk = try? decoder.decode(ChatStreamChunk.self, from: data) else {
+            return
+        }
+
+        if let error = chunk.error, !error.isEmpty {
+            throw CompanionAPIError.server(error)
+        }
+        if let text = chunk.content, !text.isEmpty {
+            continuation.yield(text)
+        }
+        if chunk.done == true {
+            continuation.finish()
+        }
     }
 
-    private func validate(response: URLResponse, data: Data) throws {
+    private func validate(response: URLResponse, data: Data, isPairRequest: Bool) throws {
         guard let http = response as? HTTPURLResponse else {
             throw CompanionAPIError.server("Keine Server-Antwort")
         }
         guard (200...299).contains(http.statusCode) else {
-            if http.statusCode == 401 { throw CompanionAPIError.unauthorized }
-            let message = String(data: data, encoding: .utf8) ?? "HTTP \(http.statusCode)"
+            if http.statusCode == 401 {
+                throw isPairRequest ? CompanionAPIError.invalidPIN : CompanionAPIError.unauthorized
+            }
+            let body = String(data: data, encoding: .utf8) ?? ""
+            if isPairRequest && isPINError(status: http.statusCode, body: body) {
+                throw CompanionAPIError.invalidPIN
+            }
+            if http.statusCode == 403, isPairRequest {
+                throw CompanionAPIError.invalidPIN
+            }
+            let message = parseErrorMessage(data: data) ?? "HTTP \(http.statusCode)"
             throw CompanionAPIError.server(message)
         }
+    }
+
+    private func isPINError(status: Int, body: String) -> Bool {
+        let lower = body.lowercased()
+        return status == 400 || lower.contains("pin") || lower.contains("ungültig") || lower.contains("invalid")
+    }
+
+    private func parseErrorMessage(data: Data) -> String? {
+        if let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any] {
+            for key in ["error", "message", "detail"] {
+                if let value = json[key] as? String, !value.isEmpty { return value }
+            }
+        }
+        let text = String(data: data, encoding: .utf8)?.trimmingCharacters(in: .whitespacesAndNewlines)
+        return text?.isEmpty == false ? text : nil
+    }
+
+    private func mapNetworkError(_ error: Error) -> Error {
+        if let api = error as? CompanionAPIError { return api }
+        if let urlError = error as? URLError,
+           urlError.code == .cannotConnectToHost || urlError.code == .timedOut || urlError.code == .networkConnectionLost {
+            return CompanionAPIError.unreachable
+        }
+        return CompanionAPIError.network(error)
     }
 }

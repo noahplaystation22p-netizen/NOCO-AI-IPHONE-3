@@ -1,6 +1,6 @@
 import Foundation
 
-struct PairingInfo: Codable, Equatable {
+struct PairingInfo: Decodable, Equatable {
     let ip: String
     let pin: String
     let port: Int?
@@ -56,7 +56,7 @@ struct PairResponse: Codable {
     }
 }
 
-struct ServerStatus: Codable, Equatable {
+struct ServerStatus: Decodable, Equatable {
     let online: Bool
     let model: String?
     let gpuPercent: Double?

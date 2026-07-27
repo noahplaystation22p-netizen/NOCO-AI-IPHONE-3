@@ -122,7 +122,7 @@ final class ConnectionStore: ObservableObject {
         guard !trimmed.isEmpty, let api, !isSending else { return }
         isSending = true
         messages.append(ChatMessage(role: .user, text: trimmed))
-        var assistant = ChatMessage(role: .assistant, text: "", isStreaming: true)
+        let assistant = ChatMessage(role: .assistant, text: "", isStreaming: true)
         messages.append(assistant)
         let assistantID = assistant.id
         HapticService.light()

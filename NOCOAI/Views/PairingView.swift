@@ -187,7 +187,7 @@ struct PairingView: View {
             VStack(alignment: .leading, spacing: 8) {
                 Label("Hinweise", systemImage: "info.circle")
                     .font(.headline)
-                Text("• PC und iPhone im gleichen WLAN\n• Windows-Firewall Port 4747 erlauben\n• NOCO AI muss auf dem PC laufen\n• Nur Companion-Port 4747 — keine lokale KI auf dem iPhone")
+                Text("• PC und iPhone im gleichen WLAN\n• Nur IP eingeben — kein http://\n• iOS: Einstellungen → NOCO AI → Lokales Netzwerk → An\n• Windows-Firewall Port 4747 erlauben\n• NOCO AI muss auf dem PC laufen")
                     .font(.footnote)
                     .foregroundStyle(NOCOAITheme.secondaryText(for: scheme))
             }
@@ -213,11 +213,12 @@ struct PairingView: View {
     }
 
     private func applyStoredValues() {
-        if host.isEmpty { host = HostSanitizer.hostOnly(connection.serverHost) }
+        host = HostSanitizer.hostOnly(host.isEmpty ? connection.serverHost : host)
         if port == "4747", connection.serverPort != 4747 {
             port = String(connection.serverPort)
         }
         applyDeepLinkIfNeeded()
+        host = HostSanitizer.hostOnly(host)
     }
 
     private func applyDeepLinkIfNeeded() {

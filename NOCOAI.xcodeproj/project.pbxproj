@@ -21,12 +21,24 @@
 		NA000001000000000000000C /* MainTabView.swift in Sources */ = {isa = PBXBuildFile; fileRef = NA000002000000000000000C /* MainTabView.swift */; };
 		NA000001000000000000000D /* PairingView.swift in Sources */ = {isa = PBXBuildFile; fileRef = NA000002000000000000000D /* PairingView.swift */; };
 		NA000001000000000000000E /* HomeView.swift in Sources */ = {isa = PBXBuildFile; fileRef = NA000002000000000000000E /* HomeView.swift */; };
-		NA000001000000000000000F /* ChatView.swift in Sources */ = {isa = PBXBuildFile; fileRef = NA000002000000000000000F /* ChatView.swift */; };
 		NA0000010000000000000010 /* SettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = NA0000020000000000000010 /* SettingsView.swift */; };
+		NA0000010000000000000012 /* BrandLogo.swift in Sources */ = {isa = PBXBuildFile; fileRef = NA0000020000000000000014 /* BrandLogo.swift */; };
+		NA0000010000000000000013 /* QRScannerView.swift in Sources */ = {isa = PBXBuildFile; fileRef = NA0000020000000000000015 /* QRScannerView.swift */; };
 		NA0000010000000000000014 /* HostSanitizer.swift in Sources */ = {isa = PBXBuildFile; fileRef = NA0000020000000000000016 /* HostSanitizer.swift */; };
 		NA0000010000000000000015 /* LocalNetworkService.swift in Sources */ = {isa = PBXBuildFile; fileRef = NA0000020000000000000017 /* LocalNetworkService.swift */; };
-		NA0000010000000000000013 /* QRScannerView.swift in Sources */ = {isa = PBXBuildFile; fileRef = NA0000020000000000000015 /* QRScannerView.swift */; };
-		NA0000010000000000000012 /* BrandLogo.swift in Sources */ = {isa = PBXBuildFile; fileRef = NA0000020000000000000014 /* BrandLogo.swift */; };
+		NA0000010000000000000020 /* V2Models.swift in Sources */ = {isa = PBXBuildFile; fileRef = NA0000020000000000000020 /* V2Models.swift */; };
+		NA0000010000000000000021 /* CompanionAPI+V2.swift in Sources */ = {isa = PBXBuildFile; fileRef = NA0000020000000000000021 /* CompanionAPI+V2.swift */; };
+		NA0000010000000000000022 /* ChatStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = NA0000020000000000000022 /* ChatStore.swift */; };
+		NA0000010000000000000023 /* ImageStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = NA0000020000000000000023 /* ImageStore.swift */; };
+		NA0000010000000000000024 /* CodeStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = NA0000020000000000000024 /* CodeStore.swift */; };
+		NA0000010000000000000025 /* ModePicker.swift in Sources */ = {isa = PBXBuildFile; fileRef = NA0000020000000000000025 /* ModePicker.swift */; };
+		NA0000010000000000000026 /* SyncBadge.swift in Sources */ = {isa = PBXBuildFile; fileRef = NA0000020000000000000026 /* SyncBadge.swift */; };
+		NA0000010000000000000027 /* ChatHubView.swift in Sources */ = {isa = PBXBuildFile; fileRef = NA0000020000000000000027 /* ChatHubView.swift */; };
+		NA0000010000000000000028 /* ChatInputBar.swift in Sources */ = {isa = PBXBuildFile; fileRef = NA0000020000000000000028 /* ChatInputBar.swift */; };
+		NA0000010000000000000029 /* ImagesHubView.swift in Sources */ = {isa = PBXBuildFile; fileRef = NA0000020000000000000029 /* ImagesHubView.swift */; };
+		NA000001000000000000002A /* DashboardView.swift in Sources */ = {isa = PBXBuildFile; fileRef = NA000002000000000000002A /* DashboardView.swift */; };
+		NA000001000000000000002B /* MoreView.swift in Sources */ = {isa = PBXBuildFile; fileRef = NA000002000000000000002B /* MoreView.swift */; };
+		NA000001000000000000002C /* CodeStudioView.swift in Sources */ = {isa = PBXBuildFile; fileRef = NA000002000000000000002C /* CodeStudioView.swift */; };
 		NA0000010000000000000011 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = NA0000020000000000000011 /* Assets.xcassets */; };
 /* End PBXBuildFile section */
 
@@ -46,7 +58,6 @@
 		NA000002000000000000000C /* MainTabView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MainTabView.swift; sourceTree = "<group>"; };
 		NA000002000000000000000D /* PairingView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PairingView.swift; sourceTree = "<group>"; };
 		NA000002000000000000000E /* HomeView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HomeView.swift; sourceTree = "<group>"; };
-		NA000002000000000000000F /* ChatView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ChatView.swift; sourceTree = "<group>"; };
 		NA0000020000000000000010 /* SettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsView.swift; sourceTree = "<group>"; };
 		NA0000020000000000000017 /* LocalNetworkService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LocalNetworkService.swift; sourceTree = "<group>"; };
 		NA0000020000000000000016 /* HostSanitizer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HostSanitizer.swift; sourceTree = "<group>"; };
@@ -55,6 +66,19 @@
 		NA0000020000000000000011 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
 		NA0000020000000000000012 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
 		NA0000020000000000000013 /* NOCOAI.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = NOCOAI.entitlements; sourceTree = "<group>"; };
+		NA0000020000000000000020 /* V2Models.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = V2Models.swift; sourceTree = "<group>"; };
+		NA0000020000000000000021 /* CompanionAPI+V2.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "CompanionAPI+V2.swift"; sourceTree = "<group>"; };
+		NA0000020000000000000022 /* ChatStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ChatStore.swift; sourceTree = "<group>"; };
+		NA0000020000000000000023 /* ImageStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ImageStore.swift; sourceTree = "<group>"; };
+		NA0000020000000000000024 /* CodeStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CodeStore.swift; sourceTree = "<group>"; };
+		NA0000020000000000000025 /* ModePicker.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ModePicker.swift; sourceTree = "<group>"; };
+		NA0000020000000000000026 /* SyncBadge.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SyncBadge.swift; sourceTree = "<group>"; };
+		NA0000020000000000000027 /* ChatHubView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ChatHubView.swift; sourceTree = "<group>"; };
+		NA0000020000000000000028 /* ChatInputBar.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ChatInputBar.swift; sourceTree = "<group>"; };
+		NA0000020000000000000029 /* ImagesHubView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ImagesHubView.swift; sourceTree = "<group>"; };
+		NA000002000000000000002A /* DashboardView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DashboardView.swift; sourceTree = "<group>"; };
+		NA000002000000000000002B /* MoreView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MoreView.swift; sourceTree = "<group>"; };
+		NA000002000000000000002C /* CodeStudioView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CodeStudioView.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -81,6 +105,7 @@
 			children = (
 				NA0000020000000000000001 /* NOCOAIApp.swift */,
 				NA0000050000000000000004 /* Models */,
+				NA0000050000000000000009 /* Store */,
 				NA0000050000000000000005 /* Services */,
 				NA0000050000000000000006 /* Theme */,
 				NA0000050000000000000007 /* Views */,
@@ -104,8 +129,19 @@
 			children = (
 				NA0000020000000000000002 /* APIModels.swift */,
 				NA0000020000000000000003 /* ChatMessage.swift */,
+				NA0000020000000000000020 /* V2Models.swift */,
 			);
 			path = Models;
+			sourceTree = "<group>";
+		};
+		NA0000050000000000000009 /* Store */ = {
+			isa = PBXGroup;
+			children = (
+				NA0000020000000000000022 /* ChatStore.swift */,
+				NA0000020000000000000023 /* ImageStore.swift */,
+				NA0000020000000000000024 /* CodeStore.swift */,
+			);
+			path = Store;
 			sourceTree = "<group>";
 		};
 		NA0000050000000000000005 /* Services */ = {
@@ -114,6 +150,7 @@
 				NA0000020000000000000004 /* KeychainService.swift */,
 				NA0000020000000000000005 /* HapticService.swift */,
 				NA0000020000000000000006 /* CompanionAPI.swift */,
+				NA0000020000000000000021 /* CompanionAPI+V2.swift */,
 				NA0000020000000000000007 /* ConnectionStore.swift */,
 				NA0000020000000000000016 /* HostSanitizer.swift */,
 				NA0000020000000000000017 /* LocalNetworkService.swift */,
@@ -136,7 +173,11 @@
 				NA000002000000000000000C /* MainTabView.swift */,
 				NA000002000000000000000D /* PairingView.swift */,
 				NA000002000000000000000E /* HomeView.swift */,
-				NA000002000000000000000F /* ChatView.swift */,
+				NA000005000000000000000A /* Chat */,
+				NA000005000000000000000B /* Images */,
+				NA000005000000000000000C /* Dashboard */,
+				NA000005000000000000000D /* Code */,
+				NA000005000000000000000E /* More */,
 				NA0000020000000000000010 /* SettingsView.swift */,
 				NA0000050000000000000008 /* Components */,
 			);
@@ -150,8 +191,51 @@
 				NA000002000000000000000A /* StatusBadge.swift */,
 				NA0000020000000000000014 /* BrandLogo.swift */,
 				NA0000020000000000000015 /* QRScannerView.swift */,
+				NA0000020000000000000025 /* ModePicker.swift */,
+				NA0000020000000000000026 /* SyncBadge.swift */,
 			);
 			path = Components;
+			sourceTree = "<group>";
+		};
+		NA000005000000000000000A /* Chat */ = {
+			isa = PBXGroup;
+			children = (
+				NA0000020000000000000027 /* ChatHubView.swift */,
+				NA0000020000000000000028 /* ChatInputBar.swift */,
+			);
+			path = Chat;
+			sourceTree = "<group>";
+		};
+		NA000005000000000000000B /* Images */ = {
+			isa = PBXGroup;
+			children = (
+				NA0000020000000000000029 /* ImagesHubView.swift */,
+			);
+			path = Images;
+			sourceTree = "<group>";
+		};
+		NA000005000000000000000C /* Dashboard */ = {
+			isa = PBXGroup;
+			children = (
+				NA000002000000000000002A /* DashboardView.swift */,
+			);
+			path = Dashboard;
+			sourceTree = "<group>";
+		};
+		NA000005000000000000000D /* Code */ = {
+			isa = PBXGroup;
+			children = (
+				NA000002000000000000002C /* CodeStudioView.swift */,
+			);
+			path = Code;
+			sourceTree = "<group>";
+		};
+		NA000005000000000000000E /* More */ = {
+			isa = PBXGroup;
+			children = (
+				NA000002000000000000002B /* MoreView.swift */,
+			);
+			path = More;
 			sourceTree = "<group>";
 		};
 /* End PBXGroup section */
@@ -238,8 +322,20 @@
 				NA000001000000000000000C /* MainTabView.swift in Sources */,
 				NA000001000000000000000D /* PairingView.swift in Sources */,
 				NA000001000000000000000E /* HomeView.swift in Sources */,
-				NA000001000000000000000F /* ChatView.swift in Sources */,
 				NA0000010000000000000010 /* SettingsView.swift in Sources */,
+				NA0000010000000000000020 /* V2Models.swift in Sources */,
+				NA0000010000000000000021 /* CompanionAPI+V2.swift in Sources */,
+				NA0000010000000000000022 /* ChatStore.swift in Sources */,
+				NA0000010000000000000023 /* ImageStore.swift in Sources */,
+				NA0000010000000000000024 /* CodeStore.swift in Sources */,
+				NA0000010000000000000025 /* ModePicker.swift in Sources */,
+				NA0000010000000000000026 /* SyncBadge.swift in Sources */,
+				NA0000010000000000000027 /* ChatHubView.swift in Sources */,
+				NA0000010000000000000028 /* ChatInputBar.swift in Sources */,
+				NA0000010000000000000029 /* ImagesHubView.swift in Sources */,
+				NA000001000000000000002A /* DashboardView.swift in Sources */,
+				NA000001000000000000002B /* MoreView.swift in Sources */,
+				NA000001000000000000002C /* CodeStudioView.swift in Sources */,
 				NA0000010000000000000012 /* BrandLogo.swift in Sources */,
 				NA0000010000000000000013 /* QRScannerView.swift in Sources */,
 				NA0000010000000000000014 /* HostSanitizer.swift in Sources */,
@@ -293,7 +389,7 @@
 				CODE_SIGN_ENTITLEMENTS = NOCOAI/NOCOAI.entitlements;
 				CODE_SIGNING_ALLOWED = NO;
 				CODE_SIGNING_REQUIRED = NO;
-				CURRENT_PROJECT_VERSION = 4;
+				CURRENT_PROJECT_VERSION = 5;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = NOCOAI/Info.plist;
@@ -307,7 +403,7 @@
 					"$(inherited)",
 					"@executable_path/Frameworks",
 				);
-				MARKETING_VERSION = 1.3;
+				MARKETING_VERSION = 2.0;
 				PRODUCT_BUNDLE_IDENTIFIER = de.noco.nocoai;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator";
@@ -326,7 +422,7 @@
 				CODE_SIGN_ENTITLEMENTS = NOCOAI/NOCOAI.entitlements;
 				CODE_SIGNING_ALLOWED = NO;
 				CODE_SIGNING_REQUIRED = NO;
-				CURRENT_PROJECT_VERSION = 4;
+				CURRENT_PROJECT_VERSION = 5;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = NOCOAI/Info.plist;
@@ -340,7 +436,7 @@
 					"$(inherited)",
 					"@executable_path/Frameworks",
 				);
-				MARKETING_VERSION = 1.3;
+				MARKETING_VERSION = 2.0;
 				PRODUCT_BUNDLE_IDENTIFIER = de.noco.nocoai;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator";

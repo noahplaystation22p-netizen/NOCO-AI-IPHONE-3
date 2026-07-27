@@ -1,5 +1,6 @@
 import Foundation
 import UIKit
+import Combine
 
 @MainActor
 final class ConnectionStore: ObservableObject {
@@ -13,14 +14,18 @@ final class ConnectionStore: ObservableObject {
     @Published var isPinging = false
     @Published var pingMessage: String?
     @Published var lastError: String?
-    @Published var messages: [ChatMessage] = []
-    @Published var isSending = false
     @Published var pendingDeepLink: PairingDeepLink?
     @Published var localNetworkHint: String?
+    @Published var features: FeaturesResponse?
+
+    let chat = ChatStore()
+    let images = ImageStore()
+    let code = CodeStore()
 
     private var token: String?
     private var pollTask: Task<Void, Never>?
     private var api: CompanionAPI?
+    private var cancellables = Set<AnyCancellable>()
 
     private enum Keys {
         static let host = "nocoai.host"
@@ -30,14 +35,20 @@ final class ConnectionStore: ObservableObject {
     }
 
     init() {
-        serverHost = UserDefaults.standard.string(forKey: Keys.host) ?? ""
+        forwardStoreChanges()
+        let storedHost = UserDefaults.standard.string(forKey: Keys.host) ?? ""
+        serverHost = HostSanitizer.hostOnly(storedHost)
         serverPort = UserDefaults.standard.integer(forKey: Keys.port)
         if serverPort == 0 { serverPort = 4747 }
         deviceName = UserDefaults.standard.string(forKey: Keys.device) ?? UIDevice.current.name
         token = KeychainService.load(account: Keys.token)
         isPaired = token != nil && !serverHost.isEmpty
         rebuildAPI()
-        if isPaired { startPolling() }
+        if isPaired {
+            startPolling()
+            bindStores()
+            Task { await bootstrapAfterPair() }
+        }
     }
 
     var baseURLString: String {
@@ -51,6 +62,37 @@ final class ConnectionStore: ObservableObject {
             return
         }
         api = CompanionAPI(baseURL: url, token: token)
+        bindStores()
+    }
+
+    private func bindStores() {
+        chat.bind(api: api, host: serverHost, port: serverPort)
+        images.bind(api: api, host: serverHost, port: serverPort)
+        code.bind(api: api)
+    }
+
+    private func bootstrapAfterPair() async {
+        chat.startSyncLoop()
+        await chat.loadConversations()
+        await code.loadSessions()
+        await loadFeatures()
+        await images.loadFromConversations(chat.conversations, api: api)
+    }
+
+    func loadFeatures() async {
+        guard let api else { return }
+        features = try? await api.fetchFeatures()
+    }
+
+    func refreshGallery() async {
+        await chat.loadConversations()
+        await images.loadFromConversations(chat.conversations, api: api)
+    }
+
+    private func forwardStoreChanges() {
+        chat.objectWillChange.sink { [weak self] _ in self?.objectWillChange.send() }.store(in: &cancellables)
+        images.objectWillChange.sink { [weak self] _ in self?.objectWillChange.send() }.store(in: &cancellables)
+        code.objectWillChange.sink { [weak self] _ in self?.objectWillChange.send() }.store(in: &cancellables)
     }
 
     func prepareLocalNetworkAccess(host: String, port: Int) {
@@ -127,6 +169,7 @@ final class ConnectionStore: ObservableObject {
             HapticService.success()
             await refreshStatus()
             startPolling()
+            await bootstrapAfterPair()
         } catch {
             lastError = (error as? LocalizedError)?.errorDescription ?? error.localizedDescription
             HapticService.error()
@@ -166,6 +209,7 @@ final class ConnectionStore: ObservableObject {
             status = newStatus
             isOnline = newStatus.online
             lastError = nil
+            await loadFeatures()
         } catch {
             isOnline = false
             if let err = error as? CompanionAPIError, case .unauthorized = err {
@@ -175,41 +219,10 @@ final class ConnectionStore: ObservableObject {
         }
     }
 
-    func sendMessage(_ text: String) async {
-        let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !trimmed.isEmpty, let api, !isSending else { return }
-        isSending = true
-        messages.append(ChatMessage(role: .user, text: trimmed))
-        let assistant = ChatMessage(role: .assistant, text: "", isStreaming: true)
-        messages.append(assistant)
-        let assistantID = assistant.id
-        HapticService.light()
-
-        do {
-            for try await chunk in api.streamChat(message: trimmed) {
-                if let idx = messages.firstIndex(where: { $0.id == assistantID }) {
-                    messages[idx].text += chunk
-                }
-            }
-            if let idx = messages.firstIndex(where: { $0.id == assistantID }) {
-                messages[idx].isStreaming = false
-            }
-            HapticService.success()
-            await refreshStatus()
-        } catch {
-            if let idx = messages.firstIndex(where: { $0.id == assistantID }) {
-                messages[idx].text = "Fehler: \((error as? LocalizedError)?.errorDescription ?? error.localizedDescription)"
-                messages[idx].isStreaming = false
-            }
-            lastError = (error as? LocalizedError)?.errorDescription ?? error.localizedDescription
-            HapticService.error()
-        }
-        isSending = false
-    }
-
     func disconnect() {
         pollTask?.cancel()
         pollTask = nil
+        chat.stopSync()
         token = nil
         isPaired = false
         isOnline = false

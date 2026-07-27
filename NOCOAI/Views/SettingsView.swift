@@ -29,7 +29,7 @@ struct SettingsView: View {
                 }
 
                 Section("Info") {
-                    Text("NOCO AI Companion v1.0")
+                    Text("NOCO AI Companion v2.0")
                     Text("Alle Anfragen laufen über deinen Windows-PC. Keine lokale KI auf dem iPhone.")
                         .font(.footnote)
                         .foregroundStyle(NOCOAITheme.secondaryText(for: scheme))

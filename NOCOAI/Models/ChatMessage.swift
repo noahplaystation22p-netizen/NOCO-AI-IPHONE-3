@@ -12,12 +12,14 @@ struct ChatMessage: Identifiable, Equatable {
     var text: String
     let createdAt: Date
     var isStreaming: Bool
+    var imageURL: URL?
 
-    init(id: UUID = UUID(), role: ChatRole, text: String, createdAt: Date = .now, isStreaming: Bool = false) {
+    init(id: UUID = UUID(), role: ChatRole, text: String, createdAt: Date = .now, isStreaming: Bool = false, imageURL: URL? = nil) {
         self.id = id
         self.role = role
         self.text = text
         self.createdAt = createdAt
         self.isStreaming = isStreaming
+        self.imageURL = imageURL
     }
 }

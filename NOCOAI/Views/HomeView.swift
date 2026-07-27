@@ -9,6 +9,7 @@ struct HomeView: View {
             ScrollView {
                 VStack(spacing: 20) {
                     header
+                    smartHints
                     statusGrid
                     if let activity = connection.status.lastActivity, !activity.isEmpty {
                         GlassCard {
@@ -39,8 +40,42 @@ struct HomeView: View {
             }
             .refreshable {
                 await connection.refreshStatus(showLoading: true)
+                await connection.refreshGallery()
             }
+            .task { await connection.refreshGallery() }
         }
+    }
+
+    private var smartHints: some View {
+        GlassCard {
+            VStack(alignment: .leading, spacing: 10) {
+                Text("Smart Insights").font(.headline)
+                Text(hintText)
+                    .font(.subheadline)
+                    .foregroundStyle(NOCOAITheme.secondaryText(for: scheme))
+                if let features = connection.features, !features.enabled.isEmpty {
+                    Text("Aktiv: \(features.enabled.joined(separator: " · "))")
+                        .font(.caption)
+                        .foregroundStyle(NOCOAITheme.accent)
+                }
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+        }
+    }
+
+    private var hintText: String {
+        var hints: [String] = []
+        if connection.chat.conversations.count > 3 {
+            hints.append("Du hast \(connection.chat.conversations.count) aktive Chats.")
+        }
+        hints.append("Modus: \(connection.chat.mode.label)")
+        if !connection.images.gallery.isEmpty {
+            hints.append("\(connection.images.gallery.count) generierte Bilder in der Galerie.")
+        }
+        if let count = connection.status.requestCount, count > 0 {
+            hints.append("Heute wurden bereits \(count) Anfragen verarbeitet.")
+        }
+        return hints.isEmpty ? "Verbinde dich mit deinem PC und starte deinen ersten Chat." : hints.joined(separator: " ")
     }
 
     private var header: some View {

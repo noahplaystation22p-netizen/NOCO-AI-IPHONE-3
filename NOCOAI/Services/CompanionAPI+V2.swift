@@ -1,0 +1,187 @@
+import Foundation
+
+extension CompanionAPI {
+    func fetchFeatures() async throws -> FeaturesResponse {
+        try await get("features", as: FeaturesResponse.self)
+    }
+
+    func fetchConversations() async throws -> [ConversationSummary] {
+        let res: ConversationListResponse = try await get("conversations", as: ConversationListResponse.self)
+        return res.all
+    }
+
+    func createConversation(title: String? = nil) async throws -> CreateConversationResponse {
+        try await post("conversations", body: CreateConversationRequest(title: title), as: CreateConversationResponse.self)
+    }
+
+    func fetchConversation(id: String) async throws -> ConversationDetail {
+        try await get("conversations/\(id)", as: ConversationDetail.self)
+    }
+
+    func deleteConversation(id: String) async throws {
+        try await delete("conversations/\(id)")
+    }
+
+    func renameConversation(id: String, title: String) async throws {
+        struct Body: Encodable { let title: String }
+        let _: EmptyResponse = try await patch("conversations/\(id)", body: Body(title: title), as: EmptyResponse.self)
+    }
+
+    func fetchSyncEvents(since: String?) async throws -> SyncEventsResponse {
+        var path = "sync/events"
+        if let since, !since.isEmpty {
+            path += "?since=\(since.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? since)"
+        }
+        return try await get(path, as: SyncEventsResponse.self)
+    }
+
+    func streamChatV2(message: String, conversationId: String?, mode: AIMode) -> AsyncThrowingStream<String, Error> {
+        streamSSE(
+            path: "chat",
+            body: ChatRequestV2(message: message, conversationId: conversationId, stream: true, mode: mode == .auto ? nil : mode.rawValue)
+        )
+    }
+
+    func generateImage(prompt: String, conversationId: String?) async throws -> ImageGenerateResponse {
+        try await post("images/txt2img", body: ImageGenerateRequest(prompt: prompt, conversationId: conversationId), as: ImageGenerateResponse.self)
+    }
+
+    func imageProgress(jobId: String?) async throws -> ImageProgressResponse {
+        var path = "images/progress"
+        if let jobId { path += "?job_id=\(jobId)" }
+        return try await get(path, as: ImageProgressResponse.self)
+    }
+
+    func uploadVision(imageData: Data, filename: String, message: String?, conversationId: String?) async throws -> ConversationMessageDTO {
+        var fields: [String: String] = [:]
+        if let message { fields["message"] = message }
+        if let conversationId { fields["conversation_id"] = conversationId }
+        return try await uploadMultipart("vision", fileData: imageData, filename: filename, mime: "image/jpeg", fields: fields, as: ConversationMessageDTO.self)
+    }
+
+    func fetchCodeSessions() async throws -> [CodeSession] {
+        let res: CodeSessionListResponse = try await get("code/sessions", as: CodeSessionListResponse.self)
+        return res.all
+    }
+
+    func createCodeSession(title: String?, language: String?) async throws -> CodeSession {
+        try await post("code/sessions", body: CreateCodeSessionRequest(title: title, language: language), as: CodeSession.self)
+    }
+
+    func initCodeWorkspace(sessionId: String) async throws {
+        let _: EmptyResponse = try await post("code/sessions/\(sessionId)/init-workspace", body: EmptyBody(), as: EmptyResponse.self)
+    }
+
+    func streamCodeChat(sessionId: String, message: String) -> AsyncThrowingStream<String, Error> {
+        streamSSE(path: "code/sessions/\(sessionId)/chat", body: CodeChatRequest(message: message, stream: true))
+    }
+
+    // MARK: - HTTP helpers
+
+    private struct EmptyBody: Encodable {}
+    private struct EmptyResponse: Decodable {}
+
+    private func get<T: Decodable>(_ path: String, as type: T.Type) async throws -> T {
+        let (data, response) = try await session.data(for: authorizedRequest(path: path, method: "GET"))
+        try validate(response: response, data: data, isPairRequest: false)
+        return try decoder.decode(T.self, from: data)
+    }
+
+    private func post<B: Encodable, T: Decodable>(_ path: String, body: B, as type: T.Type) async throws -> T {
+        var request = try authorizedRequest(path: path, method: "POST")
+        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        request.httpBody = try encoder.encode(body)
+        let (data, response) = try await session.data(for: request)
+        try validate(response: response, data: data, isPairRequest: false)
+        if data.isEmpty, T.self == EmptyResponse.self { return EmptyResponse() as! T }
+        return try decoder.decode(T.self, from: data)
+    }
+
+    private func patch<B: Encodable, T: Decodable>(_ path: String, body: B, as type: T.Type) async throws -> T {
+        var request = try authorizedRequest(path: path, method: "PATCH")
+        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        request.httpBody = try encoder.encode(body)
+        let (data, response) = try await session.data(for: request)
+        try validate(response: response, data: data, isPairRequest: false)
+        return try decoder.decode(T.self, from: data)
+    }
+
+    private func delete(_ path: String) async throws {
+        let (data, response) = try await session.data(for: authorizedRequest(path: path, method: "DELETE"))
+        try validate(response: response, data: data, isPairRequest: false)
+    }
+
+    private func uploadMultipart<T: Decodable>(
+        _ path: String,
+        fileData: Data,
+        filename: String,
+        mime: String,
+        fields: [String: String],
+        as type: T.Type
+    ) async throws -> T {
+        let boundary = "Boundary-\(UUID().uuidString)"
+        var request = try authorizedRequest(path: path, method: "POST")
+        request.setValue("multipart/form-data; boundary=\(boundary)", forHTTPHeaderField: "Content-Type")
+
+        var body = Data()
+        for (key, value) in fields {
+            body.append("--\(boundary)\r\n".data(using: .utf8)!)
+            body.append("Content-Disposition: form-data; name=\"\(key)\"\r\n\r\n".data(using: .utf8)!)
+            body.append("\(value)\r\n".data(using: .utf8)!)
+        }
+        body.append("--\(boundary)\r\n".data(using: .utf8)!)
+        body.append("Content-Disposition: form-data; name=\"image\"; filename=\"\(filename)\"\r\n".data(using: .utf8)!)
+        body.append("Content-Type: \(mime)\r\n\r\n".data(using: .utf8)!)
+        body.append(fileData)
+        body.append("\r\n--\(boundary)--\r\n".data(using: .utf8)!)
+        request.httpBody = body
+
+        let (data, response) = try await session.data(for: request)
+        try validate(response: response, data: data, isPairRequest: false)
+        return try decoder.decode(T.self, from: data)
+    }
+
+    private func authorizedRequest(path: String, method: String) throws -> URLRequest {
+        guard let url = URL(string: path, relativeTo: baseURL)?.absoluteURL else {
+            throw CompanionAPIError.invalidURL
+        }
+        var request = URLRequest(url: url)
+        request.httpMethod = method
+        if let token { request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization") }
+        return request
+    }
+
+    func streamSSE<B: Encodable>(path: String, body: B) -> AsyncThrowingStream<String, Error> {
+        AsyncThrowingStream { continuation in
+            let task = Task {
+                do {
+                    var request = try authorizedRequest(path: path, method: "POST")
+                    request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+                    request.setValue("text/event-stream", forHTTPHeaderField: "Accept")
+                    request.httpBody = try encoder.encode(body)
+
+                    let (bytes, response) = try await session.bytes(for: request)
+                    guard let http = response as? HTTPURLResponse, (200...299).contains(http.statusCode) else {
+                        throw CompanionAPIError.server("Stream-Fehler")
+                    }
+
+                    var lineBuffer = ""
+                    for try await byte in bytes {
+                        let char = Character(UnicodeScalar(byte))
+                        if char == "\n" {
+                            try processSSELine(lineBuffer, continuation: continuation)
+                            lineBuffer = ""
+                        } else if char != "\r" {
+                            lineBuffer.append(char)
+                        }
+                    }
+                    if !lineBuffer.isEmpty { try processSSELine(lineBuffer, continuation: continuation) }
+                    continuation.finish()
+                } catch {
+                    continuation.finish(throwing: mapNetworkError(error))
+                }
+            }
+            continuation.onTermination = { _ in task.cancel() }
+        }
+    }
+}

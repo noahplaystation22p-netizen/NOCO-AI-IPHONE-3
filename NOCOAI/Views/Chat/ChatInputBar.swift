@@ -1,0 +1,72 @@
+import PhotosUI
+import SwiftUI
+
+struct ChatInputBar: View {
+    @EnvironmentObject private var connection: ConnectionStore
+    @Binding var text: String
+    @FocusState.Binding var focused: Bool
+    var onSend: () -> Void
+
+    @State private var showAttachments = false
+    @State private var photoItem: PhotosPickerItem?
+
+    private var modeBinding: Binding<AIMode> {
+        Binding(
+            get: { connection.chat.mode },
+            set: { connection.chat.mode = $0 }
+        )
+    }
+
+    var body: some View {
+        VStack(spacing: 10) {
+            ModePicker(mode: modeBinding)
+                .padding(.horizontal, 4)
+
+            HStack(alignment: .bottom, spacing: 10) {
+                Menu {
+                    Button("Bild auswählen", systemImage: "photo") { showAttachments = true }
+                    Button("Kamera", systemImage: "camera") { /* camera via sheet in parent */ }
+                } label: {
+                    Image(systemName: "plus.circle.fill")
+                        .font(.title2)
+                        .foregroundStyle(NOCOAITheme.accent)
+                }
+
+                TextField("Nachricht…", text: $text, axis: .vertical)
+                    .lineLimit(1...8)
+                    .focused($focused)
+                    .submitLabel(.send)
+                    .onSubmit { send() }
+                    .padding(12)
+                    .background(RoundedRectangle(cornerRadius: 18).fill(Color.primary.opacity(0.06)))
+
+                Button(action: send) {
+                    Image(systemName: "arrow.up.circle.fill")
+                        .font(.system(size: 34))
+                }
+                .disabled(text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || connection.chat.isSending)
+                .foregroundStyle(NOCOAITheme.accent)
+            }
+        }
+        .padding(.horizontal, 16)
+        .padding(.vertical, 12)
+        .background(.ultraThinMaterial)
+        .photosPicker(isPresented: $showAttachments, selection: $photoItem, matching: .images)
+        .onChange(of: photoItem) { _, item in
+            guard let item else { return }
+            Task {
+                if let data = try? await item.loadTransferable(type: Data.self) {
+                    await connection.chat.sendImage(data, caption: text.isEmpty ? nil : text)
+                    text = ""
+                    focused = false
+                }
+                photoItem = nil
+            }
+        }
+    }
+
+    private func send() {
+        focused = false
+        onSend()
+    }
+}

@@ -38,7 +38,7 @@ struct CompanionAPI {
     let baseURL: URL
     var token: String?
 
-    private let session: URLSession = {
+    let session: URLSession = {
         let config = URLSessionConfiguration.default
         config.timeoutIntervalForRequest = 15
         config.timeoutIntervalForResource = 300
@@ -46,13 +46,13 @@ struct CompanionAPI {
         return URLSession(configuration: config)
     }()
 
-    private let decoder: JSONDecoder = {
+    let decoder: JSONDecoder = {
         let d = JSONDecoder()
         d.keyDecodingStrategy = .convertFromSnakeCase
         return d
     }()
 
-    private let encoder: JSONEncoder = {
+    let encoder: JSONEncoder = {
         let e = JSONEncoder()
         e.keyEncodingStrategy = .convertToSnakeCase
         return e
@@ -96,52 +96,11 @@ struct CompanionAPI {
         return try decoder.decode(ServerStatus.self, from: data)
     }
 
-    func streamChat(message: String, conversationId: String? = nil) -> AsyncThrowingStream<String, Error> {
-        AsyncThrowingStream { continuation in
-            let task = Task {
-                do {
-                    let url = baseURL.appendingPathComponent("chat")
-                    var request = URLRequest(url: url)
-                    request.httpMethod = "POST"
-                    request.setValue("application/json", forHTTPHeaderField: "Content-Type")
-                    request.setValue("text/event-stream", forHTTPHeaderField: "Accept")
-                    if let token {
-                        request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
-                    }
-                    request.httpBody = try encoder.encode(ChatRequest(message: message, conversationId: conversationId))
-
-                    let (bytes, response) = try await session.bytes(for: request)
-                    guard let http = response as? HTTPURLResponse else {
-                        throw CompanionAPIError.server("Keine Server-Antwort")
-                    }
-                    guard (200...299).contains(http.statusCode) else {
-                        if http.statusCode == 401 { throw CompanionAPIError.unauthorized }
-                        throw CompanionAPIError.server("Chat-Fehler (\(http.statusCode))")
-                    }
-
-                    var lineBuffer = ""
-                    for try await byte in bytes {
-                        let char = Character(UnicodeScalar(byte))
-                        if char == "\n" {
-                            try processSSELine(lineBuffer, continuation: continuation)
-                            lineBuffer = ""
-                        } else if char != "\r" {
-                            lineBuffer.append(char)
-                        }
-                    }
-                    if !lineBuffer.isEmpty {
-                        try processSSELine(lineBuffer, continuation: continuation)
-                    }
-                    continuation.finish()
-                } catch {
-                    continuation.finish(throwing: mapNetworkError(error))
-                }
-            }
-            continuation.onTermination = { _ in task.cancel() }
-        }
+    func streamChat(message: String, conversationId: String? = nil, mode: AIMode = .auto) -> AsyncThrowingStream<String, Error> {
+        streamChatV2(message: message, conversationId: conversationId, mode: mode)
     }
 
-    private func processSSELine(_ line: String, continuation: AsyncThrowingStream<String, Error>.Continuation) throws {
+    func processSSELine(_ line: String, continuation: AsyncThrowingStream<String, Error>.Continuation) throws {
         let trimmed = line.trimmingCharacters(in: .whitespacesAndNewlines)
         guard trimmed.hasPrefix("data:") else { return }
 
@@ -167,7 +126,7 @@ struct CompanionAPI {
         }
     }
 
-    private func validate(response: URLResponse, data: Data, isPairRequest: Bool) throws {
+    func validate(response: URLResponse, data: Data, isPairRequest: Bool) throws {
         guard let http = response as? HTTPURLResponse else {
             throw CompanionAPIError.server("Keine Server-Antwort")
         }
@@ -202,7 +161,7 @@ struct CompanionAPI {
         return text?.isEmpty == false ? text : nil
     }
 
-    private func mapNetworkError(_ error: Error) -> Error {
+    func mapNetworkError(_ error: Error) -> Error {
         if let api = error as? CompanionAPIError { return api }
         if let urlError = error as? URLError,
            urlError.code == .cannotConnectToHost || urlError.code == .timedOut || urlError.code == .networkConnectionLost {

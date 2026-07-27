@@ -45,6 +45,7 @@ final class ConnectionStore: ObservableObject {
         isPaired = token != nil && !serverHost.isEmpty
         rebuildAPI()
         if isPaired {
+            chat.restoreSession()
             startPolling()
             bindStores()
             Task { await bootstrapAfterPair() }
@@ -72,6 +73,7 @@ final class ConnectionStore: ObservableObject {
     }
 
     private func bootstrapAfterPair() async {
+        chat.restoreSession()
         chat.startSyncLoop()
         await chat.loadConversations()
         await code.loadSessions()

@@ -6,8 +6,19 @@ extension CompanionAPI {
     }
 
     func fetchConversations() async throws -> [ConversationSummary] {
-        let res: ConversationListResponse = try await get("conversations", as: ConversationListResponse.self)
-        return res.all
+        let (data, response) = try await session.data(for: authorizedRequest(path: "conversations", method: "GET"))
+        try validate(response: response, data: data, isPairRequest: false)
+        if let list = try? decoder.decode(ConversationListResponse.self, from: data) {
+            return list.all
+        }
+        if let direct = try? decoder.decode([ConversationSummary].self, from: data) {
+            return direct
+        }
+        struct Wrapper: Decodable { let data: [ConversationSummary]?; let items: [ConversationSummary]? }
+        if let wrapped = try? decoder.decode(Wrapper.self, from: data) {
+            return wrapped.data ?? wrapped.items ?? []
+        }
+        return []
     }
 
     func createConversation(title: String? = nil) async throws -> CreateConversationResponse {
@@ -35,11 +46,23 @@ extension CompanionAPI {
         return try await get(path, as: SyncEventsResponse.self)
     }
 
-    func streamChatV2(message: String, conversationId: String?, mode: AIMode) -> AsyncThrowingStream<String, Error> {
-        streamSSE(
+    func streamChatV2(message: String, conversationId: String?, mode: AIMode) -> AsyncThrowingStream<ChatStreamChunk, Error> {
+        streamSSEChunks(
             path: "chat",
             body: ChatRequestV2(message: message, conversationId: conversationId, stream: true, mode: mode == .auto ? nil : mode.rawValue)
         )
+    }
+
+    func uploadVisionImage(imageData: Data, filename: String, message: String?, conversationId: String?) async throws -> VisionUploadResult {
+        var fields: [String: String] = [:]
+        if let message, !message.isEmpty { fields["message"] = message }
+        if let conversationId { fields["conversation_id"] = conversationId }
+
+        do {
+            return try await uploadMultipart("vision", fileData: imageData, filename: filename, mime: "image/jpeg", fields: fields, as: VisionUploadResult.self)
+        } catch {
+            return try await uploadMultipart("chat", fileData: imageData, filename: filename, mime: "image/jpeg", fields: fields, as: VisionUploadResult.self)
+        }
     }
 
     func generateImage(prompt: String, conversationId: String?) async throws -> ImageGenerateResponse {
@@ -50,13 +73,6 @@ extension CompanionAPI {
         var path = "images/progress"
         if let jobId { path += "?job_id=\(jobId)" }
         return try await get(path, as: ImageProgressResponse.self)
-    }
-
-    func uploadVision(imageData: Data, filename: String, message: String?, conversationId: String?) async throws -> ConversationMessageDTO {
-        var fields: [String: String] = [:]
-        if let message { fields["message"] = message }
-        if let conversationId { fields["conversation_id"] = conversationId }
-        return try await uploadMultipart("vision", fileData: imageData, filename: filename, mime: "image/jpeg", fields: fields, as: ConversationMessageDTO.self)
     }
 
     func fetchCodeSessions() async throws -> [CodeSession] {
@@ -149,6 +165,56 @@ extension CompanionAPI {
         request.httpMethod = method
         if let token { request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization") }
         return request
+    }
+
+    func streamSSEChunks<B: Encodable>(path: String, body: B) -> AsyncThrowingStream<ChatStreamChunk, Error> {
+        AsyncThrowingStream { continuation in
+            let task = Task {
+                do {
+                    var request = try authorizedRequest(path: path, method: "POST")
+                    request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+                    request.setValue("text/event-stream", forHTTPHeaderField: "Accept")
+                    request.httpBody = try encoder.encode(body)
+
+                    let (bytes, response) = try await session.bytes(for: request)
+                    guard let http = response as? HTTPURLResponse, (200...299).contains(http.statusCode) else {
+                        throw CompanionAPIError.server("Stream-Fehler")
+                    }
+
+                    var lineBuffer = ""
+                    for try await byte in bytes {
+                        let char = Character(UnicodeScalar(byte))
+                        if char == "\n" {
+                            if let chunk = try parseSSEChunk(lineBuffer) {
+                                continuation.yield(chunk)
+                                if chunk.done == true { break }
+                            }
+                            lineBuffer = ""
+                        } else if char != "\r" {
+                            lineBuffer.append(char)
+                        }
+                    }
+                    if !lineBuffer.isEmpty, let chunk = try parseSSEChunk(lineBuffer) {
+                        continuation.yield(chunk)
+                    }
+                    continuation.finish()
+                } catch {
+                    continuation.finish(throwing: mapNetworkError(error))
+                }
+            }
+            continuation.onTermination = { _ in task.cancel() }
+        }
+    }
+
+    private func parseSSEChunk(_ line: String) throws -> ChatStreamChunk? {
+        let trimmed = line.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard trimmed.hasPrefix("data:") else { return nil }
+        let payload = trimmed.dropFirst(5).trimmingCharacters(in: .whitespaces)
+        if payload == "[DONE]" { return ChatStreamChunk(content: nil, done: true, error: nil, conversationId: nil, messageId: nil, imageUrl: nil) }
+        guard let data = payload.data(using: .utf8),
+              let chunk = try? decoder.decode(ChatStreamChunk.self, from: data) else { return nil }
+        if let error = chunk.error, !error.isEmpty { throw CompanionAPIError.server(error) }
+        return chunk
     }
 
     func streamSSE<B: Encodable>(path: String, body: B) -> AsyncThrowingStream<String, Error> {

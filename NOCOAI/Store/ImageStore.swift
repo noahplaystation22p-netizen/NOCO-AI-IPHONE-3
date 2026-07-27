@@ -34,7 +34,7 @@ final class ImageStore: ObservableObject {
                     items.append(GeneratedImageItem(
                         id: msg.id,
                         prompt: msg.content,
-                        url: media.url(for: msg.mediaPath ?? msg.content),
+                        url: media.url(for: msg.resolvedMediaPath),
                         createdAt: .now
                     ))
                 }

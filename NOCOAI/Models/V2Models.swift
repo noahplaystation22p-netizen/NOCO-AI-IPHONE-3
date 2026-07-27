@@ -42,30 +42,74 @@ struct ConversationMessageDTO: Identifiable, Decodable, Equatable {
     let content: String
     let type: String?
     let mediaPath: String?
+    let imageUrl: String?
     let createdAt: String?
 
     enum CodingKeys: String, CodingKey {
         case id, role, content, type
         case mediaPath = "media_path"
+        case imageUrl = "image_url"
         case createdAt = "created_at"
     }
 
-    var isUser: Bool { role == "user" }
-    var isGeneratedImage: Bool { type == "generated-image" }
+    init(id: String, role: String, content: String, type: String? = nil, mediaPath: String? = nil, imageUrl: String? = nil, createdAt: String? = nil) {
+        self.id = id
+        self.role = role
+        self.content = content
+        self.type = type
+        self.mediaPath = mediaPath
+        self.imageUrl = imageUrl
+        self.createdAt = createdAt
+    }
+
+    var isUser: Bool { role == "user" || role == "human" }
+    var isGeneratedImage: Bool { type == "generated-image" || type == "image" }
+    var resolvedMediaPath: String? { mediaPath ?? imageUrl }
 }
 
 struct ConversationDetail: Decodable {
-    let id: String
+    let id: String?
     let title: String?
     let messages: [ConversationMessageDTO]?
-}
 
-struct CreateConversationRequest: Encodable {
-    let title: String?
+    private struct NestedConversation: Decodable {
+        let id: String?
+        let title: String?
+        let messages: [ConversationMessageDTO]?
+    }
+
+    enum CodingKeys: String, CodingKey {
+        case id, title, messages, conversation
+    }
+
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        if let nested = try? c.decode(NestedConversation.self, forKey: .conversation) {
+            id = nested.id
+            title = nested.title
+            messages = nested.messages
+        } else {
+            id = try c.decodeIfPresent(String.self, forKey: .id)
+            title = try c.decodeIfPresent(String.self, forKey: .title)
+            messages = try c.decodeIfPresent([ConversationMessageDTO].self, forKey: .messages)
+        }
+    }
 }
 
 struct CreateConversationResponse: Decodable {
-    let id: String
+    let id: String?
+    let title: String?
+    let conversation: NestedConversation?
+
+    struct NestedConversation: Decodable {
+        let id: String
+        let title: String?
+    }
+
+    var resolvedId: String? { id ?? conversation?.id }
+}
+
+struct CreateConversationRequest: Encodable {
     let title: String?
 }
 
@@ -191,6 +235,41 @@ struct VisionRequest: Encodable {
     enum CodingKeys: String, CodingKey {
         case message
         case conversationId = "conversation_id"
+    }
+}
+
+struct VisionUploadResult: Decodable {
+    let message: ConversationMessageDTO?
+    let reply: String?
+    let content: String?
+    let mediaPath: String?
+    let imageUrl: String?
+    let conversationId: String?
+
+    enum CodingKeys: String, CodingKey {
+        case message, reply, content
+        case mediaPath = "media_path"
+        case imageUrl = "image_url"
+        case conversationId = "conversation_id"
+    }
+
+    var replyText: String? {
+        reply ?? content ?? message?.content
+    }
+
+    var resolvedMediaPath: String? {
+        mediaPath ?? imageUrl ?? message?.resolvedMediaPath
+    }
+
+    func asAssistantMessage() -> ConversationMessageDTO? {
+        if let message, message.role != "user" { return message }
+        guard let text = replyText, !text.isEmpty else { return nil }
+        return ConversationMessageDTO(
+            id: message?.id ?? UUID().uuidString,
+            role: "assistant",
+            content: text,
+            mediaPath: resolvedMediaPath
+        )
     }
 }
 

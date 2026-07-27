@@ -13,7 +13,12 @@ struct ChatInputBar: View {
     private var modeBinding: Binding<AIMode> {
         Binding(
             get: { connection.chat.mode },
-            set: { connection.chat.mode = $0 }
+            set: {
+                if connection.chat.mode != $0 {
+                    HapticService.selection()
+                }
+                connection.chat.mode = $0
+            }
         )
     }
 
@@ -24,8 +29,10 @@ struct ChatInputBar: View {
 
             HStack(alignment: .bottom, spacing: 10) {
                 Menu {
-                    Button("Bild auswählen", systemImage: "photo") { showAttachments = true }
-                    Button("Kamera", systemImage: "camera") { /* camera via sheet in parent */ }
+                    Button("Bild auswählen", systemImage: "photo") {
+                        HapticService.light()
+                        showAttachments = true
+                    }
                 } label: {
                     Image(systemName: "plus.circle.fill")
                         .font(.title2)
@@ -56,6 +63,7 @@ struct ChatInputBar: View {
             guard let item else { return }
             Task {
                 if let data = try? await item.loadTransferable(type: Data.self) {
+                    HapticService.rigid()
                     await connection.chat.sendImage(data, caption: text.isEmpty ? nil : text)
                     text = ""
                     focused = false
@@ -66,6 +74,7 @@ struct ChatInputBar: View {
     }
 
     private func send() {
+        guard !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return }
         focused = false
         onSend()
     }

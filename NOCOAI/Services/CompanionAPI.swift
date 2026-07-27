@@ -97,7 +97,25 @@ struct CompanionAPI {
     }
 
     func streamChat(message: String, conversationId: String? = nil, mode: AIMode = .auto) -> AsyncThrowingStream<String, Error> {
-        streamChatV2(message: message, conversationId: conversationId, mode: mode)
+        AsyncThrowingStream { continuation in
+            let task = Task {
+                do {
+                    for try await chunk in streamChatV2(message: message, conversationId: conversationId, mode: mode) {
+                        if let text = chunk.content, !text.isEmpty {
+                            continuation.yield(text)
+                        }
+                        if chunk.done == true {
+                            continuation.finish()
+                            return
+                        }
+                    }
+                    continuation.finish()
+                } catch {
+                    continuation.finish(throwing: error)
+                }
+            }
+            continuation.onTermination = { _ in task.cancel() }
+        }
     }
 
     func processSSELine(_ line: String, continuation: AsyncThrowingStream<String, Error>.Continuation) throws {

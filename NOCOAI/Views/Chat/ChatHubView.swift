@@ -10,21 +10,39 @@ struct ChatHubView: View {
     var body: some View {
         NavigationStack {
             VStack(spacing: 0) {
+                if let error = connection.chat.lastError {
+                    Text(error)
+                        .font(.caption)
+                        .foregroundStyle(.white)
+                        .padding(.horizontal, 14)
+                        .padding(.vertical, 8)
+                        .frame(maxWidth: .infinity)
+                        .background(NOCOAITheme.danger.opacity(0.9))
+                }
+
                 ScrollViewReader { proxy in
                     ScrollView {
-                        LazyVStack(spacing: 14) {
-                            ForEach(connection.chat.messages) { message in
-                                ChatBubble(message: message)
-                                    .id(message.id)
+                        if connection.chat.messages.isEmpty {
+                            emptyState
+                        } else {
+                            LazyVStack(spacing: 14) {
+                                ForEach(connection.chat.messages) { message in
+                                    ChatBubble(message: message)
+                                        .id(message.id)
+                                }
                             }
+                            .padding(16)
                         }
-                        .padding(16)
                     }
                     .onTapGesture { inputFocused = false }
                     .onChange(of: connection.chat.messages.count) { _, _ in
                         scrollToBottom(proxy)
                     }
+                    .onChange(of: connection.chat.messages.last?.text) { _, _ in
+                        scrollToBottom(proxy)
+                    }
                 }
+
                 ChatInputBar(text: $input, focused: $inputFocused) {
                     let text = input
                     input = ""
@@ -32,10 +50,13 @@ struct ChatHubView: View {
                 }
             }
             .nocoBackground()
-            .navigationTitle(connection.chat.conversations.first(where: { $0.id == connection.chat.activeConversationId })?.title ?? "Chat")
+            .navigationTitle(titleText)
             .toolbar {
                 ToolbarItem(placement: .topBarLeading) {
-                    Button { showConversations = true } label: {
+                    Button {
+                        HapticService.light()
+                        showConversations = true
+                    } label: {
                         Image(systemName: "line.3.horizontal")
                     }
                 }
@@ -50,13 +71,34 @@ struct ChatHubView: View {
                 ConversationListView()
                     .environmentObject(connection)
             }
+            .onAppear { HapticService.prepare() }
             .task {
+                connection.chat.restoreSession()
                 await connection.chat.loadConversations()
-                if connection.chat.activeConversationId == nil, let first = connection.chat.conversations.first {
-                    await connection.chat.selectConversation(first.id)
+                if let id = connection.chat.activeConversationId {
+                    await connection.chat.loadMessages(for: id)
                 }
             }
         }
+    }
+
+    private var titleText: String {
+        connection.chat.conversations.first(where: { $0.id == connection.chat.activeConversationId })?.title ?? "Chat"
+    }
+
+    private var emptyState: some View {
+        VStack(spacing: 16) {
+            Image(systemName: "bubble.left.and.bubble.right.fill")
+                .font(.system(size: 48))
+                .foregroundStyle(NOCOAITheme.accent.opacity(0.5))
+            Text("Schreib eine Nachricht — sie erscheint sofort auf deinem PC.")
+                .font(.subheadline)
+                .multilineTextAlignment(.center)
+                .foregroundStyle(NOCOAITheme.secondaryText(for: scheme))
+                .padding(.horizontal, 32)
+        }
+        .frame(maxWidth: .infinity)
+        .padding(.top, 80)
     }
 
     private func scrollToBottom(_ proxy: ScrollViewProxy) {
@@ -73,14 +115,24 @@ private struct ChatBubble: View {
     let message: ChatMessage
 
     var body: some View {
-        HStack {
+        HStack(alignment: .bottom) {
             if message.role == .user { Spacer(minLength: 48) }
             VStack(alignment: message.role == .user ? .trailing : .leading, spacing: 8) {
-                if let url = message.imageURL {
+                if let data = message.localImageData, let uiImage = UIImage(data: data) {
+                    Image(uiImage: uiImage)
+                        .resizable()
+                        .scaledToFit()
+                        .frame(maxHeight: 240)
+                        .clipShape(RoundedRectangle(cornerRadius: 14))
+                } else if let url = message.imageURL {
                     AsyncImage(url: url) { phase in
                         switch phase {
-                        case .success(let img): img.resizable().scaledToFit().frame(maxHeight: 220).clipShape(RoundedRectangle(cornerRadius: 14))
-                        default: ProgressView()
+                        case .success(let img):
+                            img.resizable().scaledToFit().frame(maxHeight: 240).clipShape(RoundedRectangle(cornerRadius: 14))
+                        case .failure:
+                            Image(systemName: "photo").frame(height: 120)
+                        default:
+                            ProgressView().frame(height: 120)
                         }
                     }
                 }
@@ -94,6 +146,7 @@ private struct ChatBubble: View {
                             RoundedRectangle(cornerRadius: 20, style: .continuous)
                                 .fill(message.role == .user ? NOCOAITheme.accent : NOCOAITheme.cardFill(for: scheme))
                         )
+                        .animation(.easeOut(duration: 0.15), value: message.text)
                 }
             }
             if message.role == .assistant { Spacer(minLength: 48) }
@@ -110,8 +163,9 @@ struct ConversationListView: View {
             List {
                 Section {
                     Button {
+                        HapticService.medium()
                         Task {
-                            await connection.chat.newConversation()
+                            _ = await connection.chat.newConversation()
                             dismiss()
                         }
                     } label: {

@@ -123,16 +123,13 @@ final class KeyboardViewModel: ObservableObject {
                 var assembled = ""
                 var startedInsert = false
 
-                func beginInsert() {
-                    guard !startedInsert else { return }
-                    clearCharacters(deleteCount)
-                    startedInsert = true
-                }
-
                 do {
                     for try await chunk in KeyboardAIClient.streamRewrite(action: action, text: source) {
                         if Task.isCancelled { return }
-                        beginInsert()
+                        if !startedInsert {
+                            clearCharacters(deleteCount)
+                            startedInsert = true
+                        }
                         controller?.textDocumentProxy.insertText(chunk)
                         assembled += chunk
                     }
@@ -141,7 +138,8 @@ final class KeyboardViewModel: ObservableObject {
                     // Only fall back if nothing was written yet
                     if !startedInsert {
                         let result = try await KeyboardAIClient.rewrite(action: action, text: source)
-                        beginInsert()
+                        clearCharacters(deleteCount)
+                        startedInsert = true
                         controller?.textDocumentProxy.insertText(result)
                         assembled = result
                     } else {

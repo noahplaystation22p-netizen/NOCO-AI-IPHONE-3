@@ -12,8 +12,9 @@ struct ChatInputBar: View {
 
     @State private var showLibrary = false
     @State private var showCamera = false
-    @State private var showPlusMenu = false
     @State private var photoItem: PhotosPickerItem?
+    @State private var scrubMenuVisible = false
+    @State private var scrubSelection = 0
 
     private var modeBinding: Binding<AIMode> {
         Binding(
@@ -28,10 +29,11 @@ struct ChatInputBar: View {
     }
 
     var body: some View {
-        HStack(alignment: .bottom, spacing: 10) {
-            plusButton
+        ZStack(alignment: .bottomLeading) {
+            HStack(alignment: .bottom, spacing: 10) {
+                plusButton
 
-            TextField("Frag NOCO AI…", text: $text, axis: .vertical)
+                TextField("Frag NOCO AI…", text: $text, axis: .vertical)
                 .lineLimit(1...8)
                 .focused($focused)
                 .submitLabel(.send)
@@ -68,11 +70,11 @@ struct ChatInputBar: View {
                         .shadow(color: focused ? NOCOAITheme.glowPrimary.opacity(0.35) : .clear, radius: focused ? 14 : 0)
                 )
 
-            Button {
+                Button {
                 HapticService.medium()
                 focused = false
                 onVoice?()
-            } label: {
+                } label: {
                 Image(systemName: "waveform.circle.fill")
                     .font(.system(size: 34))
                     .foregroundStyle(
@@ -88,13 +90,13 @@ struct ChatInputBar: View {
                     )
                     .shadow(color: Color(red: 0.55, green: 0.45, blue: 1).opacity(0.5), radius: 10)
                     .symbolEffect(.bounce, value: connection.speak.isRunning)
-            }
-            .buttonStyle(IntelligencePressStyle(haptic: { HapticService.soft() }))
-            .disabled(!connection.isOnline || connection.chat.isSending)
-            .opacity(connection.isOnline ? 1 : 0.4)
-            .accessibilityLabel("Speak")
+                }
+                .buttonStyle(IntelligencePressStyle(haptic: { HapticService.soft() }))
+                .disabled(!connection.isOnline || connection.chat.isSending)
+                .opacity(connection.isOnline ? 1 : 0.4)
+                .accessibilityLabel("Speak")
 
-            if connection.chat.isSending {
+                if connection.chat.isSending {
                 Button {
                     HapticService.warning()
                     connection.chat.cancelSend()
@@ -106,7 +108,7 @@ struct ChatInputBar: View {
                 }
                 .buttonStyle(IntelligencePressStyle(haptic: { HapticService.rigid() }))
                 .accessibilityLabel("Abbrechen")
-            } else {
+                } else {
                 Button(action: send) {
                     Image(systemName: "arrow.up.circle.fill")
                         .font(.system(size: 36))
@@ -116,6 +118,14 @@ struct ChatInputBar: View {
                 .disabled(text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
                 .foregroundStyle(NOCOAITheme.accent)
                 .symbolEffect(.bounce, value: connection.chat.isSending)
+                }
+            }
+
+            if scrubMenuVisible {
+                scrubMenu
+                    .offset(x: 0, y: -52)
+                    .transition(.opacity.combined(with: .move(edge: .bottom)))
+                    .allowsHitTesting(false)
             }
         }
         .padding(.horizontal, 16)
@@ -130,78 +140,6 @@ struct ChatInputBar: View {
                 }
                 photoItem = nil
             }
-        }
-        .sheet(isPresented: $showPlusMenu) {
-            NavigationStack {
-                List {
-                    Section("Modell") {
-                        ForEach(AIMode.allCases) { mode in
-                            Button {
-                                modeBinding.wrappedValue = mode
-                                HapticService.modeChange()
-                                showPlusMenu = false
-                            } label: {
-                                HStack {
-                                    Label {
-                                        VStack(alignment: .leading, spacing: 2) {
-                                            Text(mode.label)
-                                            Text(mode.subtitle)
-                                                .font(.caption)
-                                                .foregroundStyle(.secondary)
-                                        }
-                                    } icon: {
-                                        Image(systemName: mode.systemImage)
-                                    }
-                                    Spacer()
-                                    if connection.chat.mode == mode {
-                                        Image(systemName: "checkmark.circle.fill")
-                                            .foregroundStyle(NOCOAITheme.accent)
-                                    }
-                                }
-                            }
-                            .foregroundStyle(.primary)
-                        }
-                    }
-
-                    Section("Bild · Vision") {
-                        Button {
-                            showPlusMenu = false
-                            DispatchQueue.main.asyncAfter(deadline: .now() + 0.25) {
-                                showLibrary = true
-                            }
-                        } label: {
-                            Label("Foto auswählen", systemImage: "photo.on.rectangle")
-                        }
-                        Button {
-                            showPlusMenu = false
-                            DispatchQueue.main.asyncAfter(deadline: .now() + 0.25) {
-                                showCamera = true
-                            }
-                        } label: {
-                            Label("Foto machen", systemImage: "camera.fill")
-                        }
-                    }
-
-                    if onWritingTools != nil {
-                        Section {
-                            Button {
-                                showPlusMenu = false
-                                onWritingTools?()
-                            } label: {
-                                Label("Schreibwerkzeuge", systemImage: "pencil.and.outline")
-                            }
-                        }
-                    }
-                }
-                .navigationTitle("Mehr")
-                .navigationBarTitleDisplayMode(.inline)
-                .toolbar {
-                    ToolbarItem(placement: .cancellationAction) {
-                        Button("Fertig") { showPlusMenu = false }
-                    }
-                }
-            }
-            .presentationDetents([.medium, .large])
         }
         .fullScreenCover(isPresented: $showCamera) {
             CameraPickerView { data in
@@ -220,16 +158,84 @@ struct ChatInputBar: View {
             .shadow(color: NOCOAITheme.glowPrimary.opacity(0.4), radius: 6)
             .frame(width: 36, height: 36)
             .contentShape(Circle())
-            .onTapGesture {
-                HapticService.light()
-                showLibrary = true
+            .gesture(
+                DragGesture(minimumDistance: 0)
+                    .onChanged { value in
+                        if !scrubMenuVisible {
+                            scrubSelection = 0
+                            withAnimation(.snappy) { scrubMenuVisible = true }
+                            HapticService.longPress()
+                        }
+                        let next = min(max(Int((-value.translation.height + 22) / 48), 0), scrubItems.count - 1)
+                        if next != scrubSelection {
+                            scrubSelection = next
+                            HapticService.whisper()
+                        }
+                    }
+                    .onEnded { _ in
+                        let selection = scrubSelection
+                        withAnimation(.snappy) { scrubMenuVisible = false }
+                        activateScrubItem(at: selection)
+                    }
+            )
+            .accessibilityLabel("Plus — Foto, Kamera, Modell und Schreibwerkzeuge")
+    }
+
+    private var scrubItems: [ScrubItem] {
+        var items: [ScrubItem] = [
+            .init(title: "Foto", icon: "photo.on.rectangle", action: .library),
+            .init(title: "Kamera", icon: "camera.fill", action: .camera)
+        ]
+        items += AIMode.allCases.map { .init(title: $0.label, icon: $0.systemImage, action: .mode($0)) }
+        if onWritingTools != nil {
+            items.append(.init(title: "Schreibwerkzeuge", icon: "pencil.and.outline", action: .writingTools))
+        }
+        return items
+    }
+
+    private var scrubMenu: some View {
+        VStack(alignment: .leading, spacing: 4) {
+            ForEach(scrubItems.indices.reversed(), id: \.self) { index in
+                let item = scrubItems[index]
+                Label(item.title, systemImage: item.icon)
+                    .font(.subheadline.weight(.semibold))
+                    .foregroundStyle(index == scrubSelection ? .white : .primary)
+                    .padding(.horizontal, 12)
+                    .frame(height: 44)
+                    .background(
+                        Capsule().fill(index == scrubSelection ? NOCOAITheme.accent : Color.primary.opacity(0.08))
+                    )
             }
-            .onLongPressGesture(minimumDuration: 0.4) {
-                HapticService.longPress()
-                showPlusMenu = true
-            }
-            .accessibilityLabel("Plus — tippen Foto, halten Menü")
-            .accessibilityHint("Tippen: Foto. Gedrückt halten: Modelle und Kamera.")
+        }
+        .padding(6)
+        .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 16, style: .continuous))
+        .shadow(color: .black.opacity(0.18), radius: 14, y: 5)
+    }
+
+    private func activateScrubItem(at index: Int) {
+        guard scrubItems.indices.contains(index) else { return }
+        HapticService.success()
+        switch scrubItems[index].action {
+        case .library:
+            showLibrary = true
+        case .camera:
+            showCamera = true
+        case .mode(let mode):
+            modeBinding.wrappedValue = mode
+        case .writingTools:
+            onWritingTools?()
+        }
+    }
+
+    private struct ScrubItem: Identifiable {
+        enum Action {
+            case library, camera, mode(AIMode), writingTools
+        }
+
+        let title: String
+        let icon: String
+        let action: Action
+        var id: String { title }
     }
 
     private func sendVision(_ data: Data) async {

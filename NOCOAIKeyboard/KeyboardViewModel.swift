@@ -23,9 +23,12 @@ final class KeyboardViewModel: ObservableObject {
     }
 
     func refreshAccess() {
+        CompanionCredentials.refreshFromDisk()
         hasFullAccess = controller?.hasFullAccess == true
         isConfigured = CompanionCredentials.isConfigured
-        if !hasFullAccess {
+        if !CompanionCredentials.appGroupAvailable {
+            statusLine = "SideStore muss die App Group für App und Tastatur behalten"
+        } else if !hasFullAccess {
             statusLine = "Vollzugriff in Einstellungen aktivieren"
         } else if !isConfigured {
             statusLine = "NOCO AI App öffnen & mit PC koppeln"
@@ -50,13 +53,11 @@ final class KeyboardViewModel: ObservableObject {
         controller?.textDocumentProxy.insertText(text)
         if shiftOn && !capsLock { shiftOn = false }
         syncDocumentSnapshot()
-        UIImpactFeedbackGenerator(style: .light).impactOccurred(intensity: 0.4)
     }
 
     func deleteBackward() {
         controller?.textDocumentProxy.deleteBackward()
         syncDocumentSnapshot()
-        UIImpactFeedbackGenerator(style: .soft).impactOccurred(intensity: 0.3)
     }
 
     func returnKey() {
@@ -69,6 +70,14 @@ final class KeyboardViewModel: ObservableObject {
 
     func nextKeyboard() {
         controller?.advanceToNextInputMode()
+    }
+
+    func openSpeak() {
+        controller?.openURL(URL(string: "nocoai://speak")!)
+    }
+
+    func openAppForSync() {
+        controller?.openURL(URL(string: "nocoai://keyboard-sync")!)
     }
 
     func toggleShift() {

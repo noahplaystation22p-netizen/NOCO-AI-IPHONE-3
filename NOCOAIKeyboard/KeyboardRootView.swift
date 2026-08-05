@@ -48,7 +48,7 @@ struct KeyboardRootView: View {
                                         .stroke(chipStroke, lineWidth: 1)
                                 )
                                 .shadow(
-                                    color: action == .noco
+                                    color: action.isPrimary
                                         ? Color(red: 0.35, green: 0.45, blue: 1).opacity(0.35)
                                         : .clear,
                                     radius: 6, y: 1
@@ -79,6 +79,14 @@ struct KeyboardRootView: View {
                 .lineLimit(1)
                 .contentTransition(.opacity)
             Spacer(minLength: 0)
+            if !model.isConfigured {
+                Button("App öffnen") {
+                    model.openAppForSync()
+                }
+                .font(.caption2.weight(.semibold))
+                .buttonStyle(.borderedProminent)
+                .controlSize(.mini)
+            }
             if model.isProcessing {
                 ProgressView()
                     .scaleEffect(0.65)
@@ -130,7 +138,7 @@ struct KeyboardRootView: View {
     }
 
     private func chipFill(for action: KeyboardAIAction) -> some ShapeStyle {
-        if action == .noco {
+        if action.isPrimary {
             return AnyShapeStyle(
                 LinearGradient(
                     colors: [
@@ -146,7 +154,7 @@ struct KeyboardRootView: View {
     }
 
     private func chipForeground(for action: KeyboardAIAction) -> Color {
-        action == .noco ? .white : .primary
+        action.isPrimary ? .white : .primary
     }
 
     private var chipStroke: Color {

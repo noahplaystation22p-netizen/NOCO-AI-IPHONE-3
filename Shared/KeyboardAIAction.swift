@@ -1,4 +1,4 @@
-import Foundation
+﻿import Foundation
 
 /// AI rewrite actions for the keyboard (flash-mode, text-only reply).
 enum KeyboardAIAction: String, CaseIterable, Identifiable {
@@ -28,7 +28,7 @@ enum KeyboardAIAction: String, CaseIterable, Identifiable {
 
     var systemImage: String {
         switch self {
-        case .improve: return "wand.and.stars"
+        case .improve: return "checkmark.circle"
         case .shorten: return "arrow.down.right.and.arrow.up.left"
         case .longer: return "arrow.up.left.and.arrow.down.right"
         case .friendlier: return "face.smiling"
@@ -39,14 +39,21 @@ enum KeyboardAIAction: String, CaseIterable, Identifiable {
         }
     }
 
+    var isPrimary: Bool { self == .improve }
+
     func prompt(for text: String) -> String {
         let t = text.trimmingCharacters(in: .whitespacesAndNewlines)
         let rule = """
-        Antworte NUR mit dem fertigen Text — keine Anführungszeichen, kein Intro, keine Erklärung.
+        Antworte NUR mit dem fertigen Text. Keine Anführungszeichen, kein Intro, keine Begrüßung, keine Erklärung, kein „Gerne“, kein „Hier ist“.
         """
         switch self {
         case .improve:
-            return "\(rule)\nFormuliere klarer, natürlicher und flüssiger um, behalte die Bedeutung:\n\n\(t)"
+            return """
+            \(rule)
+            Korrigiere Rechtschreibung, Grammatik und Zeichensetzung. Formuliere nur leicht klarer, wenn nötig. Behalte Ton, Länge und Bedeutung — keine Umschreibung zum Aufsatz:
+
+            \(t)
+            """
         case .shorten:
             return "\(rule)\nKürze deutlich, behalte die Kernaussage:\n\n\(t)"
         case .longer:
@@ -60,7 +67,7 @@ enum KeyboardAIAction: String, CaseIterable, Identifiable {
         case .summarize:
             return "\(rule)\nFasse kurz und präzise zusammen:\n\n\(t)"
         case .noco:
-            return "\(rule)\nDu bist NOCO AI. Verbessere den Text menschlich, smart und hilfreich — behalte die Absicht:\n\n\(t)"
+            return "\(rule)\nDu bist NOCO AI. Verbessere den Text menschlich und smart — behalte die Absicht:\n\n\(t)"
         }
     }
 }

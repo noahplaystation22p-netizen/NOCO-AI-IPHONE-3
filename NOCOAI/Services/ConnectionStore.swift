@@ -79,6 +79,12 @@ final class ConnectionStore: ObservableObject {
     func onForeground() {
         images.handleDidBecomeActive()
         AppNotificationService.clearBadge()
+        CompanionCredentials.sync(
+            host: serverHost,
+            port: serverPort,
+            token: token,
+            deviceName: deviceName
+        )
         if isPaired, !serverHost.isEmpty {
             prepareLocalNetworkAccess(host: serverHost, port: serverPort)
             chat.startSyncLoop()
@@ -277,6 +283,15 @@ final class ConnectionStore: ObservableObject {
     func handleIncomingURL(_ url: URL) {
         let host = (url.host ?? "").lowercased()
         let path = url.path.lowercased()
+        if host == "keyboard-sync" || host == "sync" {
+            CompanionCredentials.sync(
+                host: serverHost,
+                port: serverPort,
+                token: token,
+                deviceName: deviceName
+            )
+            return
+        }
         if host == "speak" || path.contains("speak") || host == "siri" {
             launchSpeakFromShortcut()
             return

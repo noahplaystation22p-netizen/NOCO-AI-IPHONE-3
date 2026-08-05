@@ -140,7 +140,8 @@ struct SettingsView: View {
                     1. Einstellungen → Allgemein → Tastatur → Tastaturen → Tastatur hinzufügen → NOCO AI
                     2. Tippe auf „NOCO AI“ → Vollzugriff erlauben (nötig für die KI)
                     3. In jeder App: Globus-Taste halten → NOCO AI wählen
-                    4. Text tippen oder markieren → Aktion oben tippen (Verbessern, Kürzer, NOCO …)
+                    4. Nach dem Koppeln unten „Zugangsdaten aktualisieren“ tippen
+                    5. Text tippen oder markieren → Aktion oben tippen (Verbessern, Kürzer, NOCO …)
                     """)
                     .font(.footnote)
                     .foregroundStyle(.secondary)
@@ -161,7 +162,7 @@ struct SettingsView: View {
                 } header: {
                     Text("KI-Tastatur")
                 } footer: {
-                    Text("Vollzugriff erlaubt Netzwerk zum PC. Ohne Vollzugriff funktioniert die KI-Leiste nicht. Nach dem Koppeln ggf. „Zugangsdaten aktualisieren“ tippen.")
+                    Text("Vollzugriff erlaubt Netzwerk zum PC. Ohne Vollzugriff funktioniert die KI-Leiste nicht. SideStore muss die App Group „group.de.noco.nocoai“ sowohl für die App als auch für die Tastatur behalten. Nach dem Koppeln „Zugangsdaten aktualisieren“ tippen.")
                 }
 
                 Section("Erweitert") {
@@ -209,7 +210,7 @@ struct SettingsView: View {
                 }
 
                 Section("Info") {
-                    Text("NOCO AI Companion v5.0")
+                    Text("NOCO AI Companion v5.1")
                     Text("Speak · Tastatur · Profil · Bildideen")
                         .font(.footnote)
                         .foregroundStyle(NOCOAITheme.secondaryText(for: scheme))

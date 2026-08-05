@@ -71,6 +71,9 @@ struct KeyboardLayoutView: View {
             SpaceKey {
                 model.space()
             }
+            ModifierKey(symbol: "waveform", width: 48) {
+                model.openSpeak()
+            }
             ModifierKey(title: "return", width: 72, prominent: true) {
                 model.returnKey()
             }
@@ -105,40 +108,30 @@ private struct LetterKey: View {
     let label: String
     var action: () -> Void
     @Environment(\.colorScheme) private var scheme
-    @State private var pressed = false
 
     var body: some View {
         Button(action: action) {
             Text(label)
-                .font(.system(size: 22, weight: .regular, design: .rounded))
+                .font(.system(size: 25, weight: .regular, design: .rounded))
                 .frame(maxWidth: .infinity)
-                .frame(height: 42)
+                .frame(height: 48)
                 .background(
                     RoundedRectangle(cornerRadius: 8, style: .continuous)
                         .fill(keyFill)
                         .shadow(
                             color: .black.opacity(scheme == .dark ? 0.35 : 0.16),
-                            radius: pressed ? 0 : 0.5,
-                            y: pressed ? 0 : 1
+                            radius: 0.5,
+                            y: 1
                         )
                 )
-                .scaleEffect(pressed ? 0.96 : 1)
         }
-        .buttonStyle(.plain)
-        .simultaneousGesture(
-            DragGesture(minimumDistance: 0)
-                .onChanged { _ in
-                    if !pressed { pressed = true }
-                }
-                .onEnded { _ in pressed = false }
-        )
-        .animation(.easeOut(duration: 0.08), value: pressed)
+        .buttonStyle(KeyPressStyle())
     }
 
     private var keyFill: Color {
         scheme == .dark
-            ? Color(white: pressed ? 0.38 : 0.45)
-            : Color.white.opacity(pressed ? 0.85 : 1)
+            ? Color(white: 0.45)
+            : Color.white
     }
 }
 
@@ -162,14 +155,14 @@ private struct ModifierKey: View {
                         .font(.system(size: 14, weight: .semibold, design: .rounded))
                 }
             }
-            .frame(width: width, height: 42)
+            .frame(width: width, height: 48)
             .foregroundStyle(prominent ? .white : .primary)
             .background(
                 RoundedRectangle(cornerRadius: 8, style: .continuous)
                     .fill(fill)
             )
         }
-        .buttonStyle(.plain)
+        .buttonStyle(KeyPressStyle())
     }
 
     private var fill: Color {
@@ -192,13 +185,22 @@ private struct SpaceKey: View {
             Text("Leertaste")
                 .font(.system(size: 15, weight: .medium, design: .rounded))
                 .frame(maxWidth: .infinity)
-                .frame(height: 42)
+                .frame(height: 48)
                 .background(
                     RoundedRectangle(cornerRadius: 8, style: .continuous)
                         .fill(scheme == .dark ? Color(white: 0.45) : Color.white)
                         .shadow(color: .black.opacity(0.12), radius: 0.5, y: 1)
                 )
         }
-        .buttonStyle(.plain)
+        .buttonStyle(KeyPressStyle())
+    }
+}
+
+private struct KeyPressStyle: ButtonStyle {
+    func makeBody(configuration: Configuration) -> some View {
+        configuration.label
+            .scaleEffect(configuration.isPressed ? 0.96 : 1)
+            .opacity(configuration.isPressed ? 0.82 : 1)
+            .animation(.easeOut(duration: 0.06), value: configuration.isPressed)
     }
 }

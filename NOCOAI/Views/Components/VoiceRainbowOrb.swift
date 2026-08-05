@@ -4,6 +4,7 @@ import SwiftUI
 struct IntelligenceVoiceStage: View {
     var phase: VoicePhase
     var level: CGFloat
+    var bands: [CGFloat] = Array(repeating: 0.15, count: 16)
 
     @State private var spin = false
     @State private var breathe = false
@@ -17,11 +18,11 @@ struct IntelligenceVoiceStage: View {
 
     private var intensity: Double {
         switch phase {
-        case .listening: return 0.55 + Double(level) * 0.45
+        case .listening: return 0.45 + Double(level) * 0.55
         case .processing: return 0.8
-        case .speaking: return 0.9
+        case .speaking: return 0.85 + Double(level) * 0.15
         case .error: return 0.35
-        case .idle: return 0.4
+        case .idle: return 0.35
         }
     }
 
@@ -96,14 +97,16 @@ struct IntelligenceVoiceStage: View {
                     .frame(width: 168 + CGFloat(i) * 36, height: 168 + CGFloat(i) * 36)
                     .rotationEffect(.degrees((i % 2 == 0 ? 1 : -1) * (spin ? 360 : 0)))
                     .opacity(0.35 + intensity * 0.35)
-                    .scaleEffect(1 + level * (phase == .listening ? 0.06 : 0.02))
+                    .scaleEffect(1 + level * (phase == .listening ? 0.1 : 0.03))
+                    .animation(.easeOut(duration: 0.08), value: level)
             }
         }
     }
 
     private func centerWaveform(t: Double) -> some View {
-        HStack(spacing: 5) {
-            ForEach(0..<21, id: \.self) { i in
+        let count = max(bands.count, 12)
+        return HStack(spacing: 4) {
+            ForEach(0..<count, id: \.self) { i in
                 Capsule()
                     .fill(
                         LinearGradient(
@@ -112,13 +115,13 @@ struct IntelligenceVoiceStage: View {
                             endPoint: .top
                         )
                     )
-                    .frame(width: 4, height: barHeight(i, t: t))
-                    .shadow(color: barColors(i)[0].opacity(0.55), radius: active ? 5 : 0)
+                    .frame(width: 5, height: barHeight(i, t: t))
+                    .shadow(color: barColors(i)[0].opacity(0.45 + Double(level) * 0.4), radius: active ? 6 : 0)
             }
         }
-        .frame(height: 72)
-        .padding(.horizontal, 28)
-        .padding(.vertical, 22)
+        .frame(height: 88)
+        .padding(.horizontal, 24)
+        .padding(.vertical, 20)
         .background(
             Capsule()
                 .fill(.ultraThinMaterial)
@@ -127,20 +130,22 @@ struct IntelligenceVoiceStage: View {
                         .stroke(
                             AngularGradient(
                                 colors: [
-                                    Color(red: 0.4, green: 0.8, blue: 1).opacity(0.55),
+                                    Color(red: 0.4, green: 0.8, blue: 1).opacity(0.55 + Double(level) * 0.35),
                                     Color(red: 0.7, green: 0.4, blue: 1).opacity(0.35),
                                     Color(red: 0.4, green: 0.95, blue: 0.7).opacity(0.4),
                                     Color(red: 0.4, green: 0.8, blue: 1).opacity(0.55)
                                 ],
                                 center: .center
                             ),
-                            lineWidth: 1.2
+                            lineWidth: 1.2 + level * 1.2
                         )
                         .rotationEffect(.degrees(spin ? 360 : 0))
                 )
-                .shadow(color: Color(red: 0.45, green: 0.7, blue: 1).opacity(0.28 * intensity), radius: 22)
+                .shadow(color: Color(red: 0.45, green: 0.7, blue: 1).opacity(0.22 + Double(level) * 0.35), radius: 14 + level * 18)
         )
-        .scaleEffect(phase == .listening ? 1 + level * 0.04 : 1)
+        .scaleEffect(1 + level * (phase == .listening ? 0.06 : 0.03))
+        .animation(.easeOut(duration: 0.07), value: level)
+        .animation(.easeOut(duration: 0.07), value: bands)
     }
 
     private var statusSpark: some View {
@@ -153,21 +158,30 @@ struct IntelligenceVoiceStage: View {
     }
 
     private func barHeight(_ i: Int, t: Double) -> CGFloat {
-        let mid = abs(Double(i) - 10.0)
-        let envelope = max(0.15, 1.0 - mid / 12.0)
+        let band: CGFloat
+        if i < bands.count {
+            band = bands[i]
+        } else if !bands.isEmpty {
+            band = bands[i % bands.count]
+        } else {
+            band = level
+        }
+
+        let mid = abs(Double(i) - Double(max(bands.count, 1) - 1) / 2.0)
+        let envelope = max(0.2, 1.0 - mid / 10.0)
+
         switch phase {
         case .listening:
-            let wave = abs(sin(t * 10 + Double(i) * 0.55))
-            return CGFloat(10 + (wave * 0.45 + Double(level) * 0.7) * envelope * 52)
+            // True visualizer: loud = high bars, quiet = low
+            return max(6, 8 + band * 68 * CGFloat(envelope) + level * 8)
         case .speaking:
             let wave = abs(sin(t * 8.5 + Double(i) * 0.7))
-            return CGFloat(12 + wave * envelope * 44)
+            return CGFloat(10 + (Double(band) * 0.7 + wave * 0.3) * envelope * 52)
         case .processing:
             let wave = abs(sin(t * 3.2 + Double(i) * 0.35))
             return CGFloat(8 + wave * envelope * 22)
         default:
-            let wave = abs(sin(t * 1.4 + Double(i) * 0.25))
-            return CGFloat(6 + wave * envelope * 10)
+            return CGFloat(6 + Double(band) * envelope * 12)
         }
     }
 

@@ -27,6 +27,12 @@
 	<string>NOCO AI wandelt deine Sprache in Text um und sendet ihn an deinen Windows-PC.</string>
 	<key>NSPhotoLibraryUsageDescription</key>
 	<string>NOCO AI benötigt Fotos für Bild-Uploads an deinen PC.</string>
+	<key>UIBackgroundModes</key>
+	<array>
+		<string>audio</string>
+	</array>
+	<key>NSSupportsLiveActivities</key>
+	<true/>
 	<key>UILaunchScreen</key>
 	<dict/>
 	<key>CFBundleURLTypes</key>

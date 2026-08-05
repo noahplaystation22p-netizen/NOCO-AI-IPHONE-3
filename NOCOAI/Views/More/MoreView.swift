@@ -4,7 +4,6 @@ import SwiftUI
 struct MoreView: View {
     @EnvironmentObject private var connection: ConnectionStore
     @Environment(\.colorScheme) private var scheme
-    @State private var showSpeak = false
     @State private var appear = false
 
     var body: some View {
@@ -25,18 +24,18 @@ struct MoreView: View {
                     LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible())], spacing: 14) {
                         Button {
                             HapticService.medium()
-                            showSpeak = true
+                            connection.speak.openUI()
                         } label: {
                             IntelligenceFeatureTile(
                                 title: "Speak",
-                                subtitle: "Sprechen & Spoken Reply",
+                                subtitle: connection.speak.isRunning ? "Live aktiv" : "Sprechen & Spoken Reply",
                                 systemImage: "waveform",
                                 accent: Color(red: 0.55, green: 0.45, blue: 1)
                             )
                         }
                         .buttonStyle(.plain)
-                        .disabled(!connection.isOnline)
-                        .opacity(connection.isOnline ? 1 : 0.55)
+                        .disabled(!connection.isOnline && !connection.speak.isRunning)
+                        .opacity(connection.isOnline || connection.speak.isRunning ? 1 : 0.55)
 
                         NavigationLink {
                             CodeStudioView()
@@ -77,7 +76,7 @@ struct MoreView: View {
                     connectionCard
                         .opacity(appear ? 1 : 0)
 
-                    Text("NOCO AI Companion v3.0")
+                    Text("NOCO AI Companion v3.1")
                         .font(.caption2)
                         .foregroundStyle(.secondary)
                         .padding(.top, 4)
@@ -92,10 +91,6 @@ struct MoreView: View {
             }
             .navigationTitle("Studio")
             .navigationBarTitleDisplayMode(.large)
-            .fullScreenCover(isPresented: $showSpeak) {
-                VoiceModeView()
-                    .environmentObject(connection)
-            }
             .onAppear {
                 withAnimation(.spring(response: 0.55, dampingFraction: 0.84)) {
                     appear = true

@@ -21,6 +21,7 @@ final class ConnectionStore: ObservableObject {
     let chat = ChatStore()
     let images = ImageStore()
     let code = CodeStore()
+    let speak = SpeakSessionController()
 
     private var token: String?
     private var pollTask: Task<Void, Never>?
@@ -44,6 +45,7 @@ final class ConnectionStore: ObservableObject {
         token = KeychainService.load(account: Keys.token)
         isPaired = token != nil && !serverHost.isEmpty
         rebuildAPI()
+        speak.bind(connection: self)
         if isPaired {
             chat.restoreSession()
             startPolling()
@@ -95,6 +97,11 @@ final class ConnectionStore: ObservableObject {
         chat.objectWillChange.sink { [weak self] _ in self?.objectWillChange.send() }.store(in: &cancellables)
         images.objectWillChange.sink { [weak self] _ in self?.objectWillChange.send() }.store(in: &cancellables)
         code.objectWillChange.sink { [weak self] _ in self?.objectWillChange.send() }.store(in: &cancellables)
+        speak.objectWillChange.sink { [weak self] _ in self?.objectWillChange.send() }.store(in: &cancellables)
+        speak.voice.objectWillChange.sink { [weak self] _ in
+            self?.objectWillChange.send()
+            self?.speak.pushLiveActivity(force: false)
+        }.store(in: &cancellables)
     }
 
     func prepareLocalNetworkAccess(host: String, port: Int) {
@@ -185,6 +192,13 @@ final class ConnectionStore: ObservableObject {
     }
 
     func handleIncomingURL(_ url: URL) {
+        if url.host == "speak" || url.path.contains("speak") {
+            speak.openUI()
+            if !speak.isRunning {
+                speak.start()
+            }
+            return
+        }
         guard let link = PairingDeepLink.from(url: url) else { return }
         applyDeepLink(link)
         if let pin = link.pin, !pin.isEmpty {
@@ -238,6 +252,7 @@ final class ConnectionStore: ObservableObject {
     }
 
     func disconnect() {
+        speak.stop()
         pollTask?.cancel()
         pollTask = nil
         chat.stopSync()

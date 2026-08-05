@@ -3,11 +3,10 @@ import SwiftUI
 struct VoiceModeView: View {
     @EnvironmentObject private var connection: ConnectionStore
     @Environment(\.dismiss) private var dismiss
-    @StateObject private var voice = VoiceService()
+    @Environment(\.scenePhase) private var scenePhase
 
-    @State private var statusLine = "Gedrückt halten und sprechen"
-    @State private var lastReply = ""
-    @State private var isHolding = false
+    private var speak: SpeakSessionController { connection.speak }
+    private var voice: VoiceService { speak.voice }
 
     var body: some View {
         ZStack {
@@ -19,7 +18,7 @@ struct VoiceModeView: View {
                 IntelligenceShimmerLine()
                     .padding(.horizontal, 48)
 
-                IntelligenceVoiceStage(phase: voice.phase, level: voice.level)
+                IntelligenceVoiceStage(phase: voice.phase, level: voice.level, bands: voice.bands)
                     .padding(.top, 8)
 
                 Text(displayText)
@@ -28,45 +27,54 @@ struct VoiceModeView: View {
                     .foregroundStyle(.primary)
                     .padding(.horizontal, 28)
                     .frame(minHeight: 64)
-                    .animation(.easeOut(duration: 0.2), value: displayText)
+                    .animation(.easeOut(duration: 0.12), value: displayText)
+                    .animation(.easeOut(duration: 0.08), value: voice.level)
 
-                Text(statusLine)
+                Text(speak.statusLine)
                     .font(.footnote)
                     .foregroundStyle(.secondary)
+                    .multilineTextAlignment(.center)
+                    .padding(.horizontal, 24)
 
                 modeChip
 
                 Spacer()
-                holdButton
-                    .padding(.bottom, 40)
+                controls
+                    .padding(.bottom, 36)
             }
         }
         .task {
-            let ok = await voice.requestPermissions()
-            if !ok {
-                statusLine = "Mikrofon & Spracherkennung erlauben"
-            } else if !connection.isOnline {
-                statusLine = "PC offline — Companion in NOCO AI X starten"
+            _ = await voice.requestPermissions()
+            if !connection.isOnline {
+                speak.statusLine = "PC offline — Companion in NOCO AI X starten"
+            } else if !speak.isRunning {
+                speak.statusLine = "Starten → Pause sendet automatisch.\nWeiterhören in Dynamic Island / Sperrbildschirm."
+            }
+        }
+        .onChange(of: scenePhase) { _, phase in
+            if speak.isRunning, phase != .active {
+                speak.statusLine = "Speak läuft im Hintergrund (Island / Sperrbildschirm)"
+                speak.pushLiveActivity(force: true)
             }
         }
     }
 
     private var topBar: some View {
         HStack {
-            Button("Fertig") {
-                voice.stopSpeaking()
-                voice.stopListening(cancel: true)
+            Button(speak.isRunning ? "Im Hintergrund lassen" : "Fertig") {
+                // Keep session alive when running — only close UI
                 dismiss()
+                speak.showSpeakUI = false
             }
             .fontWeight(.medium)
 
             Spacer()
 
             HStack(spacing: 6) {
-                Circle()
-                    .fill(connection.isOnline ? NOCOAITheme.success : NOCOAITheme.danger)
-                    .frame(width: 8, height: 8)
-                    .shadow(color: connection.isOnline ? NOCOAITheme.success.opacity(0.7) : .clear, radius: 4)
+                IntelligencePulseDot(
+                    color: connection.isOnline ? NOCOAITheme.success : NOCOAITheme.danger,
+                    size: 7
+                )
                 Text(connection.isOnline ? "Intelligence Sync" : "Offline")
                     .font(.caption.weight(.semibold))
                     .foregroundStyle(connection.isOnline ? NOCOAITheme.success : NOCOAITheme.danger)
@@ -80,23 +88,30 @@ struct VoiceModeView: View {
         VStack(spacing: 4) {
             Text("Speak")
                 .font(.largeTitle.weight(.bold))
-            Text("Sprich. Dein PC denkt.")
+            Text(speak.isRunning ? "Live · nur Sprache · Visualizer" : "Sprich. Dein PC denkt.")
                 .font(.subheadline)
                 .foregroundStyle(.secondary)
         }
     }
 
     private var modeChip: some View {
-        Text(VoiceSettings.defaultMode.label)
-            .font(.caption2.weight(.bold))
-            .padding(.horizontal, 12)
-            .padding(.vertical, 6)
-            .background(
-                Capsule()
-                    .fill(NOCOAITheme.accent.opacity(0.15))
-                    .overlay(Capsule().stroke(NOCOAITheme.glowPrimary.opacity(0.4), lineWidth: 1))
-            )
-            .foregroundStyle(NOCOAITheme.accent)
+        HStack(spacing: 8) {
+            Text(VoiceSettings.defaultMode.label)
+                .font(.caption2.weight(.bold))
+            if speak.isRunning {
+                Text("· Live Activity")
+                    .font(.caption2.weight(.semibold))
+                    .foregroundStyle(.secondary)
+            }
+        }
+        .padding(.horizontal, 12)
+        .padding(.vertical, 6)
+        .background(
+            Capsule()
+                .fill(NOCOAITheme.accent.opacity(0.15))
+                .overlay(Capsule().stroke(NOCOAITheme.glowPrimary.opacity(0.4), lineWidth: 1))
+        )
+        .foregroundStyle(NOCOAITheme.accent)
     }
 
     private var displayText: String {
@@ -106,138 +121,77 @@ struct VoiceModeView: View {
         case .processing:
             return voice.liveTranscript.isEmpty ? "Sende an den PC…" : voice.liveTranscript
         case .speaking:
-            return lastReply.isEmpty ? "Antwort…" : lastReply
+            return speak.lastReply.isEmpty ? "Antwort…" : speak.lastReply
         case .error(let msg):
             return msg
         case .idle:
-            return lastReply.isEmpty ? "Frag mich etwas" : lastReply
+            return speak.lastReply.isEmpty ? "Frag mich etwas" : speak.lastReply
         }
     }
 
-    private var holdButton: some View {
+    private var controls: some View {
         VStack(spacing: 12) {
-            Text(holdLabel)
+            Text(controlHint)
                 .font(.caption.weight(.semibold))
                 .foregroundStyle(.secondary)
 
-            ZStack {
-                Capsule()
-                    .fill(.ultraThinMaterial)
-                    .frame(width: 220, height: 64)
-                    .overlay(
-                        Capsule()
-                            .stroke(
-                                LinearGradient(
-                                    colors: [
-                                        Color(red: 0.4, green: 0.8, blue: 1),
-                                        Color(red: 0.65, green: 0.4, blue: 1),
-                                        Color(red: 0.4, green: 0.95, blue: 0.7)
-                                    ],
-                                    startPoint: .leading,
-                                    endPoint: .trailing
-                                ),
-                                lineWidth: isHolding ? 2 : 1.2
-                            )
-                    )
-                    .shadow(color: Color(red: 0.5, green: 0.5, blue: 1).opacity(isHolding ? 0.45 : 0.2), radius: isHolding ? 20 : 10)
-
+            Button {
+                HapticService.medium()
+                if speak.isRunning {
+                    speak.stop()
+                } else {
+                    speak.start()
+                }
+            } label: {
                 HStack(spacing: 10) {
-                    Image(systemName: isHolding ? "waveform" : "mic.fill")
+                    Image(systemName: speak.isRunning ? "stop.fill" : "waveform")
                         .font(.title3.weight(.semibold))
-                    Text(isHolding ? "Zuhören…" : "Gedrückt halten")
+                    Text(speak.isRunning ? "Stoppen" : "Speak starten")
                         .font(.subheadline.weight(.semibold))
                 }
-                .foregroundStyle(.primary)
+                .foregroundStyle(.white)
+                .frame(width: 220, height: 58)
+                .background(
+                    Capsule()
+                        .fill(
+                            LinearGradient(
+                                colors: speak.isRunning
+                                    ? [Color.red.opacity(0.85), Color.orange.opacity(0.75)]
+                                    : [
+                                        Color(red: 0.35, green: 0.75, blue: 1),
+                                        Color(red: 0.55, green: 0.4, blue: 1),
+                                        Color(red: 0.95, green: 0.4, blue: 0.75)
+                                    ],
+                                startPoint: .leading,
+                                endPoint: .trailing
+                            )
+                        )
+                        .shadow(color: Color(red: 0.5, green: 0.45, blue: 1).opacity(0.45), radius: 18)
+                )
             }
-            .scaleEffect(isHolding ? 1.04 : 1)
-            .animation(.spring(response: 0.28, dampingFraction: 0.72), value: isHolding)
-            .gesture(
-                DragGesture(minimumDistance: 0)
-                    .onChanged { _ in
-                        guard !isHolding else { return }
-                        isHolding = true
-                        startHold()
-                    }
-                    .onEnded { _ in
-                        isHolding = false
-                        Task { await endHoldAndSend() }
-                    }
-            )
-            .disabled(!connection.isOnline || connection.chat.isSending)
-            .opacity(connection.isOnline && !connection.chat.isSending ? 1 : 0.4)
+            .disabled(!connection.isOnline && !speak.isRunning)
+            .opacity(connection.isOnline || speak.isRunning ? 1 : 0.4)
 
             if voice.phase == .speaking {
-                Button("Stoppen") {
+                Button("Antwort überspringen") {
                     voice.stopSpeaking()
-                    statusLine = "Gestoppt"
                 }
                 .font(.footnote.weight(.medium))
             }
         }
     }
 
-    private var holdLabel: String {
-        switch voice.phase {
-        case .listening: return "Loslassen zum Senden"
-        case .processing: return "\(VoiceSettings.defaultMode.label) auf dem PC…"
-        case .speaking: return "Spoken Reply"
-        default:
-            return connection.isOnline ? "Speak aktivieren" : "Keine Verbindung"
-        }
-    }
-
-    private func startHold() {
-        guard connection.isOnline, !connection.chat.isSending else {
-            statusLine = "PC offline — erst verbinden"
-            isHolding = false
-            return
-        }
-        voice.stopSpeaking()
-        do {
-            try voice.startListening()
-            statusLine = "Listening…"
-            HapticService.rigid()
-        } catch {
-            statusLine = "Mikrofon-Fehler"
-            voice.phase = .error(error.localizedDescription)
-            isHolding = false
-        }
-    }
-
-    private func endHoldAndSend() async {
-        let text = voice.finishUtterance()
-        guard !text.isEmpty else {
-            statusLine = "Nichts erkannt — nochmal halten"
-            voice.phase = .idle
-            return
-        }
-        guard connection.isOnline else {
-            statusLine = "Keine Verbindung zum PC"
-            voice.phase = .error("Offline")
-            return
-        }
-
-        statusLine = "Intelligence Sync…"
-        voice.phase = .processing
-        HapticService.send()
-
-        let reply = await connection.chat.sendAndReturnReply(text, modeOverride: VoiceSettings.defaultMode)
-
-        if let reply, !reply.isEmpty {
-            lastReply = reply
-            if voice.autoSpeakReplies {
-                statusLine = "Spoken Reply…"
-                voice.speak(reply)
-            } else {
-                voice.phase = .idle
-                statusLine = "Fertig — Antwort im Chat"
+    private var controlHint: String {
+        if !connection.isOnline { return "Keine Verbindung" }
+        if speak.isRunning {
+            switch voice.phase {
+            case .listening: return "Laut = hohe Balken · Leise = niedrige Balken"
+            case .processing: return "Nur Text-Antwort — keine Bilder"
+            case .speaking: return "Spoken Reply · danach wieder Zuhören"
+            default: return "Session aktiv im Hintergrund möglich"
             }
-        } else {
-            let msg = connection.chat.lastError ?? "Keine Antwort vom PC"
-            statusLine = msg
-            voice.phase = .error(msg)
-            HapticService.error()
         }
+        return "Startet Zuhören + Dynamic Island"
     }
 }
 

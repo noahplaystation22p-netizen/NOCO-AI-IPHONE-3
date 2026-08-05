@@ -46,7 +46,25 @@
 		NA0000010000000000000031 /* IntelligenceTools.swift in Sources */ = {isa = PBXBuildFile; fileRef = NA0000020000000000000031 /* IntelligenceTools.swift */; };
 		NA0000010000000000000032 /* WritingToolsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = NA0000020000000000000032 /* WritingToolsView.swift */; };
 		NA0000010000000000000011 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = NA0000020000000000000011 /* Assets.xcassets */; };
+
+		NA0000010000000000000033 /* SpeakLiveActivity.swift in Sources */ = {isa = PBXBuildFile; fileRef = NA0000020000000000000033 /* SpeakLiveActivity.swift */; };
+		NA0000010000000000000034 /* SpeakSessionController.swift in Sources */ = {isa = PBXBuildFile; fileRef = NA0000020000000000000034 /* SpeakSessionController.swift */; };
+		NA0000010000000000000035 /* SpeakActivityAttributes.swift in Sources */ = {isa = PBXBuildFile; fileRef = NA0000020000000000000035 /* SpeakActivityAttributes.swift */; };
+		WDG0000010000000000000001 /* SpeakLiveActivityWidget.swift in Sources */ = {isa = PBXBuildFile; fileRef = WDG0000020000000000000001 /* SpeakLiveActivityWidget.swift */; };
+		WDG0000010000000000000002 /* SpeakActivityAttributes.swift in Sources */ = {isa = PBXBuildFile; fileRef = NA0000020000000000000035 /* SpeakActivityAttributes.swift */; };
+		WDG0000010000000000000003 /* NOCOAISpeakWidget.appex in Embed Foundation Extensions */ = {isa = PBXBuildFile; fileRef = WDG0000030000000000000001 /* NOCOAISpeakWidget.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
 /* End PBXBuildFile section */
+
+
+/* Begin PBXContainerItemProxy section */
+		WDG00000C000000000000001 /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = NA00000A0000000000000001 /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = WDG0000060000000000000001;
+			remoteInfo = NOCOAISpeakWidget;
+		};
+/* End PBXContainerItemProxy section */
 
 /* Begin PBXFileReference section */
 		NA0000030000000000000001 /* NOCOAI.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = NOCOAI.app; sourceTree = BUILT_PRODUCTS_DIR; };
@@ -91,10 +109,26 @@
 		NA0000020000000000000030 /* VoiceModeView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VoiceModeView.swift; sourceTree = "<group>"; };
 		NA0000020000000000000031 /* IntelligenceTools.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = IntelligenceTools.swift; sourceTree = "<group>"; };
 		NA0000020000000000000032 /* WritingToolsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WritingToolsView.swift; sourceTree = "<group>"; };
+
+		NA0000020000000000000033 /* SpeakLiveActivity.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SpeakLiveActivity.swift; sourceTree = "<group>"; };
+		NA0000020000000000000034 /* SpeakSessionController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SpeakSessionController.swift; sourceTree = "<group>"; };
+		NA0000020000000000000035 /* SpeakActivityAttributes.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SpeakActivityAttributes.swift; sourceTree = "<group>"; };
+		WDG0000020000000000000001 /* SpeakLiveActivityWidget.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SpeakLiveActivityWidget.swift; sourceTree = "<group>"; };
+		WDG0000020000000000000002 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
+		WDG0000020000000000000003 /* NOCOAISpeakWidget.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = NOCOAISpeakWidget.entitlements; sourceTree = "<group>"; };
+		WDG0000030000000000000001 /* NOCOAISpeakWidget.appex */ = {isa = PBXFileReference; explicitFileType = "wrapper.app-extension"; includeInIndex = 0; path = NOCOAISpeakWidget.appex; sourceTree = BUILT_PRODUCTS_DIR; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
 		NA0000040000000000000001 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+
+		WDG0000040000000000000001 /* Frameworks */ = {
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
@@ -108,6 +142,8 @@
 			isa = PBXGroup;
 			children = (
 				NA0000050000000000000002 /* NOCOAI */,
+				WDG0000050000000000000001 /* NOCOAISpeakWidget */,
+				WDG0000050000000000000002 /* Shared */,
 				NA0000050000000000000003 /* Products */,
 			);
 			sourceTree = "<group>";
@@ -132,6 +168,7 @@
 			isa = PBXGroup;
 			children = (
 				NA0000030000000000000001 /* NOCOAI.app */,
+				WDG0000030000000000000001 /* NOCOAISpeakWidget.appex */,
 			);
 			name = Products;
 			sourceTree = "<group>";
@@ -168,6 +205,8 @@
 				NA0000020000000000000016 /* HostSanitizer.swift */,
 				NA0000020000000000000017 /* LocalNetworkService.swift */,
 				NA000002000000000000002E /* VoiceService.swift */,
+				NA0000020000000000000033 /* SpeakLiveActivity.swift */,
+				NA0000020000000000000034 /* SpeakSessionController.swift */,
 			);
 			path = Services;
 			sourceTree = "<group>";
@@ -256,6 +295,25 @@
 			path = More;
 			sourceTree = "<group>";
 		};
+
+		WDG0000050000000000000001 /* NOCOAISpeakWidget */ = {
+			isa = PBXGroup;
+			children = (
+				WDG0000020000000000000001 /* SpeakLiveActivityWidget.swift */,
+				WDG0000020000000000000002 /* Info.plist */,
+				WDG0000020000000000000003 /* NOCOAISpeakWidget.entitlements */,
+			);
+			path = NOCOAISpeakWidget;
+			sourceTree = "<group>";
+		};
+		WDG0000050000000000000002 /* Shared */ = {
+			isa = PBXGroup;
+			children = (
+				NA0000020000000000000035 /* SpeakActivityAttributes.swift */,
+			);
+			path = Shared;
+			sourceTree = "<group>";
+		};
 /* End PBXGroup section */
 
 /* Begin PBXNativeTarget section */
@@ -289,6 +347,9 @@
 					NA0000060000000000000001 = {
 						CreatedOnToolsVersion = 15.0;
 					};
+					WDG0000060000000000000001 = {
+						CreatedOnToolsVersion = 15.0;
+					};
 				};
 			};
 			buildConfigurationList = NA0000090000000000000001 /* Build configuration list for PBXProject "NOCOAI" */;
@@ -306,6 +367,7 @@
 			projectRoot = "";
 			targets = (
 				NA0000060000000000000001 /* NOCOAI */,
+				WDG0000060000000000000001 /* NOCOAISpeakWidget */,
 			);
 		};
 /* End PBXProject section */
@@ -320,6 +382,15 @@
 			runOnlyForDeploymentPostprocessing = 0;
 		};
 /* End PBXResourcesBuildPhase section */
+
+
+/* Begin PBXTargetDependency section */
+		WDG00000D000000000000001 /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = WDG0000060000000000000001 /* NOCOAISpeakWidget */;
+			targetProxy = WDG00000C000000000000001 /* PBXContainerItemProxy */;
+		};
+/* End PBXTargetDependency section */
 
 /* Begin PBXSourcesBuildPhase section */
 		NA0000070000000000000001 /* Sources */ = {
@@ -356,6 +427,9 @@
 				NA000001000000000000002C /* CodeStudioView.swift in Sources */,
 				NA000001000000000000002D /* IntelligenceEffects.swift in Sources */,
 				NA000001000000000000002E /* VoiceService.swift in Sources */,
+				NA0000010000000000000033 /* SpeakLiveActivity.swift in Sources */,
+				NA0000010000000000000034 /* SpeakSessionController.swift in Sources */,
+				NA0000010000000000000035 /* SpeakActivityAttributes.swift in Sources */,
 				NA000001000000000000002F /* VoiceRainbowOrb.swift in Sources */,
 				NA0000010000000000000030 /* VoiceModeView.swift in Sources */,
 				NA0000010000000000000031 /* IntelligenceTools.swift in Sources */,
@@ -364,6 +438,23 @@
 				NA0000010000000000000013 /* QRScannerView.swift in Sources */,
 				NA0000010000000000000014 /* HostSanitizer.swift in Sources */,
 				NA0000010000000000000015 /* LocalNetworkService.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+
+		WDG0000070000000000000001 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				WDG0000010000000000000001 /* SpeakLiveActivityWidget.swift in Sources */,
+				WDG0000010000000000000002 /* SpeakActivityAttributes.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		WDG0000080000000000000002 /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -413,7 +504,7 @@
 				CODE_SIGN_ENTITLEMENTS = NOCOAI/NOCOAI.entitlements;
 				CODE_SIGNING_ALLOWED = NO;
 				CODE_SIGNING_REQUIRED = NO;
-				CURRENT_PROJECT_VERSION = 14;
+				CURRENT_PROJECT_VERSION = 15;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = NOCOAI/Info.plist;
@@ -427,7 +518,7 @@
 					"$(inherited)",
 					"@executable_path/Frameworks",
 				);
-				MARKETING_VERSION = 3.0;
+				MARKETING_VERSION = 3.1;
 				PRODUCT_BUNDLE_IDENTIFIER = de.noco.nocoai;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator";
@@ -446,7 +537,7 @@
 				CODE_SIGN_ENTITLEMENTS = NOCOAI/NOCOAI.entitlements;
 				CODE_SIGNING_ALLOWED = NO;
 				CODE_SIGNING_REQUIRED = NO;
-				CURRENT_PROJECT_VERSION = 14;
+				CURRENT_PROJECT_VERSION = 15;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = NOCOAI/Info.plist;
@@ -460,9 +551,65 @@
 					"$(inherited)",
 					"@executable_path/Frameworks",
 				);
-				MARKETING_VERSION = 3.0;
+				MARKETING_VERSION = 3.1;
 				PRODUCT_BUNDLE_IDENTIFIER = de.noco.nocoai;
 				PRODUCT_NAME = "$(TARGET_NAME)";
+				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator";
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = 1;
+				VALIDATE_PRODUCT = NO;
+			};
+			name = Release;
+		};
+
+		WDG00000B0000000000000003 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CODE_SIGN_ENTITLEMENTS = NOCOAISpeakWidget/NOCOAISpeakWidget.entitlements;
+				CODE_SIGNING_ALLOWED = NO;
+				CODE_SIGNING_REQUIRED = NO;
+				CURRENT_PROJECT_VERSION = 15;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = NOCOAISpeakWidget/Info.plist;
+				INFOPLIST_KEY_CFBundleDisplayName = "NOCO Speak";
+				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@executable_path/../../Frameworks",
+				);
+				MARKETING_VERSION = 3.1;
+				PRODUCT_BUNDLE_IDENTIFIER = de.noco.nocoai.SpeakWidget;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SKIP_INSTALL = YES;
+				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator";
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = 1;
+			};
+			name = Debug;
+		};
+		WDG00000B0000000000000004 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CODE_SIGN_ENTITLEMENTS = NOCOAISpeakWidget/NOCOAISpeakWidget.entitlements;
+				CODE_SIGNING_ALLOWED = NO;
+				CODE_SIGNING_REQUIRED = NO;
+				CURRENT_PROJECT_VERSION = 15;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = NOCOAISpeakWidget/Info.plist;
+				INFOPLIST_KEY_CFBundleDisplayName = "NOCO Speak";
+				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@executable_path/../../Frameworks",
+				);
+				MARKETING_VERSION = 3.1;
+				PRODUCT_BUNDLE_IDENTIFIER = de.noco.nocoai.SpeakWidget;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SKIP_INSTALL = YES;
 				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator";
 				SWIFT_EMIT_LOC_STRINGS = YES;
 				SWIFT_VERSION = 5.0;
@@ -488,6 +635,16 @@
 			buildConfigurations = (
 				NA00000B0000000000000003 /* Debug */,
 				NA00000B0000000000000004 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+
+		WDG0000090000000000000002 /* Build configuration list for PBXNativeTarget "NOCOAISpeakWidget" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				WDG00000B0000000000000003 /* Debug */,
+				WDG00000B0000000000000004 /* Release */,
 			);
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Release;

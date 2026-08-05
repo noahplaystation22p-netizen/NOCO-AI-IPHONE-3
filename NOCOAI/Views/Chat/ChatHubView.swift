@@ -6,7 +6,6 @@ struct ChatHubView: View {
     @Environment(\.colorScheme) private var scheme
     @State private var input = ""
     @State private var showConversations = false
-    @State private var showVoice = false
     @State private var showWritingTools = false
     @FocusState private var inputFocused: Bool
 
@@ -63,7 +62,7 @@ struct ChatHubView: View {
                         input = ""
                         Task { await connection.chat.send(text) }
                     },
-                    onVoice: { showVoice = true },
+                    onVoice: { connection.speak.openUI() },
                     onWritingTools: { showWritingTools = true }
                 )
             }
@@ -98,10 +97,6 @@ struct ChatHubView: View {
                     input = ""
                     Task { await connection.chat.send(tool.prompt(for: source)) }
                 }
-            }
-            .fullScreenCover(isPresented: $showVoice) {
-                VoiceModeView()
-                    .environmentObject(connection)
             }
             .onAppear { HapticService.prepare() }
             .task {

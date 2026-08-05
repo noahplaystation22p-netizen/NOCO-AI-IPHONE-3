@@ -35,5 +35,12 @@ struct MainTabView: View {
         .onChange(of: selectedTab) { _, _ in
             HapticService.selection()
         }
+        .fullScreenCover(isPresented: Binding(
+            get: { connection.speak.showSpeakUI },
+            set: { connection.speak.showSpeakUI = $0 }
+        )) {
+            VoiceModeView()
+                .environmentObject(connection)
+        }
     }
 }

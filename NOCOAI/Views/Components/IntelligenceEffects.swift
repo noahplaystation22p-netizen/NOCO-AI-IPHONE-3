@@ -27,7 +27,6 @@ struct IntelligenceAtmosphere: View {
                 .blur(radius: 58)
                 .offset(x: phase ? 34 : -24, y: phase ? 48 : 110)
 
-            // Soft conic shimmer veil
             AngularGradient(
                 colors: [
                     NOCOAITheme.glowPrimary.opacity(0.08),
@@ -52,7 +51,6 @@ struct IntelligenceAtmosphere: View {
     }
 }
 
-/// Floating intelligence dots for pairing / idle states.
 struct FloatingIntelligenceDots: View {
     let count: Int
     @State private var animate = false
@@ -97,7 +95,6 @@ struct FloatingIntelligenceDots: View {
     }
 }
 
-/// Orbiting rings — Apple Intelligence pairing vibe.
 struct IntelligenceOrbitRings: View {
     @State private var spin = false
     var size: CGFloat = 220
@@ -223,7 +220,6 @@ struct StreamingGlowCursor: View {
     }
 }
 
-/// Soft thinking indicator (Windows-style, Apple soft)
 struct IntelligenceThinkingDots: View {
     @State private var phase = 0
 
@@ -252,11 +248,12 @@ struct IntelligenceThinkingDots: View {
 
 struct IntelligenceShimmerBorder: ViewModifier {
     @State private var spin = false
+    var cornerRadius: CGFloat = 30
 
     func body(content: Content) -> some View {
         content
             .overlay(
-                RoundedRectangle(cornerRadius: 30, style: .continuous)
+                RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
                     .stroke(
                         AngularGradient(
                             colors: [
@@ -278,7 +275,278 @@ struct IntelligenceShimmerBorder: ViewModifier {
 }
 
 extension View {
-    func intelligenceShimmerBorder() -> some View {
-        modifier(IntelligenceShimmerBorder())
+    func intelligenceShimmerBorder(cornerRadius: CGFloat = 30) -> some View {
+        modifier(IntelligenceShimmerBorder(cornerRadius: cornerRadius))
+    }
+}
+
+// MARK: - Extra Apple Intelligence motion kit
+
+struct IntelligencePulseDot: View {
+    var color: Color = NOCOAITheme.success
+    var size: CGFloat = 9
+    @State private var pulse = false
+
+    var body: some View {
+        ZStack {
+            Circle()
+                .fill(color.opacity(0.35))
+                .frame(width: size * 2.4, height: size * 2.4)
+                .scaleEffect(pulse ? 1.35 : 0.7)
+                .opacity(pulse ? 0 : 0.7)
+            Circle()
+                .fill(color)
+                .frame(width: size, height: size)
+                .shadow(color: color.opacity(0.8), radius: 6)
+        }
+        .onAppear {
+            withAnimation(.easeOut(duration: 1.4).repeatForever(autoreverses: false)) {
+                pulse = true
+            }
+        }
+    }
+}
+
+struct IntelligenceProgressRing: View {
+    var progress: Double // 0...1
+    var label: String
+    var valueText: String
+    var tint: Color = NOCOAITheme.glowPrimary
+
+    @State private var appear = false
+
+    var body: some View {
+        VStack(spacing: 10) {
+            ZStack {
+                Circle()
+                    .stroke(Color.primary.opacity(0.08), lineWidth: 8)
+                Circle()
+                    .trim(from: 0, to: appear ? min(max(progress, 0), 1) : 0)
+                    .stroke(
+                        AngularGradient(
+                            colors: [tint, NOCOAITheme.glowSecondary, NOCOAITheme.glowAccent, tint],
+                            center: .center
+                        ),
+                        style: StrokeStyle(lineWidth: 8, lineCap: .round)
+                    )
+                    .rotationEffect(.degrees(-90))
+                    .shadow(color: tint.opacity(0.45), radius: 8)
+                Text(valueText)
+                    .font(.caption.weight(.bold))
+                    .minimumScaleFactor(0.7)
+            }
+            .frame(width: 72, height: 72)
+            Text(label)
+                .font(.caption2.weight(.semibold))
+                .foregroundStyle(.secondary)
+        }
+        .onAppear {
+            withAnimation(.spring(response: 0.9, dampingFraction: 0.78)) {
+                appear = true
+            }
+        }
+        .onChange(of: progress) { _, _ in
+            appear = false
+            withAnimation(.spring(response: 0.7, dampingFraction: 0.8)) {
+                appear = true
+            }
+        }
+    }
+}
+
+/// Large studio tile chrome (wrap with Button / NavigationLink).
+struct IntelligenceFeatureTile: View {
+    let title: String
+    let subtitle: String
+    let systemImage: String
+    var accent: Color = NOCOAITheme.glowPrimary
+
+    @State private var breathe = false
+    @State private var spin = false
+
+    var body: some View {
+        ZStack(alignment: .topLeading) {
+            RoundedRectangle(cornerRadius: 24, style: .continuous)
+                .fill(.ultraThinMaterial)
+                .overlay(
+                    RoundedRectangle(cornerRadius: 24, style: .continuous)
+                        .fill(
+                            RadialGradient(
+                                colors: [
+                                    accent.opacity(breathe ? 0.28 : 0.14),
+                                    .clear
+                                ],
+                                center: .topTrailing,
+                                startRadius: 4,
+                                endRadius: 120
+                            )
+                        )
+                )
+                .overlay(
+                    RoundedRectangle(cornerRadius: 24, style: .continuous)
+                        .stroke(
+                            AngularGradient(
+                                colors: [
+                                    accent.opacity(0.7),
+                                    NOCOAITheme.glowSecondary.opacity(0.35),
+                                    NOCOAITheme.glowAccent.opacity(0.45),
+                                    accent.opacity(0.15),
+                                    accent.opacity(0.7)
+                                ],
+                                center: .center,
+                                angle: .degrees(spin ? 360 : 0)
+                            ),
+                            lineWidth: 1.3
+                        )
+                )
+                .shadow(color: accent.opacity(0.25), radius: 16, y: 6)
+
+            VStack(alignment: .leading, spacing: 12) {
+                ZStack {
+                    Circle()
+                        .fill(accent.opacity(0.18))
+                        .frame(width: 44, height: 44)
+                        .blur(radius: 2)
+                    Image(systemName: systemImage)
+                        .font(.title3.weight(.semibold))
+                        .foregroundStyle(accent)
+                        .symbolEffect(.pulse, options: .repeating.speed(0.4))
+                }
+                Spacer(minLength: 8)
+                Text(title)
+                    .font(.headline)
+                    .foregroundStyle(.primary)
+                Text(subtitle)
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .lineLimit(2)
+            }
+            .padding(16)
+        }
+        .frame(maxWidth: .infinity, minHeight: 148)
+        .onAppear {
+            withAnimation(.easeInOut(duration: 2.6).repeatForever(autoreverses: true)) { breathe = true }
+            withAnimation(.linear(duration: 7).repeatForever(autoreverses: false)) { spin = true }
+        }
+    }
+}
+
+struct IntelligenceHeroBanner: View {
+    var title: String
+    var subtitle: String
+    var online: Bool
+
+    @State private var shimmer = false
+
+    var body: some View {
+        ZStack(alignment: .leading) {
+            RoundedRectangle(cornerRadius: 26, style: .continuous)
+                .fill(.ultraThinMaterial)
+                .overlay(
+                    RoundedRectangle(cornerRadius: 26, style: .continuous)
+                        .stroke(
+                            LinearGradient(
+                                colors: [
+                                    NOCOAITheme.glowPrimary.opacity(0.55),
+                                    NOCOAITheme.glowSecondary.opacity(0.25),
+                                    NOCOAITheme.glowAccent.opacity(0.4)
+                                ],
+                                startPoint: shimmer ? .topLeading : .bottomTrailing,
+                                endPoint: shimmer ? .bottomTrailing : .topLeading
+                            ),
+                            lineWidth: 1.2
+                        )
+                )
+                .shadow(color: NOCOAITheme.glowPrimary.opacity(0.2), radius: 20, y: 8)
+
+            HStack(spacing: 14) {
+                ZStack {
+                    IntelligenceOrbitRings(size: 64)
+                        .opacity(0.55)
+                    Image(systemName: "sparkles")
+                        .font(.title3.weight(.semibold))
+                        .foregroundStyle(NOCOAITheme.accent)
+                        .symbolEffect(.variableColor.iterative, options: .repeating)
+                }
+                .frame(width: 64, height: 64)
+
+                VStack(alignment: .leading, spacing: 4) {
+                    Text(title)
+                        .font(.title3.weight(.bold))
+                    Text(subtitle)
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                    HStack(spacing: 6) {
+                        IntelligencePulseDot(color: online ? NOCOAITheme.success : NOCOAITheme.danger, size: 7)
+                        Text(online ? "Intelligence Sync aktiv" : "Offline")
+                            .font(.caption2.weight(.semibold))
+                            .foregroundStyle(online ? NOCOAITheme.success : NOCOAITheme.danger)
+                    }
+                    .padding(.top, 2)
+                }
+                Spacer(minLength: 0)
+            }
+            .padding(16)
+        }
+        .onAppear {
+            withAnimation(.easeInOut(duration: 2.8).repeatForever(autoreverses: true)) {
+                shimmer = true
+            }
+        }
+    }
+}
+
+struct IntelligenceGeneratingOverlay: View {
+    var progress: Double
+    var status: String
+
+    var body: some View {
+        VStack(spacing: 14) {
+            ZStack {
+                IntelligenceOrbitRings(size: 90)
+                Circle()
+                    .trim(from: 0, to: max(0.05, min(progress, 1)))
+                    .stroke(
+                        AngularGradient(
+                            colors: [NOCOAITheme.glowPrimary, NOCOAITheme.glowSecondary, NOCOAITheme.glowAccent],
+                            center: .center
+                        ),
+                        style: StrokeStyle(lineWidth: 4, lineCap: .round)
+                    )
+                    .frame(width: 54, height: 54)
+                    .rotationEffect(.degrees(-90))
+                Image(systemName: "paintbrush.pointed.fill")
+                    .foregroundStyle(NOCOAITheme.accent)
+                    .symbolEffect(.pulse, options: .repeating)
+            }
+            Text(status)
+                .font(.caption.weight(.medium))
+                .foregroundStyle(.secondary)
+            IntelligenceShimmerLine()
+                .frame(width: 140)
+        }
+        .padding(20)
+        .background(
+            RoundedRectangle(cornerRadius: 22, style: .continuous)
+                .fill(.ultraThinMaterial)
+                .intelligenceShimmerBorder(cornerRadius: 22)
+        )
+    }
+}
+
+struct IntelligenceTabGlow: ViewModifier {
+    var active: Bool
+
+    func body(content: Content) -> some View {
+        content
+            .shadow(color: active ? NOCOAITheme.glowPrimary.opacity(0.55) : .clear, radius: active ? 10 : 0)
+            .scaleEffect(active ? 1.02 : 1)
+            .animation(.spring(response: 0.35, dampingFraction: 0.75), value: active)
+    }
+}
+
+extension View {
+    func intelligenceTabGlow(_ active: Bool) -> some View {
+        modifier(IntelligenceTabGlow(active: active))
     }
 }

@@ -1,22 +1,39 @@
 import SwiftUI
 
 struct MainTabView: View {
+    @EnvironmentObject private var connection: ConnectionStore
     @State private var selectedTab = 0
 
     var body: some View {
         TabView(selection: $selectedTab) {
             ChatHubView()
-                .tabItem { Label("Chat", systemImage: "sparkles") }
+                .tabItem {
+                    Label("Chat", systemImage: selectedTab == 0 ? "sparkles" : "bubble.left.and.bubble.right")
+                }
                 .tag(0)
 
-            HomeView()
-                .tabItem { Label("System", systemImage: "desktopcomputer") }
+            ImagesHubView()
+                .tabItem {
+                    Label("Bildideen", systemImage: "paintbrush.pointed.fill")
+                }
                 .tag(1)
 
             MoreView()
-                .tabItem { Label("Studio", systemImage: "square.grid.2x2.fill") }
+                .tabItem {
+                    Label("Studio", systemImage: "square.grid.2x2.fill")
+                }
                 .tag(2)
+
+            HomeView()
+                .tabItem {
+                    Label("System", systemImage: "desktopcomputer")
+                }
+                .tag(3)
         }
         .tint(NOCOAITheme.accent)
+        .sensoryFeedback(.selection, trigger: selectedTab)
+        .onChange(of: selectedTab) { _, _ in
+            HapticService.selection()
+        }
     }
 }

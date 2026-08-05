@@ -123,13 +123,17 @@ struct ChatHubView: View {
     private var emptyState: some View {
         VStack(spacing: 20) {
             ZStack {
-                IntelligenceOrbitRings(size: 120)
-                    .opacity(0.4)
+                IntelligenceOrbitRings(size: 130)
+                    .opacity(0.45)
+                Circle()
+                    .fill(NOCOAITheme.glowPrimary.opacity(0.16))
+                    .frame(width: 88, height: 88)
+                    .blur(radius: 16)
                 Image(systemName: "sparkles")
                     .font(.system(size: 36, weight: .light))
                     .foregroundStyle(NOCOAITheme.accent)
                     .shadow(color: NOCOAITheme.glowPrimary.opacity(0.75), radius: 16)
-                    .symbolEffect(.pulse, options: .repeating)
+                    .symbolEffect(.variableColor.iterative, options: .repeating)
             }
             Text("Frag irgendetwas")
                 .font(.title3.weight(.semibold))
@@ -142,14 +146,18 @@ struct ChatHubView: View {
             IntelligenceShimmerLine()
                 .padding(.horizontal, 60)
 
+            FloatingIntelligenceDots(count: 10)
+                .frame(height: 56)
+                .padding(.horizontal, 36)
+
             IntelligenceIdeaChips { idea in
                 Task { await connection.chat.send(idea.prompt) }
             }
             .padding(.horizontal, 16)
-            .padding(.top, 8)
+            .padding(.top, 4)
         }
         .frame(maxWidth: .infinity)
-        .padding(.top, 48)
+        .padding(.top, 40)
     }
 
     private func scrollToBottom(_ proxy: ScrollViewProxy) {

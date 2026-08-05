@@ -41,6 +41,14 @@ final class VoiceService: NSObject, ObservableObject {
     private var pendingSpeakChunks = 0
     private var speakFinishedNotified = false
 
+    /// Amplified TTS path (gain > 1.0 — AVSpeechUtterance.volume alone caps at 1).
+    private let ttsEngine = AVAudioEngine()
+    private let ttsPlayer = AVAudioPlayerNode()
+    private var ttsEngineReady = false
+    private var ttsUseAmplified = false
+    private var ttsPendingBuffers = 0
+    private let ttsGain: Float = 5.5
+
     /// Quiet after speech / transcript pause before auto-send (fast).
     private let silenceToEnd: TimeInterval = 0.55
     private let transcriptStableToEnd: TimeInterval = 0.50
@@ -91,13 +99,26 @@ final class VoiceService: NSObject, ObservableObject {
         try session.setActive(true, options: [])
     }
 
-    /// Loud TTS route — avoid voiceChat ducking; force speaker.
+    /// Loud TTS route — pure playback is louder than playAndRecord; force speaker.
     func activateLoudPlaybackSession() throws {
         let session = AVAudioSession.sharedInstance()
         try session.setCategory(
-            .playAndRecord,
+            .playback,
             mode: .spokenAudio,
             options: [.defaultToSpeaker, .allowBluetoothA2DP]
+        )
+        try session.overrideOutputAudioPort(.speaker)
+        try session.setActive(true, options: [])
+    }
+
+    /// Back to mic after TTS — deactivate first so route switches cleanly.
+    func activateListeningAfterTTS() throws {
+        let session = AVAudioSession.sharedInstance()
+        try? session.setActive(false, options: .notifyOthersOnDeactivation)
+        try session.setCategory(
+            .playAndRecord,
+            mode: .measurement,
+            options: [.defaultToSpeaker, .allowBluetooth, .mixWithOthers]
         )
         try session.overrideOutputAudioPort(.speaker)
         try session.setActive(true, options: [])
@@ -252,30 +273,159 @@ final class VoiceService: NSObject, ObservableObject {
         let chunks = Self.speechChunks(from: cleaned)
         pendingSpeakChunks = chunks.count
         speakFinishedNotified = false
+        ttsUseAmplified = true
+        ttsPendingBuffers = 0
         phase = .speaking
         HapticService.soft()
 
         Task { await animateSpeakingBands() }
 
+        // Amplified path: write PCM → gain → AVAudioEngine (utterance.volume alone is capped at 1.0)
+        speakAmplified(chunks: chunks)
+    }
+
+    private func speakAmplified(chunks: [String]) {
+        guard !chunks.isEmpty else {
+            phase = .idle
+            notifySpeakFinishedOnce()
+            return
+        }
+
+        pendingSpeakChunks = chunks.count
+
         for (index, chunk) in chunks.enumerated() {
             let utterance = AVSpeechUtterance(string: chunk)
             utterance.voice = bestGermanVoice()
-            utterance.rate = AVSpeechUtteranceDefaultSpeechRate * 0.96
-            utterance.pitchMultiplier = 1.05
-            // Max utterance volume; session route boosts perceived loudness
+            utterance.rate = AVSpeechUtteranceDefaultSpeechRate * 0.94
+            utterance.pitchMultiplier = 1.02
             utterance.volume = 1.0
-            utterance.preUtteranceDelay = index == 0 ? 0.05 : 0.08
-            utterance.postUtteranceDelay = 0.05
+            utterance.preUtteranceDelay = index == 0 ? 0 : 0.04
+            utterance.postUtteranceDelay = 0
+
+            synthesizer.write(utterance) { [weak self] buffer in
+                guard let self else { return }
+                // Buffer is only valid inside this callback — copy immediately.
+                guard let pcm = buffer as? AVAudioPCMBuffer else { return }
+
+                if pcm.frameLength == 0 {
+                    Task { @MainActor in
+                        self.pendingSpeakChunks = max(0, self.pendingSpeakChunks - 1)
+                        self.finishAmplifiedIfIdle()
+                    }
+                    return
+                }
+
+                guard let copy = Self.copyPCM(pcm) else { return }
+                Self.amplifyPCM(copy, gain: self.ttsGain)
+
+                Task { @MainActor in
+                    do {
+                        try self.ensureTTSEngine(format: copy.format)
+                        self.ttsPendingBuffers += 1
+                        if !self.ttsPlayer.isPlaying {
+                            self.ttsPlayer.play()
+                        }
+                        self.ttsPlayer.scheduleBuffer(copy, completionHandler: { [weak self] in
+                            Task { @MainActor in
+                                guard let self else { return }
+                                self.ttsPendingBuffers = max(0, self.ttsPendingBuffers - 1)
+                                self.finishAmplifiedIfIdle()
+                            }
+                        })
+                    } catch {
+                        self.ttsUseAmplified = false
+                        self.fallbackSpeak(chunks: chunks)
+                    }
+                }
+            }
+        }
+    }
+
+    private func finishAmplifiedIfIdle() {
+        guard ttsUseAmplified, case .speaking = phase else { return }
+        if pendingSpeakChunks > 0 || ttsPendingBuffers > 0 { return }
+        phase = .idle
+        HapticService.success()
+        stopTTSEngine()
+        notifySpeakFinishedOnce()
+    }
+
+    private static func copyPCM(_ source: AVAudioPCMBuffer) -> AVAudioPCMBuffer? {
+        guard let copy = AVAudioPCMBuffer(pcmFormat: source.format, frameCapacity: source.frameLength) else {
+            return nil
+        }
+        copy.frameLength = source.frameLength
+        let channels = Int(source.format.channelCount)
+        if let src = source.floatChannelData, let dst = copy.floatChannelData {
+            let frames = Int(source.frameLength)
+            for ch in 0..<channels {
+                memcpy(dst[ch], src[ch], frames * MemoryLayout<Float>.size)
+            }
+        }
+        return copy
+    }
+
+    private func fallbackSpeak(chunks: [String]) {
+        stopTTSEngine()
+        pendingSpeakChunks = chunks.count
+        for (index, chunk) in chunks.enumerated() {
+            let utterance = AVSpeechUtterance(string: chunk)
+            utterance.voice = bestGermanVoice()
+            utterance.rate = AVSpeechUtteranceDefaultSpeechRate * 0.94
+            utterance.pitchMultiplier = 1.02
+            utterance.volume = 1.0
+            utterance.preUtteranceDelay = index == 0 ? 0 : 0.04
+            utterance.postUtteranceDelay = 0
             synthesizer.speak(utterance)
         }
     }
 
+    private func ensureTTSEngine(format: AVAudioFormat) throws {
+        if !ttsEngineReady {
+            ttsEngine.attach(ttsPlayer)
+            ttsEngine.connect(ttsPlayer, to: ttsEngine.mainMixerNode, format: format)
+            // Extra headroom on mixer (linear > 1)
+            ttsEngine.mainMixerNode.outputVolume = 1.35
+            ttsEngineReady = true
+        }
+        if !ttsEngine.isRunning {
+            try ttsEngine.start()
+        }
+    }
+
+    private func stopTTSEngine() {
+        if ttsPlayer.isPlaying {
+            ttsPlayer.stop()
+        }
+        ttsPlayer.reset()
+        if ttsEngine.isRunning {
+            ttsEngine.stop()
+        }
+        ttsPendingBuffers = 0
+    }
+
+    private static func amplifyPCM(_ buffer: AVAudioPCMBuffer, gain: Float) {
+        guard let channels = buffer.floatChannelData else { return }
+        let channelCount = Int(buffer.format.channelCount)
+        let frames = Int(buffer.frameLength)
+        for ch in 0..<channelCount {
+            let samples = channels[ch]
+            for i in 0..<frames {
+                // Soft saturation keeps it loud without harsh digital clip
+                let boosted = samples[i] * gain
+                samples[i] = tanh(boosted * 0.85)
+            }
+        }
+    }
+
     func stopSpeaking(notifyFinished: Bool = true) {
-        let wasSpeaking = synthesizer.isSpeaking || phase == .speaking
+        let wasSpeaking = synthesizer.isSpeaking || ttsPlayer.isPlaying || phase == .speaking
         if synthesizer.isSpeaking {
             synthesizer.stopSpeaking(at: .immediate)
         }
+        stopTTSEngine()
         pendingSpeakChunks = 0
+        ttsUseAmplified = false
         if case .speaking = phase {
             phase = .idle
         }
@@ -502,6 +652,8 @@ final class VoiceService: NSObject, ObservableObject {
 extension VoiceService: AVSpeechSynthesizerDelegate {
     nonisolated func speechSynthesizer(_ synthesizer: AVSpeechSynthesizer, didFinish utterance: AVSpeechUtterance) {
         Task { @MainActor in
+            // Amplified path finishes via buffer completions
+            guard !self.ttsUseAmplified else { return }
             if !synthesizer.isSpeaking {
                 self.phase = .idle
                 HapticService.success()
@@ -512,7 +664,9 @@ extension VoiceService: AVSpeechSynthesizerDelegate {
 
     nonisolated func speechSynthesizer(_ synthesizer: AVSpeechSynthesizer, didCancel utterance: AVSpeechUtterance) {
         Task { @MainActor in
-            self.phase = .idle
+            if case .speaking = self.phase {
+                self.phase = .idle
+            }
         }
     }
 }

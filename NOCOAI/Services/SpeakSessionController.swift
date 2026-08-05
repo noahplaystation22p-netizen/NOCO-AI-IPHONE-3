@@ -27,7 +27,7 @@ final class SpeakSessionController: ObservableObject {
             Task { await self?.handleUtterance(text) }
         }
         voice.onSpeakFinished = { [weak self] in
-            self?.scheduleResumeListening(after: 0.28)
+            self?.scheduleResumeListening(after: 0.05)
         }
     }
 
@@ -160,7 +160,7 @@ final class SpeakSessionController: ObservableObject {
         resumeTask?.cancel()
         resumeTask = Task { [weak self] in
             for _ in 0..<400 {
-                try? await Task.sleep(nanoseconds: 150_000_000)
+                try? await Task.sleep(nanoseconds: 80_000_000)
                 guard let self, !Task.isCancelled else { return }
                 let speaking = await MainActor.run {
                     if case .speaking = self.voice.phase { return true }
@@ -168,7 +168,7 @@ final class SpeakSessionController: ObservableObject {
                 }
                 if !speaking { break }
             }
-            try? await Task.sleep(nanoseconds: 450_000_000)
+            try? await Task.sleep(nanoseconds: 40_000_000)
             guard !Task.isCancelled else { return }
             await MainActor.run { self?.resumeListening() }
         }
@@ -183,18 +183,21 @@ final class SpeakSessionController: ObservableObject {
             return
         }
         guard !isBusy else {
-            // Retry shortly when chat round-trip still finishing
-            scheduleResumeListening(after: 0.35)
+            scheduleResumeListening(after: 0.12)
+            return
+        }
+        if case .speaking = voice.phase {
+            scheduleResumeListening(after: 0.08)
             return
         }
         do {
-            try voice.activateBackgroundAudioSession()
+            try voice.activateListeningAfterTTS()
             try voice.startListening(autoEnd: true)
             statusLine = "Wieder Zuhören…"
             pushLiveActivity(force: true)
         } catch {
-            statusLine = "Zuhören unterbrochen — nochmal versuchen"
-            scheduleResumeListening(after: 0.8)
+            statusLine = "Zuhören unterbrochen — nochmal…"
+            scheduleResumeListening(after: 0.25)
         }
     }
 
@@ -224,12 +227,12 @@ final class SpeakSessionController: ObservableObject {
                 statusLine = "Spoken Reply…"
                 pushLiveActivity(force: true)
                 resumeTask?.cancel()
+                isBusy = false
                 voice.speak(reply)
-                // Watchdog: if TTS delegate misses finish, still resume after speech ends
                 startSpeakWatchdog()
             } else {
                 voice.phase = .idle
-                scheduleResumeListening(after: 0.25)
+                scheduleResumeListening(after: 0.05)
             }
         } else {
             let msg = connection.chat.lastError ?? "Keine Antwort"

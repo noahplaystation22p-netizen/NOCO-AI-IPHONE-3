@@ -1,8 +1,4 @@
 import Foundation
-import UIKit
-import PhotosUI
-import UniformTypeIdentifiers
-import CoreTransferable
 
 /// Decides whether an uploaded image should be described (vision) or edited (SD img2img).
 enum ImageAttachIntent {
@@ -15,7 +11,6 @@ enum ImageAttachIntent {
 
         let lower = t.lowercased()
 
-        // Explicit analyze / describe
         if lower.range(of: #"^(was|wer|wo|warum|wieso|beschreib|analy|erkenne|sieh|schau|what's|what is|describe)"#, options: .regularExpression) != nil
             || lower.contains("im bild")
             || lower.contains("auf dem bild")
@@ -25,12 +20,10 @@ enum ImageAttachIntent {
             return .analyze
         }
 
-        // New image generation phrasing (not edit) — still analyze attached photo unless clearly edit
         if lower.range(of: #"^(mach(?:e)?\s+mir\s+(?:ein\s+)?(?:bild|foto))"#, options: .regularExpression) != nil {
             return .analyze
         }
 
-        // Edit / magical erase / restyle
         let editHints = [
             "entferne", "remove", "lösch", "erase", "radier",
             "änder", "change", "mach ", "make ", "füg", "add ",
@@ -50,7 +43,6 @@ enum ImageAttachIntent {
         return .analyze
     }
 
-    /// Build a Stable Diffusion img2img prompt from a casual German/English instruction.
     static func editPrompt(from userText: String) -> String {
         let lower = userText.lowercased()
         var parts: [String] = [
@@ -91,41 +83,5 @@ enum ImageAttachIntent {
             return 0.35
         }
         return 0.48
-    }
-}
-
-/// Reliable PhotosPicker → JPEG data (Data.self alone often fails for library HEIC).
-enum PhotoPickerLoader {
-    struct TransferImage: Transferable {
-        let data: Data
-
-        static var transferRepresentation: some TransferRepresentation {
-            DataRepresentation(importedContentType: .image) { data in
-                TransferImage(data: data)
-            }
-            DataRepresentation(importedContentType: .jpeg) { data in
-                TransferImage(data: data)
-            }
-            DataRepresentation(importedContentType: .png) { data in
-                TransferImage(data: data)
-            }
-            DataRepresentation(importedContentType: .heic) { data in
-                TransferImage(data: data)
-            }
-        }
-    }
-
-    static func loadJPEG(from item: PhotosPickerItem) async -> Data? {
-        if let transfer = try? await item.loadTransferable(type: TransferImage.self),
-           let ui = UIImage(data: transfer.data),
-           let jpeg = ui.jpegData(compressionQuality: 0.9) {
-            return jpeg
-        }
-        if let data = try? await item.loadTransferable(type: Data.self),
-           let ui = UIImage(data: data),
-           let jpeg = ui.jpegData(compressionQuality: 0.9) {
-            return jpeg
-        }
-        return nil
     }
 }

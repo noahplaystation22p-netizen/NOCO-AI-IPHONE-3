@@ -1,6 +1,8 @@
 import PhotosUI
 import SwiftUI
 import UIKit
+import UniformTypeIdentifiers
+import CoreTransferable
 
 struct ChatInputBar: View {
     @EnvironmentObject private var connection: ConnectionStore
@@ -132,10 +134,10 @@ struct ChatInputBar: View {
         .padding(.vertical, 12)
         .background(.ultraThinMaterial)
         .photosPicker(isPresented: $showLibrary, selection: $photoItem, matching: .images)
-        .onChange(of: photoItem) { _, item in
+        .onChange(of: photoItem) { item in
             guard let item else { return }
             Task {
-                if let data = await PhotoPickerLoader.loadJPEG(from: item) {
+                if let data = await ChatPhotoLoader.loadJPEG(from: item) {
                     await sendVision(data)
                 } else {
                     HapticService.error()
@@ -287,5 +289,41 @@ struct CameraPickerView: UIViewControllerRepresentable {
             let image = (info[.editedImage] ?? info[.originalImage]) as? UIImage
             onFinish(image?.jpegData(compressionQuality: 0.85))
         }
+    }
+}
+
+/// Reliable PhotosPicker → JPEG (plain Data transferable often fails on HEIC library assets).
+enum ChatPhotoLoader {
+    struct TransferImage: Transferable {
+        let data: Data
+
+        static var transferRepresentation: some TransferRepresentation {
+            DataRepresentation(importedContentType: .image) { data in
+                TransferImage(data: data)
+            }
+            DataRepresentation(importedContentType: .jpeg) { data in
+                TransferImage(data: data)
+            }
+            DataRepresentation(importedContentType: .png) { data in
+                TransferImage(data: data)
+            }
+            DataRepresentation(importedContentType: .heic) { data in
+                TransferImage(data: data)
+            }
+        }
+    }
+
+    static func loadJPEG(from item: PhotosPickerItem) async -> Data? {
+        if let transfer = try? await item.loadTransferable(type: TransferImage.self),
+           let ui = UIImage(data: transfer.data),
+           let jpeg = ui.jpegData(compressionQuality: 0.9) {
+            return jpeg
+        }
+        if let data = try? await item.loadTransferable(type: Data.self),
+           let ui = UIImage(data: data),
+           let jpeg = ui.jpegData(compressionQuality: 0.9) {
+            return jpeg
+        }
+        return nil
     }
 }

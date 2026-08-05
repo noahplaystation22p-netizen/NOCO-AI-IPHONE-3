@@ -158,8 +158,17 @@ extension CompanionAPI {
     }
 
     private func authorizedRequest(path: String, method: String) throws -> URLRequest {
-        guard let url = URL(string: path, relativeTo: baseURL)?.absoluteURL else {
-            throw CompanionAPIError.invalidURL
+        // CRITICAL: URL(string:relativeTo:) replaces the last path segment when baseURL
+        // has no trailing slash ("…/api/v1" + "chat" → "…/api/chat"). Always append.
+        let parts = path.split(separator: "?", maxSplits: 1, omittingEmptySubsequences: false)
+        let pathOnly = String(parts[0]).trimmingCharacters(in: CharacterSet(charactersIn: "/"))
+        var url = baseURL
+        for segment in pathOnly.split(separator: "/") {
+            url = url.appendingPathComponent(String(segment))
+        }
+        if parts.count > 1, var comps = URLComponents(url: url, resolvingAgainstBaseURL: false) {
+            comps.percentEncodedQuery = String(parts[1])
+            if let withQuery = comps.url { url = withQuery }
         }
         var request = URLRequest(url: url)
         request.httpMethod = method
@@ -177,8 +186,19 @@ extension CompanionAPI {
                     request.httpBody = try encoder.encode(body)
 
                     let (bytes, response) = try await session.bytes(for: request)
-                    guard let http = response as? HTTPURLResponse, (200...299).contains(http.statusCode) else {
-                        throw CompanionAPIError.server("Stream-Fehler")
+                    guard let http = response as? HTTPURLResponse else {
+                        throw CompanionAPIError.server("Keine Server-Antwort")
+                    }
+                    guard (200...299).contains(http.statusCode) else {
+                        // Collect a short body for better errors (e.g. Unbekannte Route)
+                        var errData = Data()
+                        for try await b in bytes.prefix(4096) { errData.append(b) }
+                        let msg = String(data: errData, encoding: .utf8) ?? ""
+                        if http.statusCode == 401 { throw CompanionAPIError.unauthorized }
+                        if msg.lowercased().contains("unbekannte route") || http.statusCode == 404 {
+                            throw CompanionAPIError.server("API-Route fehlt (\(path)) — Companion Server neu starten?")
+                        }
+                        throw CompanionAPIError.server(msg.isEmpty ? "Stream-Fehler HTTP \(http.statusCode)" : msg)
                     }
 
                     var lineBuffer = ""
@@ -227,8 +247,19 @@ extension CompanionAPI {
                     request.httpBody = try encoder.encode(body)
 
                     let (bytes, response) = try await session.bytes(for: request)
-                    guard let http = response as? HTTPURLResponse, (200...299).contains(http.statusCode) else {
-                        throw CompanionAPIError.server("Stream-Fehler")
+                    guard let http = response as? HTTPURLResponse else {
+                        throw CompanionAPIError.server("Keine Server-Antwort")
+                    }
+                    guard (200...299).contains(http.statusCode) else {
+                        // Collect a short body for better errors (e.g. Unbekannte Route)
+                        var errData = Data()
+                        for try await b in bytes.prefix(4096) { errData.append(b) }
+                        let msg = String(data: errData, encoding: .utf8) ?? ""
+                        if http.statusCode == 401 { throw CompanionAPIError.unauthorized }
+                        if msg.lowercased().contains("unbekannte route") || http.statusCode == 404 {
+                            throw CompanionAPIError.server("API-Route fehlt (\(path)) — Companion Server neu starten?")
+                        }
+                        throw CompanionAPIError.server(msg.isEmpty ? "Stream-Fehler HTTP \(http.statusCode)" : msg)
                     }
 
                     var lineBuffer = ""

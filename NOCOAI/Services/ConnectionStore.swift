@@ -53,7 +53,7 @@ final class ConnectionStore: ObservableObject {
     }
 
     var baseURLString: String {
-        "http://\(serverHost):\(serverPort)/api/v1"
+        "http://\(serverHost):\(serverPort)/api/v1/"
     }
 
     func rebuildAPI() {

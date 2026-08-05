@@ -33,6 +33,50 @@ struct ImagesHubView: View {
                         .padding(.horizontal, 8)
 
                     createCard
+
+                    NavigationLink {
+                        MagischerRadiererView()
+                            .environmentObject(connection)
+                    } label: {
+                        HStack(spacing: 14) {
+                            ZStack {
+                                Circle()
+                                    .fill(
+                                        LinearGradient(
+                                            colors: [
+                                                Color(red: 0.45, green: 0.55, blue: 1),
+                                                Color(red: 0.85, green: 0.4, blue: 0.9)
+                                            ],
+                                            startPoint: .topLeading,
+                                            endPoint: .bottomTrailing
+                                        )
+                                    )
+                                    .frame(width: 44, height: 44)
+                                Image(systemName: "eraser.fill")
+                                    .foregroundStyle(.white)
+                            }
+                            VStack(alignment: .leading, spacing: 4) {
+                                Text("Magischer Radierer")
+                                    .font(.headline)
+                                    .foregroundStyle(.primary)
+                                Text("Bemalen → entfernen oder ändern")
+                                    .font(.caption)
+                                    .foregroundStyle(.secondary)
+                            }
+                            Spacer()
+                            Image(systemName: "chevron.right")
+                                .font(.caption.weight(.semibold))
+                                .foregroundStyle(.secondary)
+                        }
+                        .padding(16)
+                        .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 20, style: .continuous))
+                        .overlay(
+                            RoundedRectangle(cornerRadius: 20, style: .continuous)
+                                .stroke(NOCOAITheme.glowPrimary.opacity(0.3), lineWidth: 1)
+                        )
+                    }
+                    .buttonStyle(IntelligencePressStyle(haptic: { HapticService.open() }))
+
                     resultCard
                     galleryCard
                 }

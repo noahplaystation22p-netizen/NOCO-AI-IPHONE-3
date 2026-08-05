@@ -65,6 +65,19 @@ struct MoreView: View {
                         }
                         .buttonStyle(IntelligencePressStyle(haptic: { HapticService.open() }))
 
+                        NavigationLink {
+                            MagischerRadiererView()
+                                .environmentObject(connection)
+                        } label: {
+                            IntelligenceFeatureTile(
+                                title: "Radierer",
+                                subtitle: "Bereich bemalen & ändern",
+                                systemImage: "eraser.fill",
+                                accent: Color(red: 0.75, green: 0.4, blue: 0.95)
+                            )
+                        }
+                        .buttonStyle(IntelligencePressStyle(haptic: { HapticService.open() }))
+
                         IntelligenceFeatureTile(
                             title: "NOCO Sync",
                             subtitle: connection.isOnline ? "Live mit dem PC" : "Warte auf PC…",
@@ -78,7 +91,7 @@ struct MoreView: View {
                     connectionCard
                         .opacity(appear ? 1 : 0)
 
-                    Text("NOCO AI Companion v4.9")
+                    Text("NOCO AI Companion v5.5")
                         .font(.caption2)
                         .foregroundStyle(.secondary)
                         .padding(.top, 4)

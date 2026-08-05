@@ -11,6 +11,12 @@ final class KeyboardViewModel: ObservableObject {
     @Published var capsLock = false
     @Published var showingNumbers = false
     @Published var lastError: String?
+    @Published var showIntelligenceBurst = false
+    @Published var animationPhase: AnimationPhase = .idle
+
+    enum AnimationPhase: Equatable {
+        case idle, thinking, writing, success
+    }
 
     private weak var controller: KeyboardViewController?
     private var snapshotBefore = ""
@@ -128,6 +134,8 @@ final class KeyboardViewModel: ObservableObject {
         guard !isProcessing else { return }
 
         isProcessing = true
+        showIntelligenceBurst = true
+        animationPhase = .thinking
         lastError = nil
         statusLine = "\(action.title)…"
         UIImpactFeedbackGenerator(style: .medium).impactOccurred(intensity: 0.7)
@@ -139,22 +147,49 @@ final class KeyboardViewModel: ObservableObject {
 
         runTask?.cancel()
         runTask = Task {
-            defer { isProcessing = false }
+            defer {
+                isProcessing = false
+            }
             do {
-                // One-shot flash: more reliable than streaming into the field
                 let result = try await KeyboardAIClient.rewrite(action: action, text: source)
                 if Task.isCancelled { return }
+                animationPhase = .writing
+                statusLine = "Schreibt…"
                 clearCharacters(deleteCount)
-                controller?.textDocumentProxy.insertText(result)
+                await typewriterInsert(result)
+                if Task.isCancelled { return }
+                animationPhase = .success
                 statusLine = "Fertig · \(action.title)"
                 notifyHaptic.notificationOccurred(.success)
                 syncDocumentSnapshot()
+                try? await Task.sleep(nanoseconds: 550_000_000)
+                withAnimation(.easeOut(duration: 0.28)) {
+                    showIntelligenceBurst = false
+                    animationPhase = .idle
+                }
             } catch {
                 if Task.isCancelled { return }
+                showIntelligenceBurst = false
+                animationPhase = .idle
                 lastError = error.localizedDescription
                 statusLine = error.localizedDescription
                 notifyHaptic.notificationOccurred(.error)
             }
+        }
+    }
+
+    private func typewriterInsert(_ text: String) async {
+        guard let proxy = controller?.textDocumentProxy else { return }
+        // Chunk insert for fluid Apple-like reveal without feeling sluggish
+        let chars = Array(text)
+        var i = 0
+        let chunk = max(2, min(8, chars.count / 40 + 2))
+        while i < chars.count {
+            if Task.isCancelled { return }
+            let end = min(i + chunk, chars.count)
+            proxy.insertText(String(chars[i..<end]))
+            i = end
+            try? await Task.sleep(nanoseconds: 12_000_000)
         }
     }
 

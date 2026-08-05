@@ -51,6 +51,7 @@
 		NA0000010000000000000027 /* ChatHubView.swift in Sources */ = {isa = PBXBuildFile; fileRef = NA0000020000000000000027 /* ChatHubView.swift */; };
 		NA0000010000000000000028 /* ChatInputBar.swift in Sources */ = {isa = PBXBuildFile; fileRef = NA0000020000000000000028 /* ChatInputBar.swift */; };
 		NA0000010000000000000029 /* ImagesHubView.swift in Sources */ = {isa = PBXBuildFile; fileRef = NA0000020000000000000029 /* ImagesHubView.swift */; };
+		NA0000010000000000000070 /* MagischerRadiererView.swift in Sources */ = {isa = PBXBuildFile; fileRef = NA0000020000000000000070 /* MagischerRadiererView.swift */; };
 		NA000001000000000000002A /* DashboardView.swift in Sources */ = {isa = PBXBuildFile; fileRef = NA000002000000000000002A /* DashboardView.swift */; };
 		NA000001000000000000002B /* MoreView.swift in Sources */ = {isa = PBXBuildFile; fileRef = NA000002000000000000002B /* MoreView.swift */; };
 		NA000001000000000000002C /* CodeStudioView.swift in Sources */ = {isa = PBXBuildFile; fileRef = NA000002000000000000002C /* CodeStudioView.swift */; };
@@ -141,6 +142,7 @@
 		NA0000020000000000000027 /* ChatHubView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ChatHubView.swift; sourceTree = "<group>"; };
 		NA0000020000000000000028 /* ChatInputBar.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ChatInputBar.swift; sourceTree = "<group>"; };
 		NA0000020000000000000029 /* ImagesHubView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ImagesHubView.swift; sourceTree = "<group>"; };
+		NA0000020000000000000070 /* MagischerRadiererView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MagischerRadiererView.swift; sourceTree = "<group>"; };
 		NA000002000000000000002A /* DashboardView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DashboardView.swift; sourceTree = "<group>"; };
 		NA000002000000000000002B /* MoreView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MoreView.swift; sourceTree = "<group>"; };
 		NA000002000000000000002C /* CodeStudioView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CodeStudioView.swift; sourceTree = "<group>"; };
@@ -326,6 +328,7 @@
 			isa = PBXGroup;
 			children = (
 				NA0000020000000000000029 /* ImagesHubView.swift */,
+				NA0000020000000000000070 /* MagischerRadiererView.swift */,
 			);
 			path = Images;
 			sourceTree = "<group>";
@@ -586,6 +589,7 @@
 				NA0000010000000000000027 /* ChatHubView.swift in Sources */,
 				NA0000010000000000000028 /* ChatInputBar.swift in Sources */,
 				NA0000010000000000000029 /* ImagesHubView.swift in Sources */,
+				NA0000010000000000000070 /* MagischerRadiererView.swift in Sources */,
 				NA000001000000000000002A /* DashboardView.swift in Sources */,
 				NA000001000000000000002B /* MoreView.swift in Sources */,
 				NA000001000000000000002C /* CodeStudioView.swift in Sources */,
@@ -639,7 +643,7 @@
 				CODE_SIGNING_REQUIRED = NO;
 				CODE_SIGN_IDENTITY = "";
 				CODE_SIGNING_STYLE = Manual;
-				CURRENT_PROJECT_VERSION = 38;
+				CURRENT_PROJECT_VERSION = 39;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = NOCOAIKeyboard/Info.plist;
 				INFOPLIST_KEY_CFBundleDisplayName = "NOCO AI";
@@ -649,7 +653,7 @@
 					"@executable_path/Frameworks",
 					"@executable_path/../../Frameworks",
 				);
-				MARKETING_VERSION = 5.4;
+				MARKETING_VERSION = 5.5;
 				PRODUCT_BUNDLE_IDENTIFIER = de.noco.nocoai.keyboard;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SKIP_INSTALL = YES;
@@ -668,7 +672,7 @@
 				CODE_SIGNING_REQUIRED = NO;
 				CODE_SIGN_IDENTITY = "";
 				CODE_SIGNING_STYLE = Manual;
-				CURRENT_PROJECT_VERSION = 38;
+				CURRENT_PROJECT_VERSION = 39;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = NOCOAIKeyboard/Info.plist;
 				INFOPLIST_KEY_CFBundleDisplayName = "NOCO AI";
@@ -678,7 +682,7 @@
 					"@executable_path/Frameworks",
 					"@executable_path/../../Frameworks",
 				);
-				MARKETING_VERSION = 5.4;
+				MARKETING_VERSION = 5.5;
 				PRODUCT_BUNDLE_IDENTIFIER = de.noco.nocoai.keyboard;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SKIP_INSTALL = YES;
@@ -733,7 +737,7 @@
 				CODE_SIGN_ENTITLEMENTS = NOCOAI/NOCOAI.entitlements;
 				CODE_SIGNING_ALLOWED = NO;
 				CODE_SIGNING_REQUIRED = NO;
-				CURRENT_PROJECT_VERSION = 38;
+				CURRENT_PROJECT_VERSION = 39;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = NOCOAI/Info.plist;
@@ -748,7 +752,7 @@
 					"$(inherited)",
 					"@executable_path/Frameworks",
 				);
-				MARKETING_VERSION = 5.4;
+				MARKETING_VERSION = 5.5;
 				PRODUCT_BUNDLE_IDENTIFIER = de.noco.nocoai;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator";
@@ -767,7 +771,7 @@
 				CODE_SIGN_ENTITLEMENTS = NOCOAI/NOCOAI.entitlements;
 				CODE_SIGNING_ALLOWED = NO;
 				CODE_SIGNING_REQUIRED = NO;
-				CURRENT_PROJECT_VERSION = 38;
+				CURRENT_PROJECT_VERSION = 39;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = NOCOAI/Info.plist;
@@ -782,7 +786,7 @@
 					"$(inherited)",
 					"@executable_path/Frameworks",
 				);
-				MARKETING_VERSION = 5.4;
+				MARKETING_VERSION = 5.5;
 				PRODUCT_BUNDLE_IDENTIFIER = de.noco.nocoai;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator";
@@ -800,7 +804,7 @@
 				CODE_SIGN_ENTITLEMENTS = NOCOAISpeakWidget/NOCOAISpeakWidget.entitlements;
 				CODE_SIGNING_ALLOWED = NO;
 				CODE_SIGNING_REQUIRED = NO;
-				CURRENT_PROJECT_VERSION = 38;
+				CURRENT_PROJECT_VERSION = 39;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = NOCOAISpeakWidget/Info.plist;
 				INFOPLIST_KEY_CFBundleDisplayName = "NOCO Speak";
@@ -811,7 +815,7 @@
 					"@executable_path/Frameworks",
 					"@executable_path/../../Frameworks",
 				);
-				MARKETING_VERSION = 5.4;
+				MARKETING_VERSION = 5.5;
 				PRODUCT_BUNDLE_IDENTIFIER = de.noco.nocoai.SpeakWidget;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SKIP_INSTALL = YES;
@@ -828,7 +832,7 @@
 				CODE_SIGN_ENTITLEMENTS = NOCOAISpeakWidget/NOCOAISpeakWidget.entitlements;
 				CODE_SIGNING_ALLOWED = NO;
 				CODE_SIGNING_REQUIRED = NO;
-				CURRENT_PROJECT_VERSION = 38;
+				CURRENT_PROJECT_VERSION = 39;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = NOCOAISpeakWidget/Info.plist;
 				INFOPLIST_KEY_CFBundleDisplayName = "NOCO Speak";
@@ -839,7 +843,7 @@
 					"@executable_path/Frameworks",
 					"@executable_path/../../Frameworks",
 				);
-				MARKETING_VERSION = 5.4;
+				MARKETING_VERSION = 5.5;
 				PRODUCT_BUNDLE_IDENTIFIER = de.noco.nocoai.SpeakWidget;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SKIP_INSTALL = YES;

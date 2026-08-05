@@ -164,6 +164,43 @@ extension CompanionAPI {
         return try decoder.decode(ImageGenerateResponse.self, from: data)
     }
 
+    /// Magical eraser — paint mask (white = edit) + instruction → SD inpaint.
+    func inpaintImage(
+        prompt: String,
+        imageJPEG: Data,
+        maskPNG: Data,
+        conversationId: String?
+    ) async throws -> ImageGenerateResponse {
+        struct Body: Encodable {
+            let prompt: String
+            let imageBase64: String
+            let maskBase64: String
+            let conversationId: String?
+            let width: Int
+            let height: Int
+            let steps: Int
+            let denoisingStrength: Double
+        }
+        var request = try authorizedRequest(path: "images/inpaint", method: "POST")
+        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        request.timeoutInterval = 360
+        request.httpBody = try encoder.encode(
+            Body(
+                prompt: prompt,
+                imageBase64: imageJPEG.base64EncodedString(),
+                maskBase64: maskPNG.base64EncodedString(),
+                conversationId: conversationId,
+                width: 512,
+                height: 512,
+                steps: 10,
+                denoisingStrength: 0.72
+            )
+        )
+        let (data, response) = try await session.data(for: request)
+        try validate(response: response, data: data, isPairRequest: false)
+        return try decoder.decode(ImageGenerateResponse.self, from: data)
+    }
+
     func imageProgress(jobId: String? = nil) async throws -> ImageProgressResponse {
         var path = "images/progress"
         if let jobId { path += "?job_id=\(jobId)" }

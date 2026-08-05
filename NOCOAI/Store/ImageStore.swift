@@ -237,6 +237,34 @@ final class ImageStore: ObservableObject {
         statusText = "Abgebrochen"
     }
 
+    /// Magischer Radierer result → gallery.
+    func ingestEditedImage(prompt: String, localData: Data, path: String?) {
+        let url = media?.url(for: path)
+        let item = GeneratedImageItem(
+            prompt: "🪄 \(prompt)",
+            url: url,
+            localData: localData
+        )
+        gallery.insert(item, at: 0)
+        lastImageData = localData
+        lastImageURL = url
+        lastPrompt = prompt
+        phase = .done
+        statusText = "Radierer fertig"
+    }
+
+    func runInpaint(prompt: String, imageJPEG: Data, maskPNG: Data) async throws -> ImageGenerateResponse {
+        guard let api else {
+            throw CompanionAPIError.unreachable
+        }
+        return try await api.inpaintImage(
+            prompt: prompt,
+            imageJPEG: imageJPEG,
+            maskPNG: maskPNG,
+            conversationId: nil
+        )
+    }
+
     func saveLastToPhotos() async {
         let data: Data?
         if let lastImageData {

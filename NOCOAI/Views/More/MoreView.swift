@@ -77,7 +77,7 @@ struct MoreView: View {
                     connectionCard
                         .opacity(appear ? 1 : 0)
 
-                    Text("NOCO AI Companion v3.3")
+                    Text("NOCO AI Companion v3.4")
                         .font(.caption2)
                         .foregroundStyle(.secondary)
                         .padding(.top, 4)

@@ -499,38 +499,186 @@ struct IntelligenceHeroBanner: View {
 struct IntelligenceGeneratingOverlay: View {
     var progress: Double
     var status: String
+    var insight: String = ""
+    var etaSeconds: Int? = nil
 
     var body: some View {
-        VStack(spacing: 14) {
+        ImageCreationTheater(
+            progress: progress,
+            status: status,
+            insight: insight,
+            etaSeconds: etaSeconds
+        )
+    }
+}
+
+/// Full Apple-Intelligence theater for long SD waits (~4 min on CPU).
+struct ImageCreationTheater: View {
+    var progress: Double
+    var status: String
+    var insight: String
+    var etaSeconds: Int?
+
+    @State private var spin = false
+    @State private var breathe = false
+    @State private var sweep = false
+    @State private var particlePhase = false
+
+    private var pct: Int { Int((min(max(progress, 0), 1) * 100).rounded()) }
+
+    private var etaLabel: String? {
+        guard let eta = etaSeconds, eta > 0 else { return nil }
+        if eta >= 60 { return "~\(min(8, Int(ceil(Double(eta) / 60)))) Min" }
+        return "~\(eta)s"
+    }
+
+    var body: some View {
+        VStack(spacing: 18) {
             ZStack {
-                IntelligenceOrbitRings(size: 90)
+                // Soft aurora
                 Circle()
-                    .trim(from: 0, to: max(0.05, min(progress, 1)))
+                    .fill(NOCOAITheme.glowPrimary.opacity(breathe ? 0.28 : 0.12))
+                    .frame(width: 210, height: 210)
+                    .blur(radius: 36)
+                    .scaleEffect(breathe ? 1.08 : 0.92)
+
+                Circle()
+                    .fill(NOCOAITheme.glowAccent.opacity(breathe ? 0.18 : 0.08))
+                    .frame(width: 160, height: 160)
+                    .blur(radius: 28)
+                    .offset(x: breathe ? 12 : -10, y: breathe ? -8 : 10)
+
+                IntelligenceOrbitRings(size: 150)
+                    .opacity(0.55)
+
+                // Progress ring
+                Circle()
+                    .stroke(Color.primary.opacity(0.08), lineWidth: 10)
+                    .frame(width: 118, height: 118)
+
+                Circle()
+                    .trim(from: 0, to: max(0.04, min(progress, 1)))
                     .stroke(
                         AngularGradient(
-                            colors: [NOCOAITheme.glowPrimary, NOCOAITheme.glowSecondary, NOCOAITheme.glowAccent],
-                            center: .center
+                            colors: [
+                                NOCOAITheme.glowPrimary,
+                                NOCOAITheme.glowSecondary,
+                                NOCOAITheme.glowAccent,
+                                NOCOAITheme.glowPrimary
+                            ],
+                            center: .center,
+                            angle: .degrees(spin ? 360 : 0)
                         ),
-                        style: StrokeStyle(lineWidth: 4, lineCap: .round)
+                        style: StrokeStyle(lineWidth: 10, lineCap: .round)
                     )
-                    .frame(width: 54, height: 54)
+                    .frame(width: 118, height: 118)
                     .rotationEffect(.degrees(-90))
-                Image(systemName: "paintbrush.pointed.fill")
-                    .foregroundStyle(NOCOAITheme.accent)
-                    .symbolEffect(.pulse, options: .repeating)
+                    .shadow(color: NOCOAITheme.glowPrimary.opacity(0.45), radius: 10)
+                    .animation(.easeInOut(duration: 0.55), value: progress)
+
+                VStack(spacing: 2) {
+                    Text("\(pct)%")
+                        .font(.title2.weight(.bold).monospacedDigit())
+                        .foregroundStyle(NOCOAITheme.accent)
+                        .contentTransition(.numericText())
+                    if let etaLabel {
+                        Text(etaLabel)
+                            .font(.caption2.weight(.semibold))
+                            .foregroundStyle(.secondary)
+                    }
+                }
+
+                // Floating particles
+                ForEach(0..<8, id: \.self) { i in
+                    Circle()
+                        .fill(dotColor(i))
+                        .frame(width: 4, height: 4)
+                        .offset(
+                            x: cos(Double(i) / 8 * .pi * 2) * (particlePhase ? 72 : 58),
+                            y: sin(Double(i) / 8 * .pi * 2) * (particlePhase ? 72 : 58)
+                        )
+                        .opacity(particlePhase ? 0.95 : 0.35)
+                        .blur(radius: 0.4)
+                }
             }
-            Text(status)
-                .font(.caption.weight(.medium))
-                .foregroundStyle(.secondary)
-            IntelligenceShimmerLine()
-                .frame(width: 140)
+            .frame(height: 200)
+
+            // Sweeping shimmer bar
+            GeometryReader { geo in
+                ZStack(alignment: .leading) {
+                    Capsule()
+                        .fill(Color.primary.opacity(0.08))
+                        .frame(height: 8)
+                    Capsule()
+                        .fill(
+                            LinearGradient(
+                                colors: [
+                                    NOCOAITheme.glowPrimary,
+                                    NOCOAITheme.glowSecondary,
+                                    NOCOAITheme.glowAccent
+                                ],
+                                startPoint: .leading,
+                                endPoint: .trailing
+                            )
+                        )
+                        .frame(width: max(18, geo.size.width * min(max(progress, 0.04), 1)), height: 8)
+                        .shadow(color: NOCOAITheme.glowPrimary.opacity(0.5), radius: 6)
+                        .animation(.spring(response: 0.5, dampingFraction: 0.85), value: progress)
+
+                    Capsule()
+                        .fill(Color.white.opacity(0.35))
+                        .frame(width: 36, height: 8)
+                        .offset(x: sweep ? max(0, geo.size.width * min(progress, 1) - 36) : 0)
+                        .opacity(0.5)
+                }
+            }
+            .frame(height: 8)
+            .padding(.horizontal, 28)
+
+            VStack(spacing: 6) {
+                Text(status)
+                    .font(.subheadline.weight(.semibold))
+                    .multilineTextAlignment(.center)
+                if !insight.isEmpty {
+                    Text(insight)
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                        .multilineTextAlignment(.center)
+                        .id(insight)
+                        .transition(.opacity.combined(with: .move(edge: .bottom)))
+                }
+                Text("Dein PC rechnet — das kann ein paar Minuten dauern.")
+                    .font(.caption2)
+                    .foregroundStyle(.tertiary)
+                    .multilineTextAlignment(.center)
+                    .padding(.top, 2)
+            }
+            .padding(.horizontal, 12)
+            .animation(.easeInOut(duration: 0.35), value: insight)
         }
-        .padding(20)
+        .padding(.vertical, 22)
+        .padding(.horizontal, 12)
+        .frame(maxWidth: .infinity)
         .background(
-            RoundedRectangle(cornerRadius: 22, style: .continuous)
+            RoundedRectangle(cornerRadius: 26, style: .continuous)
                 .fill(.ultraThinMaterial)
-                .intelligenceShimmerBorder(cornerRadius: 22)
+                .intelligenceShimmerBorder(cornerRadius: 26)
+                .shadow(color: NOCOAITheme.glowPrimary.opacity(0.2), radius: 20, y: 8)
         )
+        .onAppear {
+            withAnimation(.linear(duration: 6).repeatForever(autoreverses: false)) { spin = true }
+            withAnimation(.easeInOut(duration: 2.8).repeatForever(autoreverses: true)) { breathe = true }
+            withAnimation(.easeInOut(duration: 1.6).repeatForever(autoreverses: true)) { particlePhase = true }
+            withAnimation(.easeInOut(duration: 1.8).repeatForever(autoreverses: true)) { sweep = true }
+        }
+    }
+
+    private func dotColor(_ i: Int) -> Color {
+        switch i % 3 {
+        case 0: return NOCOAITheme.glowPrimary
+        case 1: return NOCOAITheme.glowSecondary
+        default: return NOCOAITheme.glowAccent
+        }
     }
 }
 

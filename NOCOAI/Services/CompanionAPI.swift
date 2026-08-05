@@ -41,7 +41,7 @@ struct CompanionAPI {
     let session: URLSession = {
         let config = URLSessionConfiguration.default
         config.timeoutIntervalForRequest = 20
-        config.timeoutIntervalForResource = 300
+        config.timeoutIntervalForResource = 400
         config.waitsForConnectivity = true
         return URLSession(configuration: config)
     }()

@@ -87,13 +87,30 @@ extension CompanionAPI {
     }
 
     func generateImage(prompt: String, conversationId: String?) async throws -> ImageGenerateResponse {
-        try await post("images/txt2img", body: ImageGenerateRequest(prompt: prompt, conversationId: conversationId), as: ImageGenerateResponse.self)
+        var request = try authorizedRequest(path: "images/txt2img", method: "POST")
+        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        // SD on CPU can take several minutes — must outlive default 20s request timeout
+        request.timeoutInterval = 360
+        request.httpBody = try encoder.encode(
+            ImageGenerateRequest(prompt: prompt, conversationId: conversationId)
+        )
+        let (data, response) = try await session.data(for: request)
+        try validate(response: response, data: data, isPairRequest: false)
+        return try decoder.decode(ImageGenerateResponse.self, from: data)
     }
 
-    func imageProgress(jobId: String?) async throws -> ImageProgressResponse {
+    func imageProgress(jobId: String? = nil) async throws -> ImageProgressResponse {
         var path = "images/progress"
         if let jobId { path += "?job_id=\(jobId)" }
-        return try await get(path, as: ImageProgressResponse.self)
+        var request = try authorizedRequest(path: path, method: "GET")
+        request.timeoutInterval = 8
+        let (data, response) = try await session.data(for: request)
+        try validate(response: response, data: data, isPairRequest: false)
+        return try decoder.decode(ImageProgressResponse.self, from: data)
+    }
+
+    func interruptImage() async throws {
+        let _: ImageInterruptResponse = try await post("images/interrupt", body: EmptyBody(), as: ImageInterruptResponse.self)
     }
 
     func fetchCodeSessions() async throws -> [CodeSession] {

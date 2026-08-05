@@ -174,12 +174,27 @@ struct FeaturesResponse: Decodable {
 struct ImageGenerateRequest: Encodable {
     let prompt: String
     let conversationId: String?
+    let width: Int?
+    let height: Int?
+    let steps: Int?
+
+    init(prompt: String, conversationId: String? = nil, width: Int? = 384, height: Int? = 384, steps: Int? = 6) {
+        self.prompt = prompt
+        self.conversationId = conversationId
+        self.width = width
+        self.height = height
+        self.steps = steps
+    }
 }
 
 struct ImageGenerateResponse: Decodable {
     let imageUrl: String?
+    let imageBase64: String?
+    let mediaPath: String?
     let jobId: String?
     let conversationId: String?
+
+    var resolvedPath: String? { imageUrl ?? mediaPath }
 }
 
 struct ImageProgressResponse: Decodable {
@@ -188,8 +203,43 @@ struct ImageProgressResponse: Decodable {
     let status: String?
     let imageUrl: String?
     let done: Bool?
+    let etaRelative: Double?
+    let textinfo: String?
+    let state: SDState?
 
-    var value: Double { percent ?? progress ?? 0 }
+    struct SDState: Decodable {
+        let samplingStep: Int?
+        let samplingSteps: Int?
+        let job: String?
+        let jobCount: Int?
+    }
+
+    /// 0…1 (caps below 1 until done)
+    var normalizedProgress: Double {
+        if let step = state?.samplingStep, let steps = state?.samplingSteps, steps > 0 {
+            return min(Double(step) / Double(steps), 0.97)
+        }
+        if let p = progress {
+            let n = p > 1 ? p / 100 : p
+            return max(0, min(n, 0.97))
+        }
+        if let pct = percent {
+            let n = pct > 1 ? pct / 100 : pct
+            return max(0, min(n, 0.97))
+        }
+        return 0
+    }
+
+    var value: Double { normalizedProgress * 100 }
+
+    var stepLabel: String? {
+        guard let step = state?.samplingStep, let steps = state?.samplingSteps, steps > 0 else { return nil }
+        return "Step \(step)/\(steps)"
+    }
+}
+
+struct ImageInterruptResponse: Decodable {
+    let ok: Bool?
 }
 
 struct CodeSession: Identifiable, Decodable, Equatable {

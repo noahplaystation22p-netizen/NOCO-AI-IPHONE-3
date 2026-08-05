@@ -18,18 +18,20 @@ struct PairingView: View {
     var body: some View {
         ZStack {
             IntelligenceAtmosphere()
-            FloatingIntelligenceDots(count: 16)
+            FloatingIntelligenceDots(count: 10)
 
             VStack(spacing: 24) {
                 Spacer(minLength: 28)
 
                 ZStack {
-                    IntelligenceOrbitRings(size: 200)
-                        .opacity(0.85)
+                    PixelSphereView(size: 240, intensity: 0.85)
+                        .opacity(0.9)
+                    IntelligenceOrbitRings(size: 190)
+                        .opacity(0.55)
                     BrandLogo(size: 84)
                         .scaleEffect(appear ? 1 : 0.88)
                 }
-                .frame(height: 210)
+                .frame(height: 230)
 
                 VStack(spacing: 10) {
                     Text("NOCO AI")

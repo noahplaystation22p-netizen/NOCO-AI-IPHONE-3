@@ -589,19 +589,20 @@ struct ImageCreationTheater: View {
                 }
 
                 // Floating particles
-                ForEach(0..<8, id: \.self) { i in
+                ForEach(0..<4, id: \.self) { i in
                     Circle()
                         .fill(dotColor(i))
                         .frame(width: 4, height: 4)
                         .offset(
-                            x: cos(Double(i) / 8 * .pi * 2) * (particlePhase ? 72 : 58),
-                            y: sin(Double(i) / 8 * .pi * 2) * (particlePhase ? 72 : 58)
+                            x: cos(Double(i) / 4 * .pi * 2) * (particlePhase ? 68 : 56),
+                            y: sin(Double(i) / 4 * .pi * 2) * (particlePhase ? 68 : 56)
                         )
                         .opacity(particlePhase ? 0.95 : 0.35)
                         .blur(radius: 0.4)
                 }
             }
             .frame(height: 200)
+            .drawingGroup() // Flatten layers — much smoother during SD wait
 
             // Sweeping shimmer bar
             GeometryReader { geo in
@@ -666,10 +667,10 @@ struct ImageCreationTheater: View {
                 .shadow(color: NOCOAITheme.glowPrimary.opacity(0.2), radius: 20, y: 8)
         )
         .onAppear {
-            withAnimation(.linear(duration: 6).repeatForever(autoreverses: false)) { spin = true }
-            withAnimation(.easeInOut(duration: 2.8).repeatForever(autoreverses: true)) { breathe = true }
-            withAnimation(.easeInOut(duration: 1.6).repeatForever(autoreverses: true)) { particlePhase = true }
-            withAnimation(.easeInOut(duration: 1.8).repeatForever(autoreverses: true)) { sweep = true }
+            withAnimation(.linear(duration: 12).repeatForever(autoreverses: false)) { spin = true }
+            withAnimation(.easeInOut(duration: 3.6).repeatForever(autoreverses: true)) { breathe = true }
+            withAnimation(.easeInOut(duration: 2.4).repeatForever(autoreverses: true)) { particlePhase = true }
+            withAnimation(.easeInOut(duration: 2.6).repeatForever(autoreverses: true)) { sweep = true }
         }
     }
 
@@ -830,5 +831,83 @@ struct IntelligenceMessageArrive: ViewModifier {
 extension View {
     func intelligenceMessageArrive() -> some View {
         modifier(IntelligenceMessageArrive())
+    }
+}
+
+// MARK: - Pixel sphere (decorative pairing aura — QR still does the scan)
+
+/// Lightweight colorful pixel-orb that swings around a center. Cheap (~48 dots).
+struct PixelSphereView: View {
+    var size: CGFloat = 220
+    var intensity: Double = 1
+
+    @State private var phase = false
+
+    private let count = 48
+
+    var body: some View {
+        TimelineView(.animation(minimumInterval: 1 / 24)) { timeline in
+            let t = timeline.date.timeIntervalSinceReferenceDate
+            Canvas { ctx, canvasSize in
+                let mid = CGPoint(x: canvasSize.width / 2, y: canvasSize.height / 2)
+                let r = min(canvasSize.width, canvasSize.height) * 0.42
+                let swing = sin(t * 1.15) * 10
+                let tilt = cos(t * 0.85) * 0.35
+                for i in 0..<count {
+                    let u = Double(i) / Double(count)
+                    let lat = (u * 2 - 1) * .pi / 2
+                    let lon = u * .pi * 8 + t * 1.4 + Double(i) * 0.17
+                    let x = cos(lat) * cos(lon)
+                    let y = sin(lat)
+                    let z = cos(lat) * sin(lon)
+                    // simple perspective
+                    let depth = (z * 0.55 + 0.7)
+                    let px = mid.x + CGFloat(x) * r * CGFloat(depth) + CGFloat(swing)
+                    let py = mid.y + CGFloat(y * cos(tilt) - z * sin(tilt)) * r * CGFloat(depth)
+                    let s = max(1.6, 3.8 * depth) * intensity
+                    let hue = (u + t * 0.08).truncatingRemainder(dividingBy: 1)
+                    let color = Color(hue: hue, saturation: 0.85, brightness: 0.95)
+                        .opacity(0.35 + 0.55 * depth)
+                    let rect = CGRect(x: px - s / 2, y: py - s / 2, width: s, height: s)
+                    ctx.fill(Path(ellipseIn: rect), with: .color(color))
+                }
+            }
+        }
+        .frame(width: size, height: size)
+        .allowsHitTesting(false)
+        .onAppear {
+            phase.toggle()
+        }
+    }
+}
+
+/// Soft aurora ring used around QR / scanner frames.
+struct IntelligenceScanAura: View {
+    @State private var spin = false
+
+    var body: some View {
+        ZStack {
+            PixelSphereView(size: 260, intensity: 0.9)
+                .blur(radius: 0.2)
+            Circle()
+                .stroke(
+                    AngularGradient(
+                        colors: [
+                            Color(red: 0.4, green: 0.85, blue: 1),
+                            Color(red: 0.7, green: 0.4, blue: 1),
+                            Color(red: 1.0, green: 0.45, blue: 0.7),
+                            Color(red: 0.4, green: 0.95, blue: 0.7),
+                            Color(red: 0.4, green: 0.85, blue: 1)
+                        ],
+                        center: .center
+                    ),
+                    lineWidth: 2
+                )
+                .frame(width: 168, height: 168)
+                .rotationEffect(.degrees(spin ? 360 : 0))
+                .animation(.linear(duration: 10).repeatForever(autoreverses: false), value: spin)
+        }
+        .onAppear { spin = true }
+        .allowsHitTesting(false)
     }
 }

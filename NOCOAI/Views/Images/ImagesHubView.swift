@@ -39,14 +39,10 @@ struct ImagesHubView: View {
             }
             .nocoBackground()
             .overlay {
-                FloatingIntelligenceDots(count: 10)
-                    .opacity(0.28)
-                    .allowsHitTesting(false)
-            }
-            .overlay {
-                if connection.images.isGenerating {
-                    IntelligenceBreathingAura()
-                        .opacity(0.45)
+                // Skip heavy overlays while generating — big lag win on older iPhones
+                if !connection.images.isGenerating {
+                    FloatingIntelligenceDots(count: 6)
+                        .opacity(0.22)
                         .allowsHitTesting(false)
                 }
             }

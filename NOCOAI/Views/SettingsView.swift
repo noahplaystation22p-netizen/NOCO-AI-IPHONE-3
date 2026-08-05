@@ -8,6 +8,7 @@ struct SettingsView: View {
     @State private var autoSpeak = true
     @State private var voiceId = ""
     @State private var voices: [AVSpeechSynthesisVoice] = []
+    @State private var previewSynth = AVSpeechSynthesizer()
 
     var body: some View {
         NavigationStack {
@@ -43,11 +44,12 @@ struct SettingsView: View {
                     }
                     .onChange(of: voiceId) { _, newValue in
                         UserDefaults.standard.set(newValue, forKey: "nocoai.voiceId")
+                        previewVoice(identifier: newValue)
                     }
                 } header: {
                     Text("Speak")
                 } footer: {
-                    Text("Standard ist Blitz für schnelle Spoken Replies. Stimme bevorzugt Premium/Enhanced Deutsch.")
+                    Text("Stimme wählen → kurzer Testsatz. Standard Blitz für schnelle Spoken Replies.")
                 }
 
                 Section("Erweitert") {
@@ -83,8 +85,8 @@ struct SettingsView: View {
                 }
 
                 Section("Info") {
-                    Text("NOCO AI Companion v3.5")
-                    Text("Live-Sync · Tipp-Sync · Speak · Bildideen")
+                    Text("NOCO AI Companion v4.4")
+                    Text("Live-Sync · Speak · Bildideen · Pixel-Aura")
                         .font(.footnote)
                         .foregroundStyle(NOCOAITheme.secondaryText(for: scheme))
                 }
@@ -121,5 +123,25 @@ struct SettingsView: View {
         case .enhanced: return 2
         default: return 1
         }
+    }
+
+    private func previewVoice(identifier: String) {
+        previewSynth.stopSpeaking(at: .immediate)
+        let utterance = AVSpeechUtterance(string: "Hallo, ich bin NOCO AI. So klingt diese Stimme.")
+        if identifier.isEmpty {
+            utterance.voice = AVSpeechSynthesisVoice(language: "de-DE")
+        } else {
+            utterance.voice = AVSpeechSynthesisVoice(identifier: identifier)
+                ?? AVSpeechSynthesisVoice(language: "de-DE")
+        }
+        utterance.rate = AVSpeechUtteranceDefaultSpeechRate * 0.96
+        utterance.pitchMultiplier = 1.05
+        utterance.volume = 1.0
+        do {
+            try AVAudioSession.sharedInstance().setCategory(.playback, mode: .spokenAudio, options: [.duckOthers])
+            try AVAudioSession.sharedInstance().setActive(true)
+        } catch { /* best effort */ }
+        HapticService.selection()
+        previewSynth.speak(utterance)
     }
 }

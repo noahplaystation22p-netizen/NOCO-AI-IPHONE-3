@@ -290,7 +290,7 @@ final class ImageStore: ObservableObject {
         pollTask = Task { [weak self] in
             while !Task.isCancelled {
                 await self?.tickProgress()
-                try? await Task.sleep(nanoseconds: 1_200_000_000)
+                try? await Task.sleep(nanoseconds: 2_500_000_000)
             }
         }
     }
@@ -318,7 +318,7 @@ final class ImageStore: ObservableObject {
                 sawRealProgress = true
                 phase = .rendering
             }
-            if next > progress {
+            if next > progress + 0.012 {
                 progress = next
             } else if !sawRealProgress {
                 // Soft time-based fill while SD cold-starts (up to ~70% over 3 min)

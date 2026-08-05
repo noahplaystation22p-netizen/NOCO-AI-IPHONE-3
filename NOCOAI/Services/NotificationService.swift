@@ -29,21 +29,23 @@ enum AppNotificationService {
 
     static func notifyImageReady(prompt: String) async {
         guard await requestAuthorizationIfNeeded() else { return }
-        // Only when user left the app — in-app UI already shows the result
-        guard UIApplication.shared.applicationState != .active else { return }
 
         UNUserNotificationCenter.current().removeDeliveredNotifications(withIdentifiers: [imageRunningId])
         UNUserNotificationCenter.current().removePendingNotificationRequests(withIdentifiers: [imageRunningId])
 
         let content = UNMutableNotificationContent()
-        content.title = "Bildidee fertig"
+        content.title = "Bildidee fertig ✨"
         content.body = prompt.isEmpty
             ? "Dein Bild ist bereit — tippe zum Öffnen."
-            : String(prompt.prefix(100))
+            : "Fertig: \(String(prompt.prefix(100)))"
         content.sound = .default
-        content.badge = 1
+        content.badge = NSNumber(value: 1)
         content.userInfo = ["screen": "images"]
         content.interruptionLevel = .timeSensitive
+        // Extra banner even if the app is open (user asked for a clear "done" ping)
+        if #available(iOS 15.0, *) {
+            content.relevanceScore = 1.0
+        }
 
         let request = UNNotificationRequest(
             identifier: "\(imageReadyId).\(UUID().uuidString)",

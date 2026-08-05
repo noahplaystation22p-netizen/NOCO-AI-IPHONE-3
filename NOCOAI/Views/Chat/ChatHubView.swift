@@ -157,7 +157,7 @@ struct ChatHubView: View {
             IntelligenceShimmerLine()
                 .padding(.horizontal, 60)
 
-            FloatingIntelligenceDots(count: 10)
+            FloatingIntelligenceDots(count: 6)
                 .frame(height: 56)
                 .padding(.horizontal, 36)
 

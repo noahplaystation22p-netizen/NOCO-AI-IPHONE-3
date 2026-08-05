@@ -19,7 +19,7 @@ struct ChatInputBar: View {
                 if connection.chat.mode != $0 {
                     HapticService.selection()
                 }
-                connection.chat.mode = $0
+                connection.chat.setMode($0)
             }
         )
     }

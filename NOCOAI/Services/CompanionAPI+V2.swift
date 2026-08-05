@@ -67,6 +67,18 @@ extension CompanionAPI {
         )
     }
 
+    func postMode(_ mode: AIMode) async throws {
+        struct Body: Encodable {
+            let mode: String
+            let source: String
+        }
+        let _: EmptyResponse = try await post(
+            "mode",
+            body: Body(mode: mode.rawValue, source: "mobile"),
+            as: EmptyResponse.self
+        )
+    }
+
     func streamChatV2(message: String, conversationId: String?, mode: AIMode) -> AsyncThrowingStream<ChatStreamChunk, Error> {
         streamSSEChunks(
             path: "chat",
@@ -239,21 +251,12 @@ extension CompanionAPI {
                         throw CompanionAPIError.server(msg.isEmpty ? "Stream-Fehler HTTP \(http.statusCode)" : msg)
                     }
 
-                    var lineBuffer = ""
-                    for try await byte in bytes {
-                        let char = Character(UnicodeScalar(byte))
-                        if char == "\n" {
-                            if let chunk = try parseSSEChunk(lineBuffer) {
-                                continuation.yield(chunk)
-                                if chunk.done == true { break }
-                            }
-                            lineBuffer = ""
-                        } else if char != "\r" {
-                            lineBuffer.append(char)
+                    // UTF-8 line decode — never treat raw bytes as Characters (breaks ä/ö/ü)
+                    for try await line in bytes.lines {
+                        if let chunk = try parseSSEChunk(line) {
+                            continuation.yield(chunk)
+                            if chunk.done == true { break }
                         }
-                    }
-                    if !lineBuffer.isEmpty, let chunk = try parseSSEChunk(lineBuffer) {
-                        continuation.yield(chunk)
                     }
                     continuation.finish()
                 } catch {
@@ -300,17 +303,9 @@ extension CompanionAPI {
                         throw CompanionAPIError.server(msg.isEmpty ? "Stream-Fehler HTTP \(http.statusCode)" : msg)
                     }
 
-                    var lineBuffer = ""
-                    for try await byte in bytes {
-                        let char = Character(UnicodeScalar(byte))
-                        if char == "\n" {
-                            try processSSELine(lineBuffer, continuation: continuation)
-                            lineBuffer = ""
-                        } else if char != "\r" {
-                            lineBuffer.append(char)
-                        }
+                    for try await line in bytes.lines {
+                        try processSSELine(line, continuation: continuation)
                     }
-                    if !lineBuffer.isEmpty { try processSSELine(lineBuffer, continuation: continuation) }
                     continuation.finish()
                 } catch {
                     continuation.finish(throwing: mapNetworkError(error))

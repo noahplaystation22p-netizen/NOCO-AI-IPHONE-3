@@ -89,7 +89,10 @@ struct ChatHubView: View {
                 ToolbarItem(placement: .topBarTrailing) {
                     HStack(spacing: 8) {
                         SyncBadge(active: connection.chat.isSyncActive)
-                        StatusBadge(online: connection.isOnline, label: connection.isOnline ? "Sync" : "Offline")
+                        StatusBadge(
+                            online: connection.isOnline,
+                            label: connection.isOnline ? "Online" : "Offline"
+                        )
                     }
                 }
             }

@@ -198,8 +198,10 @@ struct VoiceModeView: View {
 enum VoiceSettings {
     static var defaultMode: AIMode {
         get {
-            if let raw = UserDefaults.standard.string(forKey: "nocoai.voiceMode"),
-               let mode = AIMode(rawValue: raw) {
+            if let raw = UserDefaults.standard.string(forKey: "nocoai.voiceMode") {
+                let mode = AIMode.from(raw)
+                // Legacy Klar → keep Flash as Speak default
+                if raw == "normal" { return .flash }
                 return mode
             }
             return .flash

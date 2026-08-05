@@ -1,5 +1,6 @@
 import Foundation
 import SwiftUI
+import UIKit
 
 /// App-scoped Speak session so audio + Live Activity survive leaving the Speak UI.
 @MainActor
@@ -14,6 +15,7 @@ final class SpeakSessionController: ObservableObject {
     private weak var connection: ConnectionStore?
     private var isBusy = false
     private var wired = false
+    private var bgTask: UIBackgroundTaskIdentifier = .invalid
 
     func bind(connection: ConnectionStore) {
         self.connection = connection
@@ -40,6 +42,7 @@ final class SpeakSessionController: ObservableObject {
             try voice.activateBackgroundAudioSession()
             isRunning = true
             voice.sessionActive = true
+            beginBackgroundKeepAlive()
             SpeakLiveActivityManager.start()
             try voice.startListening(autoEnd: true)
             statusLine = "Zuhören — Pause sendet automatisch"
@@ -47,6 +50,7 @@ final class SpeakSessionController: ObservableObject {
             HapticService.medium()
         } catch {
             isRunning = false
+            endBackgroundKeepAlive()
             voice.phase = .error(error.localizedDescription)
             statusLine = "Mikrofon-Fehler"
         }
@@ -57,14 +61,33 @@ final class SpeakSessionController: ObservableObject {
         voice.sessionActive = false
         voice.stopSpeaking()
         voice.stopListening(cancel: true)
+        endBackgroundKeepAlive()
         SpeakLiveActivityManager.end()
         voice.phase = .idle
         statusLine = "Speak gestoppt"
     }
 
+    private func beginBackgroundKeepAlive() {
+        endBackgroundKeepAlive()
+        bgTask = UIApplication.shared.beginBackgroundTask(withName: "NOCO Speak") { [weak self] in
+            Task { @MainActor in
+                // Keep session flagged; iOS ending the task — audio session still helps briefly
+                self?.endBackgroundKeepAlive()
+            }
+        }
+    }
+
+    private func endBackgroundKeepAlive() {
+        if bgTask != .invalid {
+            UIApplication.shared.endBackgroundTask(bgTask)
+            bgTask = .invalid
+        }
+    }
+
     private func resumeListening() {
         guard isRunning, connection?.isOnline == true, !isBusy else { return }
         do {
+            try voice.activateBackgroundAudioSession()
             try voice.startListening(autoEnd: true)
             statusLine = "Wieder Zuhören…"
             pushLiveActivity(force: true)

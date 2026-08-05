@@ -19,9 +19,11 @@ final class ChatStore: ObservableObject {
     private var syncCursor: String?
     private var syncTask: Task<Void, Never>?
     private var typingTask: Task<Void, Never>?
+    private var modeTask: Task<Void, Never>?
     private var messageReloadTask: Task<Void, Never>?
     private var pendingReloadConversationId: String?
     private var deletedIds: Set<String> = Set(UserDefaults.standard.stringArray(forKey: "nocoai.deletedChats") ?? [])
+    private var applyingRemoteMode = false
 
     private var syncIntervalNs: UInt64 {
         peerTyping ? 450_000_000 : 900_000_000
@@ -238,6 +240,19 @@ final class ChatStore: ObservableObject {
         HapticService.medium()
     }
 
+    func setMode(_ newMode: AIMode) {
+        guard mode != newMode else { return }
+        mode = newMode
+        guard !applyingRemoteMode else { return }
+        modeTask?.cancel()
+        modeTask = Task { [weak self] in
+            guard let self, let api = self.api else { return }
+            try? await Task.sleep(nanoseconds: 120_000_000)
+            guard !Task.isCancelled else { return }
+            try? await api.postMode(newMode)
+        }
+    }
+
     func publishTyping(_ text: String) {
         guard let api, let cid = activeConversationId else { return }
         typingTask?.cancel()
@@ -305,8 +320,15 @@ final class ChatStore: ObservableObject {
             applyTypingPresence(res.typing)
             guard !res.events.isEmpty else { return }
 
-            isSyncActive = true
-            lastSyncAt = .now
+            let meaningfulSync = res.events.contains {
+                $0.type != "mode.updated" && $0.type != "typing.updated"
+            }
+            if meaningfulSync {
+                isSyncActive = true
+                lastSyncAt = .now
+            } else {
+                lastSyncAt = .now
+            }
 
             var needsConversationList = false
             var messageReloadIds = Set<String>()
@@ -343,6 +365,12 @@ final class ChatStore: ObservableObject {
                     guard event.source != "mobile" else { continue }
                     peerTyping = event.typing ?? true
                     peerTypingDraft = event.draftPreview
+                case "mode.updated":
+                    guard event.source != "mobile" else { continue }
+                    let next = AIMode.from(event.mode)
+                    applyingRemoteMode = true
+                    mode = next
+                    applyingRemoteMode = false
                 default:
                     break
                 }

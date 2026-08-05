@@ -1,14 +1,14 @@
 import Foundation
 
 enum AIMode: String, CaseIterable, Identifiable, Codable {
-    case flash, normal, think, auto
+    case flash, knowledge, think, auto
 
     var id: String { rawValue }
 
     var label: String {
         switch self {
         case .flash: return "Blitz"
-        case .normal: return "Klar"
+        case .knowledge: return "Wissen"
         case .think: return "Tiefe"
         case .auto: return "Intelligent"
         }
@@ -17,7 +17,7 @@ enum AIMode: String, CaseIterable, Identifiable, Codable {
     var subtitle: String {
         switch self {
         case .flash: return "Schnelle Antworten"
-        case .normal: return "Ausgewogen"
+        case .knowledge: return "Ohne Chat-Kontext"
         case .think: return "Nachdenken"
         case .auto: return "Wählt automatisch"
         }
@@ -26,10 +26,31 @@ enum AIMode: String, CaseIterable, Identifiable, Codable {
     var systemImage: String {
         switch self {
         case .flash: return "bolt.fill"
-        case .normal: return "circle.lefthalf.filled"
+        case .knowledge: return "book.fill"
         case .think: return "brain.head.profile"
         case .auto: return "sparkles"
         }
+    }
+
+    static func from(_ raw: String?) -> AIMode {
+        switch (raw ?? "").lowercased() {
+        case "flash", "blitz": return .flash
+        case "knowledge", "wissen", "normal", "klar": return .knowledge
+        case "think", "tiefe", "depth": return .think
+        case "auto", "intelligent": return .auto
+        default: return .auto
+        }
+    }
+
+    /// Accept legacy "normal" / "klar" / "wissen" from older builds / PC.
+    init(from decoder: Decoder) throws {
+        let raw = try decoder.singleValueContainer().decode(String.self)
+        self = AIMode.from(raw)
+    }
+
+    func encode(to encoder: Encoder) throws {
+        var c = encoder.singleValueContainer()
+        try c.encode(rawValue)
     }
 }
 
@@ -141,6 +162,7 @@ struct SyncEvent: Decodable {
     let draftPreview: String?
     let source: String?
     let typing: Bool?
+    let mode: String?
 }
 
 struct TypingPresence: Decodable, Equatable {

@@ -12,6 +12,7 @@ struct StatusBadge: View {
             )
             Text(label)
                 .font(.subheadline.weight(.semibold))
+                .contentTransition(.interpolate)
         }
         .padding(.horizontal, 12)
         .padding(.vertical, 8)
@@ -26,5 +27,7 @@ struct StatusBadge: View {
                         )
                 )
         )
+        .animation(.easeInOut(duration: 0.45), value: online)
+        .animation(.easeInOut(duration: 0.45), value: label)
     }
 }

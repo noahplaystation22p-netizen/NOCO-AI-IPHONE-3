@@ -31,7 +31,7 @@ final class ConnectionStore: ObservableObject {
     private var cancellables = Set<AnyCancellable>()
     /// Hysteresis: require several consecutive failures before marking offline
     private var consecutiveFailures = 0
-    private let offlineFailureThreshold = 3
+    private let offlineFailureThreshold = 5
 
     private enum Keys {
         static let host = "nocoai.host"
@@ -310,7 +310,7 @@ final class ConnectionStore: ObservableObject {
         pollTask = Task { [weak self] in
             while !Task.isCancelled {
                 await self?.refreshStatus()
-                try? await Task.sleep(nanoseconds: 5_000_000_000)
+                try? await Task.sleep(nanoseconds: 8_000_000_000)
             }
         }
     }

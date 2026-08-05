@@ -42,8 +42,8 @@ final class VoiceService: NSObject, ObservableObject {
     private var autoFinishArmed = false
 
     /// Seconds of quiet after speech before we auto-send.
-    private let silenceToEnd: TimeInterval = 1.15
-    private let minSpeechSeconds: TimeInterval = 0.35
+    private let silenceToEnd: TimeInterval = 0.72
+    private let minSpeechSeconds: TimeInterval = 0.28
     private let speechLevelFactor: CGFloat = 2.4
 
     var preferredVoiceIdentifier: String {
@@ -212,11 +212,12 @@ final class VoiceService: NSObject, ObservableObject {
         for (index, chunk) in chunks.enumerated() {
             let utterance = AVSpeechUtterance(string: chunk)
             utterance.voice = bestGermanVoice()
-            utterance.rate = AVSpeechUtteranceDefaultSpeechRate * 0.92
-            utterance.pitchMultiplier = 1.02
+            // Slightly quicker than default, still natural
+            utterance.rate = AVSpeechUtteranceDefaultSpeechRate * 0.98
+            utterance.pitchMultiplier = 1.0
             utterance.volume = 1.0
-            utterance.preUtteranceDelay = index == 0 ? 0.08 : 0.12
-            utterance.postUtteranceDelay = 0.08
+            utterance.preUtteranceDelay = index == 0 ? 0.02 : 0.06
+            utterance.postUtteranceDelay = 0.04
             synthesizer.speak(utterance)
         }
     }
@@ -338,27 +339,33 @@ final class VoiceService: NSObject, ObservableObject {
            let preferred = voices.first(where: { $0.identifier == preferredVoiceIdentifier }) {
             return preferred
         }
-        if let premium = voices.first(where: { $0.quality == .premium }) { return premium }
-        if let enhanced = voices.first(where: { $0.quality == .enhanced }) { return enhanced }
-        let preferredNames = ["anna", "helena", "martin", "petra", "yannick", "viktoria"]
-        if let named = voices.first(where: { v in preferredNames.contains(where: { v.name.lowercased().contains($0) }) }) {
+        // Prefer neural / premium de-DE voices for more natural speech
+        let deDE = voices.filter { $0.language.lowercased().hasPrefix("de-de") }
+        let pool = deDE.isEmpty ? voices : deDE
+        if let premium = pool.first(where: { $0.quality == .premium }) { return premium }
+        if let enhanced = pool.first(where: { $0.quality == .enhanced }) { return enhanced }
+        let preferredNames = ["anna", "helena", "martin", "petra", "yannick", "viktoria", "markus", "katja"]
+        if let named = pool.first(where: { v in preferredNames.contains(where: { v.name.lowercased().contains($0) }) }) {
             return named
         }
-        return voices.first ?? AVSpeechSynthesisVoice(language: "de-DE")
+        return pool.first ?? AVSpeechSynthesisVoice(language: "de-DE")
     }
 
     private func voiceScore(_ voice: AVSpeechSynthesisVoice) -> Int {
         var score = 0
         switch voice.quality {
-        case .premium: score += 5
-        case .enhanced: score += 3
+        case .premium: score += 8
+        case .enhanced: score += 5
         default: score += 1
         }
+        if voice.language.lowercased().hasPrefix("de-de") { score += 3 }
         let name = voice.name.lowercased()
-        if ["anna", "helena", "martin", "petra", "yannick", "viktoria"].contains(where: { name.contains($0) }) {
+        if ["anna", "helena", "martin", "petra", "yannick", "viktoria", "markus", "katja"].contains(where: { name.contains($0) }) {
             score += 2
         }
-        if voice.language == "de-DE" { score += 1 }
+        if name.contains("neural") || name.contains("siri") || name.contains("premium") {
+            score += 2
+        }
         return score
     }
 

@@ -137,11 +137,14 @@ struct SettingsView: View {
                     }
 
                     Text("""
-                    1. Einstellungen → Allgemein → Tastatur → Tastaturen → Tastatur hinzufügen → NOCO AI
-                    2. Tippe auf „NOCO AI“ → Vollzugriff erlauben (nötig für die KI)
-                    3. In jeder App: Globus-Taste halten → NOCO AI wählen
-                    4. Nach dem Koppeln unten „Zugangsdaten aktualisieren“ tippen
-                    5. Text tippen oder markieren → Aktion oben tippen (Verbessern, Kürzer, NOCO …)
+                    1. App mit dem PC koppeln (muss online sein)
+                    2. Unten „Zugangsdaten für Tastatur aktualisieren“ tippen
+                    3. iPhone-Einstellungen → Allgemein → Tastatur → NOCO AI hinzufügen
+                    4. Bei NOCO AI: „Vollzugriff erlauben“ einschalten
+                    5. Globus halten → NOCO AI → Text markieren → Aktion tippen
+
+                    Was ist eine App Group?
+                    App und Tastatur sind getrennte Programme. Die App Group ist ein gemeinsames Schließfach für Login-Daten. In SideStore bitte App Groups für App und Tastatur aktiv lassen (group.de.noco.nocoai). Zusätzlich hilft der Button „Zugangsdaten aktualisieren“.
                     """)
                     .font(.footnote)
                     .foregroundStyle(.secondary)
@@ -162,7 +165,7 @@ struct SettingsView: View {
                 } header: {
                     Text("KI-Tastatur")
                 } footer: {
-                    Text("Vollzugriff erlaubt Netzwerk zum PC. Ohne Vollzugriff funktioniert die KI-Leiste nicht. SideStore muss die App Group „group.de.noco.nocoai“ sowohl für die App als auch für die Tastatur behalten. Nach dem Koppeln „Zugangsdaten aktualisieren“ tippen.")
+                    Text("Ohne Vollzugriff kein Netzwerk. Nach jedem Neu-Installieren von SideStore: App koppeln → Zugangsdaten aktualisieren → Vollzugriff erneut erlauben.")
                 }
 
                 Section("Erweitert") {
@@ -210,8 +213,8 @@ struct SettingsView: View {
                 }
 
                 Section("Info") {
-                    Text("NOCO AI Companion v5.3")
-                    Text("Vision · Bild-Edit · Tastatur · Speak")
+                    Text("NOCO AI Companion v5.4")
+                    Text("Tastatur-Sync · Vision · Bild-Edit")
                         .font(.footnote)
                         .foregroundStyle(NOCOAITheme.secondaryText(for: scheme))
                 }

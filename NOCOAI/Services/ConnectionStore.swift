@@ -287,9 +287,10 @@ final class ConnectionStore: ObservableObject {
             CompanionCredentials.sync(
                 host: serverHost,
                 port: serverPort,
-                token: token,
+                token: token ?? KeychainService.load(account: "nocoai.token"),
                 deviceName: deviceName
             )
+            lastError = nil
             return
         }
         if host == "speak" || path.contains("speak") || host == "siri" {

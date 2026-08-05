@@ -31,12 +31,10 @@ final class KeyboardViewModel: ObservableObject {
         CompanionCredentials.refreshFromDisk()
         hasFullAccess = controller?.hasFullAccess == true
         isConfigured = CompanionCredentials.isConfigured
-        if !CompanionCredentials.appGroupAvailable {
-            statusLine = "SideStore: App Group für App + Tastatur behalten"
-        } else if !hasFullAccess {
-            statusLine = "Vollzugriff in Einstellungen aktivieren"
+        if !hasFullAccess {
+            statusLine = "Vollzugriff in iPhone-Einstellungen aktivieren"
         } else if !isConfigured {
-            statusLine = "NOCO AI App öffnen & mit PC koppeln"
+            statusLine = "In der App: Zugangsdaten aktualisieren"
         } else {
             statusLine = "Text tippen/markieren → Aktion tippen"
         }

@@ -1,17 +1,46 @@
 NOCO AI – SideStore / Sideloading
 
-1. IPA von GitHub Actions herunterladen (Artifact: NOCO-AI-ipa)
-2. ZIP entpacken → NOCO-AI.ipa in SideStore importieren
-3. Bundle-ID: de.noco.nocoai
-4. PC und iPhone im gleichen WLAN, NOCO AI auf dem PC starten
+1. IPA herunterladen und in SideStore importieren
+2. Bundle-ID: de.noco.nocoai
+3. PC und iPhone im gleichen WLAN, NOCO AI X auf dem PC starten
+4. App öffnen und per QR / PIN koppeln
 
-Die App heißt auf dem Homescreen "NOCO AI".
+=======================================
+Was bedeutet „App Group“? (einfach)
+=======================================
 
-KI-Tastatur (v5.0+):
-1. App öffnen und mit dem PC koppeln
-2. iPhone-Einstellungen → Allgemein → Tastatur → Tastaturen → NOCO AI hinzufügen
-3. Bei NOCO AI „Vollzugriff erlauben“ aktivieren
-4. In Apps: Globus halten → NOCO AI → Text markieren → Aktion tippen
+Die App und die KI-Tastatur sind für iOS zwei getrennte Mini-Programme.
+Normalerweise darf die Tastatur die Login-Daten der App NICHT lesen.
 
-Hinweis: SideStore sollte App Group `group.de.noco.nocoai` für App + Keyboard Extension behalten,
-damit die Tastatur die PC-Zugangsdaten sieht.
+Eine „App Group“ ist wie ein gemeinsames Schließfach:
+App legt PC-Adresse + Token hinein → Tastatur darf es lesen.
+
+In SideStore muss dieses Schließfach für BEIDE aktiv bleiben:
+  - Haupt-App  (de.noco.nocoai)
+  - Tastatur   (de.noco.nocoai.keyboard)
+
+Group-ID: group.de.noco.nocoai
+
+In SideStore (je nach Version):
+  App antippen → Entitlements / Capabilities → App Groups aktiv lassen.
+  Nicht entfernen, wenn SideStore danach fragt.
+
+Ab v5.4 gibt es zusätzlich „Zugangsdaten für Tastatur aktualisieren“,
+das oft auch ohne perfekte App Group funktioniert.
+
+=======================================
+KI-Tastatur – Schritt für Schritt
+=======================================
+
+1. NOCO AI App öffnen und mit dem PC koppeln (online)
+2. Einstellungen → „Zugangsdaten für Tastatur aktualisieren“ tippen
+3. iPhone-Einstellungen → Allgemein → Tastatur → Tastaturen → NOCO AI
+4. Auf „NOCO AI“ tippen → „Vollzugriff erlauben“ = AN
+5. In einer App: Globus halten → NOCO AI
+6. Text tippen/markieren → oben z.B. „Verbessern“
+
+Wenn die Tastatur noch „App koppeln“ sagt:
+  → App öffnen → Zugangsdaten aktualisieren → zurück zur Tastatur
+  → Oder in der Tastatur „App öffnen“ tippen
+
+Vollzugriff ist Pflicht (Netzwerk zum PC).

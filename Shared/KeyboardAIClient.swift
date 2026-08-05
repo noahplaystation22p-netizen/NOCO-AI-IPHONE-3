@@ -30,15 +30,17 @@ enum KeyboardAIClient {
 
     private static let session: URLSession = {
         let config = URLSessionConfiguration.ephemeral
-        config.timeoutIntervalForRequest = 45
-        config.timeoutIntervalForResource = 60
+        config.timeoutIntervalForRequest = 28
+        config.timeoutIntervalForResource = 40
         config.waitsForConnectivity = true
         config.requestCachePolicy = .reloadIgnoringLocalCacheData
+        config.httpMaximumConnectionsPerHost = 2
         return URLSession(configuration: config)
     }()
 
-    /// Non-streaming flash rewrite — returns the full rewritten text.
+    /// Preferred path: single flash response, sanitized — stable & fast.
     static func rewrite(action: KeyboardAIAction, text: String) async throws -> String {
+        CompanionCredentials.refreshFromDisk()
         guard CompanionCredentials.isConfigured,
               let base = CompanionCredentials.baseURL,
               let token = CompanionCredentials.token else {
@@ -47,7 +49,7 @@ enum KeyboardAIClient {
         let url = base.appendingPathComponent("chat")
         var request = URLRequest(url: url)
         request.httpMethod = "POST"
-        request.timeoutInterval = 45
+        request.timeoutInterval = 28
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
         request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
         request.httpBody = try JSONEncoder().encode(
@@ -59,73 +61,11 @@ enum KeyboardAIClient {
         guard (200..<300).contains(code) else { throw ClientError.http(code) }
 
         if let text = extractReply(from: data) {
-            let clean = text.trimmingCharacters(in: .whitespacesAndNewlines)
+            let clean = KeyboardAIAction.sanitize(text)
             guard !clean.isEmpty else { throw ClientError.empty }
             return clean
         }
         throw ClientError.decode
-    }
-
-    /// Streaming rewrite — yields text deltas as they arrive (SSE from Companion).
-    static func streamRewrite(
-        action: KeyboardAIAction,
-        text: String
-    ) -> AsyncThrowingStream<String, Error> {
-        AsyncThrowingStream { continuation in
-            let task = Task {
-                do {
-                    guard CompanionCredentials.isConfigured,
-                          let base = CompanionCredentials.baseURL,
-                          let token = CompanionCredentials.token else {
-                        throw ClientError.notConfigured
-                    }
-                    let url = base.appendingPathComponent("chat")
-                    var request = URLRequest(url: url)
-                    request.httpMethod = "POST"
-                    request.timeoutInterval = 60
-                    request.setValue("application/json", forHTTPHeaderField: "Content-Type")
-                    request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
-                    request.setValue("text/event-stream", forHTTPHeaderField: "Accept")
-                    request.httpBody = try JSONEncoder().encode(
-                        ChatBody(message: action.prompt(for: text), stream: true, mode: "flash")
-                    )
-
-                    let (bytes, response) = try await session.bytes(for: request)
-                    let code = (response as? HTTPURLResponse)?.statusCode ?? 0
-                    guard (200..<300).contains(code) else { throw ClientError.http(code) }
-
-                    var gotContent = false
-                    for try await line in bytes.lines {
-                        if Task.isCancelled { throw ClientError.cancelled }
-                        let trimmed = line.trimmingCharacters(in: .whitespacesAndNewlines)
-                        guard trimmed.hasPrefix("data:") else { continue }
-                        let payload = trimmed.dropFirst(5).trimmingCharacters(in: .whitespaces)
-                        if payload == "[DONE]" { break }
-                        guard let data = payload.data(using: .utf8),
-                              let obj = try? JSONSerialization.jsonObject(with: data) as? [String: Any] else {
-                            continue
-                        }
-                        if let err = obj["error"] as? String, !err.isEmpty {
-                            throw ClientError.http(502)
-                        }
-                        if let chunk = obj["content"] as? String, !chunk.isEmpty {
-                            gotContent = true
-                            continuation.yield(chunk)
-                        }
-                        if obj["done"] as? Bool == true { break }
-                    }
-                    if !gotContent {
-                        // Fallback: some servers may not stream — do a one-shot
-                        let full = try await rewrite(action: action, text: text)
-                        continuation.yield(full)
-                    }
-                    continuation.finish()
-                } catch {
-                    continuation.finish(throwing: error)
-                }
-            }
-            continuation.onTermination = { _ in task.cancel() }
-        }
     }
 
     private static func extractReply(from data: Data) -> String? {

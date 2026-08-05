@@ -38,7 +38,7 @@ final class KeyboardViewController: UIInputViewController {
     }
 
     override func updateViewConstraints() {
-        let needed: CGFloat = 310
+        let needed: CGFloat = 326
         if let heightConstraint {
             heightConstraint.constant = needed
         } else {

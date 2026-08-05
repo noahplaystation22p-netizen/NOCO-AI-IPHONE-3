@@ -16,9 +16,14 @@ final class KeyboardViewModel: ObservableObject {
     private var snapshotBefore = ""
     private var snapshotSelected = ""
     private var runTask: Task<Void, Never>?
+    private let keyHaptic = UIImpactFeedbackGenerator(style: .light)
+    private let selectHaptic = UISelectionFeedbackGenerator()
+    private let notifyHaptic = UINotificationFeedbackGenerator()
 
     func bind(controller: KeyboardViewController) {
         self.controller = controller
+        keyHaptic.prepare()
+        selectHaptic.prepare()
         refreshAccess()
     }
 
@@ -27,13 +32,13 @@ final class KeyboardViewModel: ObservableObject {
         hasFullAccess = controller?.hasFullAccess == true
         isConfigured = CompanionCredentials.isConfigured
         if !CompanionCredentials.appGroupAvailable {
-            statusLine = "SideStore muss die App Group für App und Tastatur behalten"
+            statusLine = "SideStore: App Group für App + Tastatur behalten"
         } else if !hasFullAccess {
             statusLine = "Vollzugriff in Einstellungen aktivieren"
         } else if !isConfigured {
             statusLine = "NOCO AI App öffnen & mit PC koppeln"
         } else {
-            statusLine = "Markiere Text oder tippe — dann Aktion wählen"
+            statusLine = "Text tippen/markieren → Aktion tippen"
         }
     }
 
@@ -43,30 +48,37 @@ final class KeyboardViewModel: ObservableObject {
         snapshotSelected = proxy.selectedText ?? ""
     }
 
+    /// Selection first; else last paragraph / capped context for speed.
     var workingText: String {
         let selected = snapshotSelected.trimmingCharacters(in: .whitespacesAndNewlines)
         if !selected.isEmpty { return selected }
-        return snapshotBefore.trimmingCharacters(in: .whitespacesAndNewlines)
+        let before = snapshotBefore.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !before.isEmpty else { return "" }
+        if before.count <= 600 { return before }
+        if let range = before.range(of: "\n", options: .backwards) {
+            let tail = String(before[range.upperBound...]).trimmingCharacters(in: .whitespacesAndNewlines)
+            if !tail.isEmpty { return String(tail.suffix(600)) }
+        }
+        return String(before.suffix(600))
     }
 
     func insert(_ text: String) {
         controller?.textDocumentProxy.insertText(text)
         if shiftOn && !capsLock { shiftOn = false }
+        keyHaptic.impactOccurred(intensity: 0.38)
+        keyHaptic.prepare()
         syncDocumentSnapshot()
     }
 
     func deleteBackward() {
         controller?.textDocumentProxy.deleteBackward()
+        keyHaptic.impactOccurred(intensity: 0.28)
+        keyHaptic.prepare()
         syncDocumentSnapshot()
     }
 
-    func returnKey() {
-        insert("\n")
-    }
-
-    func space() {
-        insert(" ")
-    }
+    func returnKey() { insert("\n") }
+    func space() { insert(" ") }
 
     func nextKeyboard() {
         controller?.advanceToNextInputMode()
@@ -89,12 +101,14 @@ final class KeyboardViewModel: ObservableObject {
         } else {
             shiftOn = true
         }
-        UISelectionFeedbackGenerator().selectionChanged()
+        selectHaptic.selectionChanged()
+        selectHaptic.prepare()
     }
 
     func toggleNumbers() {
         showingNumbers.toggle()
-        UISelectionFeedbackGenerator().selectionChanged()
+        selectHaptic.selectionChanged()
+        selectHaptic.prepare()
     }
 
     func run(_ action: KeyboardAIAction) {
@@ -102,7 +116,7 @@ final class KeyboardViewModel: ObservableObject {
         let source = workingText
         guard !source.isEmpty else {
             statusLine = "Kein Text — tippe oder markiere etwas"
-            UINotificationFeedbackGenerator().notificationOccurred(.warning)
+            notifyHaptic.notificationOccurred(.warning)
             return
         }
         guard hasFullAccess else {
@@ -118,55 +132,30 @@ final class KeyboardViewModel: ObservableObject {
         isProcessing = true
         lastError = nil
         statusLine = "\(action.title)…"
-        UIImpactFeedbackGenerator(style: .medium).impactOccurred(intensity: 0.75)
+        UIImpactFeedbackGenerator(style: .medium).impactOccurred(intensity: 0.7)
 
         let hadSelection = !(snapshotSelected.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
         let deleteCount = hadSelection
             ? snapshotSelected.count
-            : (snapshotBefore.hasSuffix(source) ? source.count : snapshotBefore.count)
+            : (snapshotBefore.hasSuffix(source) ? source.count : min(source.count, snapshotBefore.count))
 
         runTask?.cancel()
         runTask = Task {
             defer { isProcessing = false }
             do {
-                var assembled = ""
-                var startedInsert = false
-
-                do {
-                    for try await chunk in KeyboardAIClient.streamRewrite(action: action, text: source) {
-                        if Task.isCancelled { return }
-                        if !startedInsert {
-                            clearCharacters(deleteCount)
-                            startedInsert = true
-                        }
-                        controller?.textDocumentProxy.insertText(chunk)
-                        assembled += chunk
-                    }
-                } catch {
-                    if Task.isCancelled { return }
-                    // Only fall back if nothing was written yet
-                    if !startedInsert {
-                        let result = try await KeyboardAIClient.rewrite(action: action, text: source)
-                        clearCharacters(deleteCount)
-                        startedInsert = true
-                        controller?.textDocumentProxy.insertText(result)
-                        assembled = result
-                    } else {
-                        throw error
-                    }
-                }
-
+                // One-shot flash: more reliable than streaming into the field
+                let result = try await KeyboardAIClient.rewrite(action: action, text: source)
                 if Task.isCancelled { return }
-                let clean = assembled.trimmingCharacters(in: .whitespacesAndNewlines)
-                guard !clean.isEmpty else { throw KeyboardAIClient.ClientError.empty }
+                clearCharacters(deleteCount)
+                controller?.textDocumentProxy.insertText(result)
                 statusLine = "Fertig · \(action.title)"
-                UINotificationFeedbackGenerator().notificationOccurred(.success)
+                notifyHaptic.notificationOccurred(.success)
                 syncDocumentSnapshot()
             } catch {
                 if Task.isCancelled { return }
                 lastError = error.localizedDescription
                 statusLine = error.localizedDescription
-                UINotificationFeedbackGenerator().notificationOccurred(.error)
+                notifyHaptic.notificationOccurred(.error)
             }
         }
     }

@@ -44,30 +44,60 @@ enum KeyboardAIAction: String, CaseIterable, Identifiable {
     func prompt(for text: String) -> String {
         let t = text.trimmingCharacters(in: .whitespacesAndNewlines)
         let rule = """
-        Antworte NUR mit dem fertigen Text. Keine Anführungszeichen, kein Intro, keine Begrüßung, keine Erklärung, kein „Gerne“, kein „Hier ist“.
+        Aufgabe: Textbearbeitung. Antworte AUSSCHLIESSLICH mit dem fertigen Ergebnistext.
+        VERBOTEN: Begrüßung, Intro, Erklärung, Anführungszeichen um den Text, Markdown, Aufzählungen, „Gerne“, „Hier ist“, „Hallo“, „Ich bin“.
         """
         switch self {
         case .improve:
             return """
             \(rule)
-            Korrigiere Rechtschreibung, Grammatik und Zeichensetzung. Formuliere nur leicht klarer, wenn nötig. Behalte Ton, Länge und Bedeutung — keine Umschreibung zum Aufsatz:
+            Korrigiere nur Rechtschreibung, Grammatik und Zeichensetzung.
+            Ändere Wortwahl nur wenn nötig für Klarheit. Länge und Ton bleiben gleich.
 
+            TEXT:
             \(t)
             """
         case .shorten:
-            return "\(rule)\nKürze deutlich, behalte die Kernaussage:\n\n\(t)"
+            return "\(rule)\nKürze auf das Wesentliche (ca. 50–70%), behalte die Aussage:\n\nTEXT:\n\(t)"
         case .longer:
-            return "\(rule)\nErweitere sinnvoll mit mehr Details und Fluss:\n\n\(t)"
+            return "\(rule)\nErweitere natürlich mit 1–3 sinnvollen Details, ohne Floskeln:\n\nTEXT:\n\(t)"
         case .friendlier:
-            return "\(rule)\nSchreibe wärmer und freundlicher um:\n\n\(t)"
+            return "\(rule)\nSchreibe wärmer und freundlicher, gleiche Länge ungefähr:\n\nTEXT:\n\(t)"
         case .professional:
-            return "\(rule)\nSchreibe formeller und professioneller um:\n\n\(t)"
+            return "\(rule)\nSchreibe klar, formell und professionell:\n\nTEXT:\n\(t)"
         case .translate:
-            return "\(rule)\nÜbersetze ins Englische. Wenn schon Englisch: ins Deutsche:\n\n\(t)"
+            return "\(rule)\nÜbersetze ins Englische. Wenn der Text schon Englisch ist: ins Deutsche. Nur die Übersetzung:\n\nTEXT:\n\(t)"
         case .summarize:
-            return "\(rule)\nFasse kurz und präzise zusammen:\n\n\(t)"
+            return "\(rule)\nFasse in 1–3 kurzen Sätzen zusammen:\n\nTEXT:\n\(t)"
         case .noco:
-            return "\(rule)\nDu bist NOCO AI. Verbessere den Text menschlich und smart — behalte die Absicht:\n\n\(t)"
+            return "\(rule)\nVerbessere den Text smart und natürlich — behalte Absicht und Länge ungefähr:\n\nTEXT:\n\(t)"
         }
+    }
+
+    /// Strip model chatter so replacement stays clean.
+    static func sanitize(_ raw: String) -> String {
+        var s = raw.trimmingCharacters(in: .whitespacesAndNewlines)
+        let bannedPrefixes = [
+            "gerne", "hier ist", "hier sind", "sure", "certainly", "of course",
+            "hallo", "hi,", "hey,", "ich bin", "als ki", "als sprachmodell",
+            "improved:", "corrected:", "übersetzung:", "zusammenfassung:"
+        ]
+        let lines = s.components(separatedBy: .newlines)
+        if let first = lines.first?.trimmingCharacters(in: .whitespacesAndNewlines).lowercased() {
+            if bannedPrefixes.contains(where: { first.hasPrefix($0) }) && lines.count > 1 {
+                s = lines.dropFirst().joined(separator: "\n")
+                    .trimmingCharacters(in: .whitespacesAndNewlines)
+            }
+        }
+        if (s.hasPrefix("\"") && s.hasSuffix("\""))
+            || (s.hasPrefix("„") && s.hasSuffix("“"))
+            || (s.hasPrefix("'") && s.hasSuffix("'")) {
+            s = String(s.dropFirst().dropLast()).trimmingCharacters(in: .whitespacesAndNewlines)
+        }
+        if s.hasPrefix("```") {
+            s = s.replacingOccurrences(of: "```", with: "")
+                .trimmingCharacters(in: .whitespacesAndNewlines)
+        }
+        return s
     }
 }

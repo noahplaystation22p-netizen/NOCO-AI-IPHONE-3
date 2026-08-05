@@ -135,8 +135,11 @@ struct ChatInputBar: View {
         .onChange(of: photoItem) { _, item in
             guard let item else { return }
             Task {
-                if let data = try? await item.loadTransferable(type: Data.self) {
+                if let data = await PhotoPickerLoader.loadJPEG(from: item) {
                     await sendVision(data)
+                } else {
+                    HapticService.error()
+                    connection.chat.lastError = "Foto konnte nicht geladen werden — erneut versuchen"
                 }
                 photoItem = nil
             }

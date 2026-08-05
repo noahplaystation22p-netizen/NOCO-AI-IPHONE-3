@@ -258,13 +258,23 @@ final class ChatStore: ObservableObject {
         HapticService.rigid()
 
         let isStartingNewChat = activeConversationId == nil
+        let trimmed = caption?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+        let intent = ImageAttachIntent.resolve(caption: trimmed.isEmpty ? nil : trimmed)
 
-        let userText = caption?.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty == false
-            ? caption!.trimmingCharacters(in: .whitespacesAndNewlines)
-            : "Was siehst du auf dem Bild?"
-
-        // Normalize HEIC/PNG → JPEG so vision models accept the bytes
+        // Normalize HEIC/PNG → JPEG so vision / SD accept the bytes
         let jpeg = Self.jpegData(from: data)
+
+        if intent == .edit, !trimmed.isEmpty {
+            await sendImageEdit(jpeg: jpeg, instruction: trimmed, isStartingNewChat: isStartingNewChat)
+            return
+        }
+
+        let userText = trimmed.isEmpty ? "Was siehst du auf dem Bild?" : trimmed
+        await sendImageVision(jpeg: jpeg, userText: userText, isStartingNewChat: isStartingNewChat)
+    }
+
+    private func sendImageVision(jpeg: Data, userText: String, isStartingNewChat: Bool) async {
+        guard let api else { return }
 
         let userMessage = ChatMessage(role: .user, text: userText, localImageData: jpeg)
         messages.append(userMessage)
@@ -305,12 +315,100 @@ final class ChatStore: ObservableObject {
             }
 
             await resolveConversationId(activeConversationId, preferLatest: isStartingNewChat)
-            // Soft sync — never wipe a fresh vision reply if the server lags
             await softSyncPreservingVision(localAssistant: keptAssistant)
             evaluateChatLimit()
             HapticService.success()
         } catch {
             messages.append(ChatMessage(role: .assistant, text: "Bild-Upload fehlgeschlagen: \((error as? LocalizedError)?.errorDescription ?? error.localizedDescription)"))
+            lastError = (error as? LocalizedError)?.errorDescription
+            HapticService.error()
+        }
+    }
+
+    private func sendImageEdit(jpeg: Data, instruction: String, isStartingNewChat: Bool) async {
+        guard let api else { return }
+
+        let userMessage = ChatMessage(role: .user, text: instruction, localImageData: jpeg)
+        messages.append(userMessage)
+
+        let placeholderId = UUID()
+        messages.append(ChatMessage(
+            id: placeholderId,
+            role: .assistant,
+            text: "Bearbeite Bild…",
+            isStreaming: true
+        ))
+
+        isSending = true
+        lastError = nil
+        defer { isSending = false }
+
+        do {
+            let prompt = ImageAttachIntent.editPrompt(from: instruction)
+            let denoise = ImageAttachIntent.denoising(for: instruction)
+            let result = try await api.editImage(
+                prompt: prompt,
+                imageJPEG: jpeg,
+                conversationId: activeConversationId,
+                denoisingStrength: denoise
+            )
+
+            if let cid = result.conversationId, !cid.isEmpty {
+                activeConversationId = cid
+                persistActiveConversation()
+            }
+
+            var localData: Data?
+            if let b64 = result.imageBase64 {
+                let cleaned = b64
+                    .replacingOccurrences(of: "\n", with: "")
+                    .replacingOccurrences(of: "data:image/png;base64,", with: "")
+                    .replacingOccurrences(of: "data:image/jpeg;base64,", with: "")
+                localData = Data(base64Encoded: cleaned)
+            }
+
+            let url = media?.url(for: result.resolvedPath)
+            let replyText = result.content?.isEmpty == false
+                ? result.content!
+                : "Fertig — \(instruction)"
+
+            if let idx = messages.firstIndex(where: { $0.id == placeholderId }) {
+                messages[idx] = ChatMessage(
+                    id: placeholderId,
+                    role: .assistant,
+                    text: replyText,
+                    isStreaming: false,
+                    imageURL: url,
+                    localImageData: localData
+                )
+            } else {
+                messages.append(ChatMessage(
+                    role: .assistant,
+                    text: replyText,
+                    imageURL: url,
+                    localImageData: localData
+                ))
+            }
+
+            if let kept = messages.first(where: { $0.id == placeholderId }) {
+                stickyVisionAssistant = kept
+                stickyVisionUntil = Date().addingTimeInterval(90)
+            }
+
+            await resolveConversationId(activeConversationId, preferLatest: isStartingNewChat)
+            await softSyncPreservingVision(localAssistant: messages.first(where: { $0.id == placeholderId }))
+            evaluateChatLimit()
+            HapticService.success()
+            HapticService.messageReceived()
+        } catch {
+            if let idx = messages.firstIndex(where: { $0.id == placeholderId }) {
+                messages[idx] = ChatMessage(
+                    id: placeholderId,
+                    role: .assistant,
+                    text: "Bildbearbeitung fehlgeschlagen: \((error as? LocalizedError)?.errorDescription ?? error.localizedDescription)",
+                    isStreaming: false
+                )
+            }
             lastError = (error as? LocalizedError)?.errorDescription
             HapticService.error()
         }

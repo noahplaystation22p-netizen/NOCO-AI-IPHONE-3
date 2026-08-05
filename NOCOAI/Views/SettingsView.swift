@@ -210,8 +210,8 @@ struct SettingsView: View {
                 }
 
                 Section("Info") {
-                    Text("NOCO AI Companion v5.2")
-                    Text("Speak · Tastatur · Scrub · Accents")
+                    Text("NOCO AI Companion v5.3")
+                    Text("Vision · Bild-Edit · Tastatur · Speak")
                         .font(.footnote)
                         .foregroundStyle(NOCOAITheme.secondaryText(for: scheme))
                 }

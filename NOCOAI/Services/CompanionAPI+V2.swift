@@ -141,6 +141,29 @@ extension CompanionAPI {
         return try decoder.decode(ImageGenerateResponse.self, from: data)
     }
 
+    /// Edit an existing photo with Stable Diffusion img2img (remove object, recolor hair, etc.).
+    func editImage(
+        prompt: String,
+        imageJPEG: Data,
+        conversationId: String?,
+        denoisingStrength: Double
+    ) async throws -> ImageGenerateResponse {
+        var request = try authorizedRequest(path: "images/img2img", method: "POST")
+        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        request.timeoutInterval = 360
+        request.httpBody = try encoder.encode(
+            ImageEditRequest(
+                prompt: prompt,
+                imageBase64: imageJPEG.base64EncodedString(),
+                conversationId: conversationId,
+                denoisingStrength: denoisingStrength
+            )
+        )
+        let (data, response) = try await session.data(for: request)
+        try validate(response: response, data: data, isPairRequest: false)
+        return try decoder.decode(ImageGenerateResponse.self, from: data)
+    }
+
     func imageProgress(jobId: String? = nil) async throws -> ImageProgressResponse {
         var path = "images/progress"
         if let jobId { path += "?job_id=\(jobId)" }

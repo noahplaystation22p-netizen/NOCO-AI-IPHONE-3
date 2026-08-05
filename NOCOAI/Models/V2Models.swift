@@ -210,12 +210,44 @@ struct ImageGenerateRequest: Encodable {
     }
 }
 
+struct ImageEditRequest: Encodable {
+    let prompt: String
+    let imageBase64: String
+    let conversationId: String?
+    let width: Int?
+    let height: Int?
+    let steps: Int?
+    let denoisingStrength: Double?
+    let negativePrompt: String?
+
+    init(
+        prompt: String,
+        imageBase64: String,
+        conversationId: String? = nil,
+        width: Int? = 512,
+        height: Int? = 512,
+        steps: Int? = 8,
+        denoisingStrength: Double? = 0.48,
+        negativePrompt: String? = "blurry, low quality, watermark, text, deformed, artifacts"
+    ) {
+        self.prompt = prompt
+        self.imageBase64 = imageBase64
+        self.conversationId = conversationId
+        self.width = width
+        self.height = height
+        self.steps = steps
+        self.denoisingStrength = denoisingStrength
+        self.negativePrompt = negativePrompt
+    }
+}
+
 struct ImageGenerateResponse: Decodable {
     let imageUrl: String?
     let imageBase64: String?
     let mediaPath: String?
     let jobId: String?
     let conversationId: String?
+    let content: String?
 
     var resolvedPath: String? { imageUrl ?? mediaPath }
 }

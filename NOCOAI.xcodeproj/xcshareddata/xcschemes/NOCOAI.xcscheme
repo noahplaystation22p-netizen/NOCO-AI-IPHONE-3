@@ -28,6 +28,20 @@
             buildForAnalyzing = "YES">
             <BuildableReference
                BuildableIdentifier = "primary"
+               BlueprintIdentifier = "KBD0000060000000000000001"
+               BuildableName = "NOCOAIKeyboard.appex"
+               BlueprintName = "NOCOAIKeyboard"
+               ReferencedContainer = "container:NOCOAI.xcodeproj">
+            </BuildableReference>
+         </BuildActionEntry>
+         <BuildActionEntry
+            buildForTesting = "YES"
+            buildForRunning = "YES"
+            buildForProfiling = "YES"
+            buildForArchiving = "YES"
+            buildForAnalyzing = "YES">
+            <BuildableReference
+               BuildableIdentifier = "primary"
                BlueprintIdentifier = "NA0000060000000000000001"
                BuildableName = "NOCOAI.app"
                BlueprintName = "NOCOAI"

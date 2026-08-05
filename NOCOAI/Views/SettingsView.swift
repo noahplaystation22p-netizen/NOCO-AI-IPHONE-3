@@ -120,6 +120,50 @@ struct SettingsView: View {
                     Text("Name, Persönlichkeit und Fakten gehen unsichtbar an die KI — bei Think & Intelligent. Nicht bei Blitz, Wissen oder Speak.")
                 }
 
+                Section {
+                    Label {
+                        VStack(alignment: .leading, spacing: 4) {
+                            Text("NOCO AI Tastatur")
+                                .font(.body.weight(.semibold))
+                            Text(CompanionCredentials.isConfigured
+                                  ? "PC-Verbindung bereit für die Tastatur"
+                                  : "Zuerst mit dem PC koppeln")
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                        }
+                    } icon: {
+                        Image(systemName: "keyboard")
+                            .foregroundStyle(NOCOAITheme.accent)
+                    }
+
+                    Text("""
+                    1. Einstellungen → Allgemein → Tastatur → Tastaturen → Tastatur hinzufügen → NOCO AI
+                    2. Tippe auf „NOCO AI“ → Vollzugriff erlauben (nötig für die KI)
+                    3. In jeder App: Globus-Taste halten → NOCO AI wählen
+                    4. Text tippen oder markieren → Aktion oben tippen (Verbessern, Kürzer, NOCO …)
+                    """)
+                    .font(.footnote)
+                    .foregroundStyle(.secondary)
+
+                    Button {
+                        HapticService.open()
+                        CompanionCredentials.sync(
+                            host: connection.serverHost,
+                            port: connection.serverPort,
+                            token: KeychainService.load(account: "nocoai.token"),
+                            deviceName: connection.deviceName
+                        )
+                        HapticService.success()
+                    } label: {
+                        Label("Zugangsdaten für Tastatur aktualisieren", systemImage: "arrow.triangle.2.circlepath")
+                    }
+                    .disabled(!connection.isPaired)
+                } header: {
+                    Text("KI-Tastatur")
+                } footer: {
+                    Text("Vollzugriff erlaubt Netzwerk zum PC. Ohne Vollzugriff funktioniert die KI-Leiste nicht. Nach dem Koppeln ggf. „Zugangsdaten aktualisieren“ tippen.")
+                }
+
                 Section("Erweitert") {
                     NavigationLink {
                         CodeStudioView()
@@ -165,8 +209,8 @@ struct SettingsView: View {
                 }
 
                 Section("Info") {
-                    Text("NOCO AI Companion v4.9")
-                    Text("Speak · Profil · Haptik · Bildideen")
+                    Text("NOCO AI Companion v5.0")
+                    Text("Speak · Tastatur · Profil · Bildideen")
                         .font(.footnote)
                         .foregroundStyle(NOCOAITheme.secondaryText(for: scheme))
                 }

@@ -53,14 +53,21 @@ jobs:
           ls -la "$APP_PATH"
           ls -la "$APP_PATH/PlugIns" || true
 
-          # Live Activities REQUIRE the widget appex inside PlugIns/
-          APEX=$(find "$APP_PATH/PlugIns" -name "*.appex" -type d 2>/dev/null | head -1 || true)
-          if [ -z "$APEX" ]; then
+          # Live Activities REQUIRE the widget appex; AI keyboard requires keyboard appex
+          WIDGET_APEX=$(find "$APP_PATH/PlugIns" -name "NOCOAISpeakWidget.appex" -type d 2>/dev/null | head -1 || true)
+          KEYBOARD_APEX=$(find "$APP_PATH/PlugIns" -name "NOCOAIKeyboard.appex" -type d 2>/dev/null | head -1 || true)
+          if [ -z "$WIDGET_APEX" ]; then
             echo "FATAL: NOCOAISpeakWidget.appex missing from PlugIns — Live Activities cannot work"
             find "$APP_PATH" -maxdepth 3 -type d
             exit 1
           fi
-          echo "Found Live Activity widget: $APEX"
+          if [ -z "$KEYBOARD_APEX" ]; then
+            echo "FATAL: NOCOAIKeyboard.appex missing from PlugIns — AI keyboard cannot work"
+            ls -la "$APP_PATH/PlugIns" || true
+            exit 1
+          fi
+          echo "Found Live Activity widget: $WIDGET_APEX"
+          echo "Found AI keyboard: $KEYBOARD_APEX"
 
           # Sign nested extension first, then the app (ad-hoc)
           find "$APP_PATH" -name "*.appex" -type d -print0 | while IFS= read -r -d '' ext; do

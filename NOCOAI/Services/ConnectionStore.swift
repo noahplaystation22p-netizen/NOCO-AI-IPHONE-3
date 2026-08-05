@@ -55,6 +55,13 @@ final class ConnectionStore: ObservableObject {
         isPaired = token != nil && !serverHost.isEmpty
         rebuildAPI()
         speak.bind(connection: self)
+        // Keep keyboard extension credentials in sync
+        CompanionCredentials.sync(
+            host: serverHost,
+            port: serverPort,
+            token: token,
+            deviceName: deviceName
+        )
         if isPaired {
             prepareLocalNetworkAccess(host: serverHost, port: serverPort)
             chat.restoreSession()
@@ -242,6 +249,12 @@ final class ConnectionStore: ObservableObject {
             UserDefaults.standard.set(serverHost, forKey: Keys.host)
             UserDefaults.standard.set(serverPort, forKey: Keys.port)
             UserDefaults.standard.set(deviceName, forKey: Keys.device)
+            CompanionCredentials.sync(
+                host: serverHost,
+                port: serverPort,
+                token: response.token,
+                deviceName: deviceName
+            )
             isPaired = true
             consecutiveFailures = 0
             rebuildAPI()
@@ -378,6 +391,7 @@ final class ConnectionStore: ObservableObject {
         isOnline = false
         consecutiveFailures = 0
         KeychainService.delete(account: Keys.token)
+        CompanionCredentials.clear()
         rebuildAPI()
     }
 

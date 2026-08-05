@@ -6,3 +6,12 @@ NOCO AI – SideStore / Sideloading
 4. PC und iPhone im gleichen WLAN, NOCO AI auf dem PC starten
 
 Die App heißt auf dem Homescreen "NOCO AI".
+
+KI-Tastatur (v5.0+):
+1. App öffnen und mit dem PC koppeln
+2. iPhone-Einstellungen → Allgemein → Tastatur → Tastaturen → NOCO AI hinzufügen
+3. Bei NOCO AI „Vollzugriff erlauben“ aktivieren
+4. In Apps: Globus halten → NOCO AI → Text markieren → Aktion tippen
+
+Hinweis: SideStore sollte App Group `group.de.noco.nocoai` für App + Keyboard Extension behalten,
+damit die Tastatur die PC-Zugangsdaten sieht.

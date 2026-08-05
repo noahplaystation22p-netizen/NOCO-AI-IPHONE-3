@@ -7,6 +7,18 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+
+		KBD0000010000000000000001 /* KeyboardViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = KBD0000020000000000000001 /* KeyboardViewController.swift */; };
+		KBD0000010000000000000002 /* KeyboardViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = KBD0000020000000000000002 /* KeyboardViewModel.swift */; };
+		KBD0000010000000000000003 /* KeyboardRootView.swift in Sources */ = {isa = PBXBuildFile; fileRef = KBD0000020000000000000003 /* KeyboardRootView.swift */; };
+		KBD0000010000000000000004 /* KeyboardLayoutView.swift in Sources */ = {isa = PBXBuildFile; fileRef = KBD0000020000000000000004 /* KeyboardLayoutView.swift */; };
+		KBD0000010000000000000005 /* CompanionCredentials.swift in Sources */ = {isa = PBXBuildFile; fileRef = KBD0000020000000000000010 /* CompanionCredentials.swift */; };
+		KBD0000010000000000000006 /* KeyboardAIAction.swift in Sources */ = {isa = PBXBuildFile; fileRef = KBD0000020000000000000011 /* KeyboardAIAction.swift */; };
+		KBD0000010000000000000007 /* KeyboardAIClient.swift in Sources */ = {isa = PBXBuildFile; fileRef = KBD0000020000000000000012 /* KeyboardAIClient.swift */; };
+		KBD0000010000000000000008 /* KeychainService.swift in Sources */ = {isa = PBXBuildFile; fileRef = NA0000020000000000000004 /* KeychainService.swift */; };
+		KBD0000010000000000000009 /* NOCOAIKeyboard.appex in Embed Foundation Extensions */ = {isa = PBXBuildFile; fileRef = KBD0000030000000000000001 /* NOCOAIKeyboard.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
+		NA0000010000000000000060 /* CompanionCredentials.swift in Sources */ = {isa = PBXBuildFile; fileRef = KBD0000020000000000000010 /* CompanionCredentials.swift */; };
+		NA0000010000000000000061 /* KeyboardAIAction.swift in Sources */ = {isa = PBXBuildFile; fileRef = KBD0000020000000000000011 /* KeyboardAIAction.swift */; };
 		NA0000010000000000000051 /* IntelligencePressStyle.swift in Sources */ = {isa = PBXBuildFile; fileRef = NA0000020000000000000051 /* IntelligencePressStyle.swift */; };
 		NA0000010000000000000050 /* UserProfileStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = NA0000020000000000000050 /* UserProfileStore.swift */; };
 		NA0000010000000000000001 /* NOCOAIApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = NA0000020000000000000001 /* NOCOAIApp.swift */; };
@@ -64,6 +76,13 @@
 
 
 /* Begin PBXContainerItemProxy section */
+		KBD00000C000000000000001 /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = NA00000A0000000000000001 /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = KBD0000060000000000000001;
+			remoteInfo = NOCOAIKeyboard;
+		};
 		WDG00000C000000000000001 /* PBXContainerItemProxy */ = {
 			isa = PBXContainerItemProxy;
 			containerPortal = NA00000A0000000000000001 /* Project object */;
@@ -74,6 +93,17 @@
 /* End PBXContainerItemProxy section */
 
 /* Begin PBXFileReference section */
+
+		KBD0000020000000000000001 /* KeyboardViewController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = KeyboardViewController.swift; sourceTree = "<group>"; };
+		KBD0000020000000000000002 /* KeyboardViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = KeyboardViewModel.swift; sourceTree = "<group>"; };
+		KBD0000020000000000000003 /* KeyboardRootView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = KeyboardRootView.swift; sourceTree = "<group>"; };
+		KBD0000020000000000000004 /* KeyboardLayoutView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = KeyboardLayoutView.swift; sourceTree = "<group>"; };
+		KBD0000020000000000000005 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
+		KBD0000020000000000000006 /* NOCOAIKeyboard.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = NOCOAIKeyboard.entitlements; sourceTree = "<group>"; };
+		KBD0000020000000000000010 /* CompanionCredentials.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CompanionCredentials.swift; sourceTree = "<group>"; };
+		KBD0000020000000000000011 /* KeyboardAIAction.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = KeyboardAIAction.swift; sourceTree = "<group>"; };
+		KBD0000020000000000000012 /* KeyboardAIClient.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = KeyboardAIClient.swift; sourceTree = "<group>"; };
+		KBD0000030000000000000001 /* NOCOAIKeyboard.appex */ = {isa = PBXFileReference; explicitFileType = "wrapper.app-extension"; includeInIndex = 0; path = NOCOAIKeyboard.appex; sourceTree = BUILT_PRODUCTS_DIR; };
 		NA0000020000000000000051 /* IntelligencePressStyle.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = IntelligencePressStyle.swift; sourceTree = "<group>"; };
 		NA0000020000000000000050 /* UserProfileStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UserProfileStore.swift; sourceTree = "<group>"; };
 		NA0000030000000000000001 /* NOCOAI.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = NOCOAI.app; sourceTree = BUILT_PRODUCTS_DIR; };
@@ -140,8 +170,14 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
-
 		WDG0000040000000000000001 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		KBD0000040000000000000001 /* Frameworks */ = {
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
@@ -156,6 +192,7 @@
 			children = (
 				NA0000050000000000000002 /* NOCOAI */,
 				WDG0000050000000000000001 /* NOCOAISpeakWidget */,
+				KBD0000050000000000000001 /* NOCOAIKeyboard */,
 				WDG0000050000000000000002 /* Shared */,
 				NA0000050000000000000003 /* Products */,
 			);
@@ -182,6 +219,7 @@
 			children = (
 				NA0000030000000000000001 /* NOCOAI.app */,
 				WDG0000030000000000000001 /* NOCOAISpeakWidget.appex */,
+				KBD0000030000000000000001 /* NOCOAIKeyboard.appex */,
 			);
 			name = Products;
 			sourceTree = "<group>";
@@ -329,8 +367,24 @@
 			children = (
 				NA0000020000000000000035 /* SpeakActivityAttributes.swift */,
 				NA0000020000000000000037 /* ImageActivityAttributes.swift */,
+				KBD0000020000000000000010 /* CompanionCredentials.swift */,
+				KBD0000020000000000000011 /* KeyboardAIAction.swift */,
+				KBD0000020000000000000012 /* KeyboardAIClient.swift */,
 			);
 			path = Shared;
+			sourceTree = "<group>";
+		};
+		KBD0000050000000000000001 /* NOCOAIKeyboard */ = {
+			isa = PBXGroup;
+			children = (
+				KBD0000020000000000000001 /* KeyboardViewController.swift */,
+				KBD0000020000000000000002 /* KeyboardViewModel.swift */,
+				KBD0000020000000000000003 /* KeyboardRootView.swift */,
+				KBD0000020000000000000004 /* KeyboardLayoutView.swift */,
+				KBD0000020000000000000005 /* Info.plist */,
+				KBD0000020000000000000006 /* NOCOAIKeyboard.entitlements */,
+			);
+			path = NOCOAIKeyboard;
 			sourceTree = "<group>";
 		};
 /* End PBXGroup section */
@@ -349,6 +403,7 @@
 			);
 			dependencies = (
 				WDG00000D000000000000001 /* PBXTargetDependency */,
+				KBD00000D000000000000001 /* PBXTargetDependency */,
 			);
 			name = NOCOAI;
 			productName = NOCOAI;
@@ -372,6 +427,23 @@
 			productReference = WDG0000030000000000000001 /* NOCOAISpeakWidget.appex */;
 			productType = "com.apple.product-type.app-extension";
 		};
+		KBD0000060000000000000001 /* NOCOAIKeyboard */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = KBD0000090000000000000002 /* Build configuration list for PBXNativeTarget "NOCOAIKeyboard" */;
+			buildPhases = (
+				KBD0000070000000000000001 /* Sources */,
+				KBD0000040000000000000001 /* Frameworks */,
+				KBD0000080000000000000002 /* Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			name = NOCOAIKeyboard;
+			productName = NOCOAIKeyboard;
+			productReference = KBD0000030000000000000001 /* NOCOAIKeyboard.appex */;
+			productType = "com.apple.product-type.app-extension";
+		};
 /* End PBXNativeTarget section */
 
 /* Begin PBXProject section */
@@ -386,6 +458,9 @@
 						CreatedOnToolsVersion = 15.0;
 					};
 					WDG0000060000000000000001 = {
+						CreatedOnToolsVersion = 15.0;
+					};
+					KBD0000060000000000000001 = {
 						CreatedOnToolsVersion = 15.0;
 					};
 				};
@@ -406,6 +481,7 @@
 			targets = (
 				NA0000060000000000000001 /* NOCOAI */,
 				WDG0000060000000000000001 /* NOCOAISpeakWidget */,
+				KBD0000060000000000000001 /* NOCOAIKeyboard */,
 			);
 		};
 /* End PBXProject section */
@@ -418,6 +494,7 @@
 			dstSubfolderSpec = 13;
 			files = (
 				WDG0000010000000000000003 /* NOCOAISpeakWidget.appex in Embed Foundation Extensions */,
+				KBD0000010000000000000009 /* NOCOAIKeyboard.appex in Embed Foundation Extensions */,
 			);
 			name = "Embed Foundation Extensions";
 			runOnlyForDeploymentPostprocessing = 0;
@@ -425,6 +502,13 @@
 /* End PBXCopyFilesBuildPhase section */
 
 /* Begin PBXResourcesBuildPhase section */
+		KBD0000080000000000000002 /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 		NA0000080000000000000001 /* Resources */ = {
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
@@ -442,9 +526,29 @@
 			target = WDG0000060000000000000001 /* NOCOAISpeakWidget */;
 			targetProxy = WDG00000C000000000000001 /* PBXContainerItemProxy */;
 		};
+		KBD00000D000000000000001 /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = KBD0000060000000000000001 /* NOCOAIKeyboard */;
+			targetProxy = KBD00000C000000000000001 /* PBXContainerItemProxy */;
+		};
 /* End PBXTargetDependency section */
 
 /* Begin PBXSourcesBuildPhase section */
+		KBD0000070000000000000001 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				KBD0000010000000000000001 /* KeyboardViewController.swift in Sources */,
+				KBD0000010000000000000002 /* KeyboardViewModel.swift in Sources */,
+				KBD0000010000000000000003 /* KeyboardRootView.swift in Sources */,
+				KBD0000010000000000000004 /* KeyboardLayoutView.swift in Sources */,
+				KBD0000010000000000000005 /* CompanionCredentials.swift in Sources */,
+				KBD0000010000000000000006 /* KeyboardAIAction.swift in Sources */,
+				KBD0000010000000000000007 /* KeyboardAIClient.swift in Sources */,
+				KBD0000010000000000000008 /* KeychainService.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 		NA0000070000000000000001 /* Sources */ = {
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
@@ -453,6 +557,8 @@
 				NA0000010000000000000002 /* APIModels.swift in Sources */,
 				NA0000010000000000000003 /* ChatMessage.swift in Sources */,
 				NA0000010000000000000004 /* KeychainService.swift in Sources */,
+				NA0000010000000000000060 /* CompanionCredentials.swift in Sources */,
+				NA0000010000000000000061 /* KeyboardAIAction.swift in Sources */,
 				NA0000010000000000000005 /* HapticService.swift in Sources */,
 				NA0000010000000000000006 /* CompanionAPI.swift in Sources */,
 				NA0000010000000000000007 /* ConnectionStore.swift in Sources */,
@@ -520,6 +626,66 @@
 /* End PBXSourcesBuildPhase section */
 
 /* Begin XCBuildConfiguration section */
+
+		KBD00000A0000000000000001 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CODE_SIGN_ENTITLEMENTS = NOCOAIKeyboard/NOCOAIKeyboard.entitlements;
+				CODE_SIGNING_ALLOWED = NO;
+				CODE_SIGNING_REQUIRED = NO;
+				CODE_SIGN_IDENTITY = "";
+				CODE_SIGNING_STYLE = Manual;
+				CURRENT_PROJECT_VERSION = 34;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = NOCOAIKeyboard/Info.plist;
+				INFOPLIST_KEY_CFBundleDisplayName = "NOCO AI";
+				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@executable_path/../../Frameworks",
+				);
+				MARKETING_VERSION = 5.0;
+				PRODUCT_BUNDLE_IDENTIFIER = de.noco.nocoai.keyboard;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SKIP_INSTALL = YES;
+				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator";
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = 1;
+			};
+			name = Debug;
+		};
+		KBD00000A0000000000000002 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CODE_SIGN_ENTITLEMENTS = NOCOAIKeyboard/NOCOAIKeyboard.entitlements;
+				CODE_SIGNING_ALLOWED = NO;
+				CODE_SIGNING_REQUIRED = NO;
+				CODE_SIGN_IDENTITY = "";
+				CODE_SIGNING_STYLE = Manual;
+				CURRENT_PROJECT_VERSION = 34;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = NOCOAIKeyboard/Info.plist;
+				INFOPLIST_KEY_CFBundleDisplayName = "NOCO AI";
+				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@executable_path/../../Frameworks",
+				);
+				MARKETING_VERSION = 5.0;
+				PRODUCT_BUNDLE_IDENTIFIER = de.noco.nocoai.keyboard;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SKIP_INSTALL = YES;
+				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator";
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = 1;
+				VALIDATE_PRODUCT = NO;
+			};
+			name = Release;
+		};
 		NA00000B0000000000000001 /* Debug */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
@@ -563,7 +729,7 @@
 				CODE_SIGN_ENTITLEMENTS = NOCOAI/NOCOAI.entitlements;
 				CODE_SIGNING_ALLOWED = NO;
 				CODE_SIGNING_REQUIRED = NO;
-				CURRENT_PROJECT_VERSION = 33;
+				CURRENT_PROJECT_VERSION = 34;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = NOCOAI/Info.plist;
@@ -578,7 +744,7 @@
 					"$(inherited)",
 					"@executable_path/Frameworks",
 				);
-				MARKETING_VERSION = 4.9;
+				MARKETING_VERSION = 5.0;
 				PRODUCT_BUNDLE_IDENTIFIER = de.noco.nocoai;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator";
@@ -597,7 +763,7 @@
 				CODE_SIGN_ENTITLEMENTS = NOCOAI/NOCOAI.entitlements;
 				CODE_SIGNING_ALLOWED = NO;
 				CODE_SIGNING_REQUIRED = NO;
-				CURRENT_PROJECT_VERSION = 33;
+				CURRENT_PROJECT_VERSION = 34;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = NOCOAI/Info.plist;
@@ -612,7 +778,7 @@
 					"$(inherited)",
 					"@executable_path/Frameworks",
 				);
-				MARKETING_VERSION = 4.9;
+				MARKETING_VERSION = 5.0;
 				PRODUCT_BUNDLE_IDENTIFIER = de.noco.nocoai;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator";
@@ -630,7 +796,7 @@
 				CODE_SIGN_ENTITLEMENTS = NOCOAISpeakWidget/NOCOAISpeakWidget.entitlements;
 				CODE_SIGNING_ALLOWED = NO;
 				CODE_SIGNING_REQUIRED = NO;
-				CURRENT_PROJECT_VERSION = 33;
+				CURRENT_PROJECT_VERSION = 34;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = NOCOAISpeakWidget/Info.plist;
 				INFOPLIST_KEY_CFBundleDisplayName = "NOCO Speak";
@@ -641,7 +807,7 @@
 					"@executable_path/Frameworks",
 					"@executable_path/../../Frameworks",
 				);
-				MARKETING_VERSION = 4.9;
+				MARKETING_VERSION = 5.0;
 				PRODUCT_BUNDLE_IDENTIFIER = de.noco.nocoai.SpeakWidget;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SKIP_INSTALL = YES;
@@ -658,7 +824,7 @@
 				CODE_SIGN_ENTITLEMENTS = NOCOAISpeakWidget/NOCOAISpeakWidget.entitlements;
 				CODE_SIGNING_ALLOWED = NO;
 				CODE_SIGNING_REQUIRED = NO;
-				CURRENT_PROJECT_VERSION = 33;
+				CURRENT_PROJECT_VERSION = 34;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = NOCOAISpeakWidget/Info.plist;
 				INFOPLIST_KEY_CFBundleDisplayName = "NOCO Speak";
@@ -669,7 +835,7 @@
 					"@executable_path/Frameworks",
 					"@executable_path/../../Frameworks",
 				);
-				MARKETING_VERSION = 4.9;
+				MARKETING_VERSION = 5.0;
 				PRODUCT_BUNDLE_IDENTIFIER = de.noco.nocoai.SpeakWidget;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SKIP_INSTALL = YES;
@@ -684,6 +850,15 @@
 /* End XCBuildConfiguration section */
 
 /* Begin XCConfigurationList section */
+		KBD0000090000000000000002 /* Build configuration list for PBXNativeTarget "NOCOAIKeyboard" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				KBD00000A0000000000000001 /* Debug */,
+				KBD00000A0000000000000002 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
 		NA0000090000000000000001 /* Build configuration list for PBXProject "NOCOAI" */ = {
 			isa = XCConfigurationList;
 			buildConfigurations = (

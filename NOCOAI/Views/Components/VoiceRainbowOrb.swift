@@ -27,7 +27,7 @@ struct IntelligenceVoiceStage: View {
     }
 
     var body: some View {
-        TimelineView(.animation(minimumInterval: 1 / 30)) { timeline in
+        TimelineView(.animation(minimumInterval: 1 / 45)) { timeline in
             let t = timeline.date.timeIntervalSinceReferenceDate
             ZStack {
                 auroraField
@@ -36,10 +36,10 @@ struct IntelligenceVoiceStage: View {
                 statusSpark
             }
         }
-        .frame(height: 280)
+        .frame(height: 240)
         .onAppear {
-            withAnimation(.linear(duration: 14).repeatForever(autoreverses: false)) { spin = true }
-            withAnimation(.easeInOut(duration: 2.4).repeatForever(autoreverses: true)) { breathe = true }
+            withAnimation(.linear(duration: 9).repeatForever(autoreverses: false)) { spin = true }
+            withAnimation(.easeInOut(duration: 1.6).repeatForever(autoreverses: true)) { breathe = true }
         }
     }
 

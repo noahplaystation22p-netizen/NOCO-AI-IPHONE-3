@@ -47,7 +47,7 @@ final class VoiceService: NSObject, ObservableObject {
     private var ttsEngineReady = false
     private var ttsUseAmplified = false
     private var ttsPendingBuffers = 0
-    private let ttsGain: Float = 5.5
+    private let ttsGain: Float = 8.5
 
     /// Quiet after speech / transcript pause before auto-send (fast).
     private let silenceToEnd: TimeInterval = 0.55
@@ -385,7 +385,7 @@ final class VoiceService: NSObject, ObservableObject {
             ttsEngine.attach(ttsPlayer)
             ttsEngine.connect(ttsPlayer, to: ttsEngine.mainMixerNode, format: format)
             // Extra headroom on mixer (linear > 1)
-            ttsEngine.mainMixerNode.outputVolume = 1.35
+            ttsEngine.mainMixerNode.outputVolume = 1.8
             ttsEngineReady = true
         }
         if !ttsEngine.isRunning {
@@ -413,7 +413,7 @@ final class VoiceService: NSObject, ObservableObject {
             for i in 0..<frames {
                 // Soft saturation keeps it loud without harsh digital clip
                 let boosted = samples[i] * gain
-                samples[i] = tanh(boosted * 0.85)
+                samples[i] = tanh(boosted * 1.05)
             }
         }
     }

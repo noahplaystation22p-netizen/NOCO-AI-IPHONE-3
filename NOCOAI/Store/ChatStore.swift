@@ -551,13 +551,19 @@ final class ChatStore: ObservableObject {
         }
         return merged
     }
+    /// Resize + JPEG so Ollama vision (moondream) does not 500 on huge phone photos.
     private static func jpegData(from data: Data) -> Data {
-        #if canImport(UIKit)
-        if let img = UIImage(data: data), let jpeg = img.jpegData(compressionQuality: 0.88) {
-            return jpeg
+        guard let img = UIImage(data: data) else { return data }
+        let maxSide: CGFloat = 1280
+        let w = img.size.width
+        let h = img.size.height
+        let scale = min(1, maxSide / max(w, h))
+        let target = CGSize(width: max(1, floor(w * scale)), height: max(1, floor(h * scale)))
+        let renderer = UIGraphicsImageRenderer(size: target)
+        let resized = renderer.image { _ in
+            img.draw(in: CGRect(origin: .zero, size: target))
         }
-        #endif
-        return data
+        return resized.jpegData(compressionQuality: 0.82) ?? data
     }
 
 }

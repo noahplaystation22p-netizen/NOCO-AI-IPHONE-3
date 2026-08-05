@@ -60,7 +60,7 @@ final class UserProfileStore: ObservableObject {
     @Published var lastError: String?
 
     private let localKey = "nocoai.userProfile"
-    private weak var api: CompanionAPI?
+    private var api: CompanionAPI?
 
     init() {
         loadLocal()

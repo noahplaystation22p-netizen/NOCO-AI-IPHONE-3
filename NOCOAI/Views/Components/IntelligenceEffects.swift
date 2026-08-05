@@ -173,12 +173,14 @@ struct GlowBubbleBackground: View {
                     )
                     : AnyShapeStyle(.ultraThinMaterial)
             )
-            .overlay(
-                RoundedRectangle(cornerRadius: 22, style: .continuous)
-                    .stroke(
-                        isUser
-                            ? Color.white.opacity(0.28)
-                            : LinearGradient(
+            .overlay {
+                if isUser {
+                    RoundedRectangle(cornerRadius: 22, style: .continuous)
+                        .stroke(Color.white.opacity(0.28), lineWidth: 1)
+                } else {
+                    RoundedRectangle(cornerRadius: 22, style: .continuous)
+                        .stroke(
+                            LinearGradient(
                                 colors: [
                                     NOCOAITheme.glowPrimary.opacity(scheme == .dark ? 0.35 : 0.2),
                                     NOCOAITheme.glowSecondary.opacity(0.15)
@@ -186,9 +188,10 @@ struct GlowBubbleBackground: View {
                                 startPoint: .topLeading,
                                 endPoint: .bottomTrailing
                             ),
-                        lineWidth: 1
-                    )
-            )
+                            lineWidth: 1
+                        )
+                }
+            }
             .shadow(
                 color: isUser ? NOCOAITheme.glowPrimary.opacity(0.4) : NOCOAITheme.glowSecondary.opacity(0.18),
                 radius: isUser ? 16 : 12,

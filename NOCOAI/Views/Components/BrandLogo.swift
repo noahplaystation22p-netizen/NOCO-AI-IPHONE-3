@@ -8,7 +8,8 @@ struct BrandLogo: View {
             .resizable()
             .scaledToFit()
             .frame(width: size, height: size)
-            .clipShape(RoundedRectangle(cornerRadius: size * 0.22, style: .continuous))
-            .shadow(color: NOCOAITheme.accent.opacity(0.35), radius: 16, y: 8)
+            .clipShape(RoundedRectangle(cornerRadius: size * 0.223, style: .continuous))
+            .shadow(color: NOCOAITheme.glowPrimary.opacity(0.55), radius: size * 0.22, y: size * 0.06)
+            .shadow(color: NOCOAITheme.glowAccent.opacity(0.25), radius: size * 0.16)
     }
 }

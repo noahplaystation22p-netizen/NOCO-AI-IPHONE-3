@@ -244,7 +244,7 @@ final class ChatStore: ObservableObject {
         let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
         typingTask = Task { [weak self] in
             try? await Task.sleep(nanoseconds: 280_000_000)
-            guard !Task.isCancelled, let self else { return }
+            guard !Task.isCancelled else { return }
             do {
                 if trimmed.isEmpty {
                     try await api.postTyping(conversationId: cid, typing: false, draftPreview: nil, deviceId: nil)

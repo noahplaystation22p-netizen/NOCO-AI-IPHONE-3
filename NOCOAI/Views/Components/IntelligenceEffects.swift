@@ -603,32 +603,32 @@ struct IntelligenceBreathingAura: View {
 /// Horizontal waveform ribbon (chat / studio headers).
 struct IntelligenceWaveRibbon: View {
     var body: some View {
-        TimelineView(.animation(minimumInterval: 1 / 30)) { timeline in
+        TimelineView(.animation(minimumInterval: 1.0 / 30.0)) { timeline in
             Canvas { context, size in
-                let t = timeline.date.timeIntervalSinceReferenceDate
+                let t = CGFloat(timeline.date.timeIntervalSinceReferenceDate)
                 let midY = size.height * 0.5
-                var path = Path()
                 let steps = max(Int(size.width / 4), 20)
+                var path = Path()
                 for i in 0...steps {
                     let x = CGFloat(i) / CGFloat(steps) * size.width
-                    let wave =
-                        sin(x * 0.045 + t * 2.2) * 5 +
-                        sin(x * 0.09 + t * 3.1) * 2.5
-                    let y = midY + wave
-                    if i == 0 { path.move(to: CGPoint(x: x, y: y)) }
-                    else { path.addLine(to: CGPoint(x: x, y: y)) }
+                    let a = sin(x * 0.045 + t * 2.2) * 5
+                    let b = sin(x * 0.09 + t * 3.1) * 2.5
+                    let y = midY + a + b
+                    let point = CGPoint(x: x, y: y)
+                    if i == 0 {
+                        path.move(to: point)
+                    } else {
+                        path.addLine(to: point)
+                    }
                 }
+                let gradient = Gradient(colors: [
+                    NOCOAITheme.glowPrimary.opacity(0.85),
+                    NOCOAITheme.glowSecondary.opacity(0.7),
+                    NOCOAITheme.glowAccent.opacity(0.8)
+                ])
                 context.stroke(
                     path,
-                    with: .linearGradient(
-                        Gradient(colors: [
-                            NOCOAITheme.glowPrimary.opacity(0.85),
-                            NOCOAITheme.glowSecondary.opacity(0.7),
-                            NOCOAITheme.glowAccent.opacity(0.8)
-                        ]),
-                        startPoint: .leading,
-                        endPoint: .trailing
-                    ),
+                    with: .linearGradient(gradient, startPoint: .leading, endPoint: .trailing),
                     style: StrokeStyle(lineWidth: 2.2, lineCap: .round, lineJoin: .round)
                 )
             }

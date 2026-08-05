@@ -48,6 +48,16 @@ struct NOCOAIApp: App {
                 .onReceive(NotificationCenter.default.publisher(for: .nocoOpenImages)) { _ in
                     connection.openImagesTab()
                 }
+                .onReceive(NotificationCenter.default.publisher(for: .nocoStartSpeak)) { _ in
+                    connection.launchSpeakFromShortcut()
+                }
+                .onReceive(NotificationCenter.default.publisher(for: .nocoStopSpeak)) { _ in
+                    connection.stopSpeakFromShortcut()
+                }
+                .task {
+                    // Cold start from Shortcuts / Siri while app was killed
+                    connection.consumePendingSpeakLaunchIfNeeded()
+                }
         }
     }
 }

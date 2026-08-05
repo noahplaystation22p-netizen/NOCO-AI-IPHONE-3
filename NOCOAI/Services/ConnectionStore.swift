@@ -68,10 +68,12 @@ final class ConnectionStore: ObservableObject {
     func onForeground() {
         images.handleDidBecomeActive()
         AppNotificationService.clearBadge()
-        guard isPaired, !serverHost.isEmpty else { return }
-        prepareLocalNetworkAccess(host: serverHost, port: serverPort)
-        chat.startSyncLoop()
-        Task { await refreshStatus() }
+        if isPaired, !serverHost.isEmpty {
+            prepareLocalNetworkAccess(host: serverHost, port: serverPort)
+            chat.startSyncLoop()
+            Task { await refreshStatus() }
+        }
+        consumePendingSpeakLaunchIfNeeded()
     }
 
     func onBackground() {
@@ -240,11 +242,8 @@ final class ConnectionStore: ObservableObject {
     func handleIncomingURL(_ url: URL) {
         let host = (url.host ?? "").lowercased()
         let path = url.path.lowercased()
-        if host == "speak" || path.contains("speak") {
-            speak.openUI()
-            if !speak.isRunning {
-                speak.start()
-            }
+        if host == "speak" || path.contains("speak") || host == "siri" {
+            launchSpeakFromShortcut()
             return
         }
         if host == "images" || host == "bildideen" || path.contains("images") || path.contains("bild") {
@@ -256,6 +255,41 @@ final class ConnectionStore: ObservableObject {
         if let pin = link.pin, !pin.isEmpty {
             Task { await pair(host: link.host, port: link.port, pin: pin) }
         }
+    }
+
+    /// Shortcuts / Siri / `nocoai://speak` — works even after cold start.
+    func launchSpeakFromShortcut() {
+        SpeakLaunchBridge.pendingStart = true
+        speak.openUI()
+        Task { @MainActor in
+            // Wait until paired + online (cold launch needs a few ticks)
+            for _ in 0..<40 {
+                if isPaired && isOnline { break }
+                try? await Task.sleep(nanoseconds: 250_000_000)
+                await refreshStatus(showLoading: false)
+            }
+            guard SpeakLaunchBridge.pendingStart else { return }
+            speak.openUI()
+            if isOnline {
+                if !speak.isRunning {
+                    speak.start()
+                }
+                SpeakLaunchBridge.clearPending()
+            } else {
+                speak.statusLine = "PC offline — Companion starten, dann nochmal Shortcut"
+            }
+        }
+    }
+
+    func stopSpeakFromShortcut() {
+        SpeakLaunchBridge.clearPending()
+        speak.stop()
+        speak.showSpeakUI = false
+    }
+
+    func consumePendingSpeakLaunchIfNeeded() {
+        guard SpeakLaunchBridge.pendingStart else { return }
+        launchSpeakFromShortcut()
     }
 
     func openImagesTab() {

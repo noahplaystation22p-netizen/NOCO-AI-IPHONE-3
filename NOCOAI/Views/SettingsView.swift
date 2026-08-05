@@ -84,9 +84,21 @@ struct SettingsView: View {
                     }
                 }
 
+                Section("Shortcuts / Siri") {
+                    Text("Kurzbefehle-App → „Mit NOCO sprechen“ zum Home-Bildschirm oder Siri hinzufügen.")
+                        .font(.footnote)
+                    Text("Oder: „Hey Siri, mit NOCO AI sprechen“ · Link: nocoai://speak")
+                        .font(.caption2)
+                        .foregroundStyle(.secondary)
+                    Button("Speak jetzt testen") {
+                        HapticService.medium()
+                        connection.launchSpeakFromShortcut()
+                    }
+                }
+
                 Section("Info") {
-                    Text("NOCO AI Companion v4.4")
-                    Text("Live-Sync · Speak · Bildideen · Pixel-Aura")
+                    Text("NOCO AI Companion v4.5")
+                    Text("Speak · Shortcuts/Siri · Live-Sync · Bildideen")
                         .font(.footnote)
                         .foregroundStyle(NOCOAITheme.secondaryText(for: scheme))
                 }

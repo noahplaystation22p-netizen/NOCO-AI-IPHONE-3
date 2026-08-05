@@ -4,36 +4,96 @@ struct PairingView: View {
     @EnvironmentObject private var connection: ConnectionStore
     @Environment(\.colorScheme) private var scheme
 
+    @State private var showQRScanner = true
+    @State private var isPairingFromQR = false
     @State private var host = ""
     @State private var port = "4747"
     @State private var pin = ""
-    @State private var showQRScanner = false
+    @State private var showManual = false
     @FocusState private var focusedField: Field?
 
-    private enum Field { case host, port, pin }
+    private enum Field { case host, pin }
 
     var body: some View {
-        ScrollView {
-            VStack(spacing: 24) {
-                header
-                pairingCard
-                hintsCard
+        ZStack {
+            NOCOAITheme.intelligenceBackground(for: scheme).ignoresSafeArea()
+
+            VStack(spacing: 28) {
+                Spacer(minLength: 40)
+
+                VStack(spacing: 14) {
+                    BrandLogo(size: 72)
+                    Text("NOCO AI")
+                        .font(.system(size: 34, weight: .semibold, design: .rounded))
+                    Text("Scanne den QR-Code auf deinem PC.\nDanach einfach fragen.")
+                        .font(.body)
+                        .foregroundStyle(.secondary)
+                        .multilineTextAlignment(.center)
+                }
+
+                Button {
+                    HapticService.medium()
+                    showQRScanner = true
+                } label: {
+                    VStack(spacing: 14) {
+                        Image(systemName: "qrcode.viewfinder")
+                            .font(.system(size: 44, weight: .light))
+                        Text(isPairingFromQR || connection.isRefreshing ? "Verbinde…" : "QR-Code scannen")
+                            .font(.headline)
+                    }
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, 36)
+                    .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 28, style: .continuous))
+                }
+                .buttonStyle(.plain)
+                .disabled(isPairingFromQR || connection.isRefreshing)
+
+                if let error = connection.lastError {
+                    Text(error)
+                        .font(.footnote)
+                        .foregroundStyle(NOCOAITheme.danger)
+                        .multilineTextAlignment(.center)
+                        .padding(.horizontal)
+                }
+
+                if let ping = connection.pingMessage {
+                    Text(ping)
+                        .font(.footnote.weight(.medium))
+                        .foregroundStyle(ping.contains("✓") ? NOCOAITheme.success : NOCOAITheme.danger)
+                }
+
+                Button(showManual ? "Manuell ausblenden" : "Manuell mit PIN") {
+                    withAnimation { showManual.toggle() }
+                }
+                .font(.subheadline.weight(.medium))
+                .foregroundStyle(.secondary)
+
+                if showManual {
+                    manualCard
+                        .transition(.opacity.combined(with: .move(edge: .bottom)))
+                }
+
+                Spacer()
+
+                Text("PC und iPhone im gleichen WLAN · NOCO AI X muss laufen")
+                    .font(.caption)
+                    .foregroundStyle(.tertiary)
+                    .multilineTextAlignment(.center)
+                    .padding(.bottom, 24)
             }
-            .padding(20)
+            .padding(.horizontal, 24)
         }
-        .nocoBackground()
         .onAppear {
-            applyStoredValues()
-            connection.prepareLocalNetworkAccess(host: host.isEmpty ? "192.168.0.1" : host, port: Int(port) ?? 4747)
+            connection.prepareLocalNetworkAccess(host: "192.168.0.1", port: 4747)
+            applyDeepLinkIfNeeded()
         }
         .onChange(of: connection.pendingDeepLink?.host) { _, _ in
             applyDeepLinkIfNeeded()
         }
-        .sheet(isPresented: $showQRScanner) {
+        .fullScreenCover(isPresented: $showQRScanner) {
             NavigationStack {
                 QRScannerView { code in
-                    connection.applyQRCode(code)
-                    applyDeepLinkIfNeeded()
+                    Task { await pairFromQR(code) }
                 }
                 .ignoresSafeArea()
                 .navigationTitle("QR scannen")
@@ -47,178 +107,46 @@ struct PairingView: View {
         }
     }
 
-    private var header: some View {
+    private var manualCard: some View {
         VStack(spacing: 12) {
-            BrandLogo(size: 96)
-            Text("NOCO AI")
-                .font(.largeTitle.bold())
-                .foregroundStyle(NOCOAITheme.primaryText(for: scheme))
-            Text("Verbinde dein iPhone mit deinem Windows-PC")
-                .font(.subheadline)
-                .foregroundStyle(NOCOAITheme.secondaryText(for: scheme))
-                .multilineTextAlignment(.center)
-        }
-        .padding(.top, 40)
-    }
+            TextField("IP — z. B. 192.168.178.197", text: $host)
+                .textInputAutocapitalization(.never)
+                .autocorrectionDisabled()
+                .keyboardType(.numbersAndPunctuation)
+                .focused($focusedField, equals: .host)
+                .padding(14)
+                .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 16))
 
-    private var pairingCard: some View {
-        GlassCard {
-            VStack(alignment: .leading, spacing: 16) {
-                Text("Kopplung")
-                    .font(.headline)
+            TextField("PIN vom PC", text: $pin)
+                .keyboardType(.numberPad)
+                .focused($focusedField, equals: .pin)
+                .padding(14)
+                .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 16))
 
-                Text("NOCO AI auf dem PC → Statusleiste → iPhone. Dort findest du IP, PIN und QR-Code.")
-                    .font(.footnote)
-                    .foregroundStyle(NOCOAITheme.secondaryText(for: scheme))
-
-                TextField("Nur IP — z. B. 192.168.178.197", text: $host)
-                    .textInputAutocapitalization(.never)
-                    .autocorrectionDisabled()
-                    .keyboardType(.numbersAndPunctuation)
-                    .focused($focusedField, equals: .host)
-                    .textFieldStyle(.plain)
-                    .padding(12)
-                    .background(fieldBackground)
-                    .onChange(of: host) { _, newValue in
-                        sanitizeHostField(newValue)
-                    }
-
-                HStack(spacing: 12) {
-                    TextField("Port", text: $port)
-                        .keyboardType(.numberPad)
-                        .focused($focusedField, equals: .port)
-                        .textFieldStyle(.plain)
-                        .padding(12)
-                        .background(fieldBackground)
-                        .frame(width: 100)
-
-                    TextField("PIN", text: $pin)
-                        .keyboardType(.numberPad)
-                        .focused($focusedField, equals: .pin)
-                        .textFieldStyle(.plain)
-                        .padding(12)
-                        .background(fieldBackground)
+            Button {
+                focusedField = nil
+                Task {
+                    await connection.pair(host: host, port: Int(port) ?? 4747, pin: pin)
                 }
-
-                if let hint = connection.localNetworkHint {
-                    Text(hint)
-                        .font(.caption)
-                        .foregroundStyle(NOCOAITheme.accent)
-                }
-
-                Text("Die PIN wechselt alle 15 Minuten. Bei Fehler neue PIN in NOCO AI holen.")
-                    .font(.caption)
-                    .foregroundStyle(NOCOAITheme.secondaryText(for: scheme))
-
-                if let ping = connection.pingMessage {
-                    Text(ping)
-                        .font(.footnote.weight(.medium))
-                        .foregroundStyle(pingColor(ping))
-                }
-
-                if let error = connection.lastError {
-                    Text(error)
-                        .font(.footnote)
-                        .foregroundStyle(NOCOAITheme.danger)
-                }
-
-                HStack(spacing: 10) {
-                    Button {
-                        focusedField = nil
-                        Task {
-                            _ = await connection.testConnection(
-                                host: host,
-                                port: Int(port) ?? 4747
-                            )
-                        }
-                    } label: {
-                        HStack {
-                            if connection.isPinging {
-                                ProgressView().scaleEffect(0.8)
-                            }
-                            Text("Verbindung testen")
-                                .fontWeight(.medium)
-                        }
-                        .frame(maxWidth: .infinity)
-                        .padding(.vertical, 12)
-                    }
-                    .buttonStyle(.bordered)
-                    .disabled(host.isEmpty || connection.isPinging)
-
-                    Button {
-                        showQRScanner = true
-                    } label: {
-                        Image(systemName: "qrcode.viewfinder")
-                            .font(.title3)
-                            .frame(width: 48, height: 48)
-                    }
-                    .buttonStyle(.bordered)
-                }
-
-                Button {
-                    focusedField = nil
-                    Task {
-                        await connection.pair(
-                            host: host,
-                            port: Int(port) ?? 4747,
-                            pin: pin
-                        )
-                    }
-                } label: {
-                    HStack {
-                        if connection.isRefreshing {
-                            ProgressView().tint(.white)
-                        }
-                        Text(connection.isRefreshing ? "Verbinde…" : "Mit PC koppeln")
-                            .fontWeight(.semibold)
-                    }
+            } label: {
+                Text("Verbinden")
+                    .fontWeight(.semibold)
                     .frame(maxWidth: .infinity)
                     .padding(.vertical, 14)
-                }
-                .buttonStyle(.borderedProminent)
-                .tint(NOCOAITheme.accent)
-                .disabled(host.isEmpty || pin.isEmpty || connection.isRefreshing)
             }
+            .buttonStyle(.borderedProminent)
+            .tint(NOCOAITheme.accent)
+            .disabled(host.isEmpty || pin.isEmpty || connection.isRefreshing)
         }
     }
 
-    private var hintsCard: some View {
-        GlassCard {
-            VStack(alignment: .leading, spacing: 8) {
-                Label("Hinweise", systemImage: "info.circle")
-                    .font(.headline)
-                Text("• PC und iPhone im gleichen WLAN\n• Nur IP eingeben — kein http://\n• iOS: Einstellungen → NOCO AI → Lokales Netzwerk → An\n• Windows-Firewall Port 4747 erlauben\n• NOCO AI muss auf dem PC laufen")
-                    .font(.footnote)
-                    .foregroundStyle(NOCOAITheme.secondaryText(for: scheme))
-            }
+    private func pairFromQR(_ code: String) async {
+        isPairingFromQR = true
+        defer { isPairingFromQR = false }
+        await connection.pairFromQR(code)
+        if !connection.isPaired {
+            showQRScanner = true
         }
-    }
-
-    private var fieldBackground: some View {
-        RoundedRectangle(cornerRadius: 12).fill(Color.primary.opacity(0.06))
-    }
-
-    private func pingColor(_ message: String) -> Color {
-        message.contains("✓") ? NOCOAITheme.success : NOCOAITheme.danger
-    }
-
-    private func sanitizeHostField(_ value: String) {
-        guard value.contains("http") || value.contains("/") || value.contains(":") else { return }
-        if let parsed = HostSanitizer.parse(value, defaultPort: Int(port) ?? 4747) {
-            host = parsed.host
-            if let parsedPort = parsed.port {
-                port = String(parsedPort)
-            }
-        }
-    }
-
-    private func applyStoredValues() {
-        host = HostSanitizer.hostOnly(host.isEmpty ? connection.serverHost : host)
-        if port == "4747", connection.serverPort != 4747 {
-            port = String(connection.serverPort)
-        }
-        applyDeepLinkIfNeeded()
-        host = HostSanitizer.hostOnly(host)
     }
 
     private func applyDeepLinkIfNeeded() {
@@ -227,6 +155,7 @@ struct PairingView: View {
         port = String(link.port)
         if let linkPin = link.pin, !linkPin.isEmpty {
             pin = linkPin
+            Task { await connection.pair(host: link.host, port: link.port, pin: linkPin) }
         }
         connection.pendingDeepLink = nil
     }

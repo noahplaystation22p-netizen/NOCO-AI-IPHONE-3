@@ -9,6 +9,12 @@ struct MoreView: View {
             List {
                 Section("Tools") {
                     NavigationLink {
+                        ImagesHubView()
+                            .environmentObject(connection)
+                    } label: {
+                        Label("Bilder", systemImage: "photo.artframe")
+                    }
+                    NavigationLink {
                         CodeStudioView()
                             .environmentObject(connection)
                     } label: {
@@ -44,8 +50,8 @@ struct MoreView: View {
                 }
 
                 Section("Info") {
-                    Text("NOCO AI Companion v2.0")
-                    Text("Rechenleistung auf deinem Windows-PC — das iPhone ist die Fernbedienung.")
+                    Text("NOCO AI Companion v2.3")
+                    Text("QR scannen → fragen. Text läuft auf deinem Windows-PC.")
                         .font(.footnote)
                         .foregroundStyle(NOCOAITheme.secondaryText(for: scheme))
                 }

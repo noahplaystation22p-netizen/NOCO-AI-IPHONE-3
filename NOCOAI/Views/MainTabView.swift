@@ -5,25 +5,17 @@ struct MainTabView: View {
 
     var body: some View {
         TabView(selection: $selectedTab) {
-            HomeView()
-                .tabItem { Label("Home", systemImage: "house.fill") }
+            ChatHubView()
+                .tabItem { Label("Chat", systemImage: "sparkles") }
                 .tag(0)
 
-            ChatHubView()
-                .tabItem { Label("Chat", systemImage: "bubble.left.and.bubble.right.fill") }
+            HomeView()
+                .tabItem { Label("PC", systemImage: "desktopcomputer") }
                 .tag(1)
 
-            ImagesHubView()
-                .tabItem { Label("Bilder", systemImage: "photo.artframe") }
-                .tag(2)
-
-            DashboardView()
-                .tabItem { Label("Dashboard", systemImage: "chart.bar.fill") }
-                .tag(3)
-
             MoreView()
-                .tabItem { Label("Mehr", systemImage: "ellipsis.circle.fill") }
-                .tag(4)
+                .tabItem { Label("Mehr", systemImage: "ellipsis.circle") }
+                .tag(2)
         }
         .tint(NOCOAITheme.accent)
     }

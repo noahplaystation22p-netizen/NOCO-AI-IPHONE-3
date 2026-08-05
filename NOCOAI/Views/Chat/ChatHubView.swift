@@ -94,7 +94,7 @@ struct ChatHubView: View {
             Image(systemName: "bubble.left.and.bubble.right.fill")
                 .font(.system(size: 48))
                 .foregroundStyle(NOCOAITheme.accent.opacity(0.5))
-            Text("Schreib eine Nachricht — sie erscheint sofort auf deinem PC.")
+            Text("Stell eine Frage.\nDie Antwort kommt von deinem PC.")
                 .font(.subheadline)
                 .multilineTextAlignment(.center)
                 .foregroundStyle(NOCOAITheme.secondaryText(for: scheme))

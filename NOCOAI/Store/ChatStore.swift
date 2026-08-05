@@ -5,7 +5,7 @@ final class ChatStore: ObservableObject {
     @Published var conversations: [ConversationSummary] = []
     @Published var messages: [ChatMessage] = []
     @Published var activeConversationId: String?
-    @Published var mode: AIMode = .normal
+    @Published var mode: AIMode = .auto
     @Published var isSending = false
     @Published var isSyncActive = false
     @Published var lastSyncAt: Date?

@@ -39,7 +39,7 @@ struct ChatInputBar: View {
                         .foregroundStyle(NOCOAITheme.accent)
                 }
 
-                TextField("Nachricht…", text: $text, axis: .vertical)
+                TextField("Frag NOCO AI…", text: $text, axis: .vertical)
                     .lineLimit(1...8)
                     .focused($focused)
                     .submitLabel(.send)

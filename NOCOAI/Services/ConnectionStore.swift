@@ -187,7 +187,7 @@ final class ConnectionStore: ObservableObject {
     func handleIncomingURL(_ url: URL) {
         guard let link = PairingDeepLink.from(url: url) else { return }
         applyDeepLink(link)
-        if isPaired, let pin = link.pin, !pin.isEmpty {
+        if let pin = link.pin, !pin.isEmpty {
             Task { await pair(host: link.host, port: link.port, pin: pin) }
         }
     }
@@ -199,6 +199,22 @@ final class ConnectionStore: ObservableObject {
         }
         applyDeepLink(link)
         HapticService.light()
+    }
+
+    /// One-scan pairing: QR contains host + pin → connect immediately
+    func pairFromQR(_ raw: String) async {
+        guard let link = PairingDeepLink.parse(from: raw) else {
+            lastError = "QR-Code ungültig — in NOCO AI X neu öffnen"
+            HapticService.error()
+            return
+        }
+        guard let pin = link.pin, !pin.isEmpty else {
+            lastError = "QR ohne PIN — bitte neuen Code in NOCO AI X öffnen"
+            HapticService.error()
+            return
+        }
+        lastError = nil
+        await pair(host: link.host, port: link.port, pin: pin)
     }
 
     func refreshStatus(showLoading: Bool = false) async {

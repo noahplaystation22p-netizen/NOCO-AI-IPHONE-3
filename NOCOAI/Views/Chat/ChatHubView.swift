@@ -7,6 +7,7 @@ struct ChatHubView: View {
     @State private var input = ""
     @State private var showConversations = false
     @State private var showVoice = false
+    @State private var showWritingTools = false
     @FocusState private var inputFocused: Bool
 
     var body: some View {
@@ -29,13 +30,17 @@ struct ChatHubView: View {
                         } else {
                             LazyVStack(spacing: 16) {
                                 ForEach(Array(connection.chat.messages.enumerated()), id: \.element.id) { index, message in
-                                    ChatBubble(message: message)
-                                        .id(message.id)
-                                        .transition(.asymmetric(
-                                            insertion: .opacity.combined(with: .move(edge: .bottom)).combined(with: .scale(scale: 0.96)),
-                                            removal: .opacity
-                                        ))
-                                        .animation(.spring(response: 0.4, dampingFraction: 0.82).delay(Double(min(index, 6)) * 0.02), value: connection.chat.messages.count)
+                                    ChatBubble(message: message) { action in
+                                        Task {
+                                            await connection.chat.send(action.prompt(for: message.text))
+                                        }
+                                    }
+                                    .id(message.id)
+                                    .transition(.asymmetric(
+                                        insertion: .opacity.combined(with: .move(edge: .bottom)).combined(with: .scale(scale: 0.96)),
+                                        removal: .opacity
+                                    ))
+                                    .animation(.spring(response: 0.4, dampingFraction: 0.82).delay(Double(min(index, 6)) * 0.02), value: connection.chat.messages.count)
                                 }
                             }
                             .padding(16)
@@ -50,13 +55,17 @@ struct ChatHubView: View {
                     }
                 }
 
-                ChatInputBar(text: $input, focused: $inputFocused, onSend: {
-                    let text = input
-                    input = ""
-                    Task { await connection.chat.send(text) }
-                }, onVoice: {
-                    showVoice = true
-                })
+                ChatInputBar(
+                    text: $input,
+                    focused: $inputFocused,
+                    onSend: {
+                        let text = input
+                        input = ""
+                        Task { await connection.chat.send(text) }
+                    },
+                    onVoice: { showVoice = true },
+                    onWritingTools: { showWritingTools = true }
+                )
             }
             .nocoBackground()
             .navigationTitle(titleText)
@@ -72,13 +81,23 @@ struct ChatHubView: View {
                 ToolbarItem(placement: .topBarTrailing) {
                     HStack(spacing: 8) {
                         SyncBadge(active: connection.chat.isSyncActive)
-                        StatusBadge(online: connection.isOnline, label: connection.isOnline ? "Live" : "Offline")
+                        StatusBadge(online: connection.isOnline, label: connection.isOnline ? "Sync" : "Offline")
                     }
                 }
             }
             .sheet(isPresented: $showConversations) {
                 ConversationListView()
                     .environmentObject(connection)
+            }
+            .sheet(isPresented: $showWritingTools) {
+                WritingToolsSheet(sourceText: input.isEmpty ? (connection.chat.messages.last(where: { $0.role == .assistant })?.text ?? "") : input) { tool in
+                    let source = input.isEmpty
+                        ? (connection.chat.messages.last(where: { $0.role == .user || $0.role == .assistant })?.text ?? "")
+                        : input
+                    guard !source.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return }
+                    input = ""
+                    Task { await connection.chat.send(tool.prompt(for: source)) }
+                }
             }
             .fullScreenCover(isPresented: $showVoice) {
                 VoiceModeView()
@@ -102,33 +121,35 @@ struct ChatHubView: View {
     }
 
     private var emptyState: some View {
-        VStack(spacing: 18) {
+        VStack(spacing: 20) {
             ZStack {
-                IntelligenceOrbitRings(size: 130)
-                    .opacity(0.45)
-                Circle()
-                    .fill(NOCOAITheme.glowPrimary.opacity(0.18))
-                    .frame(width: 100, height: 100)
-                    .blur(radius: 18)
+                IntelligenceOrbitRings(size: 120)
+                    .opacity(0.4)
                 Image(systemName: "sparkles")
-                    .font(.system(size: 40, weight: .light))
+                    .font(.system(size: 36, weight: .light))
                     .foregroundStyle(NOCOAITheme.accent)
                     .shadow(color: NOCOAITheme.glowPrimary.opacity(0.75), radius: 16)
                     .symbolEffect(.pulse, options: .repeating)
             }
             Text("Frag irgendetwas")
                 .font(.title3.weight(.semibold))
-            Text("Deine Frage geht an den PC —\nAntwort streamt zurück wie in der Cloud.")
+            Text("Dein PC rechnet — Antworten streamen\nweich wie Apple Intelligence.")
                 .font(.subheadline)
                 .multilineTextAlignment(.center)
                 .foregroundStyle(NOCOAITheme.secondaryText(for: scheme))
-                .padding(.horizontal, 32)
-            FloatingIntelligenceDots(count: 8)
-                .frame(height: 80)
-                .padding(.horizontal, 40)
+                .padding(.horizontal, 28)
+
+            IntelligenceShimmerLine()
+                .padding(.horizontal, 60)
+
+            IntelligenceIdeaChips { idea in
+                Task { await connection.chat.send(idea.prompt) }
+            }
+            .padding(.horizontal, 16)
+            .padding(.top, 8)
         }
         .frame(maxWidth: .infinity)
-        .padding(.top, 70)
+        .padding(.top, 48)
     }
 
     private func scrollToBottom(_ proxy: ScrollViewProxy) {
@@ -143,6 +164,7 @@ struct ChatHubView: View {
 private struct ChatBubble: View {
     @Environment(\.colorScheme) private var scheme
     let message: ChatMessage
+    var onReplyAction: ((ReplyAction) -> Void)?
 
     var body: some View {
         HStack(alignment: .bottom) {
@@ -185,6 +207,10 @@ private struct ChatBubble: View {
                         .animation(.easeOut(duration: 0.12), value: message.text)
                     }
                 }
+
+                if message.role == .assistant, !message.isStreaming, !message.text.isEmpty, let onReplyAction {
+                    ReplyActionBar(replyText: message.text, onAction: onReplyAction)
+                }
             }
             if message.role == .assistant { Spacer(minLength: 48) }
         }
@@ -209,7 +235,7 @@ struct ConversationListView: View {
                         Label("Neuer Chat", systemImage: "plus.bubble.fill")
                     }
                 }
-                Section("Chats") {
+                Section("Unterhaltungen") {
                     ForEach(connection.chat.filteredConversations) { convo in
                         Button {
                             Task {

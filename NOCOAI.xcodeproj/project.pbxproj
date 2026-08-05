@@ -43,6 +43,8 @@
 		NA000001000000000000002E /* VoiceService.swift in Sources */ = {isa = PBXBuildFile; fileRef = NA000002000000000000002E /* VoiceService.swift */; };
 		NA000001000000000000002F /* VoiceRainbowOrb.swift in Sources */ = {isa = PBXBuildFile; fileRef = NA000002000000000000002F /* VoiceRainbowOrb.swift */; };
 		NA0000010000000000000030 /* VoiceModeView.swift in Sources */ = {isa = PBXBuildFile; fileRef = NA0000020000000000000030 /* VoiceModeView.swift */; };
+		NA0000010000000000000031 /* IntelligenceTools.swift in Sources */ = {isa = PBXBuildFile; fileRef = NA0000020000000000000031 /* IntelligenceTools.swift */; };
+		NA0000010000000000000032 /* WritingToolsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = NA0000020000000000000032 /* WritingToolsView.swift */; };
 		NA0000010000000000000011 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = NA0000020000000000000011 /* Assets.xcassets */; };
 /* End PBXBuildFile section */
 
@@ -87,6 +89,8 @@
 		NA000002000000000000002E /* VoiceService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VoiceService.swift; sourceTree = "<group>"; };
 		NA000002000000000000002F /* VoiceRainbowOrb.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VoiceRainbowOrb.swift; sourceTree = "<group>"; };
 		NA0000020000000000000030 /* VoiceModeView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VoiceModeView.swift; sourceTree = "<group>"; };
+		NA0000020000000000000031 /* IntelligenceTools.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = IntelligenceTools.swift; sourceTree = "<group>"; };
+		NA0000020000000000000032 /* WritingToolsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WritingToolsView.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -138,6 +142,7 @@
 				NA0000020000000000000002 /* APIModels.swift */,
 				NA0000020000000000000003 /* ChatMessage.swift */,
 				NA0000020000000000000020 /* V2Models.swift */,
+				NA0000020000000000000031 /* IntelligenceTools.swift */,
 			);
 			path = Models;
 			sourceTree = "<group>";
@@ -204,6 +209,7 @@
 				NA0000020000000000000026 /* SyncBadge.swift */,
 				NA000002000000000000002D /* IntelligenceEffects.swift */,
 				NA000002000000000000002F /* VoiceRainbowOrb.swift */,
+				NA0000020000000000000032 /* WritingToolsView.swift */,
 			);
 			path = Components;
 			sourceTree = "<group>";
@@ -352,6 +358,8 @@
 				NA000001000000000000002E /* VoiceService.swift in Sources */,
 				NA000001000000000000002F /* VoiceRainbowOrb.swift in Sources */,
 				NA0000010000000000000030 /* VoiceModeView.swift in Sources */,
+				NA0000010000000000000031 /* IntelligenceTools.swift in Sources */,
+				NA0000010000000000000032 /* WritingToolsView.swift in Sources */,
 				NA0000010000000000000012 /* BrandLogo.swift in Sources */,
 				NA0000010000000000000013 /* QRScannerView.swift in Sources */,
 				NA0000010000000000000014 /* HostSanitizer.swift in Sources */,
@@ -405,7 +413,7 @@
 				CODE_SIGN_ENTITLEMENTS = NOCOAI/NOCOAI.entitlements;
 				CODE_SIGNING_ALLOWED = NO;
 				CODE_SIGNING_REQUIRED = NO;
-				CURRENT_PROJECT_VERSION = 12;
+				CURRENT_PROJECT_VERSION = 13;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = NOCOAI/Info.plist;
@@ -419,7 +427,7 @@
 					"$(inherited)",
 					"@executable_path/Frameworks",
 				);
-				MARKETING_VERSION = 2.8;
+				MARKETING_VERSION = 2.9;
 				PRODUCT_BUNDLE_IDENTIFIER = de.noco.nocoai;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator";
@@ -438,7 +446,7 @@
 				CODE_SIGN_ENTITLEMENTS = NOCOAI/NOCOAI.entitlements;
 				CODE_SIGNING_ALLOWED = NO;
 				CODE_SIGNING_REQUIRED = NO;
-				CURRENT_PROJECT_VERSION = 12;
+				CURRENT_PROJECT_VERSION = 13;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = NOCOAI/Info.plist;
@@ -452,7 +460,7 @@
 					"$(inherited)",
 					"@executable_path/Frameworks",
 				);
-				MARKETING_VERSION = 2.8;
+				MARKETING_VERSION = 2.9;
 				PRODUCT_BUNDLE_IDENTIFIER = de.noco.nocoai;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator";

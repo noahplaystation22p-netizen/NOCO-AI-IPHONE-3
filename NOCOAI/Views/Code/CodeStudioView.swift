@@ -55,7 +55,7 @@ struct CodeStudioView: View {
                 .background(.ultraThinMaterial)
             }
             .nocoBackground()
-            .navigationTitle(connection.code.activeSession?.title ?? "Code Studio")
+            .navigationTitle(connection.code.activeSession?.title ?? "Code Assist")
             .toolbar {
                 ToolbarItem(placement: .topBarLeading) {
                     Menu {

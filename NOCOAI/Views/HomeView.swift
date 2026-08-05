@@ -27,7 +27,7 @@ struct HomeView: View {
                 .padding(20)
             }
             .nocoBackground()
-            .navigationTitle("NOCO AI")
+            .navigationTitle("System")
             .toolbar {
                 ToolbarItem(placement: .topBarTrailing) {
                     Button {
@@ -49,7 +49,7 @@ struct HomeView: View {
     private var smartHints: some View {
         GlassCard {
             VStack(alignment: .leading, spacing: 10) {
-                Text("Smart Insights").font(.headline)
+                Text("Einblicke").font(.headline)
                 Text(hintText)
                     .font(.subheadline)
                     .foregroundStyle(NOCOAITheme.secondaryText(for: scheme))

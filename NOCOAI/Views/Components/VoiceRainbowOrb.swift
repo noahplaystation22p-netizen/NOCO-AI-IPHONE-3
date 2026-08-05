@@ -1,15 +1,12 @@
 import SwiftUI
 
-/// Intense Apple-Intelligence / Siri-style rainbow orb for voice mode.
-struct VoiceRainbowOrb: View {
+/// Apple-Intelligence voice stage: soft aurora + thin rings + reactive waveform — not a fat orb.
+struct IntelligenceVoiceStage: View {
     var phase: VoicePhase
     var level: CGFloat
 
-    @State private var spinA = false
-    @State private var spinB = false
+    @State private var spin = false
     @State private var breathe = false
-    @State private var pulse = false
-    @State private var hueShift: Double = 0
 
     private var active: Bool {
         switch phase {
@@ -18,12 +15,13 @@ struct VoiceRainbowOrb: View {
         }
     }
 
-    private var intensity: CGFloat {
+    private var intensity: Double {
         switch phase {
-        case .listening: return 0.55 + level * 0.5
-        case .processing: return 0.82
+        case .listening: return 0.55 + Double(level) * 0.45
+        case .processing: return 0.8
         case .speaking: return 0.9
-        default: return 0.38
+        case .error: return 0.35
+        case .idle: return 0.4
         }
     }
 
@@ -31,199 +29,224 @@ struct VoiceRainbowOrb: View {
         TimelineView(.animation(minimumInterval: 1 / 30)) { timeline in
             let t = timeline.date.timeIntervalSinceReferenceDate
             ZStack {
-                outerBloom
-                auroraVeil(t: t)
-                rainbowRings
-                waveformHalo
-                coreOrb(t: t)
-                sparkField(t: t)
-                statusGlyph
+                auroraField
+                softRings
+                centerWaveform(t: t)
+                statusSpark
             }
         }
-        .frame(width: 340, height: 340)
+        .frame(height: 280)
         .onAppear {
-            withAnimation(.linear(duration: 8).repeatForever(autoreverses: false)) { spinA = true }
-            withAnimation(.linear(duration: 11).repeatForever(autoreverses: false)) { spinB = true }
-            withAnimation(.easeInOut(duration: 2.0).repeatForever(autoreverses: true)) { breathe = true }
-            withAnimation(.easeInOut(duration: 1.15).repeatForever(autoreverses: true)) { pulse = true }
+            withAnimation(.linear(duration: 14).repeatForever(autoreverses: false)) { spin = true }
+            withAnimation(.easeInOut(duration: 2.4).repeatForever(autoreverses: true)) { breathe = true }
         }
     }
 
-    private var outerBloom: some View {
+    private var auroraField: some View {
         ZStack {
-            Circle()
+            Ellipse()
                 .fill(
                     RadialGradient(
                         colors: [
-                            Color(red: 0.45, green: 0.8, blue: 1).opacity(0.55 * intensity),
-                            Color(red: 0.75, green: 0.35, blue: 1).opacity(0.28 * intensity),
-                            Color(red: 1.0, green: 0.4, blue: 0.6).opacity(0.12 * intensity),
+                            Color(red: 0.45, green: 0.78, blue: 1).opacity(0.34 * intensity),
+                            Color(red: 0.65, green: 0.45, blue: 1).opacity(0.18 * intensity),
                             .clear
                         ],
                         center: .center,
-                        startRadius: 8,
-                        endRadius: 170
+                        startRadius: 10,
+                        endRadius: 160
                     )
                 )
-                .frame(width: 340, height: 340)
-                .scaleEffect(breathe ? 1.1 : 0.9)
-                .blur(radius: 12)
+                .frame(width: 340, height: 220)
+                .blur(radius: 28)
+                .scaleEffect(breathe ? 1.06 : 0.94)
 
-            Circle()
-                .fill(Color(red: 0.4, green: 0.95, blue: 0.7).opacity(0.18 * intensity))
-                .frame(width: 220, height: 220)
-                .blur(radius: 40)
-                .offset(x: breathe ? 18 : -14, y: breathe ? -12 : 16)
+            Ellipse()
+                .fill(Color(red: 0.35, green: 0.92, blue: 0.75).opacity(0.14 * intensity))
+                .frame(width: 260, height: 140)
+                .blur(radius: 36)
+                .offset(x: breathe ? 20 : -18, y: breathe ? -10 : 14)
+
+            Ellipse()
+                .fill(Color(red: 1.0, green: 0.55, blue: 0.7).opacity(0.1 * intensity))
+                .frame(width: 200, height: 120)
+                .blur(radius: 30)
+                .offset(x: breathe ? -24 : 16, y: 20)
         }
     }
 
-    private func auroraVeil(t: Double) -> some View {
-        AngularGradient(
-            colors: rainbow(offset: t * 40),
-            center: .center
-        )
-        .mask(
-            Circle()
-                .stroke(lineWidth: 48)
-                .frame(width: 210, height: 210)
-                .blur(radius: 18)
-        )
-        .opacity(0.35 + Double(intensity) * 0.35)
-        .rotationEffect(.degrees(spinA ? 360 : 0))
-        .blendMode(.plusLighter)
-    }
-
-    private var rainbowRings: some View {
+    private var softRings: some View {
         ZStack {
-            ForEach(0..<5, id: \.self) { i in
+            ForEach(0..<3, id: \.self) { i in
                 Circle()
                     .stroke(
                         AngularGradient(
-                            colors: rainbow(offset: Double(i) * 48),
+                            colors: [
+                                Color(red: 0.4, green: 0.8, blue: 1).opacity(0.55),
+                                .clear,
+                                Color(red: 0.7, green: 0.45, blue: 1).opacity(0.4),
+                                .clear,
+                                Color(red: 0.4, green: 0.95, blue: 0.75).opacity(0.35),
+                                .clear
+                            ],
                             center: .center
                         ),
-                        style: StrokeStyle(lineWidth: max(1.6, 4.2 - CGFloat(i) * 0.45), lineCap: .round)
+                        lineWidth: 1.1
                     )
-                    .frame(width: 150 + CGFloat(i) * 26, height: 150 + CGFloat(i) * 26)
-                    .rotationEffect(.degrees((i % 2 == 0 ? 1 : -1) * (spinA ? 360 : 0)))
-                    .opacity(0.45 + Double(intensity) * 0.5)
-                    .blur(radius: i == 0 ? 0.2 : 1.0)
-                    .scaleEffect(1 + level * (phase == .listening ? 0.14 : 0.05) * CGFloat(5 - i) * 0.18)
+                    .frame(width: 168 + CGFloat(i) * 36, height: 168 + CGFloat(i) * 36)
+                    .rotationEffect(.degrees((i % 2 == 0 ? 1 : -1) * (spin ? 360 : 0)))
+                    .opacity(0.35 + intensity * 0.35)
+                    .scaleEffect(1 + level * (phase == .listening ? 0.06 : 0.02))
             }
-
-            // Dashed accent ring
-            Circle()
-                .stroke(
-                    AngularGradient(colors: rainbow(offset: 120), center: .center),
-                    style: StrokeStyle(lineWidth: 1.5, dash: [6, 10])
-                )
-                .frame(width: 248, height: 248)
-                .rotationEffect(.degrees(spinB ? -360 : 0))
-                .opacity(0.7)
         }
     }
 
-    private var waveformHalo: some View {
+    private func centerWaveform(t: Double) -> some View {
         HStack(spacing: 5) {
-            ForEach(0..<9, id: \.self) { i in
+            ForEach(0..<21, id: \.self) { i in
                 Capsule()
-                    .fill(rainbow(offset: Double(i) * 28)[i % 7])
-                    .frame(width: 4, height: barHeight(i))
-                    .shadow(color: rainbow(offset: Double(i) * 28)[i % 7].opacity(0.8), radius: 6)
+                    .fill(
+                        LinearGradient(
+                            colors: barColors(i),
+                            startPoint: .bottom,
+                            endPoint: .top
+                        )
+                    )
+                    .frame(width: 4, height: barHeight(i, t: t))
+                    .shadow(color: barColors(i)[0].opacity(0.55), radius: active ? 5 : 0)
             }
         }
-        .opacity(phase == .listening || phase == .speaking ? 0.95 : 0)
-        .offset(y: 118)
-        .animation(.easeOut(duration: 0.08), value: level)
-    }
-
-    private func coreOrb(t: Double) -> some View {
-        ZStack {
-            Circle()
-                .fill(
-                    RadialGradient(
-                        colors: [
-                            .white.opacity(0.92),
-                            Color(red: 0.55, green: 0.85, blue: 1).opacity(0.75),
-                            Color(red: 0.6, green: 0.4, blue: 1).opacity(0.6),
-                            Color(red: 0.2, green: 0.9, blue: 0.75).opacity(0.4),
-                            Color(red: 1.0, green: 0.45, blue: 0.7).opacity(0.25)
-                        ],
-                        center: UnitPoint(x: 0.32 + 0.08 * sin(t), y: 0.28 + 0.06 * cos(t * 1.3)),
-                        startRadius: 1,
-                        endRadius: 78
-                    )
-                )
-                .frame(width: 128, height: 128)
+        .frame(height: 72)
+        .padding(.horizontal, 28)
+        .padding(.vertical, 22)
+        .background(
+            Capsule()
+                .fill(.ultraThinMaterial)
                 .overlay(
-                    Circle()
+                    Capsule()
                         .stroke(
-                            AngularGradient(colors: rainbow(offset: t * 60), center: .center),
-                            lineWidth: 2.4
+                            AngularGradient(
+                                colors: [
+                                    Color(red: 0.4, green: 0.8, blue: 1).opacity(0.55),
+                                    Color(red: 0.7, green: 0.4, blue: 1).opacity(0.35),
+                                    Color(red: 0.4, green: 0.95, blue: 0.7).opacity(0.4),
+                                    Color(red: 0.4, green: 0.8, blue: 1).opacity(0.55)
+                                ],
+                                center: .center
+                            ),
+                            lineWidth: 1.2
                         )
-                        .rotationEffect(.degrees(spinB ? 360 : 0))
+                        .rotationEffect(.degrees(spin ? 360 : 0))
                 )
-                .shadow(color: Color(red: 0.35, green: 0.75, blue: 1).opacity(0.75 * intensity), radius: 30)
-                .shadow(color: Color(red: 0.85, green: 0.35, blue: 1).opacity(0.5 * intensity), radius: 48)
-                .shadow(color: Color(red: 1.0, green: 0.45, blue: 0.55).opacity(0.28 * intensity), radius: 64)
-                .scaleEffect((pulse ? 1.04 : 0.97) * (1 + level * (phase == .listening ? 0.2 : 0.07)))
-                .animation(.easeOut(duration: 0.07), value: level)
-
-            // Specular highlight
-            Ellipse()
-                .fill(.white.opacity(0.55))
-                .frame(width: 42, height: 18)
-                .blur(radius: 2)
-                .offset(x: -18, y: -28)
-        }
+                .shadow(color: Color(red: 0.45, green: 0.7, blue: 1).opacity(0.28 * intensity), radius: 22)
+        )
+        .scaleEffect(phase == .listening ? 1 + level * 0.04 : 1)
     }
 
-    private func sparkField(t: Double) -> some View {
-        ForEach(0..<14, id: \.self) { i in
-            let angle = Double(i) * (360.0 / 14.0) + t * (active ? 28 : 8)
-            let radius = 92.0 + Double(i % 4) * 8 + Double(level) * 16
-            Circle()
-                .fill(rainbow(offset: Double(i) * 25)[i % 7])
-                .frame(width: CGFloat(3 + i % 3), height: CGFloat(3 + i % 3))
-                .offset(
-                    x: CGFloat(cos(angle * .pi / 180) * radius),
-                    y: CGFloat(sin(angle * .pi / 180) * radius)
-                )
-                .opacity(active ? (0.45 + 0.5 * sin(t * 3 + Double(i))) : 0.12)
-                .blur(radius: 0.3)
-                .shadow(color: rainbow(offset: Double(i) * 25)[i % 7], radius: 5)
-        }
-    }
-
-    private var statusGlyph: some View {
+    private var statusSpark: some View {
         Image(systemName: glyph)
-            .font(.system(size: 36, weight: .semibold))
-            .foregroundStyle(.white)
-            .shadow(color: .black.opacity(0.3), radius: 5)
+            .font(.system(size: 18, weight: .semibold))
+            .foregroundStyle(.secondary)
+            .padding(.top, 118)
             .symbolEffect(.pulse, options: .repeating, isActive: phase == .processing || phase == .listening)
-            .symbolEffect(.variableColor.iterative, options: .repeating, isActive: phase == .speaking)
+            .opacity(0.85)
     }
 
-    private func barHeight(_ i: Int) -> CGFloat {
-        let base: CGFloat = phase == .speaking ? 18 : 10
-        let wave = abs(sin(Double(i) * 0.9 + Double(level) * 8))
-        return base + CGFloat(wave) * (22 + level * 28)
+    private func barHeight(_ i: Int, t: Double) -> CGFloat {
+        let mid = abs(Double(i) - 10.0)
+        let envelope = max(0.15, 1.0 - mid / 12.0)
+        switch phase {
+        case .listening:
+            let wave = abs(sin(t * 10 + Double(i) * 0.55))
+            return CGFloat(10 + (wave * 0.45 + Double(level) * 0.7) * envelope * 52)
+        case .speaking:
+            let wave = abs(sin(t * 8.5 + Double(i) * 0.7))
+            return CGFloat(12 + wave * envelope * 44)
+        case .processing:
+            let wave = abs(sin(t * 3.2 + Double(i) * 0.35))
+            return CGFloat(8 + wave * envelope * 22)
+        default:
+            let wave = abs(sin(t * 1.4 + Double(i) * 0.25))
+            return CGFloat(6 + wave * envelope * 10)
+        }
+    }
+
+    private func barColors(_ i: Int) -> [Color] {
+        let hues = [0.55, 0.62, 0.72, 0.85, 0.95, 0.08]
+        let h = hues[i % hues.count]
+        return [
+            Color(hue: h, saturation: 0.75, brightness: 1),
+            Color(hue: (h + 0.08).truncatingRemainder(dividingBy: 1), saturation: 0.65, brightness: 1)
+        ]
     }
 
     private var glyph: String {
         switch phase {
-        case .listening: return "waveform"
+        case .listening: return "ear.fill"
         case .processing: return "sparkles"
         case .speaking: return "speaker.wave.2.fill"
-        case .error: return "exclamationmark"
+        case .error: return "exclamationmark.circle"
         case .idle: return "mic.fill"
         }
     }
+}
 
-    private func rainbow(offset: Double) -> [Color] {
-        let hues: [Double] = [0.95, 0.08, 0.14, 0.35, 0.55, 0.68, 0.78, 0.95]
-        return hues.map { h in
-            Color(hue: (h + offset / 360).truncatingRemainder(dividingBy: 1), saturation: 0.85, brightness: 1)
+/// Soft full-bleed mesh for Speak / Intelligence surfaces.
+struct IntelligenceMeshBackground: View {
+    @Environment(\.colorScheme) private var scheme
+    @State private var drift = false
+
+    var body: some View {
+        ZStack {
+            IntelligenceAtmosphere()
+            FloatingIntelligenceDots(count: 16).opacity(0.4)
+
+            Circle()
+                .fill(NOCOAITheme.glowPrimary.opacity(scheme == .dark ? 0.2 : 0.12))
+                .frame(width: 380, height: 380)
+                .blur(radius: 90)
+                .offset(x: drift ? 40 : -50, y: drift ? -120 : -40)
+
+            Circle()
+                .fill(NOCOAITheme.glowSecondary.opacity(scheme == .dark ? 0.16 : 0.1))
+                .frame(width: 300, height: 300)
+                .blur(radius: 80)
+                .offset(x: drift ? -60 : 70, y: drift ? 180 : 80)
         }
+        .ignoresSafeArea()
+        .onAppear {
+            withAnimation(.easeInOut(duration: 9).repeatForever(autoreverses: true)) {
+                drift = true
+            }
+        }
+    }
+}
+
+/// Horizontal rainbow shimmer line (Apple Intelligence accent).
+struct IntelligenceShimmerLine: View {
+    @State private var move = false
+
+    var body: some View {
+        Capsule()
+            .fill(
+                LinearGradient(
+                    colors: [
+                        .clear,
+                        Color(red: 0.4, green: 0.8, blue: 1),
+                        Color(red: 0.7, green: 0.45, blue: 1),
+                        Color(red: 0.4, green: 0.95, blue: 0.7),
+                        .clear
+                    ],
+                    startPoint: move ? .leading : .trailing,
+                    endPoint: move ? .trailing : .leading
+                )
+            )
+            .frame(height: 2)
+            .opacity(0.85)
+            .onAppear {
+                withAnimation(.easeInOut(duration: 2.2).repeatForever(autoreverses: true)) {
+                    move = true
+                }
+            }
     }
 }

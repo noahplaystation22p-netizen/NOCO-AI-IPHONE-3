@@ -10,11 +10,11 @@ struct MainTabView: View {
                 .tag(0)
 
             HomeView()
-                .tabItem { Label("PC", systemImage: "desktopcomputer") }
+                .tabItem { Label("System", systemImage: "desktopcomputer") }
                 .tag(1)
 
             MoreView()
-                .tabItem { Label("Mehr", systemImage: "ellipsis.circle") }
+                .tabItem { Label("Studio", systemImage: "square.grid.2x2.fill") }
                 .tag(2)
         }
         .tint(NOCOAITheme.accent)

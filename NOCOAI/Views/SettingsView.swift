@@ -12,7 +12,7 @@ struct SettingsView: View {
     var body: some View {
         NavigationStack {
             List {
-                Section("Verbindung") {
+                Section("Intelligence Sync") {
                     LabeledContent("PC-Adresse", value: connection.serverHost)
                     LabeledContent("Port", value: String(connection.serverPort))
                     LabeledContent("API", value: connection.baseURLString)
@@ -20,9 +20,9 @@ struct SettingsView: View {
                 }
 
                 Section {
-                    Picker("Voice-Modell", selection: $voiceMode) {
+                    Picker("Speak-Modell", selection: $voiceMode) {
                         ForEach(AIMode.allCases) { mode in
-                            Text(mode.label).tag(mode)
+                            Text("\(mode.label) — \(mode.subtitle)").tag(mode)
                         }
                     }
                     .onChange(of: voiceMode) { _, newValue in
@@ -30,7 +30,7 @@ struct SettingsView: View {
                         HapticService.selection()
                     }
 
-                    Toggle("Antworten vorlesen", isOn: $autoSpeak)
+                    Toggle("Spoken Reply", isOn: $autoSpeak)
                         .onChange(of: autoSpeak) { _, newValue in
                             UserDefaults.standard.set(newValue, forKey: "nocoai.autoSpeak")
                         }
@@ -45,9 +45,9 @@ struct SettingsView: View {
                         UserDefaults.standard.set(newValue, forKey: "nocoai.voiceId")
                     }
                 } header: {
-                    Text("Sprachmodus")
+                    Text("Speak")
                 } footer: {
-                    Text("Standard ist Flash für schnelle Antworten. Stimme und Modell nur für Voice — Chat-Modus bleibt separat.")
+                    Text("Standard ist Blitz für schnelle Spoken Replies. Stimme bevorzugt Premium/Enhanced Deutsch.")
                 }
 
                 Section("Gerät") {
@@ -65,8 +65,8 @@ struct SettingsView: View {
                 }
 
                 Section("Info") {
-                    Text("NOCO AI Companion v2.8")
-                    Text("Voice · Apple Intelligence Design · Cloud-Chat · Text auf dem PC.")
+                    Text("NOCO AI Companion v2.9")
+                    Text("Speak · Schreibwerkzeuge · Bildideen · Intelligence Sync")
                         .font(.footnote)
                         .foregroundStyle(NOCOAITheme.secondaryText(for: scheme))
                 }
@@ -82,9 +82,7 @@ struct SettingsView: View {
                 voiceId = UserDefaults.standard.string(forKey: "nocoai.voiceId") ?? ""
                 voices = AVSpeechSynthesisVoice.speechVoices()
                     .filter { $0.language.hasPrefix("de") }
-                    .sorted { a, b in
-                        qualityRank(a) > qualityRank(b)
-                    }
+                    .sorted { qualityRank($0) > qualityRank($1) }
             }
         }
     }

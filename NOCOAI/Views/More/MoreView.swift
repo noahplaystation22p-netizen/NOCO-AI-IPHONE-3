@@ -7,36 +7,62 @@ struct MoreView: View {
     var body: some View {
         NavigationStack {
             List {
-                Section("Tools") {
+                Section {
                     NavigationLink {
                         ImagesHubView()
                             .environmentObject(connection)
                     } label: {
-                        Label("Bilder", systemImage: "photo.artframe")
+                        Label {
+                            VStack(alignment: .leading, spacing: 2) {
+                                Text("Bildideen")
+                                Text("Bilder erzeugen & verbessern")
+                                    .font(.caption)
+                                    .foregroundStyle(.secondary)
+                            }
+                        } icon: {
+                            Image(systemName: "paintbrush.pointed.fill")
+                                .foregroundStyle(NOCOAITheme.accent)
+                        }
                     }
+
                     NavigationLink {
                         CodeStudioView()
                             .environmentObject(connection)
                     } label: {
-                        Label("Code Studio", systemImage: "chevron.left.forwardslash.chevron.right")
+                        Label {
+                            VStack(alignment: .leading, spacing: 2) {
+                                Text("Code Assist")
+                                Text("Code erklären, fixen, verbessern")
+                                    .font(.caption)
+                                    .foregroundStyle(.secondary)
+                            }
+                        } icon: {
+                            Image(systemName: "chevron.left.forwardslash.chevron.right")
+                                .foregroundStyle(NOCOAITheme.accent)
+                        }
                     }
+
                     NavigationLink {
                         SettingsView()
                             .environmentObject(connection)
                     } label: {
                         Label("Einstellungen", systemImage: "gearshape.fill")
                     }
+                } header: {
+                    Text("Intelligence")
+                } footer: {
+                    Text("Funktionen laufen auf deinem Windows-PC — das iPhone steuert nur.")
                 }
 
                 if let features = connection.features, !features.enabled.isEmpty {
-                    Section("PC-Features") {
+                    Section("PC-Fähigkeiten") {
                         ForEach(features.enabled, id: \.self) { feature in
-                            Label(feature, systemImage: icon(for: feature))
+                            Label(friendlyFeature(feature), systemImage: icon(for: feature))
                         }
                     }
                 }
 
-                Section("Verbindung") {
+                Section("Intelligence Sync") {
                     LabeledContent("PC", value: connection.serverHost)
                     LabeledContent("Status", value: connection.isOnline ? "Online" : "Offline")
                     SyncBadge(active: connection.chat.isSyncActive)
@@ -50,24 +76,36 @@ struct MoreView: View {
                 }
 
                 Section("Info") {
-                    Text("NOCO AI Companion v2.7")
-                    Text("Apple Intelligence Design · Cloud-Chat · Text auf dem PC.")
+                    Text("NOCO AI Companion v2.9")
+                    Text("Speak · Schreibwerkzeuge · Bildideen · Intelligence Sync")
                         .font(.footnote)
                         .foregroundStyle(NOCOAITheme.secondaryText(for: scheme))
                 }
             }
-            .navigationTitle("Mehr")
+            .navigationTitle("Studio")
+        }
+    }
+
+    private func friendlyFeature(_ feature: String) -> String {
+        switch feature.lowercased() {
+        case "chat": return "Chat"
+        case "bilder", "images": return "Bildideen"
+        case "code": return "Code Assist"
+        case "vision": return "Visuelle Intelligenz"
+        case "sync": return "Intelligence Sync"
+        case "browser", "browser_agent": return "Browser-Agent (PC)"
+        default: return feature
         }
     }
 
     private func icon(for feature: String) -> String {
         switch feature.lowercased() {
         case "chat": return "bubble.left.and.bubble.right"
-        case "bilder": return "photo.artframe"
+        case "bilder", "images": return "paintbrush.pointed"
         case "code": return "chevron.left.forwardslash.chevron.right"
         case "vision": return "eye"
         case "sync": return "arrow.triangle.2.circlepath"
-        default: return "checkmark.circle"
+        default: return "sparkles"
         }
     }
 }

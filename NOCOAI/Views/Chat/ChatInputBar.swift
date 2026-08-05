@@ -7,6 +7,7 @@ struct ChatInputBar: View {
     @FocusState.Binding var focused: Bool
     var onSend: () -> Void
     var onVoice: (() -> Void)? = nil
+    var onWritingTools: (() -> Void)? = nil
 
     @State private var showAttachments = false
     @State private var photoItem: PhotosPickerItem?
@@ -30,9 +31,13 @@ struct ChatInputBar: View {
 
             HStack(alignment: .bottom, spacing: 10) {
                 Menu {
-                    Button("Bild auswählen", systemImage: "photo") {
+                    Button("Visuelle Intelligenz", systemImage: "eye") {
                         HapticService.light()
                         showAttachments = true
+                    }
+                    Button("Schreibwerkzeuge", systemImage: "pencil.and.outline") {
+                        HapticService.light()
+                        onWritingTools?()
                     }
                 } label: {
                     Image(systemName: "plus.circle.fill")
@@ -84,7 +89,7 @@ struct ChatInputBar: View {
                 }
                 .disabled(!connection.isOnline || connection.chat.isSending)
                 .opacity(connection.isOnline ? 1 : 0.4)
-                .accessibilityLabel("Sprachmodus")
+                .accessibilityLabel("Speak")
 
                 Button(action: send) {
                     Image(systemName: "arrow.up.circle.fill")

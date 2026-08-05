@@ -21,7 +21,7 @@ final class CodeStore: ObservableObject {
 
     func createSession(language: String = "swift") async {
         guard let api else { return }
-        if let session = try? await api.createCodeSession(title: "Code Studio", language: language) {
+        if let session = try? await api.createCodeSession(title: "Code Assist", language: language) {
             activeSession = session
             previewCode = session.preview ?? ""
             messages = []

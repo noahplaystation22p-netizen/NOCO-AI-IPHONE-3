@@ -12,27 +12,32 @@ struct ModePicker: View {
                     }
                     HapticService.selection()
                 } label: {
-                    Text(m.label)
-                        .font(.caption.weight(.semibold))
-                        .padding(.horizontal, 12)
-                        .padding(.vertical, 8)
-                        .background {
-                            Capsule()
-                                .fill(mode == m ? NOCOAITheme.accent.opacity(0.22) : Color.primary.opacity(0.05))
-                                .overlay(
-                                    Capsule()
-                                        .stroke(
-                                            mode == m
-                                                ? NOCOAITheme.glowPrimary.opacity(0.55)
-                                                : Color.clear,
-                                            lineWidth: 1
-                                        )
-                                )
-                                .shadow(color: mode == m ? NOCOAITheme.glowPrimary.opacity(0.35) : .clear, radius: 8)
-                        }
+                    HStack(spacing: 4) {
+                        Image(systemName: m.systemImage)
+                            .font(.caption2.weight(.bold))
+                        Text(m.label)
+                            .font(.caption.weight(.semibold))
+                    }
+                    .padding(.horizontal, 11)
+                    .padding(.vertical, 8)
+                    .background {
+                        Capsule()
+                            .fill(mode == m ? NOCOAITheme.accent.opacity(0.22) : Color.primary.opacity(0.05))
+                            .overlay(
+                                Capsule()
+                                    .stroke(
+                                        mode == m
+                                            ? NOCOAITheme.glowPrimary.opacity(0.55)
+                                            : Color.clear,
+                                        lineWidth: 1
+                                    )
+                            )
+                            .shadow(color: mode == m ? NOCOAITheme.glowPrimary.opacity(0.35) : .clear, radius: 8)
+                    }
                 }
                 .buttonStyle(.plain)
                 .foregroundStyle(mode == m ? NOCOAITheme.accent : .secondary)
+                .accessibilityLabel("\(m.label), \(m.subtitle)")
             }
         }
     }

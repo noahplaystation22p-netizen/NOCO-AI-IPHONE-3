@@ -11,76 +11,92 @@ struct VoiceModeView: View {
 
     var body: some View {
         ZStack {
-            IntelligenceAtmosphere()
-            FloatingIntelligenceDots(count: 20)
-                .opacity(0.55)
+            IntelligenceMeshBackground()
 
-            VStack(spacing: 18) {
-                HStack {
-                    Button("Fertig") {
-                        voice.stopSpeaking()
-                        voice.stopListening(cancel: true)
-                        dismiss()
-                    }
-                    .fontWeight(.medium)
+            VStack(spacing: 16) {
+                topBar
+                titleBlock
+                IntelligenceShimmerLine()
+                    .padding(.horizontal, 48)
 
-                    Spacer()
-
-                    HStack(spacing: 6) {
-                        Circle()
-                            .fill(connection.isOnline ? NOCOAITheme.success : NOCOAITheme.danger)
-                            .frame(width: 8, height: 8)
-                        Text(connection.isOnline ? "PC live" : "Offline")
-                            .font(.caption.weight(.semibold))
-                            .foregroundStyle(connection.isOnline ? NOCOAITheme.success : NOCOAITheme.danger)
-                    }
-                }
-                .padding(.horizontal, 20)
-                .padding(.top, 12)
-
-                VStack(spacing: 4) {
-                    Text("NOCO Voice")
-                        .font(.title2.weight(.bold))
-                    Text("Modell: \(VoiceSettings.defaultMode.label)")
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                }
-
-                VoiceRainbowOrb(phase: voice.phase, level: voice.level)
+                IntelligenceVoiceStage(phase: voice.phase, level: voice.level)
+                    .padding(.top, 8)
 
                 Text(displayText)
-                    .font(.body)
+                    .font(.title3.weight(.medium))
                     .multilineTextAlignment(.center)
                     .foregroundStyle(.primary)
                     .padding(.horizontal, 28)
-                    .frame(minHeight: 58)
+                    .frame(minHeight: 64)
                     .animation(.easeOut(duration: 0.2), value: displayText)
 
                 Text(statusLine)
                     .font(.footnote)
                     .foregroundStyle(.secondary)
 
-                if let err = connection.chat.lastError, case .error = voice.phase {
-                    Text(err)
-                        .font(.caption2)
-                        .foregroundStyle(NOCOAITheme.danger)
-                        .padding(.horizontal)
-                }
+                modeChip
 
                 Spacer()
-
                 holdButton
-                    .padding(.bottom, 36)
+                    .padding(.bottom, 40)
             }
         }
         .task {
             let ok = await voice.requestPermissions()
             if !ok {
-                statusLine = "Mikrofon & Spracherkennung in den iPhone-Einstellungen erlauben"
+                statusLine = "Mikrofon & Spracherkennung erlauben"
             } else if !connection.isOnline {
-                statusLine = "PC offline — erst in NOCO AI X Companion starten"
+                statusLine = "PC offline — Companion in NOCO AI X starten"
             }
         }
+    }
+
+    private var topBar: some View {
+        HStack {
+            Button("Fertig") {
+                voice.stopSpeaking()
+                voice.stopListening(cancel: true)
+                dismiss()
+            }
+            .fontWeight(.medium)
+
+            Spacer()
+
+            HStack(spacing: 6) {
+                Circle()
+                    .fill(connection.isOnline ? NOCOAITheme.success : NOCOAITheme.danger)
+                    .frame(width: 8, height: 8)
+                    .shadow(color: connection.isOnline ? NOCOAITheme.success.opacity(0.7) : .clear, radius: 4)
+                Text(connection.isOnline ? "Intelligence Sync" : "Offline")
+                    .font(.caption.weight(.semibold))
+                    .foregroundStyle(connection.isOnline ? NOCOAITheme.success : NOCOAITheme.danger)
+            }
+        }
+        .padding(.horizontal, 20)
+        .padding(.top, 12)
+    }
+
+    private var titleBlock: some View {
+        VStack(spacing: 4) {
+            Text("Speak")
+                .font(.largeTitle.weight(.bold))
+            Text("Sprich. Dein PC denkt.")
+                .font(.subheadline)
+                .foregroundStyle(.secondary)
+        }
+    }
+
+    private var modeChip: some View {
+        Text(VoiceSettings.defaultMode.label)
+            .font(.caption2.weight(.bold))
+            .padding(.horizontal, 12)
+            .padding(.vertical, 6)
+            .background(
+                Capsule()
+                    .fill(NOCOAITheme.accent.opacity(0.15))
+                    .overlay(Capsule().stroke(NOCOAITheme.glowPrimary.opacity(0.4), lineWidth: 1))
+            )
+            .foregroundStyle(NOCOAITheme.accent)
     }
 
     private var displayText: String {
@@ -88,7 +104,7 @@ struct VoiceModeView: View {
         case .listening:
             return voice.liveTranscript.isEmpty ? "Ich höre zu…" : voice.liveTranscript
         case .processing:
-            return voice.liveTranscript.isEmpty ? "Sende an PC…" : voice.liveTranscript
+            return voice.liveTranscript.isEmpty ? "Sende an den PC…" : voice.liveTranscript
         case .speaking:
             return lastReply.isEmpty ? "Antwort…" : lastReply
         case .error(let msg):
@@ -105,45 +121,36 @@ struct VoiceModeView: View {
                 .foregroundStyle(.secondary)
 
             ZStack {
-                Circle()
-                    .stroke(
-                        AngularGradient(
-                            colors: [
-                                Color(red: 0.35, green: 0.8, blue: 1),
-                                Color(red: 0.6, green: 0.4, blue: 1),
-                                Color(red: 1.0, green: 0.4, blue: 0.7),
-                                Color(red: 0.35, green: 0.8, blue: 1)
-                            ],
-                            center: .center
-                        ),
-                        lineWidth: 3
-                    )
-                    .frame(width: 96, height: 96)
-                    .opacity(isHolding ? 1 : 0.45)
-                    .scaleEffect(isHolding ? 1.08 : 1)
-
-                Circle()
-                    .fill(
-                        LinearGradient(
-                            colors: [
-                                Color(red: 0.35, green: 0.75, blue: 1),
-                                Color(red: 0.55, green: 0.4, blue: 1),
-                                Color(red: 0.95, green: 0.4, blue: 0.75)
-                            ],
-                            startPoint: .topLeading,
-                            endPoint: .bottomTrailing
-                        )
-                    )
-                    .frame(width: 84, height: 84)
-                    .shadow(color: Color(red: 0.5, green: 0.4, blue: 1).opacity(0.55), radius: 24)
+                Capsule()
+                    .fill(.ultraThinMaterial)
+                    .frame(width: 220, height: 64)
                     .overlay(
-                        Image(systemName: isHolding ? "waveform" : "mic.fill")
-                            .font(.title)
-                            .foregroundStyle(.white)
+                        Capsule()
+                            .stroke(
+                                LinearGradient(
+                                    colors: [
+                                        Color(red: 0.4, green: 0.8, blue: 1),
+                                        Color(red: 0.65, green: 0.4, blue: 1),
+                                        Color(red: 0.4, green: 0.95, blue: 0.7)
+                                    ],
+                                    startPoint: .leading,
+                                    endPoint: .trailing
+                                ),
+                                lineWidth: isHolding ? 2 : 1.2
+                            )
                     )
+                    .shadow(color: Color(red: 0.5, green: 0.5, blue: 1).opacity(isHolding ? 0.45 : 0.2), radius: isHolding ? 20 : 10)
+
+                HStack(spacing: 10) {
+                    Image(systemName: isHolding ? "waveform" : "mic.fill")
+                        .font(.title3.weight(.semibold))
+                    Text(isHolding ? "Zuhören…" : "Gedrückt halten")
+                        .font(.subheadline.weight(.semibold))
+                }
+                .foregroundStyle(.primary)
             }
-            .scaleEffect(isHolding ? 1.1 : 1)
-            .animation(.spring(response: 0.28, dampingFraction: 0.7), value: isHolding)
+            .scaleEffect(isHolding ? 1.04 : 1)
+            .animation(.spring(response: 0.28, dampingFraction: 0.72), value: isHolding)
             .gesture(
                 DragGesture(minimumDistance: 0)
                     .onChanged { _ in
@@ -172,10 +179,10 @@ struct VoiceModeView: View {
     private var holdLabel: String {
         switch voice.phase {
         case .listening: return "Loslassen zum Senden"
-        case .processing: return "PC denkt (\(VoiceSettings.defaultMode.label))…"
-        case .speaking: return "Sprachausgabe…"
+        case .processing: return "\(VoiceSettings.defaultMode.label) auf dem PC…"
+        case .speaking: return "Spoken Reply"
         default:
-            return connection.isOnline ? "Gedrückt halten" : "Keine Verbindung"
+            return connection.isOnline ? "Speak aktivieren" : "Keine Verbindung"
         }
     }
 
@@ -188,7 +195,7 @@ struct VoiceModeView: View {
         voice.stopSpeaking()
         do {
             try voice.startListening()
-            statusLine = "Zuhören…"
+            statusLine = "Listening…"
             HapticService.rigid()
         } catch {
             statusLine = "Mikrofon-Fehler"
@@ -210,7 +217,7 @@ struct VoiceModeView: View {
             return
         }
 
-        statusLine = "Sende an NOCO AI X…"
+        statusLine = "Intelligence Sync…"
         voice.phase = .processing
         HapticService.send()
 
@@ -219,7 +226,7 @@ struct VoiceModeView: View {
         if let reply, !reply.isEmpty {
             lastReply = reply
             if voice.autoSpeakReplies {
-                statusLine = "Sprachausgabe…"
+                statusLine = "Spoken Reply…"
                 voice.speak(reply)
             } else {
                 voice.phase = .idle

@@ -7,10 +7,28 @@ enum AIMode: String, CaseIterable, Identifiable, Codable {
 
     var label: String {
         switch self {
-        case .flash: return "Flash"
-        case .normal: return "Normal"
-        case .think: return "Think"
-        case .auto: return "Auto"
+        case .flash: return "Blitz"
+        case .normal: return "Klar"
+        case .think: return "Tiefe"
+        case .auto: return "Intelligent"
+        }
+    }
+
+    var subtitle: String {
+        switch self {
+        case .flash: return "Schnelle Antworten"
+        case .normal: return "Ausgewogen"
+        case .think: return "Nachdenken"
+        case .auto: return "Wählt automatisch"
+        }
+    }
+
+    var systemImage: String {
+        switch self {
+        case .flash: return "bolt.fill"
+        case .normal: return "circle.lefthalf.filled"
+        case .think: return "brain.head.profile"
+        case .auto: return "sparkles"
         }
     }
 }

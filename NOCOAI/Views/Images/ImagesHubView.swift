@@ -76,7 +76,7 @@ struct ImagesHubView: View {
                 .padding(20)
             }
             .nocoBackground()
-            .navigationTitle("Bilder")
+            .navigationTitle("Bildideen")
             .task { await connection.refreshGallery() }
         }
     }

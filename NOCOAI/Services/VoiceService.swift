@@ -22,7 +22,6 @@ final class VoiceService: NSObject, ObservableObject {
     private var recognitionRequest: SFSpeechAudioBufferRecognitionRequest?
     private var recognitionTask: SFSpeechRecognitionTask?
     private let synthesizer = AVSpeechSynthesizer()
-    private var levelTimer: Timer?
 
     var preferredVoiceIdentifier: String {
         get { UserDefaults.standard.string(forKey: "nocoai.voiceId") ?? "" }
@@ -72,9 +71,7 @@ final class VoiceService: NSObject, ObservableObject {
         guard let recognitionRequest else { return }
         recognitionRequest.shouldReportPartialResults = true
         recognitionRequest.taskHint = .dictation
-        if speechRecognizer.supportsOnDeviceRecognition {
-            recognitionRequest.requiresOnDeviceRecognition = false
-        }
+        recognitionRequest.addsPunctuation = true
 
         let input = audioEngine.inputNode
         let format = input.outputFormat(forBus: 0)
@@ -98,14 +95,13 @@ final class VoiceService: NSObject, ObservableObject {
                     self.liveTranscript = result.bestTranscription.formattedString
                 }
                 if let error {
-                    // Normal end-of-utterance often surfaces as an error; keep transcript.
                     let ns = error as NSError
                     if ns.domain == "kAFAssistantErrorDomain" || ns.code == 216 || ns.code == 203 {
                         return
                     }
                     if case .listening = self.phase, self.liveTranscript.isEmpty {
                         self.stopListening(cancel: true)
-                        self.phase = .error("Nichts verstanden — nochmal tippen oder sprechen")
+                        self.phase = .error("Nichts verstanden — nochmal sprechen")
                     }
                 }
             }
@@ -123,7 +119,6 @@ final class VoiceService: NSObject, ObservableObject {
         }
         recognitionRequest = nil
         recognitionTask = nil
-        levelTimer?.invalidate()
         level = 0
         if case .listening = phase {
             phase = liveTranscript.isEmpty ? .idle : .processing
@@ -138,9 +133,7 @@ final class VoiceService: NSObject, ObservableObject {
     }
 
     func speak(_ text: String) {
-        let cleaned = text
-            .replacingOccurrences(of: #"\*\*|__|`|#+"#, with: "", options: .regularExpression)
-            .trimmingCharacters(in: .whitespacesAndNewlines)
+        let cleaned = Self.cleanForSpeech(text)
         guard !cleaned.isEmpty else {
             phase = .idle
             return
@@ -153,15 +146,21 @@ final class VoiceService: NSObject, ObservableObject {
             try session.setActive(true)
         } catch { /* continue */ }
 
-        let utterance = AVSpeechUtterance(string: cleaned)
-        utterance.voice = bestGermanVoice()
-        utterance.rate = AVSpeechUtteranceDefaultSpeechRate * 0.96
-        utterance.pitchMultiplier = 1.04
-        utterance.volume = 1.0
-        utterance.preUtteranceDelay = 0.05
+        // Split into natural sentences for better German prosody
+        let chunks = Self.speechChunks(from: cleaned)
         phase = .speaking
         HapticService.soft()
-        synthesizer.speak(utterance)
+
+        for (index, chunk) in chunks.enumerated() {
+            let utterance = AVSpeechUtterance(string: chunk)
+            utterance.voice = bestGermanVoice()
+            utterance.rate = AVSpeechUtteranceDefaultSpeechRate * 0.92
+            utterance.pitchMultiplier = 1.02
+            utterance.volume = 1.0
+            utterance.preUtteranceDelay = index == 0 ? 0.08 : 0.12
+            utterance.postUtteranceDelay = 0.08
+            synthesizer.speak(utterance)
+        }
     }
 
     func stopSpeaking() {
@@ -176,32 +175,77 @@ final class VoiceService: NSObject, ObservableObject {
     func availableGermanVoices() -> [AVSpeechSynthesisVoice] {
         AVSpeechSynthesisVoice.speechVoices()
             .filter { $0.language.hasPrefix("de") }
-            .sorted { lhs, rhs in
-                voiceScore(lhs) > voiceScore(rhs)
-            }
+            .sorted { voiceScore($0) > voiceScore($1) }
     }
 
     private func bestGermanVoice() -> AVSpeechSynthesisVoice? {
         let voices = availableGermanVoices()
-        if let preferred = voices.first(where: { $0.identifier == preferredVoiceIdentifier }) {
+        if !preferredVoiceIdentifier.isEmpty,
+           let preferred = voices.first(where: { $0.identifier == preferredVoiceIdentifier }) {
             return preferred
         }
-        // Prefer premium / enhanced quality voices
-        if let premium = voices.first(where: { voiceScore($0) >= 3 }) { return premium }
+        // Prefer premium neural voices, then enhanced
+        if let premium = voices.first(where: { $0.quality == .premium }) { return premium }
+        if let enhanced = voices.first(where: { $0.quality == .enhanced }) { return enhanced }
+        // Prefer well-known natural German names
+        let preferredNames = ["anna", "helena", "martin", "petra", "yannick", "viktoria"]
+        if let named = voices.first(where: { v in preferredNames.contains(where: { v.name.lowercased().contains($0) }) }) {
+            return named
+        }
         return voices.first ?? AVSpeechSynthesisVoice(language: "de-DE")
     }
 
     private func voiceScore(_ voice: AVSpeechSynthesisVoice) -> Int {
         var score = 0
-        let q = voice.quality
-        if q == .premium { score += 4 }
-        else if q == .enhanced { score += 3 }
-        else { score += 1 }
-        let name = voice.name.lowercased()
-        if name.contains("anna") || name.contains("helena") || name.contains("markus") || name.contains("petra") {
-            score += 1
+        switch voice.quality {
+        case .premium: score += 5
+        case .enhanced: score += 3
+        default: score += 1
         }
+        let name = voice.name.lowercased()
+        if ["anna", "helena", "martin", "petra", "yannick", "viktoria"].contains(where: { name.contains($0) }) {
+            score += 2
+        }
+        if voice.language == "de-DE" { score += 1 }
         return score
+    }
+
+    static func cleanForSpeech(_ text: String) -> String {
+        var s = text
+        s = s.replacingOccurrences(of: #"```[\s\S]*?```"#, with: " Codeblock. ", options: .regularExpression)
+        s = s.replacingOccurrences(of: #"`[^`]+`"#, with: "", options: .regularExpression)
+        s = s.replacingOccurrences(of: #"\*\*|__|~~|#{1,6}\s*"#, with: "", options: .regularExpression)
+        s = s.replacingOccurrences(of: #"^\s*[-*•]\s+"#, with: "", options: [.regularExpression])
+        s = s.replacingOccurrences(of: #"\[([^\]]+)\]\([^)]+\)"#, with: "$1", options: .regularExpression)
+        s = s.replacingOccurrences(of: #"\s{2,}"#, with: " ", options: .regularExpression)
+        // Cap length for natural spoken replies
+        if s.count > 1200 {
+            s = String(s.prefix(1200)) + "…"
+        }
+        return s.trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+
+    static func speechChunks(from text: String) -> [String] {
+        let parts = text.components(separatedBy: CharacterSet(charactersIn: ".!?\n"))
+            .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
+            .filter { !$0.isEmpty }
+        if parts.isEmpty { return [text] }
+        // Re-attach short punctuation-friendly chunks, max ~180 chars
+        var result: [String] = []
+        var current = ""
+        for part in parts {
+            let next = current.isEmpty ? part : current + ". " + part
+            if next.count > 180, !current.isEmpty {
+                result.append(current.hasSuffix(".") ? current : current + ".")
+                current = part
+            } else {
+                current = next
+            }
+        }
+        if !current.isEmpty {
+            result.append(current)
+        }
+        return result
     }
 
     private func updateLevel(from buffer: AVAudioPCMBuffer) {
@@ -216,7 +260,7 @@ final class VoiceService: NSObject, ObservableObject {
         let rms = sqrt(sum / Float(frames))
         let normalized = min(CGFloat(rms * 8), 1)
         Task { @MainActor in
-            self.level = self.level * 0.7 + normalized * 0.3
+            self.level = self.level * 0.65 + normalized * 0.35
         }
     }
 }
@@ -224,8 +268,10 @@ final class VoiceService: NSObject, ObservableObject {
 extension VoiceService: AVSpeechSynthesizerDelegate {
     nonisolated func speechSynthesizer(_ synthesizer: AVSpeechSynthesizer, didFinish utterance: AVSpeechUtterance) {
         Task { @MainActor in
-            self.phase = .idle
-            HapticService.success()
+            if !synthesizer.isSpeaking {
+                self.phase = .idle
+                HapticService.success()
+            }
         }
     }
 

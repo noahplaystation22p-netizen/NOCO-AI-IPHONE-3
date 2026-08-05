@@ -115,7 +115,20 @@ final class ChatStore: ObservableObject {
     @discardableResult
     func sendAndReturnReply(_ text: String, modeOverride: AIMode? = nil, speak: Bool = false) async -> String? {
         let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !trimmed.isEmpty, let api, !isSending else { return nil }
+        guard !trimmed.isEmpty, let api else { return nil }
+
+        // Speak must never get stuck behind a previous send
+        if isSending {
+            if speak {
+                for _ in 0..<25 {
+                    if !isSending { break }
+                    try? await Task.sleep(nanoseconds: 80_000_000)
+                }
+                if isSending { isSending = false }
+            } else {
+                return nil
+            }
+        }
 
         HapticService.prepare()
         HapticService.send()

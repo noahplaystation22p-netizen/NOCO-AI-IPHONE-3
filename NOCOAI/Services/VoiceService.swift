@@ -41,10 +41,11 @@ final class VoiceService: NSObject, ObservableObject {
     private var pendingSpeakChunks = 0
     private var speakFinishedNotified = false
 
-    /// Quiet after speech before auto-send.
-    private let silenceToEnd: TimeInterval = 0.85
-    private let minSpeechSeconds: TimeInterval = 0.32
-    private let speechLevelFactor: CGFloat = 2.2
+    /// Quiet after speech / transcript pause before auto-send (fast).
+    private let silenceToEnd: TimeInterval = 0.55
+    private let transcriptStableToEnd: TimeInterval = 0.50
+    private let minSpeechSeconds: TimeInterval = 0.22
+    private let speechLevelFactor: CGFloat = 2.6
 
     var preferredVoiceIdentifier: String {
         get { UserDefaults.standard.string(forKey: "nocoai.voiceId") ?? "" }
@@ -83,8 +84,8 @@ final class VoiceService: NSObject, ObservableObject {
         let session = AVAudioSession.sharedInstance()
         try session.setCategory(
             .playAndRecord,
-            mode: .default,
-            options: [.defaultToSpeaker, .allowBluetooth, .duckOthers]
+            mode: .measurement,
+            options: [.defaultToSpeaker, .allowBluetooth, .mixWithOthers]
         )
         try session.overrideOutputAudioPort(.speaker)
         try session.setActive(true, options: [])
@@ -184,11 +185,19 @@ final class VoiceService: NSObject, ObservableObject {
                 if let error {
                     let ns = error as NSError
                     if ns.domain == "kAFAssistantErrorDomain" || ns.code == 216 || ns.code == 203 {
+                        // Often fires when recognition ends — if we have text, send it
+                        if self.autoFinishArmed,
+                           !self.liveTranscript.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                            self.emitAutoUtteranceIfNeeded(force: true)
+                        }
                         return
                     }
-                    if case .listening = self.phase, self.liveTranscript.isEmpty {
-                        self.stopListening(cancel: true)
-                        self.phase = .error("Nichts verstanden — nochmal sprechen")
+                    if case .listening = self.phase {
+                        let partial = self.liveTranscript.trimmingCharacters(in: .whitespacesAndNewlines)
+                        if !partial.isEmpty, self.autoFinishArmed {
+                            self.emitAutoUtteranceIfNeeded(force: true)
+                        }
+                        // else: keep listening — don't kill the session on soft errors
                     }
                 }
             }
@@ -305,16 +314,25 @@ final class VoiceService: NSObject, ObservableObject {
         guard !isMuted else { return }
         guard autoFinishArmed, case .listening = phase else { return }
         let text = liveTranscript.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !text.isEmpty, speechStarted else { return }
+        guard text.count >= 2 else { return }
+
+        // Transcript alone is enough to mark that the user spoke
+        if !speechStarted {
+            speechStarted = true
+            if speechStartAt == nil { speechStartAt = Date() }
+        }
 
         let now = Date()
         let lastActivity = max(lastVoiceAt ?? .distantPast, lastTranscriptChangeAt ?? .distantPast)
         let quietFor = now.timeIntervalSince(lastActivity)
+        let transcriptStable = lastTranscriptChangeAt.map { now.timeIntervalSince($0) >= transcriptStableToEnd } ?? false
         let spokenLongEnough = speechStartAt.map { now.timeIntervalSince($0) >= minSpeechSeconds } ?? false
 
-        let longEnough = text.count >= 2
-        let silenceReady = quietFor >= silenceToEnd && spokenLongEnough
-        guard force || (longEnough && silenceReady) else { return }
+        // Primary: transcript stopped changing (user paused) → send immediately
+        // Secondary: audio went quiet
+        let silenceReady = quietFor >= silenceToEnd
+        let shouldSend = force || (spokenLongEnough && (transcriptStable || silenceReady))
+        guard shouldSend else { return }
 
         autoFinishArmed = false
         let finished = finishUtterance()

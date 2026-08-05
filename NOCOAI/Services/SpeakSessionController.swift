@@ -27,7 +27,7 @@ final class SpeakSessionController: ObservableObject {
             Task { await self?.handleUtterance(text) }
         }
         voice.onSpeakFinished = { [weak self] in
-            self?.scheduleResumeListening(after: 0.45)
+            self?.scheduleResumeListening(after: 0.28)
         }
     }
 
@@ -41,17 +41,29 @@ final class SpeakSessionController: ObservableObject {
             return
         }
         do {
-            // Live Activity banner + Island immediately
+            // Live Activity immediately (Lock Screen + Island)
             SpeakLiveActivityManager.start()
             try voice.activateBackgroundAudioSession()
             isRunning = true
+            isBusy = false
             isMuted = false
             voice.setMuted(false)
             voice.sessionActive = true
             beginBackgroundKeepAlive()
             try voice.startListening(autoEnd: true)
-            statusLine = "Zuhören — Pause sendet automatisch"
+            statusLine = "Zuhören — Pause sendet sofort"
             pushLiveActivity(force: true)
+            // Ensure banner appears even if first request raced
+            Task {
+                try? await Task.sleep(nanoseconds: 350_000_000)
+                await MainActor.run {
+                    guard self.isRunning else { return }
+                    if !SpeakLiveActivityManager.isActive {
+                        SpeakLiveActivityManager.start()
+                    }
+                    self.pushLiveActivity(force: true)
+                }
+            }
             HapticService.medium()
         } catch {
             isRunning = false
@@ -193,7 +205,11 @@ final class SpeakSessionController: ObservableObject {
         HapticService.send()
 
         let prompt = VoiceService.voiceOnlyPrompt(text)
-        let reply = await connection.chat.sendAndReturnReply(prompt, modeOverride: .flash, speak: true)
+        let reply = await connection.chat.sendAndReturnReply(
+            prompt,
+            modeOverride: .flash,
+            speak: true
+        )
 
         guard isRunning else { return }
 

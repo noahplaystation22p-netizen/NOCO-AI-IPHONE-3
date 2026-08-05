@@ -4,11 +4,36 @@ struct ModePicker: View {
     @Binding var mode: AIMode
 
     var body: some View {
-        Picker("Modus", selection: $mode) {
+        HStack(spacing: 6) {
             ForEach(AIMode.allCases) { m in
-                Text(m.label).tag(m)
+                Button {
+                    withAnimation(.spring(response: 0.32, dampingFraction: 0.78)) {
+                        mode = m
+                    }
+                    HapticService.selection()
+                } label: {
+                    Text(m.label)
+                        .font(.caption.weight(.semibold))
+                        .padding(.horizontal, 12)
+                        .padding(.vertical, 8)
+                        .background {
+                            Capsule()
+                                .fill(mode == m ? NOCOAITheme.accent.opacity(0.22) : Color.primary.opacity(0.05))
+                                .overlay(
+                                    Capsule()
+                                        .stroke(
+                                            mode == m
+                                                ? NOCOAITheme.glowPrimary.opacity(0.55)
+                                                : Color.clear,
+                                            lineWidth: 1
+                                        )
+                                )
+                                .shadow(color: mode == m ? NOCOAITheme.glowPrimary.opacity(0.35) : .clear, radius: 8)
+                        }
+                }
+                .buttonStyle(.plain)
+                .foregroundStyle(mode == m ? NOCOAITheme.accent : .secondary)
             }
         }
-        .pickerStyle(.segmented)
     }
 }

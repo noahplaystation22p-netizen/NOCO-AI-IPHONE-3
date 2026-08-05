@@ -97,14 +97,17 @@ struct ChatHubView: View {
     private var emptyState: some View {
         VStack(spacing: 18) {
             ZStack {
+                IntelligenceOrbitRings(size: 130)
+                    .opacity(0.45)
                 Circle()
-                    .fill(NOCOAITheme.glowPrimary.opacity(0.2))
-                    .frame(width: 110, height: 110)
-                    .blur(radius: 20)
+                    .fill(NOCOAITheme.glowPrimary.opacity(0.18))
+                    .frame(width: 100, height: 100)
+                    .blur(radius: 18)
                 Image(systemName: "sparkles")
-                    .font(.system(size: 44, weight: .light))
+                    .font(.system(size: 40, weight: .light))
                     .foregroundStyle(NOCOAITheme.accent)
-                    .shadow(color: NOCOAITheme.glowPrimary.opacity(0.7), radius: 16)
+                    .shadow(color: NOCOAITheme.glowPrimary.opacity(0.75), radius: 16)
+                    .symbolEffect(.pulse, options: .repeating)
             }
             Text("Frag irgendetwas")
                 .font(.title3.weight(.semibold))
@@ -158,18 +161,22 @@ private struct ChatBubble: View {
                     }
                 }
                 if !message.text.isEmpty || message.isStreaming {
-                    HStack(alignment: .bottom, spacing: 6) {
-                        Text(message.text.isEmpty && message.isStreaming ? "" : message.text)
-                            .font(.body)
-                            .foregroundStyle(message.role == .user ? .white : NOCOAITheme.primaryText(for: scheme))
-                        if message.isStreaming {
-                            StreamingGlowCursor()
+                    if message.isStreaming && message.text.isEmpty {
+                        IntelligenceThinkingDots()
+                    } else {
+                        HStack(alignment: .bottom, spacing: 6) {
+                            Text(message.text)
+                                .font(.body)
+                                .foregroundStyle(message.role == .user ? .white : NOCOAITheme.primaryText(for: scheme))
+                            if message.isStreaming {
+                                StreamingGlowCursor()
+                            }
                         }
+                        .padding(.horizontal, 16)
+                        .padding(.vertical, 12)
+                        .background(GlowBubbleBackground(isUser: message.role == .user))
+                        .animation(.easeOut(duration: 0.12), value: message.text)
                     }
-                    .padding(.horizontal, 16)
-                    .padding(.vertical, 12)
-                    .background(GlowBubbleBackground(isUser: message.role == .user))
-                    .animation(.easeOut(duration: 0.12), value: message.text)
                 }
             }
             if message.role == .assistant { Spacer(minLength: 48) }

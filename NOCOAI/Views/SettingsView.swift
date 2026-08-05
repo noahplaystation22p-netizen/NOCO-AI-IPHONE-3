@@ -29,8 +29,8 @@ struct SettingsView: View {
                 }
 
                 Section("Info") {
-                    Text("NOCO AI Companion v2.5")
-                    Text("Apple Intelligence Icon · Cloud-Chat · Text auf dem PC.")
+                    Text("NOCO AI Companion v2.7")
+                    Text("Apple Intelligence Design · Cloud-Chat · Text auf dem PC.")
                         .font(.footnote)
                         .foregroundStyle(NOCOAITheme.secondaryText(for: scheme))
                 }

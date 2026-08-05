@@ -18,73 +18,65 @@ struct PairingView: View {
     var body: some View {
         ZStack {
             IntelligenceAtmosphere()
-            FloatingIntelligenceDots(count: 14)
+            FloatingIntelligenceDots(count: 16)
 
-            VStack(spacing: 26) {
-                Spacer(minLength: 36)
+            VStack(spacing: 24) {
+                Spacer(minLength: 28)
 
-                VStack(spacing: 14) {
-                    BrandLogo(size: 78)
-                        .shadow(color: NOCOAITheme.glowPrimary.opacity(0.55), radius: appear ? 28 : 8)
-                        .scaleEffect(appear ? 1 : 0.92)
+                ZStack {
+                    IntelligenceOrbitRings(size: 200)
+                        .opacity(0.85)
+                    BrandLogo(size: 84)
+                        .scaleEffect(appear ? 1 : 0.88)
+                }
+                .frame(height: 210)
+
+                VStack(spacing: 10) {
                     Text("NOCO AI")
                         .font(.system(size: 36, weight: .semibold, design: .rounded))
-                    Text("Scanne den QR-Code auf deinem PC.\nDann einfach fragen — wie ChatGPT.")
+                    Text("Scanne den QR-Code auf deinem PC.\nDann einfach fragen.")
                         .font(.body)
                         .foregroundStyle(.secondary)
                         .multilineTextAlignment(.center)
                     PairingPulseSteps()
-                        .padding(.top, 4)
+                        .padding(.top, 6)
                 }
                 .opacity(appear ? 1 : 0)
-                .offset(y: appear ? 0 : 12)
+                .offset(y: appear ? 0 : 14)
 
                 Button {
                     HapticService.medium()
                     showQRScanner = true
                 } label: {
-                    VStack(spacing: 14) {
+                    VStack(spacing: 12) {
                         Image(systemName: "qrcode.viewfinder")
-                            .font(.system(size: 46, weight: .light))
+                            .font(.system(size: 44, weight: .light))
                             .symbolEffect(.pulse, options: .repeating, isActive: !isPairingFromQR)
                         Text(isPairingFromQR || connection.isRefreshing ? "Verbinde mit PC…" : "QR-Code scannen")
                             .font(.headline)
                     }
                     .frame(maxWidth: .infinity)
-                    .padding(.vertical, 38)
+                    .padding(.vertical, 34)
                     .background {
                         RoundedRectangle(cornerRadius: 30, style: .continuous)
                             .fill(.ultraThinMaterial)
-                            .overlay(
-                                RoundedRectangle(cornerRadius: 30, style: .continuous)
-                                    .stroke(
-                                        LinearGradient(
-                                            colors: [
-                                                NOCOAITheme.glowPrimary.opacity(0.7),
-                                                NOCOAITheme.glowSecondary.opacity(0.4),
-                                                NOCOAITheme.glowAccent.opacity(0.35)
-                                            ],
-                                            startPoint: .topLeading,
-                                            endPoint: .bottomTrailing
-                                        ),
-                                        lineWidth: 1.2
-                                    )
-                            )
-                            .shadow(color: NOCOAITheme.glowPrimary.opacity(0.35), radius: 24, y: 8)
+                            .shadow(color: NOCOAITheme.glowPrimary.opacity(0.35), radius: 28, y: 10)
                     }
+                    .intelligenceShimmerBorder()
                 }
                 .buttonStyle(.plain)
                 .disabled(isPairingFromQR || connection.isRefreshing)
                 .scaleEffect(appear ? 1 : 0.96)
 
                 if isPairingFromQR || connection.isRefreshing {
-                    HStack(spacing: 8) {
-                        ProgressView()
-                        Text("Cloud-Sync wird aufgebaut…")
+                    HStack(spacing: 10) {
+                        IntelligenceThinkingDots()
+                            .scaleEffect(0.85)
+                        Text("Intelligence Sync…")
                             .font(.footnote)
                             .foregroundStyle(.secondary)
                     }
-                    .transition(.opacity)
+                    .transition(.opacity.combined(with: .move(edge: .bottom)))
                 }
 
                 if let error = connection.lastError {
@@ -93,12 +85,6 @@ struct PairingView: View {
                         .foregroundStyle(NOCOAITheme.danger)
                         .multilineTextAlignment(.center)
                         .padding(.horizontal)
-                }
-
-                if let ping = connection.pingMessage {
-                    Text(ping)
-                        .font(.footnote.weight(.medium))
-                        .foregroundStyle(ping.contains("✓") ? NOCOAITheme.success : NOCOAITheme.danger)
                 }
 
                 Button(showManual ? "Manuell ausblenden" : "Manuell mit PIN") {
@@ -114,17 +100,17 @@ struct PairingView: View {
 
                 Spacer()
 
-                Text("PC und iPhone · gleiches WLAN · NOCO AI X")
+                Text("PC · gleiches WLAN · NOCO AI X")
                     .font(.caption)
                     .foregroundStyle(.tertiary)
-                    .padding(.bottom, 24)
+                    .padding(.bottom, 22)
             }
             .padding(.horizontal, 24)
         }
         .onAppear {
             connection.prepareLocalNetworkAccess(host: "192.168.0.1", port: 4747)
             applyDeepLinkIfNeeded()
-            withAnimation(.spring(response: 0.55, dampingFraction: 0.82)) {
+            withAnimation(.spring(response: 0.6, dampingFraction: 0.8)) {
                 appear = true
             }
         }
@@ -137,8 +123,17 @@ struct PairingView: View {
                     QRScannerView { code in
                         Task { await pairFromQR(code) }
                     }
-                    FloatingIntelligenceDots(count: 8)
-                        .opacity(0.55)
+                    VStack {
+                        IntelligenceOrbitRings(size: 160)
+                            .opacity(0.35)
+                            .padding(.top, 80)
+                        Spacer()
+                        FloatingIntelligenceDots(count: 10)
+                            .frame(height: 100)
+                            .opacity(0.5)
+                            .padding(.bottom, 40)
+                    }
+                    .allowsHitTesting(false)
                 }
                 .ignoresSafeArea()
                 .navigationTitle("QR scannen")

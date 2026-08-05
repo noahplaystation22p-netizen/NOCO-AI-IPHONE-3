@@ -50,6 +50,24 @@ struct SettingsView: View {
                     Text("Standard ist Blitz für schnelle Spoken Replies. Stimme bevorzugt Premium/Enhanced Deutsch.")
                 }
 
+                Section("Erweitert") {
+                    NavigationLink {
+                        CodeStudioView()
+                            .environmentObject(connection)
+                    } label: {
+                        Label {
+                            VStack(alignment: .leading, spacing: 2) {
+                                Text("Code Assist")
+                                Text("Optional — läuft auf dem PC")
+                                    .font(.caption)
+                                    .foregroundStyle(.secondary)
+                            }
+                        } icon: {
+                            Image(systemName: "chevron.left.forwardslash.chevron.right")
+                        }
+                    }
+                }
+
                 Section("Gerät") {
                     TextField("Gerätename", text: $connection.deviceName)
                 }
@@ -65,8 +83,8 @@ struct SettingsView: View {
                 }
 
                 Section("Info") {
-                    Text("NOCO AI Companion v3.1")
-                    Text("Speak Live · Dynamic Island · Schreibwerkzeuge · Intelligence Sync")
+                    Text("NOCO AI Companion v3.2")
+                    Text("Live-Sync · Tipp-Sync · Speak · Bildideen")
                         .font(.footnote)
                         .foregroundStyle(NOCOAITheme.secondaryText(for: scheme))
                 }

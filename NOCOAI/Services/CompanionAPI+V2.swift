@@ -46,6 +46,27 @@ extension CompanionAPI {
         return try await get(path, as: SyncEventsResponse.self)
     }
 
+    func postTyping(conversationId: String, typing: Bool, draftPreview: String?, deviceId: String?) async throws {
+        struct Body: Encodable {
+            let conversation_id: String
+            let typing: Bool
+            let draft_preview: String?
+            let device_id: String?
+            let source: String
+        }
+        let _: EmptyResponse = try await post(
+            "typing",
+            body: Body(
+                conversation_id: conversationId,
+                typing: typing,
+                draft_preview: draftPreview,
+                device_id: deviceId,
+                source: "mobile"
+            ),
+            as: EmptyResponse.self
+        )
+    }
+
     func streamChatV2(message: String, conversationId: String?, mode: AIMode) -> AsyncThrowingStream<ChatStreamChunk, Error> {
         streamSSEChunks(
             path: "chat",

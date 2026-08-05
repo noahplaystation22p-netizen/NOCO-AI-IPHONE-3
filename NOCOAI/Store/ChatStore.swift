@@ -11,13 +11,19 @@ final class ChatStore: ObservableObject {
     @Published var lastSyncAt: Date?
     @Published var searchText = ""
     @Published var lastError: String?
+    @Published var peerTyping = false
+    @Published var peerTypingDraft: String?
 
     private var api: CompanionAPI?
     private var media: MediaURLBuilder?
     private var syncCursor: String?
     private var syncTask: Task<Void, Never>?
+    private var typingTask: Task<Void, Never>?
+    private var deletedIds: Set<String> = Set(UserDefaults.standard.stringArray(forKey: "nocoai.deletedChats") ?? [])
 
-    private let syncIntervalNs: UInt64 = 1_000_000_000
+    private var syncIntervalNs: UInt64 {
+        peerTyping ? 450_000_000 : 900_000_000
+    }
 
     var filteredConversations: [ConversationSummary] {
         guard !searchText.isEmpty else { return conversations }
@@ -47,7 +53,8 @@ final class ChatStore: ObservableObject {
     func loadConversations() async {
         guard let api else { return }
         do {
-            conversations = try await api.fetchConversations()
+            let remote = try await api.fetchConversations()
+            conversations = remote.filter { !deletedIds.contains($0.id) }
             lastError = nil
         } catch {
             lastError = (error as? LocalizedError)?.errorDescription
@@ -208,13 +215,52 @@ final class ChatStore: ObservableObject {
 
     func deleteConversation(_ id: String) async {
         guard let api else { return }
-        try? await api.deleteConversation(id: id)
+        deletedIds.insert(id)
+        persistDeletedIds()
+        conversations.removeAll { $0.id == id }
         if activeConversationId == id {
             activeConversationId = nil
             messages = []
+            UserDefaults.standard.removeObject(forKey: "nocoai.activeConversation")
+        }
+        do {
+            try await api.deleteConversation(id: id)
+            lastError = nil
+        } catch {
+            lastError = (error as? LocalizedError)?.errorDescription
         }
         await loadConversations()
         HapticService.medium()
+    }
+
+    func publishTyping(_ text: String) {
+        guard let api, let cid = activeConversationId else { return }
+        typingTask?.cancel()
+        let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        typingTask = Task { [weak self] in
+            try? await Task.sleep(nanoseconds: 280_000_000)
+            guard !Task.isCancelled, let self else { return }
+            do {
+                if trimmed.isEmpty {
+                    try await api.postTyping(conversationId: cid, typing: false, draftPreview: nil, deviceId: nil)
+                } else {
+                    try await api.postTyping(
+                        conversationId: cid,
+                        typing: true,
+                        draftPreview: String(trimmed.prefix(80)),
+                        deviceId: nil
+                    )
+                }
+            } catch { /* ignore typing errors */ }
+        }
+    }
+
+    func clearTyping() {
+        guard let api, let cid = activeConversationId else { return }
+        typingTask?.cancel()
+        Task {
+            try? await api.postTyping(conversationId: cid, typing: false, draftPreview: nil, deviceId: nil)
+        }
     }
 
     private func resolveConversationId(_ known: String?, preferLatest: Bool = false) async {
@@ -251,6 +297,7 @@ final class ChatStore: ObservableObject {
         do {
             let res = try await api.fetchSyncEvents(since: syncCursor)
             syncCursor = res.cursor ?? syncCursor
+            applyTypingPresence(res.typing)
             guard !res.events.isEmpty else { return }
 
             isSyncActive = true
@@ -260,16 +307,35 @@ final class ChatStore: ObservableObject {
                 await handle(event)
             }
 
-            DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) { [weak self] in
+            DispatchQueue.main.asyncAfter(deadline: .now() + 1.2) { [weak self] in
                 self?.isSyncActive = false
             }
         } catch { }
     }
 
+    private func applyTypingPresence(_ list: [TypingPresence]?) {
+        guard let list else {
+            if peerTyping {
+                peerTyping = false
+                peerTypingDraft = nil
+            }
+            return
+        }
+        let mine = list.first(where: {
+            ($0.conversationId == activeConversationId) && ($0.source != "mobile") && ($0.typing == true)
+        })
+        let next = mine != nil
+        let draft = mine?.draftPreview
+        if peerTyping != next || peerTypingDraft != draft {
+            peerTyping = next
+            peerTypingDraft = draft
+        }
+    }
+
     private func handle(_ event: SyncEvent) async {
         switch event.type {
         case "message.added", "message.created":
-            if let cid = event.conversationId {
+            if let cid = event.conversationId, !deletedIds.contains(cid) {
                 if activeConversationId == nil { activeConversationId = cid }
                 if cid == activeConversationId {
                     await loadMessages(for: cid)
@@ -278,16 +344,47 @@ final class ChatStore: ObservableObject {
             }
             await loadConversations()
         case "conversation.updated", "conversation.created":
+            let cid = event.conversationId
+            if let cid, deletedIds.contains(cid) {
+                // Keep tombstones: ask server to drop again
+                try? await api?.deleteConversation(id: cid)
+                return
+            }
             await loadConversations()
-            if activeConversationId == nil, let cid = event.conversationId {
+            if let cid, cid == activeConversationId {
+                await loadMessages(for: cid)
+            } else if activeConversationId == nil, let cid {
                 activeConversationId = cid
                 await loadMessages(for: cid)
-            } else if let cid = activeConversationId {
-                await loadMessages(for: cid)
             }
+        case "conversation.deleted":
+            if let cid = event.conversationId {
+                applyRemoteDelete(cid)
+            }
+        case "typing.updated":
+            guard let cid = event.conversationId, cid == activeConversationId else { return }
+            guard event.source != "mobile" else { return }
+            peerTyping = event.typing ?? true
+            peerTypingDraft = event.draftPreview
         default:
             break
         }
+    }
+
+    private func applyRemoteDelete(_ id: String) {
+        deletedIds.insert(id)
+        persistDeletedIds()
+        conversations.removeAll { $0.id == id }
+        if activeConversationId == id {
+            activeConversationId = nil
+            messages = []
+            UserDefaults.standard.removeObject(forKey: "nocoai.activeConversation")
+        }
+        HapticService.soft()
+    }
+
+    private func persistDeletedIds() {
+        UserDefaults.standard.set(Array(deletedIds), forKey: "nocoai.deletedChats")
     }
 
     private func mapMessages(_ dtos: [ConversationMessageDTO]) -> [ChatMessage] {

@@ -51,6 +51,12 @@ struct ChatInputBar: View {
                     .focused($focused)
                     .submitLabel(.send)
                     .onSubmit { send() }
+                    .onChange(of: text) { _, newValue in
+                        connection.chat.publishTyping(newValue)
+                    }
+                    .onChange(of: focused) { _, isFocused in
+                        if !isFocused { connection.chat.clearTyping() }
+                    }
                     .padding(14)
                     .background(
                         RoundedRectangle(cornerRadius: 20, style: .continuous)
@@ -121,6 +127,7 @@ struct ChatInputBar: View {
 
     private func send() {
         guard !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return }
+        connection.chat.clearTyping()
         focused = false
         onSend()
     }

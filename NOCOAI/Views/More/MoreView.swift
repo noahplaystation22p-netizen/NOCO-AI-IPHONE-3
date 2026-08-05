@@ -1,6 +1,6 @@
 import SwiftUI
 
-/// Visual Intelligence hub — clear tiles instead of nested lists.
+/// Visual Intelligence hub — Speak & Settings front and center; Code Assist tucked away.
 struct MoreView: View {
     @EnvironmentObject private var connection: ConnectionStore
     @Environment(\.colorScheme) private var scheme
@@ -12,7 +12,7 @@ struct MoreView: View {
                 VStack(spacing: 18) {
                     IntelligenceHeroBanner(
                         title: "Studio",
-                        subtitle: "Speak, Code Assist & Einstellungen — alles auf einen Blick.",
+                        subtitle: "Speak & Einstellungen — Sync läuft live mit dem PC.",
                         online: connection.isOnline
                     )
                     .opacity(appear ? 1 : 0)
@@ -38,25 +38,12 @@ struct MoreView: View {
                         .opacity(connection.isOnline || connection.speak.isRunning ? 1 : 0.55)
 
                         NavigationLink {
-                            CodeStudioView()
-                                .environmentObject(connection)
-                        } label: {
-                            IntelligenceFeatureTile(
-                                title: "Code Assist",
-                                subtitle: "Erklären, fixen, verbessern",
-                                systemImage: "chevron.left.forwardslash.chevron.right",
-                                accent: NOCOAITheme.glowPrimary
-                            )
-                        }
-                        .buttonStyle(.plain)
-
-                        NavigationLink {
                             SettingsView()
                                 .environmentObject(connection)
                         } label: {
                             IntelligenceFeatureTile(
                                 title: "Einstellungen",
-                                subtitle: "Sync, Speak-Modell, Stimme",
+                                subtitle: "Sync, Speak, Stimme",
                                 systemImage: "gearshape.fill",
                                 accent: NOCOAITheme.glowAccent
                             )
@@ -64,9 +51,16 @@ struct MoreView: View {
                         .buttonStyle(.plain)
 
                         IntelligenceFeatureTile(
-                            title: "Tabs",
-                            subtitle: "Chat & Bildideen unten in der Leiste",
-                            systemImage: "rectangle.split.2x1",
+                            title: "Chat",
+                            subtitle: "Nachrichten & Tippen syncen live",
+                            systemImage: "bubble.left.and.bubble.right.fill",
+                            accent: NOCOAITheme.glowPrimary
+                        )
+
+                        IntelligenceFeatureTile(
+                            title: "Bildideen",
+                            subtitle: "Eigener Tab unten",
+                            systemImage: "paintbrush.pointed.fill",
                             accent: NOCOAITheme.glowSecondary
                         )
                     }
@@ -76,7 +70,7 @@ struct MoreView: View {
                     connectionCard
                         .opacity(appear ? 1 : 0)
 
-                    Text("NOCO AI Companion v3.1")
+                    Text("NOCO AI Companion v3.2")
                         .font(.caption2)
                         .foregroundStyle(.secondary)
                         .padding(.top, 4)
@@ -164,9 +158,10 @@ struct MoreView: View {
         switch feature.lowercased() {
         case "chat": return "Chat"
         case "bilder", "images": return "Bildideen"
-        case "code": return "Code Assist"
-        case "vision": return "Visuelle Intelligenz"
+        case "code": return "Code"
+        case "vision": return "Vision"
         case "sync": return "Sync"
+        case "typing": return "Tipp-Sync"
         default: return feature
         }
     }

@@ -147,6 +147,7 @@ struct SyncEventsResponse: Decodable {
     let events: [SyncEvent]
     let cursor: String?
     let since: String?
+    let typing: [TypingPresence]?
 }
 
 struct SyncEvent: Decodable {
@@ -154,10 +155,28 @@ struct SyncEvent: Decodable {
     let conversationId: String?
     let message: ConversationMessageDTO?
     let title: String?
+    let draftPreview: String?
+    let source: String?
+    let typing: Bool?
 
     enum CodingKeys: String, CodingKey {
-        case type, title, message
+        case type, title, message, source, typing
         case conversationId = "conversation_id"
+        case draftPreview = "draft_preview"
+    }
+}
+
+struct TypingPresence: Decodable, Equatable {
+    let conversationId: String?
+    let typing: Bool?
+    let draftPreview: String?
+    let source: String?
+    let at: String?
+
+    enum CodingKeys: String, CodingKey {
+        case typing, source, at
+        case conversationId = "conversation_id"
+        case draftPreview = "draft_preview"
     }
 }
 

@@ -54,6 +54,13 @@ struct ChatHubView: View {
                     }
                 }
 
+                if connection.chat.peerTyping {
+                    PeerTypingBanner(draft: connection.chat.peerTypingDraft)
+                        .padding(.horizontal, 16)
+                        .padding(.vertical, 6)
+                        .transition(.opacity.combined(with: .move(edge: .bottom)))
+                }
+
                 ChatInputBar(
                     text: $input,
                     focused: $inputFocused,
@@ -66,6 +73,7 @@ struct ChatHubView: View {
                     onWritingTools: { showWritingTools = true }
                 )
             }
+            .animation(.spring(response: 0.35, dampingFraction: 0.82), value: connection.chat.peerTyping)
             .nocoBackground()
             .navigationTitle(titleText)
             .toolbar {
@@ -159,6 +167,61 @@ struct ChatHubView: View {
         if let last = connection.chat.messages.last {
             withAnimation(.spring(response: 0.35, dampingFraction: 0.85)) {
                 proxy.scrollTo(last.id, anchor: .bottom)
+            }
+        }
+    }
+}
+
+private struct PeerTypingBanner: View {
+    var draft: String?
+    @State private var phase = 0
+
+    var body: some View {
+        HStack(spacing: 12) {
+            HStack(spacing: 5) {
+                ForEach(0..<3, id: \.self) { i in
+                    Circle()
+                        .fill(
+                            LinearGradient(
+                                colors: [NOCOAITheme.glowPrimary, NOCOAITheme.glowSecondary],
+                                startPoint: .top,
+                                endPoint: .bottom
+                            )
+                        )
+                        .frame(width: 7, height: 7)
+                        .scaleEffect(phase == i ? 1.35 : 0.8)
+                        .opacity(phase == i ? 1 : 0.35)
+                        .shadow(color: NOCOAITheme.glowPrimary.opacity(phase == i ? 0.7 : 0), radius: 5)
+                }
+            }
+            VStack(alignment: .leading, spacing: 2) {
+                Text("PC tippt…")
+                    .font(.caption.weight(.semibold))
+                    .foregroundStyle(NOCOAITheme.accent)
+                if let draft, !draft.isEmpty {
+                    Text(draft)
+                        .font(.caption2)
+                        .foregroundStyle(.secondary)
+                        .lineLimit(1)
+                }
+            }
+            Spacer(minLength: 0)
+        }
+        .padding(.horizontal, 14)
+        .padding(.vertical, 10)
+        .background(
+            Capsule()
+                .fill(.ultraThinMaterial)
+                .overlay(
+                    Capsule()
+                        .stroke(NOCOAITheme.glowPrimary.opacity(0.35), lineWidth: 1)
+                )
+                .shadow(color: NOCOAITheme.glowPrimary.opacity(0.2), radius: 10)
+        )
+        .task {
+            while !Task.isCancelled {
+                try? await Task.sleep(nanoseconds: 280_000_000)
+                phase = (phase + 1) % 3
             }
         }
     }

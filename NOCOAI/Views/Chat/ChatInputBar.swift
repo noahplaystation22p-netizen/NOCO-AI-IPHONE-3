@@ -37,6 +37,7 @@ struct ChatInputBar: View {
                     Image(systemName: "plus.circle.fill")
                         .font(.title2)
                         .foregroundStyle(NOCOAITheme.accent)
+                        .shadow(color: NOCOAITheme.glowPrimary.opacity(0.4), radius: 6)
                 }
 
                 TextField("Frag NOCO AI…", text: $text, axis: .vertical)
@@ -44,15 +45,30 @@ struct ChatInputBar: View {
                     .focused($focused)
                     .submitLabel(.send)
                     .onSubmit { send() }
-                    .padding(12)
-                    .background(RoundedRectangle(cornerRadius: 18).fill(Color.primary.opacity(0.06)))
+                    .padding(14)
+                    .background(
+                        RoundedRectangle(cornerRadius: 20, style: .continuous)
+                            .fill(.ultraThinMaterial)
+                            .overlay(
+                                RoundedRectangle(cornerRadius: 20, style: .continuous)
+                                    .stroke(
+                                        focused
+                                            ? NOCOAITheme.glowPrimary.opacity(0.65)
+                                            : Color.primary.opacity(0.08),
+                                        lineWidth: focused ? 1.2 : 1
+                                    )
+                            )
+                            .shadow(color: focused ? NOCOAITheme.glowPrimary.opacity(0.35) : .clear, radius: focused ? 14 : 0)
+                    )
 
                 Button(action: send) {
                     Image(systemName: "arrow.up.circle.fill")
-                        .font(.system(size: 34))
+                        .font(.system(size: 36))
+                        .shadow(color: NOCOAITheme.glowPrimary.opacity(0.55), radius: 10)
                 }
                 .disabled(text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || connection.chat.isSending)
                 .foregroundStyle(NOCOAITheme.accent)
+                .symbolEffect(.bounce, value: connection.chat.isSending)
             }
         }
         .padding(.horizontal, 16)

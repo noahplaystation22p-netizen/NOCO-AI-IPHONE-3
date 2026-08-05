@@ -39,6 +39,7 @@
 		NA000001000000000000002A /* DashboardView.swift in Sources */ = {isa = PBXBuildFile; fileRef = NA000002000000000000002A /* DashboardView.swift */; };
 		NA000001000000000000002B /* MoreView.swift in Sources */ = {isa = PBXBuildFile; fileRef = NA000002000000000000002B /* MoreView.swift */; };
 		NA000001000000000000002C /* CodeStudioView.swift in Sources */ = {isa = PBXBuildFile; fileRef = NA000002000000000000002C /* CodeStudioView.swift */; };
+		NA000001000000000000002D /* IntelligenceEffects.swift in Sources */ = {isa = PBXBuildFile; fileRef = NA000002000000000000002D /* IntelligenceEffects.swift */; };
 		NA0000010000000000000011 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = NA0000020000000000000011 /* Assets.xcassets */; };
 /* End PBXBuildFile section */
 
@@ -79,6 +80,7 @@
 		NA000002000000000000002A /* DashboardView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DashboardView.swift; sourceTree = "<group>"; };
 		NA000002000000000000002B /* MoreView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MoreView.swift; sourceTree = "<group>"; };
 		NA000002000000000000002C /* CodeStudioView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CodeStudioView.swift; sourceTree = "<group>"; };
+		NA000002000000000000002D /* IntelligenceEffects.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = IntelligenceEffects.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -193,6 +195,7 @@
 				NA0000020000000000000015 /* QRScannerView.swift */,
 				NA0000020000000000000025 /* ModePicker.swift */,
 				NA0000020000000000000026 /* SyncBadge.swift */,
+				NA000002000000000000002D /* IntelligenceEffects.swift */,
 			);
 			path = Components;
 			sourceTree = "<group>";
@@ -336,6 +339,7 @@
 				NA000001000000000000002A /* DashboardView.swift in Sources */,
 				NA000001000000000000002B /* MoreView.swift in Sources */,
 				NA000001000000000000002C /* CodeStudioView.swift in Sources */,
+				NA000001000000000000002D /* IntelligenceEffects.swift in Sources */,
 				NA0000010000000000000012 /* BrandLogo.swift in Sources */,
 				NA0000010000000000000013 /* QRScannerView.swift in Sources */,
 				NA0000010000000000000014 /* HostSanitizer.swift in Sources */,
@@ -389,7 +393,7 @@
 				CODE_SIGN_ENTITLEMENTS = NOCOAI/NOCOAI.entitlements;
 				CODE_SIGNING_ALLOWED = NO;
 				CODE_SIGNING_REQUIRED = NO;
-				CURRENT_PROJECT_VERSION = 7;
+				CURRENT_PROJECT_VERSION = 8;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = NOCOAI/Info.plist;
@@ -403,7 +407,7 @@
 					"$(inherited)",
 					"@executable_path/Frameworks",
 				);
-				MARKETING_VERSION = 2.3;
+				MARKETING_VERSION = 2.4;
 				PRODUCT_BUNDLE_IDENTIFIER = de.noco.nocoai;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator";
@@ -422,7 +426,7 @@
 				CODE_SIGN_ENTITLEMENTS = NOCOAI/NOCOAI.entitlements;
 				CODE_SIGNING_ALLOWED = NO;
 				CODE_SIGNING_REQUIRED = NO;
-				CURRENT_PROJECT_VERSION = 7;
+				CURRENT_PROJECT_VERSION = 8;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = NOCOAI/Info.plist;
@@ -436,7 +440,7 @@
 					"$(inherited)",
 					"@executable_path/Frameworks",
 				);
-				MARKETING_VERSION = 2.3;
+				MARKETING_VERSION = 2.4;
 				PRODUCT_BUNDLE_IDENTIFIER = de.noco.nocoai;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator";

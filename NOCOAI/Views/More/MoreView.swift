@@ -50,8 +50,8 @@ struct MoreView: View {
                 }
 
                 Section("Info") {
-                    Text("NOCO AI Companion v2.3")
-                    Text("QR scannen → fragen. Text läuft auf deinem Windows-PC.")
+                    Text("NOCO AI Companion v2.4")
+                    Text("Glow · Cloud-Chat · Text auf dem PC.")
                         .font(.footnote)
                         .foregroundStyle(NOCOAITheme.secondaryText(for: scheme))
                 }

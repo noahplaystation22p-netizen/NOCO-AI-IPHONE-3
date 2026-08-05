@@ -12,12 +12,23 @@ struct GlassCard<Content: View>: View {
         content
             .padding(16)
             .background(
-                RoundedRectangle(cornerRadius: 20, style: .continuous)
-                    .fill(NOCOAITheme.cardFill(for: scheme))
+                RoundedRectangle(cornerRadius: 22, style: .continuous)
+                    .fill(.ultraThinMaterial)
                     .overlay(
-                        RoundedRectangle(cornerRadius: 20, style: .continuous)
-                            .stroke(NOCOAITheme.cardStroke(for: scheme), lineWidth: 1)
+                        RoundedRectangle(cornerRadius: 22, style: .continuous)
+                            .stroke(
+                                LinearGradient(
+                                    colors: [
+                                        NOCOAITheme.glowPrimary.opacity(scheme == .dark ? 0.35 : 0.2),
+                                        NOCOAITheme.cardStroke(for: scheme)
+                                    ],
+                                    startPoint: .topLeading,
+                                    endPoint: .bottomTrailing
+                                ),
+                                lineWidth: 1
+                            )
                     )
+                    .shadow(color: NOCOAITheme.glowPrimary.opacity(0.12), radius: 18, y: 6)
             )
     }
 }

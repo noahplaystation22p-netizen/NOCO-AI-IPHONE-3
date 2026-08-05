@@ -26,10 +26,15 @@ struct ChatHubView: View {
                         if connection.chat.messages.isEmpty {
                             emptyState
                         } else {
-                            LazyVStack(spacing: 14) {
-                                ForEach(connection.chat.messages) { message in
+                            LazyVStack(spacing: 16) {
+                                ForEach(Array(connection.chat.messages.enumerated()), id: \.element.id) { index, message in
                                     ChatBubble(message: message)
                                         .id(message.id)
+                                        .transition(.asymmetric(
+                                            insertion: .opacity.combined(with: .move(edge: .bottom)).combined(with: .scale(scale: 0.96)),
+                                            removal: .opacity
+                                        ))
+                                        .animation(.spring(response: 0.4, dampingFraction: 0.82).delay(Double(min(index, 6)) * 0.02), value: connection.chat.messages.count)
                                 }
                             }
                             .padding(16)
@@ -90,23 +95,35 @@ struct ChatHubView: View {
     }
 
     private var emptyState: some View {
-        VStack(spacing: 16) {
-            Image(systemName: "bubble.left.and.bubble.right.fill")
-                .font(.system(size: 48))
-                .foregroundStyle(NOCOAITheme.accent.opacity(0.5))
-            Text("Stell eine Frage.\nDie Antwort kommt von deinem PC.")
+        VStack(spacing: 18) {
+            ZStack {
+                Circle()
+                    .fill(NOCOAITheme.glowPrimary.opacity(0.2))
+                    .frame(width: 110, height: 110)
+                    .blur(radius: 20)
+                Image(systemName: "sparkles")
+                    .font(.system(size: 44, weight: .light))
+                    .foregroundStyle(NOCOAITheme.accent)
+                    .shadow(color: NOCOAITheme.glowPrimary.opacity(0.7), radius: 16)
+            }
+            Text("Frag irgendetwas")
+                .font(.title3.weight(.semibold))
+            Text("Deine Frage geht an den PC —\nAntwort streamt zurück wie in der Cloud.")
                 .font(.subheadline)
                 .multilineTextAlignment(.center)
                 .foregroundStyle(NOCOAITheme.secondaryText(for: scheme))
                 .padding(.horizontal, 32)
+            FloatingIntelligenceDots(count: 8)
+                .frame(height: 80)
+                .padding(.horizontal, 40)
         }
         .frame(maxWidth: .infinity)
-        .padding(.top, 80)
+        .padding(.top, 70)
     }
 
     private func scrollToBottom(_ proxy: ScrollViewProxy) {
         if let last = connection.chat.messages.last {
-            withAnimation(.easeOut(duration: 0.2)) {
+            withAnimation(.spring(response: 0.35, dampingFraction: 0.85)) {
                 proxy.scrollTo(last.id, anchor: .bottom)
             }
         }
@@ -126,12 +143,13 @@ private struct ChatBubble: View {
                         .resizable()
                         .scaledToFit()
                         .frame(maxHeight: 240)
-                        .clipShape(RoundedRectangle(cornerRadius: 14))
+                        .clipShape(RoundedRectangle(cornerRadius: 16))
+                        .shadow(color: NOCOAITheme.glowPrimary.opacity(0.25), radius: 12)
                 } else if let url = message.imageURL {
                     AsyncImage(url: url) { phase in
                         switch phase {
                         case .success(let img):
-                            img.resizable().scaledToFit().frame(maxHeight: 240).clipShape(RoundedRectangle(cornerRadius: 14))
+                            img.resizable().scaledToFit().frame(maxHeight: 240).clipShape(RoundedRectangle(cornerRadius: 16))
                         case .failure:
                             Image(systemName: "photo").frame(height: 120)
                         default:
@@ -140,16 +158,18 @@ private struct ChatBubble: View {
                     }
                 }
                 if !message.text.isEmpty || message.isStreaming {
-                    Text(message.text.isEmpty && message.isStreaming ? "…" : message.text)
-                        .font(.body)
-                        .foregroundStyle(message.role == .user ? .white : NOCOAITheme.primaryText(for: scheme))
-                        .padding(.horizontal, 14)
-                        .padding(.vertical, 10)
-                        .background(
-                            RoundedRectangle(cornerRadius: 20, style: .continuous)
-                                .fill(message.role == .user ? NOCOAITheme.accent : NOCOAITheme.cardFill(for: scheme))
-                        )
-                        .animation(.easeOut(duration: 0.15), value: message.text)
+                    HStack(alignment: .bottom, spacing: 6) {
+                        Text(message.text.isEmpty && message.isStreaming ? "" : message.text)
+                            .font(.body)
+                            .foregroundStyle(message.role == .user ? .white : NOCOAITheme.primaryText(for: scheme))
+                        if message.isStreaming {
+                            StreamingGlowCursor()
+                        }
+                    }
+                    .padding(.horizontal, 16)
+                    .padding(.vertical, 12)
+                    .background(GlowBubbleBackground(isUser: message.role == .user))
+                    .animation(.easeOut(duration: 0.12), value: message.text)
                 }
             }
             if message.role == .assistant { Spacer(minLength: 48) }

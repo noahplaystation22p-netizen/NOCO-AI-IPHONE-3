@@ -49,16 +49,40 @@ jobs:
             exit 1
           fi
 
+          echo "=== App bundle contents ==="
+          ls -la "$APP_PATH"
+          ls -la "$APP_PATH/PlugIns" || true
+
+          # Live Activities REQUIRE the widget appex inside PlugIns/
+          APEX=$(find "$APP_PATH/PlugIns" -name "*.appex" -type d 2>/dev/null | head -1 || true)
+          if [ -z "$APEX" ]; then
+            echo "FATAL: NOCOAISpeakWidget.appex missing from PlugIns — Live Activities cannot work"
+            find "$APP_PATH" -maxdepth 3 -type d
+            exit 1
+          fi
+          echo "Found Live Activity widget: $APEX"
+
+          # Sign nested extension first, then the app (ad-hoc)
+          find "$APP_PATH" -name "*.appex" -type d -print0 | while IFS= read -r -d '' ext; do
+            codesign --force --sign - --timestamp=none "$ext"
+          done
           cp NOCOAI/NOCOAI.entitlements "$APP_PATH/NOCOAI.entitlements"
           codesign --force --sign - --timestamp=none "$APP_PATH"
 
           mkdir -p build/Payload
+          rm -rf build/Payload/NOCOAI.app
           cp -R "$APP_PATH" build/Payload/NOCOAI.app
           mkdir -p build/sidestore-entitlements
           cp NOCOAI/NOCOAI.entitlements build/sidestore-entitlements/NOCOAI.plist
           cp sidestore-entitlements/ANLEITUNG.txt build/sidestore-entitlements/ANLEITUNG.txt
           cd build && zip -rq NOCO-AI.ipa Payload sidestore-entitlements
           ls -la NOCO-AI.ipa
+
+          # Verify IPA contains the widget
+          unzip -l NOCO-AI.ipa | grep -E "appex|PlugIns" || {
+            echo "FATAL: IPA missing PlugIns/appex"
+            exit 1
+          }
 
       - name: Upload build log on failure
         if: failure()

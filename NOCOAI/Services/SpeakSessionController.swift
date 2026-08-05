@@ -40,9 +40,15 @@ final class SpeakSessionController: ObservableObject {
             statusLine = "PC offline — erst verbinden"
             return
         }
+        Task { @MainActor in
+            await startAsync(connection: connection)
+        }
+    }
+
+    private func startAsync(connection: ConnectionStore) async {
+        // 1) Live Activity FIRST — Lock Screen banner + Dynamic Island
+        let liveOk = await SpeakLiveActivityManager.startAndWait()
         do {
-            // Live Activity immediately (Lock Screen + Island)
-            SpeakLiveActivityManager.start()
             try voice.activateBackgroundAudioSession()
             isRunning = true
             isBusy = false
@@ -51,18 +57,17 @@ final class SpeakSessionController: ObservableObject {
             voice.sessionActive = true
             beginBackgroundKeepAlive()
             try voice.startListening(autoEnd: true)
-            statusLine = "Zuhören — Pause sendet sofort"
+            statusLine = liveOk
+                ? "Live Activity an · Pause sendet sofort"
+                : "Zuhören aktiv · Live Activity prüfen (Einstellungen → NOCO AI)"
             pushLiveActivity(force: true)
-            // Ensure banner appears even if first request raced
-            Task {
-                try? await Task.sleep(nanoseconds: 350_000_000)
-                await MainActor.run {
-                    guard self.isRunning else { return }
-                    if !SpeakLiveActivityManager.isActive {
-                        SpeakLiveActivityManager.start()
-                    }
-                    self.pushLiveActivity(force: true)
+            // Second ensure — some devices need a follow-up update
+            try? await Task.sleep(nanoseconds: 200_000_000)
+            if isRunning {
+                if !SpeakLiveActivityManager.isActive {
+                    _ = await SpeakLiveActivityManager.startAndWait()
                 }
+                pushLiveActivity(force: true)
             }
             HapticService.medium()
         } catch {

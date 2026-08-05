@@ -14,6 +14,20 @@
             buildForAnalyzing = "YES">
             <BuildableReference
                BuildableIdentifier = "primary"
+               BlueprintIdentifier = "WDG0000060000000000000001"
+               BuildableName = "NOCOAISpeakWidget.appex"
+               BlueprintName = "NOCOAISpeakWidget"
+               ReferencedContainer = "container:NOCOAI.xcodeproj">
+            </BuildableReference>
+         </BuildActionEntry>
+         <BuildActionEntry
+            buildForTesting = "YES"
+            buildForRunning = "YES"
+            buildForProfiling = "YES"
+            buildForArchiving = "YES"
+            buildForAnalyzing = "YES">
+            <BuildableReference
+               BuildableIdentifier = "primary"
                BlueprintIdentifier = "NA0000060000000000000001"
                BuildableName = "NOCOAI.app"
                BlueprintName = "NOCOAI"

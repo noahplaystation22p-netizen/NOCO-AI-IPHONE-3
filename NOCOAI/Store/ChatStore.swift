@@ -1,3 +1,4 @@
+import UIKit
 import Foundation
 
 @MainActor
@@ -7,6 +8,7 @@ final class ChatStore: ObservableObject {
     @Published var activeConversationId: String?
     @Published var mode: AIMode = .auto
     @Published var isSending = false
+    private var sendTask: Task<Void, Never>?
     @Published var isSyncActive = false
     @Published var lastSyncAt: Date?
     @Published var searchText = ""
@@ -108,7 +110,13 @@ final class ChatStore: ObservableObject {
     }
 
     func send(_ text: String) async {
-        _ = await sendAndReturnReply(text, modeOverride: nil)
+        sendTask?.cancel()
+        let task = Task { @MainActor in
+            _ = await sendAndReturnReply(text, modeOverride: nil)
+        }
+        sendTask = task
+        await task.value
+        if sendTask == task { sendTask = nil }
     }
 
     /// Sends a chat message and returns the final assistant text (for voice TTS).
@@ -154,6 +162,7 @@ final class ChatStore: ObservableObject {
                 mode: sendMode,
                 speak: speak
             ) {
+                try Task.checkCancellation()
                 if let cid = chunk.conversationId, !cid.isEmpty {
                     conversationId = cid
                     activeConversationId = cid
@@ -181,6 +190,14 @@ final class ChatStore: ObservableObject {
             await resolveConversationId(conversationId, preferLatest: isStartingNewChat)
             await syncFromServer()
             HapticService.success()
+        } catch is CancellationError {
+            if let idx = messages.firstIndex(where: { $0.id == assistantID }) {
+                messages[idx].isStreaming = false
+                if messages[idx].text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                    messages[idx].text = "(abgebrochen)"
+                }
+            }
+            reply = nil
         } catch {
             if let idx = messages.firstIndex(where: { $0.id == assistantID }) {
                 messages[idx].text = "Fehler: \((error as? LocalizedError)?.errorDescription ?? error.localizedDescription)"
@@ -195,6 +212,22 @@ final class ChatStore: ObservableObject {
         return reply
     }
 
+    func cancelSend() {
+        sendTask?.cancel()
+        sendTask = nil
+        Task { try? await api?.interruptChat(conversationId: activeConversationId) }
+        if let idx = messages.lastIndex(where: { $0.isStreaming }) {
+            messages[idx].isStreaming = false
+            if messages[idx].text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                messages[idx].text = "(abgebrochen)"
+            } else if !messages[idx].text.contains("abgebrochen") {
+                messages[idx].text += "\n\n(abgebrochen)"
+            }
+        }
+        isSending = false
+        HapticService.soft()
+    }
+
     func sendImage(_ data: Data, caption: String?) async {
         guard let api else { return }
 
@@ -205,9 +238,12 @@ final class ChatStore: ObservableObject {
 
         let userText = caption?.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty == false
             ? caption!.trimmingCharacters(in: .whitespacesAndNewlines)
-            : "Bild"
+            : "Was siehst du auf dem Bild?"
 
-        let userMessage = ChatMessage(role: .user, text: userText, localImageData: data)
+        // Normalize HEIC/PNG → JPEG so vision models accept the bytes
+        let jpeg = Self.jpegData(from: data)
+
+        let userMessage = ChatMessage(role: .user, text: userText, localImageData: jpeg)
         messages.append(userMessage)
 
         isSending = true
@@ -216,9 +252,9 @@ final class ChatStore: ObservableObject {
 
         do {
             let result = try await api.uploadVisionImage(
-                imageData: data,
+                imageData: jpeg,
                 filename: "upload.jpg",
-                message: caption,
+                message: userText,
                 conversationId: activeConversationId
             )
 
@@ -515,4 +551,13 @@ final class ChatStore: ObservableObject {
         }
         return merged
     }
+    private static func jpegData(from data: Data) -> Data {
+        #if canImport(UIKit)
+        if let img = UIImage(data: data), let jpeg = img.jpegData(compressionQuality: 0.88) {
+            return jpeg
+        }
+        #endif
+        return data
+    }
+
 }

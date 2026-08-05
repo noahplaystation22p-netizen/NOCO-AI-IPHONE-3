@@ -7,6 +7,7 @@ struct ImagesHubView: View {
     @State private var appear = false
     @State private var selectedItem: GeneratedImageItem?
     @State private var reveal = false
+    @FocusState private var promptFocused: Bool
 
     private let ideaPrompts = [
         "Neon-Stadt bei Regen, cinematic",
@@ -99,6 +100,17 @@ struct ImagesHubView: View {
                     set: { connection.images.prompt = $0 }
                 ), axis: .vertical)
                 .lineLimit(3...6)
+                .focused($promptFocused)
+                .submitLabel(.done)
+                .onSubmit { promptFocused = false }
+                .onChange(of: connection.images.prompt) { _, newValue in
+                    if newValue.contains(where: { $0 == "\n" || $0 == "\r" }) {
+                        connection.images.prompt = newValue
+                            .replacingOccurrences(of: "\r", with: "")
+                            .replacingOccurrences(of: "\n", with: "")
+                        promptFocused = false
+                    }
+                }
                 .disabled(connection.images.isGenerating)
                 .padding(12)
                 .background(
@@ -154,6 +166,7 @@ struct ImagesHubView: View {
                     }
                 } else {
                     Button {
+                        promptFocused = false
                         reveal = false
                         HapticService.medium()
                         connection.images.startGenerate()

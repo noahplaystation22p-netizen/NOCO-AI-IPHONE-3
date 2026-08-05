@@ -113,10 +113,8 @@ final class ConnectionStore: ObservableObject {
         url: URL?,
         data: Data?
     ) async {
+        // Stay on Bildideen — PC already focuses the Bild-chat via sync.
         await chat.loadConversations()
-        if let cid = conversationId, !cid.isEmpty {
-            await chat.selectConversation(cid)
-        }
         await images.loadFromConversations(chat.conversations, api: api)
         openImagesTab()
     }

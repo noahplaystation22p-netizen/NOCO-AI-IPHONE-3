@@ -94,14 +94,30 @@ extension CompanionAPI {
 
     func uploadVisionImage(imageData: Data, filename: String, message: String?, conversationId: String?) async throws -> VisionUploadResult {
         var fields: [String: String] = [:]
-        if let message, !message.isEmpty { fields["message"] = message }
+        let caption = (message?.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty == false)
+            ? message!
+            : "Beschreibe ausführlich auf Deutsch, was auf dem Bild zu sehen ist."
+        fields["message"] = caption
         if let conversationId { fields["conversation_id"] = conversationId }
 
-        do {
-            return try await uploadMultipart("vision", fileData: imageData, filename: filename, mime: "image/jpeg", fields: fields, as: VisionUploadResult.self)
-        } catch {
-            return try await uploadMultipart("chat", fileData: imageData, filename: filename, mime: "image/jpeg", fields: fields, as: VisionUploadResult.self)
+        // Do NOT fall back to /chat — that duplicates the user-image on the PC.
+        return try await uploadMultipart(
+            "vision",
+            fileData: imageData,
+            filename: filename,
+            mime: "image/jpeg",
+            fields: fields,
+            as: VisionUploadResult.self,
+            timeout: 180
+        )
+    }
+
+    func interruptChat(conversationId: String?) async throws {
+        struct Body: Encodable {
+            let conversationId: String?
         }
+        struct Resp: Decodable { let ok: Bool? }
+        let _: Resp = try await post("chat/interrupt", body: Body(conversationId: conversationId), as: Resp.self)
     }
 
     func generateImage(prompt: String, conversationId: String?) async throws -> ImageGenerateResponse {
@@ -189,10 +205,12 @@ extension CompanionAPI {
         filename: String,
         mime: String,
         fields: [String: String],
-        as type: T.Type
+        as type: T.Type,
+        timeout: TimeInterval = 60
     ) async throws -> T {
         let boundary = "Boundary-\(UUID().uuidString)"
         var request = try authorizedRequest(path: path, method: "POST")
+        request.timeoutInterval = timeout
         request.setValue("multipart/form-data; boundary=\(boundary)", forHTTPHeaderField: "Content-Type")
 
         var body = Data()

@@ -104,14 +104,27 @@ struct ChatInputBar: View {
                 .opacity(connection.isOnline ? 1 : 0.4)
                 .accessibilityLabel("Speak")
 
-                Button(action: send) {
-                    Image(systemName: "arrow.up.circle.fill")
-                        .font(.system(size: 36))
-                        .shadow(color: NOCOAITheme.glowPrimary.opacity(0.55), radius: 10)
+                if connection.chat.isSending {
+                    Button {
+                        HapticService.soft()
+                        connection.chat.cancelSend()
+                    } label: {
+                        Image(systemName: "stop.circle.fill")
+                            .font(.system(size: 36))
+                            .foregroundStyle(NOCOAITheme.danger)
+                            .shadow(color: NOCOAITheme.danger.opacity(0.45), radius: 10)
+                    }
+                    .accessibilityLabel("Abbrechen")
+                } else {
+                    Button(action: send) {
+                        Image(systemName: "arrow.up.circle.fill")
+                            .font(.system(size: 36))
+                            .shadow(color: NOCOAITheme.glowPrimary.opacity(0.55), radius: 10)
+                    }
+                    .disabled(text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+                    .foregroundStyle(NOCOAITheme.accent)
+                    .symbolEffect(.bounce, value: connection.chat.isSending)
                 }
-                .disabled(text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || connection.chat.isSending)
-                .foregroundStyle(NOCOAITheme.accent)
-                .symbolEffect(.bounce, value: connection.chat.isSending)
             }
         }
         .padding(.horizontal, 16)

@@ -92,7 +92,7 @@ struct ChatHubView: View {
             .toolbar {
                 ToolbarItem(placement: .topBarLeading) {
                     Button {
-                        HapticService.light()
+                        HapticService.open()
                         showConversations = true
                     } label: {
                         Image(systemName: "line.3.horizontal")
@@ -123,6 +123,7 @@ struct ChatHubView: View {
                 }
             }
             .onAppear { HapticService.prepare() }
+            .intelligenceSelectionFeedback(connection.chat.mode)
             .task {
                 connection.chat.restoreSession()
                 await connection.chat.loadConversations()
@@ -259,7 +260,7 @@ private struct ChatBubble: View {
             VStack(alignment: message.role == .user ? .trailing : .leading, spacing: 8) {
                 if let data = message.localImageData, let uiImage = UIImage(data: data) {
                     Button {
-                        HapticService.selection()
+                        HapticService.soft()
                         connection.openGalleryImage(url: message.imageURL, serverId: message.serverId)
                     } label: {
                         Image(uiImage: uiImage)
@@ -272,7 +273,7 @@ private struct ChatBubble: View {
                     .buttonStyle(.plain)
                 } else if let url = message.imageURL {
                     Button {
-                        HapticService.selection()
+                        HapticService.soft()
                         connection.openGalleryImage(url: url, serverId: message.serverId)
                     } label: {
                         AsyncImage(url: url) { phase in

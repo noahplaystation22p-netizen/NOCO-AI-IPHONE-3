@@ -11,17 +11,31 @@ struct GlassCard<Content: View>: View {
 
     var body: some View {
         content
-            .padding(16)
+            .padding(18)
             .background(
-                RoundedRectangle(cornerRadius: 22, style: .continuous)
+                RoundedRectangle(cornerRadius: 26, style: .continuous)
                     .fill(.ultraThinMaterial)
                     .overlay(
-                        RoundedRectangle(cornerRadius: 22, style: .continuous)
+                        RoundedRectangle(cornerRadius: 26, style: .continuous)
+                            .fill(
+                                LinearGradient(
+                                    colors: [
+                                        Color.white.opacity(scheme == .dark ? 0.06 : 0.35),
+                                        .clear
+                                    ],
+                                    startPoint: .topLeading,
+                                    endPoint: .bottomTrailing
+                                )
+                            )
+                    )
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 26, style: .continuous)
                             .stroke(
                                 LinearGradient(
                                     colors: [
-                                        NOCOAITheme.glowPrimary.opacity(scheme == .dark ? (shimmer ? 0.45 : 0.28) : (shimmer ? 0.32 : 0.18)),
-                                        NOCOAITheme.glowSecondary.opacity(0.18),
+                                        NOCOAITheme.glowPrimary.opacity(scheme == .dark ? (shimmer ? 0.42 : 0.22) : (shimmer ? 0.28 : 0.14)),
+                                        NOCOAITheme.glowAccent.opacity(0.16),
+                                        NOCOAITheme.glowSecondary.opacity(0.14),
                                         NOCOAITheme.cardStroke(for: scheme)
                                     ],
                                     startPoint: shimmer ? .topLeading : .bottomTrailing,
@@ -30,10 +44,10 @@ struct GlassCard<Content: View>: View {
                                 lineWidth: 1
                             )
                     )
-                    .shadow(color: NOCOAITheme.glowPrimary.opacity(shimmer ? 0.18 : 0.1), radius: 18, y: 6)
+                    .shadow(color: NOCOAITheme.glowPrimary.opacity(shimmer ? 0.16 : 0.08), radius: 22, y: 8)
             )
             .onAppear {
-                withAnimation(.easeInOut(duration: 3.2).repeatForever(autoreverses: true)) {
+                withAnimation(.easeInOut(duration: 3.8).repeatForever(autoreverses: true)) {
                     shimmer = true
                 }
             }

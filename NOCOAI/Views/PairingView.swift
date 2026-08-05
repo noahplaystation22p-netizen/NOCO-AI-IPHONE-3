@@ -46,7 +46,7 @@ struct PairingView: View {
                 .offset(y: appear ? 0 : 14)
 
                 Button {
-                    HapticService.medium()
+                    HapticService.open()
                     showQRScanner = true
                 } label: {
                     VStack(spacing: 12) {
@@ -171,8 +171,12 @@ struct PairingView: View {
     private func pairFromQR(_ code: String) async {
         isPairingFromQR = true
         defer { isPairingFromQR = false }
+        HapticService.pairSuccess()
         await connection.pairFromQR(code)
-        if !connection.isPaired {
+        if connection.isPaired {
+            HapticService.success()
+        } else {
+            HapticService.error()
             showQRScanner = true
         }
     }

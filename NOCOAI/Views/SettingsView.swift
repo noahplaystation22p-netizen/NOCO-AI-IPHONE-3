@@ -29,12 +29,13 @@ struct SettingsView: View {
                     }
                     .onChange(of: voiceMode) { _, newValue in
                         VoiceSettings.defaultMode = newValue
-                        HapticService.selection()
+                        HapticService.modeChange()
                     }
 
                     Toggle("Spoken Reply", isOn: $autoSpeak)
                         .onChange(of: autoSpeak) { _, newValue in
                             UserDefaults.standard.set(newValue, forKey: "nocoai.autoSpeak")
+                            HapticService.toggle()
                         }
 
                     Picker("Stimme", selection: $voiceId) {
@@ -63,7 +64,10 @@ struct SettingsView: View {
 
                     Picker("Persönlichkeit", selection: Binding(
                         get: { connection.profile.profile.personality },
-                        set: { connection.profile.setPersonality($0) }
+                        set: {
+                            connection.profile.setPersonality($0)
+                            HapticService.modeChange()
+                        }
                     )) {
                         ForEach(NocoPersonality.allCases) { p in
                             Text("\(p.label) — \(p.subtitle)").tag(p)
@@ -90,7 +94,7 @@ struct SettingsView: View {
                         ))
                         Button("Hinzufügen") {
                             connection.profile.addFact(connection.profile.draftFact)
-                            HapticService.selection()
+                            HapticService.success()
                         }
                         .disabled(connection.profile.draftFact.trimmingCharacters(in: .whitespacesAndNewlines).count < 4)
                     }
@@ -161,8 +165,8 @@ struct SettingsView: View {
                 }
 
                 Section("Info") {
-                    Text("NOCO AI Companion v4.8")
-                    Text("Speak · Profil · Live-Sync · Bildideen")
+                    Text("NOCO AI Companion v4.9")
+                    Text("Speak · Profil · Haptik · Bildideen")
                         .font(.footnote)
                         .foregroundStyle(NOCOAITheme.secondaryText(for: scheme))
                 }

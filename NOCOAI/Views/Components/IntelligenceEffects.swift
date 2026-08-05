@@ -22,29 +22,29 @@ struct IntelligenceAtmosphere: View {
                 .offset(x: phase ? -70 : 78, y: phase ? 130 : 50)
 
             Circle()
-                .fill(NOCOAITheme.glowAccent.opacity(scheme == .dark ? 0.22 : 0.12))
-                .frame(width: 220, height: 220)
-                .blur(radius: 58)
-                .offset(x: phase ? 34 : -24, y: phase ? 48 : 110)
+                .fill(NOCOAITheme.glowAccent.opacity(scheme == .dark ? 0.18 : 0.10))
+                .frame(width: 240, height: 240)
+                .blur(radius: 70)
+                .offset(x: phase ? 20 : -40, y: phase ? 90 : 20)
 
             AngularGradient(
                 colors: [
-                    NOCOAITheme.glowPrimary.opacity(0.08),
+                    NOCOAITheme.glowPrimary.opacity(0.1),
                     .clear,
-                    NOCOAITheme.glowSecondary.opacity(0.07),
+                    NOCOAITheme.glowSecondary.opacity(0.08),
                     .clear,
-                    NOCOAITheme.glowAccent.opacity(0.06),
+                    NOCOAITheme.glowAccent.opacity(0.09),
                     .clear
                 ],
                 center: .center
             )
-            .blur(radius: 40)
-            .opacity(phase ? 0.9 : 0.45)
-            .scaleEffect(1.4)
+            .blur(radius: 48)
+            .opacity(phase ? 0.95 : 0.4)
+            .scaleEffect(1.45)
         }
         .ignoresSafeArea()
         .onAppear {
-            withAnimation(.easeInOut(duration: 7.5).repeatForever(autoreverses: true)) {
+            withAnimation(.easeInOut(duration: 9.5).repeatForever(autoreverses: true)) {
                 phase = true
             }
         }
@@ -158,12 +158,16 @@ struct GlowBubbleBackground: View {
     @Environment(\.colorScheme) private var scheme
 
     var body: some View {
-        RoundedRectangle(cornerRadius: 22, style: .continuous)
+        RoundedRectangle(cornerRadius: 24, style: .continuous)
             .fill(
                 isUser
                     ? AnyShapeStyle(
                         LinearGradient(
-                            colors: [NOCOAITheme.accent, NOCOAITheme.accentSecondary],
+                            colors: [
+                                NOCOAITheme.accent,
+                                NOCOAITheme.accentSecondary,
+                                NOCOAITheme.glowAccent.opacity(0.85)
+                            ],
                             startPoint: .topLeading,
                             endPoint: .bottomTrailing
                         )
@@ -172,15 +176,27 @@ struct GlowBubbleBackground: View {
             )
             .overlay {
                 if isUser {
-                    RoundedRectangle(cornerRadius: 22, style: .continuous)
-                        .stroke(Color.white.opacity(0.28), lineWidth: 1)
+                    RoundedRectangle(cornerRadius: 24, style: .continuous)
+                        .stroke(Color.white.opacity(0.32), lineWidth: 1)
+                        .overlay(
+                            RoundedRectangle(cornerRadius: 24, style: .continuous)
+                                .fill(
+                                    LinearGradient(
+                                        colors: [Color.white.opacity(0.22), .clear],
+                                        startPoint: .top,
+                                        endPoint: .center
+                                    )
+                                )
+                                .allowsHitTesting(false)
+                        )
                 } else {
-                    RoundedRectangle(cornerRadius: 22, style: .continuous)
+                    RoundedRectangle(cornerRadius: 24, style: .continuous)
                         .stroke(
                             LinearGradient(
                                 colors: [
-                                    NOCOAITheme.glowPrimary.opacity(scheme == .dark ? 0.35 : 0.2),
-                                    NOCOAITheme.glowSecondary.opacity(0.15)
+                                    NOCOAITheme.glowPrimary.opacity(scheme == .dark ? 0.38 : 0.22),
+                                    NOCOAITheme.glowAccent.opacity(0.18),
+                                    NOCOAITheme.glowSecondary.opacity(0.14)
                                 ],
                                 startPoint: .topLeading,
                                 endPoint: .bottomTrailing
@@ -190,9 +206,9 @@ struct GlowBubbleBackground: View {
                 }
             }
             .shadow(
-                color: isUser ? NOCOAITheme.glowPrimary.opacity(0.4) : NOCOAITheme.glowSecondary.opacity(0.18),
-                radius: isUser ? 16 : 12,
-                y: 4
+                color: isUser ? NOCOAITheme.glowPrimary.opacity(0.42) : NOCOAITheme.glowSecondary.opacity(0.16),
+                radius: isUser ? 18 : 14,
+                y: 5
             )
     }
 }
@@ -366,67 +382,78 @@ struct IntelligenceFeatureTile: View {
 
     var body: some View {
         ZStack(alignment: .topLeading) {
-            RoundedRectangle(cornerRadius: 24, style: .continuous)
+            RoundedRectangle(cornerRadius: 28, style: .continuous)
                 .fill(.ultraThinMaterial)
                 .overlay(
-                    RoundedRectangle(cornerRadius: 24, style: .continuous)
+                    RoundedRectangle(cornerRadius: 28, style: .continuous)
                         .fill(
                             RadialGradient(
                                 colors: [
-                                    accent.opacity(breathe ? 0.28 : 0.14),
+                                    accent.opacity(breathe ? 0.26 : 0.12),
+                                    NOCOAITheme.glowAccent.opacity(0.06),
                                     .clear
                                 ],
                                 center: .topTrailing,
                                 startRadius: 4,
-                                endRadius: 120
+                                endRadius: 130
                             )
                         )
                 )
                 .overlay(
-                    RoundedRectangle(cornerRadius: 24, style: .continuous)
+                    RoundedRectangle(cornerRadius: 28, style: .continuous)
+                        .fill(
+                            LinearGradient(
+                                colors: [Color.white.opacity(0.1), .clear],
+                                startPoint: .topLeading,
+                                endPoint: .center
+                            )
+                        )
+                )
+                .overlay(
+                    RoundedRectangle(cornerRadius: 28, style: .continuous)
                         .stroke(
                             AngularGradient(
                                 colors: [
-                                    accent.opacity(0.7),
-                                    NOCOAITheme.glowSecondary.opacity(0.35),
-                                    NOCOAITheme.glowAccent.opacity(0.45),
-                                    accent.opacity(0.15),
-                                    accent.opacity(0.7)
+                                    accent.opacity(0.65),
+                                    NOCOAITheme.glowSecondary.opacity(0.3),
+                                    NOCOAITheme.glowAccent.opacity(0.4),
+                                    accent.opacity(0.12),
+                                    accent.opacity(0.65)
                                 ],
                                 center: .center,
                                 angle: .degrees(spin ? 360 : 0)
                             ),
-                            lineWidth: 1.3
+                            lineWidth: 1.2
                         )
                 )
-                .shadow(color: accent.opacity(0.25), radius: 16, y: 6)
+                .shadow(color: accent.opacity(0.22), radius: 18, y: 7)
 
             VStack(alignment: .leading, spacing: 12) {
                 ZStack {
                     Circle()
-                        .fill(accent.opacity(0.18))
-                        .frame(width: 44, height: 44)
+                        .fill(accent.opacity(0.16))
+                        .frame(width: 46, height: 46)
                         .blur(radius: 2)
                     Image(systemName: systemImage)
                         .font(.title3.weight(.semibold))
                         .foregroundStyle(accent)
-                        .symbolEffect(.pulse, options: .repeating.speed(0.4))
+                        .symbolEffect(.pulse, options: .repeating.speed(0.35))
                 }
                 Spacer(minLength: 8)
                 Text(title)
-                    .font(.headline)
+                    .font(.system(.headline, design: .rounded).weight(.semibold))
                     .foregroundStyle(.primary)
                 Text(subtitle)
                     .font(.caption)
                     .foregroundStyle(.secondary)
                     .lineLimit(2)
             }
-            .padding(16)
+            .padding(18)
         }
-        .frame(maxWidth: .infinity, minHeight: 148)
+        .frame(maxWidth: .infinity, minHeight: 152)
         .onAppear {
-            withAnimation(.easeInOut(duration: 2.6).repeatForever(autoreverses: true)) { breathe = true }
-            withAnimation(.linear(duration: 7).repeatForever(autoreverses: false)) { spin = true }
+            withAnimation(.easeInOut(duration: 3.2).repeatForever(autoreverses: true)) { breathe = true }
+            withAnimation(.linear(duration: 9).repeatForever(autoreverses: false)) { spin = true }
         }
     }
 }

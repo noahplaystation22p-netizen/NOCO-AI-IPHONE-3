@@ -25,17 +25,19 @@ struct MainTabView: View {
                 .tag(2)
         }
         .tint(NOCOAITheme.accent)
-        .sensoryFeedback(.selection, trigger: selectedTab)
+        .intelligenceSelectionFeedback(selectedTab)
         .onChange(of: selectedTab) { _, _ in
-            HapticService.selection()
+            HapticService.navigate()
         }
         .onChange(of: connection.pendingTab) { _, tab in
             if let tab {
                 selectedTab = tab
                 connection.pendingTab = nil
+                HapticService.open()
             }
         }
         .onAppear {
+            HapticService.prepare()
             if let tab = connection.pendingTab {
                 selectedTab = tab
                 connection.pendingTab = nil
@@ -47,6 +49,7 @@ struct MainTabView: View {
         )) {
             VoiceModeView()
                 .environmentObject(connection)
+                .onAppear { HapticService.open() }
         }
     }
 }

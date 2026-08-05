@@ -204,10 +204,10 @@ struct VoiceModeView: View {
                 .foregroundStyle(.secondary)
 
             if speak.isRunning {
-                Button {
-                    HapticService.selection()
-                    speak.toggleMute()
-                } label: {
+            Button {
+                HapticService.toggle()
+                speak.toggleMute()
+            } label: {
                     HStack(spacing: 8) {
                         Image(systemName: speak.isMuted ? "mic.slash.fill" : "mic.fill")
                         Text(speak.isMuted ? "Mute aus · wieder sprechen" : "Mute · nur zuhören")
@@ -229,10 +229,11 @@ struct VoiceModeView: View {
             }
 
             Button {
-                HapticService.medium()
                 if speak.isRunning {
+                    HapticService.speakCue()
                     speak.stop()
                 } else {
+                    HapticService.send()
                     speak.start()
                 }
             } label: {

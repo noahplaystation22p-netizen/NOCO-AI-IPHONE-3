@@ -25,7 +25,7 @@ struct MoreView: View {
 
                     LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible())], spacing: 14) {
                         Button {
-                            HapticService.medium()
+                            HapticService.open()
                             connection.speak.openUI()
                         } label: {
                             IntelligenceFeatureTile(
@@ -35,7 +35,7 @@ struct MoreView: View {
                                 accent: Color(red: 0.55, green: 0.45, blue: 1)
                             )
                         }
-                        .buttonStyle(.plain)
+                        .buttonStyle(IntelligencePressStyle(haptic: { HapticService.soft() }))
                         .disabled(!connection.isOnline && !connection.speak.isRunning)
                         .opacity(connection.isOnline || connection.speak.isRunning ? 1 : 0.55)
 
@@ -50,7 +50,7 @@ struct MoreView: View {
                                 accent: NOCOAITheme.glowSecondary
                             )
                         }
-                        .buttonStyle(.plain)
+                        .buttonStyle(IntelligencePressStyle(haptic: { HapticService.light() }))
 
                         NavigationLink {
                             SettingsView()
@@ -63,7 +63,7 @@ struct MoreView: View {
                                 accent: NOCOAITheme.glowAccent
                             )
                         }
-                        .buttonStyle(.plain)
+                        .buttonStyle(IntelligencePressStyle(haptic: { HapticService.open() }))
 
                         IntelligenceFeatureTile(
                             title: "NOCO Sync",
@@ -78,7 +78,7 @@ struct MoreView: View {
                     connectionCard
                         .opacity(appear ? 1 : 0)
 
-                    Text("NOCO AI Companion v4.8")
+                    Text("NOCO AI Companion v4.9")
                         .font(.caption2)
                         .foregroundStyle(.secondary)
                         .padding(.top, 4)

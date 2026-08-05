@@ -193,7 +193,7 @@ struct ImagesHubView: View {
                         promptFocused = false
                         connection.images.prompt = draftPrompt
                         reveal = false
-                        HapticService.medium()
+                        HapticService.send()
                         connection.images.startGenerate()
                     } label: {
                         HStack {
@@ -359,7 +359,7 @@ struct ImagesHubView: View {
                         ForEach(Array(connection.images.gallery.enumerated()), id: \.element.id) { index, item in
                             Button {
                                 selectedItem = item
-                                HapticService.selection()
+                                HapticService.open()
                             } label: {
                                 galleryThumb(item)
                             }

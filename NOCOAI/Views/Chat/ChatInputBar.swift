@@ -46,7 +46,11 @@ struct ChatInputBar: View {
                     }
                 }
                 .onChange(of: focused) { _, isFocused in
-                    if !isFocused { connection.chat.clearTyping() }
+                    if isFocused {
+                        HapticService.focus()
+                    } else {
+                        connection.chat.clearTyping()
+                    }
                 }
                 .padding(14)
                 .background(
@@ -75,22 +79,24 @@ struct ChatInputBar: View {
                         LinearGradient(
                             colors: [
                                 Color(red: 0.35, green: 0.8, blue: 1),
-                                Color(red: 0.65, green: 0.4, blue: 1),
-                                Color(red: 1.0, green: 0.4, blue: 0.7)
+                                Color(red: 0.58, green: 0.48, blue: 0.98),
+                                Color(red: 0.95, green: 0.55, blue: 0.78)
                             ],
                             startPoint: .topLeading,
                             endPoint: .bottomTrailing
                         )
                     )
-                    .shadow(color: Color(red: 0.55, green: 0.4, blue: 1).opacity(0.55), radius: 10)
+                    .shadow(color: Color(red: 0.55, green: 0.45, blue: 1).opacity(0.5), radius: 10)
+                    .symbolEffect(.bounce, value: connection.speak.isRunning)
             }
+            .buttonStyle(IntelligencePressStyle(haptic: { HapticService.soft() }))
             .disabled(!connection.isOnline || connection.chat.isSending)
             .opacity(connection.isOnline ? 1 : 0.4)
             .accessibilityLabel("Speak")
 
             if connection.chat.isSending {
                 Button {
-                    HapticService.soft()
+                    HapticService.warning()
                     connection.chat.cancelSend()
                 } label: {
                     Image(systemName: "stop.circle.fill")
@@ -98,6 +104,7 @@ struct ChatInputBar: View {
                         .foregroundStyle(NOCOAITheme.danger)
                         .shadow(color: NOCOAITheme.danger.opacity(0.45), radius: 10)
                 }
+                .buttonStyle(IntelligencePressStyle(haptic: { HapticService.rigid() }))
                 .accessibilityLabel("Abbrechen")
             } else {
                 Button(action: send) {
@@ -105,6 +112,7 @@ struct ChatInputBar: View {
                         .font(.system(size: 36))
                         .shadow(color: NOCOAITheme.glowPrimary.opacity(0.55), radius: 10)
                 }
+                .buttonStyle(IntelligencePressStyle(haptic: { HapticService.soft() }))
                 .disabled(text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
                 .foregroundStyle(NOCOAITheme.accent)
                 .symbolEffect(.bounce, value: connection.chat.isSending)
@@ -130,6 +138,7 @@ struct ChatInputBar: View {
                         ForEach(AIMode.allCases) { mode in
                             Button {
                                 modeBinding.wrappedValue = mode
+                                HapticService.modeChange()
                                 showPlusMenu = false
                             } label: {
                                 HStack {
@@ -216,7 +225,7 @@ struct ChatInputBar: View {
                 showLibrary = true
             }
             .onLongPressGesture(minimumDuration: 0.4) {
-                HapticService.medium()
+                HapticService.longPress()
                 showPlusMenu = true
             }
             .accessibilityLabel("Plus — tippen Foto, halten Menü")
@@ -224,7 +233,7 @@ struct ChatInputBar: View {
     }
 
     private func sendVision(_ data: Data) async {
-        HapticService.rigid()
+        HapticService.imageSnap()
         await connection.chat.sendImage(data, caption: text.isEmpty ? nil : text)
         text = ""
         focused = false

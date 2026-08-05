@@ -10,7 +10,7 @@ struct ModePicker: View {
                     withAnimation(.spring(response: 0.32, dampingFraction: 0.78)) {
                         mode = m
                     }
-                    HapticService.selection()
+                    HapticService.modeChange()
                 } label: {
                     HStack(spacing: 4) {
                         Image(systemName: m.systemImage)
@@ -40,5 +40,6 @@ struct ModePicker: View {
                 .accessibilityLabel("\(m.label), \(m.subtitle)")
             }
         }
+        .intelligenceSelectionFeedback(mode)
     }
 }

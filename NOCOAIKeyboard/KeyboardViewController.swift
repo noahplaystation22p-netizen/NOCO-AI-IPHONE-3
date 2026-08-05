@@ -33,6 +33,10 @@ final class KeyboardViewController: UIInputViewController {
         model.syncDocumentSnapshot()
     }
 
+    func openURL(_ url: URL) {
+        extensionContext?.open(url, completionHandler: nil)
+    }
+
     override func updateViewConstraints() {
         let needed: CGFloat = 310
         if let heightConstraint {

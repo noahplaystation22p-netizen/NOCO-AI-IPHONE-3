@@ -248,6 +248,7 @@ private struct PeerTypingBanner: View {
 }
 
 private struct ChatBubble: View {
+    @EnvironmentObject private var connection: ConnectionStore
     @Environment(\.colorScheme) private var scheme
     let message: ChatMessage
     var onReplyAction: ((ReplyAction) -> Void)?
@@ -257,23 +258,35 @@ private struct ChatBubble: View {
             if message.role == .user { Spacer(minLength: 48) }
             VStack(alignment: message.role == .user ? .trailing : .leading, spacing: 8) {
                 if let data = message.localImageData, let uiImage = UIImage(data: data) {
-                    Image(uiImage: uiImage)
-                        .resizable()
-                        .scaledToFit()
-                        .frame(maxHeight: 240)
-                        .clipShape(RoundedRectangle(cornerRadius: 16))
-                        .shadow(color: NOCOAITheme.glowPrimary.opacity(0.25), radius: 12)
+                    Button {
+                        HapticService.selection()
+                        connection.openGalleryImage(url: message.imageURL, serverId: message.serverId)
+                    } label: {
+                        Image(uiImage: uiImage)
+                            .resizable()
+                            .scaledToFit()
+                            .frame(maxHeight: 240)
+                            .clipShape(RoundedRectangle(cornerRadius: 16))
+                            .shadow(color: NOCOAITheme.glowPrimary.opacity(0.25), radius: 12)
+                    }
+                    .buttonStyle(.plain)
                 } else if let url = message.imageURL {
-                    AsyncImage(url: url) { phase in
-                        switch phase {
-                        case .success(let img):
-                            img.resizable().scaledToFit().frame(maxHeight: 240).clipShape(RoundedRectangle(cornerRadius: 16))
-                        case .failure:
-                            Image(systemName: "photo").frame(height: 120)
-                        default:
-                            ProgressView().frame(height: 120)
+                    Button {
+                        HapticService.selection()
+                        connection.openGalleryImage(url: url, serverId: message.serverId)
+                    } label: {
+                        AsyncImage(url: url) { phase in
+                            switch phase {
+                            case .success(let img):
+                                img.resizable().scaledToFit().frame(maxHeight: 240).clipShape(RoundedRectangle(cornerRadius: 16))
+                            case .failure:
+                                Image(systemName: "photo").frame(height: 120)
+                            default:
+                                ProgressView().frame(height: 120)
+                            }
                         }
                     }
+                    .buttonStyle(.plain)
                 }
                 if !message.text.isEmpty || message.isStreaming {
                     if message.isStreaming && message.text.isEmpty {

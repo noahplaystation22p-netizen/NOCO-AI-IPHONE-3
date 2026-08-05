@@ -137,9 +137,9 @@ final class ChatStore: ObservableObject {
         // Speak must never get stuck behind a previous send
         if isSending {
             if speak {
-                for _ in 0..<25 {
+                for _ in 0..<12 {
                     if !isSending { break }
-                    try? await Task.sleep(nanoseconds: 80_000_000)
+                    try? await Task.sleep(nanoseconds: 50_000_000)
                 }
                 if isSending { isSending = false }
             } else {
@@ -197,7 +197,10 @@ final class ChatStore: ObservableObject {
             }
 
             await resolveConversationId(conversationId, preferLatest: isStartingNewChat)
-            await syncFromServer()
+            // Speak: skip sync delay so TTS starts ASAP
+            if !speak {
+                await syncFromServer()
+            }
             evaluateChatLimit()
             HapticService.success()
         } catch is CancellationError {

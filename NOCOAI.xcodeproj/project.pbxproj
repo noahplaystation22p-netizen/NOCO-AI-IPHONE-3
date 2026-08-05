@@ -7,6 +7,7 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		NA0000010000000000000050 /* UserProfileStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = NA0000020000000000000050 /* UserProfileStore.swift */; };
 		NA0000010000000000000001 /* NOCOAIApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = NA0000020000000000000001 /* NOCOAIApp.swift */; };
 		NA0000010000000000000002 /* APIModels.swift in Sources */ = {isa = PBXBuildFile; fileRef = NA0000020000000000000002 /* APIModels.swift */; };
 		NA0000010000000000000003 /* ChatMessage.swift in Sources */ = {isa = PBXBuildFile; fileRef = NA0000020000000000000003 /* ChatMessage.swift */; };
@@ -72,6 +73,7 @@
 /* End PBXContainerItemProxy section */
 
 /* Begin PBXFileReference section */
+		NA0000020000000000000050 /* UserProfileStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UserProfileStore.swift; sourceTree = "<group>"; };
 		NA0000030000000000000001 /* NOCOAI.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = NOCOAI.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		NA0000020000000000000001 /* NOCOAIApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NOCOAIApp.swift; sourceTree = "<group>"; };
 		NA0000020000000000000002 /* APIModels.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = APIModels.swift; sourceTree = "<group>"; };
@@ -211,6 +213,7 @@
 				NA0000020000000000000006 /* CompanionAPI.swift */,
 				NA0000020000000000000021 /* CompanionAPI+V2.swift */,
 				NA0000020000000000000007 /* ConnectionStore.swift */,
+				NA0000020000000000000050 /* UserProfileStore.swift */,
 				NA0000020000000000000016 /* HostSanitizer.swift */,
 				NA0000020000000000000017 /* LocalNetworkService.swift */,
 				NA000002000000000000002E /* VoiceService.swift */,
@@ -450,6 +453,7 @@
 				NA0000010000000000000005 /* HapticService.swift in Sources */,
 				NA0000010000000000000006 /* CompanionAPI.swift in Sources */,
 				NA0000010000000000000007 /* ConnectionStore.swift in Sources */,
+				NA0000010000000000000050 /* UserProfileStore.swift in Sources */,
 				NA0000010000000000000008 /* NOCOAITheme.swift in Sources */,
 				NA0000010000000000000009 /* GlassCard.swift in Sources */,
 				NA000001000000000000000A /* StatusBadge.swift in Sources */,
@@ -555,7 +559,7 @@
 				CODE_SIGN_ENTITLEMENTS = NOCOAI/NOCOAI.entitlements;
 				CODE_SIGNING_ALLOWED = NO;
 				CODE_SIGNING_REQUIRED = NO;
-				CURRENT_PROJECT_VERSION = 30;
+				CURRENT_PROJECT_VERSION = 31;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = NOCOAI/Info.plist;
@@ -570,7 +574,7 @@
 					"$(inherited)",
 					"@executable_path/Frameworks",
 				);
-				MARKETING_VERSION = 4.6;
+				MARKETING_VERSION = 4.7;
 				PRODUCT_BUNDLE_IDENTIFIER = de.noco.nocoai;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator";
@@ -589,7 +593,7 @@
 				CODE_SIGN_ENTITLEMENTS = NOCOAI/NOCOAI.entitlements;
 				CODE_SIGNING_ALLOWED = NO;
 				CODE_SIGNING_REQUIRED = NO;
-				CURRENT_PROJECT_VERSION = 30;
+				CURRENT_PROJECT_VERSION = 31;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = NOCOAI/Info.plist;
@@ -604,7 +608,7 @@
 					"$(inherited)",
 					"@executable_path/Frameworks",
 				);
-				MARKETING_VERSION = 4.6;
+				MARKETING_VERSION = 4.7;
 				PRODUCT_BUNDLE_IDENTIFIER = de.noco.nocoai;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator";
@@ -622,7 +626,7 @@
 				CODE_SIGN_ENTITLEMENTS = NOCOAISpeakWidget/NOCOAISpeakWidget.entitlements;
 				CODE_SIGNING_ALLOWED = NO;
 				CODE_SIGNING_REQUIRED = NO;
-				CURRENT_PROJECT_VERSION = 30;
+				CURRENT_PROJECT_VERSION = 31;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = NOCOAISpeakWidget/Info.plist;
 				INFOPLIST_KEY_CFBundleDisplayName = "NOCO Speak";
@@ -633,7 +637,7 @@
 					"@executable_path/Frameworks",
 					"@executable_path/../../Frameworks",
 				);
-				MARKETING_VERSION = 4.6;
+				MARKETING_VERSION = 4.7;
 				PRODUCT_BUNDLE_IDENTIFIER = de.noco.nocoai.SpeakWidget;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SKIP_INSTALL = YES;
@@ -650,7 +654,7 @@
 				CODE_SIGN_ENTITLEMENTS = NOCOAISpeakWidget/NOCOAISpeakWidget.entitlements;
 				CODE_SIGNING_ALLOWED = NO;
 				CODE_SIGNING_REQUIRED = NO;
-				CURRENT_PROJECT_VERSION = 30;
+				CURRENT_PROJECT_VERSION = 31;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = NOCOAISpeakWidget/Info.plist;
 				INFOPLIST_KEY_CFBundleDisplayName = "NOCO Speak";
@@ -661,7 +665,7 @@
 					"@executable_path/Frameworks",
 					"@executable_path/../../Frameworks",
 				);
-				MARKETING_VERSION = 4.6;
+				MARKETING_VERSION = 4.7;
 				PRODUCT_BUNDLE_IDENTIFIER = de.noco.nocoai.SpeakWidget;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SKIP_INSTALL = YES;

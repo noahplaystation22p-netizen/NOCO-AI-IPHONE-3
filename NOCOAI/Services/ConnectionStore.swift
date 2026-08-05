@@ -19,11 +19,15 @@ final class ConnectionStore: ObservableObject {
     @Published var features: FeaturesResponse?
     /// Tab to open after notification / deep link (0 Chat, 1 Bildideen, 2 Studio)
     @Published var pendingTab: Int?
+    /// Open this gallery image after switching to Bildideen
+    @Published var pendingGalleryImageURL: URL?
+    @Published var pendingGalleryImageId: String?
 
     let chat = ChatStore()
     let images = ImageStore()
     let code = CodeStore()
     let speak = SpeakSessionController()
+    let profile = UserProfileStore()
 
     private var token: String?
     private var pollTask: Task<Void, Never>?
@@ -107,6 +111,19 @@ final class ConnectionStore: ObservableObject {
             }
         }
         code.bind(api: api)
+        profile.bind(api: api)
+    }
+
+    func openGalleryImage(url: URL?, serverId: String?) {
+        pendingGalleryImageURL = url
+        pendingGalleryImageId = serverId
+        pendingTab = 1
+        Task { await refreshGallery() }
+    }
+
+    func clearPendingGalleryFocus() {
+        pendingGalleryImageURL = nil
+        pendingGalleryImageId = nil
     }
 
     private func handleImageGenerationFinished(
@@ -128,6 +145,10 @@ final class ConnectionStore: ObservableObject {
         await code.loadSessions()
         await loadFeatures()
         await images.loadFromConversations(chat.conversations, api: api)
+        await profile.pullRemote()
+        if !profile.profile.userName.isEmpty || !profile.profile.facts.isEmpty {
+            await profile.pushRemote()
+        }
     }
 
     func loadFeatures() async {
@@ -145,6 +166,7 @@ final class ConnectionStore: ObservableObject {
         images.objectWillChange.sink { [weak self] _ in self?.objectWillChange.send() }.store(in: &cancellables)
         code.objectWillChange.sink { [weak self] _ in self?.objectWillChange.send() }.store(in: &cancellables)
         speak.objectWillChange.sink { [weak self] _ in self?.objectWillChange.send() }.store(in: &cancellables)
+        profile.objectWillChange.sink { [weak self] _ in self?.objectWillChange.send() }.store(in: &cancellables)
         speak.voice.objectWillChange.sink { [weak self] _ in
             self?.objectWillChange.send()
             self?.speak.pushLiveActivity(force: false)

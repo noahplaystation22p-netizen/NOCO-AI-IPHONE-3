@@ -50,9 +50,9 @@ final class VoiceService: NSObject, ObservableObject {
     private let ttsGain: Float = 2.6
 
     /// Quiet after speech / transcript pause before auto-send (fast).
-    private let silenceToEnd: TimeInterval = 0.55
-    private let transcriptStableToEnd: TimeInterval = 0.50
-    private let minSpeechSeconds: TimeInterval = 0.22
+    private let silenceToEnd: TimeInterval = 0.38
+    private let transcriptStableToEnd: TimeInterval = 0.32
+    private let minSpeechSeconds: TimeInterval = 0.18
     private let speechLevelFactor: CGFloat = 2.6
 
     var preferredVoiceIdentifier: String {
@@ -296,7 +296,7 @@ final class VoiceService: NSObject, ObservableObject {
         for (index, chunk) in chunks.enumerated() {
             let utterance = AVSpeechUtterance(string: chunk)
             utterance.voice = bestGermanVoice()
-            utterance.rate = AVSpeechUtteranceDefaultSpeechRate * 1.12
+            utterance.rate = AVSpeechUtteranceDefaultSpeechRate
             utterance.pitchMultiplier = 1.0
             utterance.volume = 1.0
             utterance.preUtteranceDelay = index == 0 ? 0 : 0.02
@@ -371,7 +371,7 @@ final class VoiceService: NSObject, ObservableObject {
         for (index, chunk) in chunks.enumerated() {
             let utterance = AVSpeechUtterance(string: chunk)
             utterance.voice = bestGermanVoice()
-            utterance.rate = AVSpeechUtteranceDefaultSpeechRate * 1.12
+            utterance.rate = AVSpeechUtteranceDefaultSpeechRate
             utterance.pitchMultiplier = 1.0
             utterance.volume = 1.0
             utterance.preUtteranceDelay = index == 0 ? 0 : 0.02

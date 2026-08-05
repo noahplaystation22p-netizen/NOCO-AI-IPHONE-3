@@ -9,6 +9,7 @@ struct SettingsView: View {
     @State private var voiceId = ""
     @State private var voices: [AVSpeechSynthesisVoice] = []
     @State private var previewSynth = AVSpeechSynthesizer()
+    @State private var nameDraft = ""
 
     var body: some View {
         NavigationStack {
@@ -49,7 +50,70 @@ struct SettingsView: View {
                 } header: {
                     Text("Speak")
                 } footer: {
-                    Text("Stimme wählen → kurzer Testsatz. Standard Blitz für schnelle Spoken Replies.")
+                    Text("Antworten sollen schneller kommen — Sprechtempo bleibt normal.")
+                }
+
+                Section {
+                    TextField("Dein Name", text: $nameDraft)
+                        .textInputAutocapitalization(.words)
+                        .onSubmit {
+                            connection.profile.setName(nameDraft)
+                            HapticService.selection()
+                        }
+
+                    Picker("Persönlichkeit", selection: Binding(
+                        get: { connection.profile.profile.personality },
+                        set: { connection.profile.setPersonality($0) }
+                    )) {
+                        ForEach(NocoPersonality.allCases) { p in
+                            Text("\(p.label) — \(p.subtitle)").tag(p)
+                        }
+                    }
+
+                    ForEach(connection.profile.profile.facts, id: \.self) { fact in
+                        HStack {
+                            Text(fact)
+                            Spacer()
+                            Button(role: .destructive) {
+                                connection.profile.removeFact(fact)
+                                HapticService.soft()
+                            } label: {
+                                Image(systemName: "trash")
+                            }
+                        }
+                    }
+
+                    HStack {
+                        TextField("Fakt / Erinnerung…", text: Binding(
+                            get: { connection.profile.draftFact },
+                            set: { connection.profile.draftFact = $0 }
+                        ))
+                        Button("Hinzufügen") {
+                            connection.profile.addFact(connection.profile.draftFact)
+                            HapticService.selection()
+                        }
+                        .disabled(connection.profile.draftFact.trimmingCharacters(in: .whitespacesAndNewlines).count < 4)
+                    }
+
+                    if connection.isOnline {
+                        Button {
+                            Task {
+                                await connection.profile.pullRemote()
+                                nameDraft = connection.profile.profile.userName
+                                HapticService.success()
+                            }
+                        } label: {
+                            Label(
+                                connection.profile.isSyncing ? "Sync…" : "Vom PC laden",
+                                systemImage: "arrow.triangle.2.circlepath"
+                            )
+                        }
+                        .disabled(connection.profile.isSyncing)
+                    }
+                } header: {
+                    Text("Dein Profil")
+                } footer: {
+                    Text("Name, Persönlichkeit und Fakten gehen unsichtbar an die KI — bei Think & Intelligent. Nicht bei Blitz, Wissen oder Speak.")
                 }
 
                 Section("Erweitert") {
@@ -97,8 +161,8 @@ struct SettingsView: View {
                 }
 
                 Section("Info") {
-                    Text("NOCO AI Companion v4.6")
-                    Text("Speak · Kurzbefehle · Live-Sync · Bildideen")
+                    Text("NOCO AI Companion v4.7")
+                    Text("Speak · Profil · Live-Sync · Bildideen")
                         .font(.footnote)
                         .foregroundStyle(NOCOAITheme.secondaryText(for: scheme))
                 }
@@ -115,6 +179,14 @@ struct SettingsView: View {
                 voices = AVSpeechSynthesisVoice.speechVoices()
                     .filter { $0.language.hasPrefix("de") }
                     .sorted { qualityRank($0) > qualityRank($1) }
+                nameDraft = connection.profile.profile.userName
+                Task {
+                    await connection.profile.pullRemote()
+                    nameDraft = connection.profile.profile.userName
+                }
+            }
+            .onDisappear {
+                connection.profile.setName(nameDraft)
             }
         }
     }

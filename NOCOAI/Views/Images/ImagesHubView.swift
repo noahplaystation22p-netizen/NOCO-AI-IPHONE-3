@@ -52,9 +52,19 @@ struct ImagesHubView: View {
                 ImageDetailSheet(item: item)
                     .environmentObject(connection)
             }
+            .onChange(of: connection.pendingGalleryImageId) { _, _ in
+                focusPendingGalleryImage()
+            }
+            .onChange(of: connection.pendingGalleryImageURL) { _, _ in
+                focusPendingGalleryImage()
+            }
+            .onAppear {
+                focusPendingGalleryImage()
+            }
             .task {
                 draftPrompt = connection.images.prompt
                 await connection.refreshGallery()
+                focusPendingGalleryImage()
                 withAnimation(.spring(response: 0.55, dampingFraction: 0.84)) {
                     appear = true
                 }
@@ -77,6 +87,32 @@ struct ImagesHubView: View {
             } message: {
                 Text(connection.images.saveMessage ?? "")
             }
+        }
+    }
+
+    private func focusPendingGalleryImage() {
+        let id = connection.pendingGalleryImageId
+        let url = connection.pendingGalleryImageURL
+        guard id != nil || url != nil else { return }
+
+        if let id, let match = connection.images.gallery.first(where: { $0.id == id }) {
+            selectedItem = match
+            connection.clearPendingGalleryFocus()
+            return
+        }
+        if let url, let match = connection.images.gallery.first(where: {
+            $0.url?.absoluteString == url.absoluteString ||
+            $0.url?.path == url.path ||
+            ($0.url?.lastPathComponent == url.lastPathComponent && !url.lastPathComponent.isEmpty)
+        }) {
+            selectedItem = match
+            connection.clearPendingGalleryFocus()
+            return
+        }
+        // Fallback: open latest gallery item if chat pointed at something not yet indexed
+        if let newest = connection.images.gallery.first {
+            selectedItem = newest
+            connection.clearPendingGalleryFocus()
         }
     }
 

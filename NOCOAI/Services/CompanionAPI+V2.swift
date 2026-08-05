@@ -79,6 +79,14 @@ extension CompanionAPI {
         )
     }
 
+    func fetchProfile() async throws -> NocoUserProfile {
+        try await get("profile", as: NocoUserProfile.self)
+    }
+
+    func saveProfile(_ profile: NocoUserProfile) async throws -> NocoUserProfile {
+        try await post("profile", body: profile, as: NocoUserProfile.self)
+    }
+
     func streamChatV2(message: String, conversationId: String?, mode: AIMode, speak: Bool = false) -> AsyncThrowingStream<ChatStreamChunk, Error> {
         streamSSEChunks(
             path: "chat",

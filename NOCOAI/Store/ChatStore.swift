@@ -94,14 +94,21 @@ final class ChatStore: ObservableObject {
     }
 
     func send(_ text: String) async {
+        _ = await sendAndReturnReply(text, modeOverride: nil)
+    }
+
+    /// Sends a chat message and returns the final assistant text (for voice TTS).
+    @discardableResult
+    func sendAndReturnReply(_ text: String, modeOverride: AIMode? = nil) async -> String? {
         let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !trimmed.isEmpty, let api, !isSending else { return }
+        guard !trimmed.isEmpty, let api, !isSending else { return nil }
 
         HapticService.prepare()
         HapticService.send()
 
         isSending = true
         lastError = nil
+        let sendMode = modeOverride ?? mode
 
         let userMessage = ChatMessage(role: .user, text: trimmed)
         messages.append(userMessage)
@@ -111,9 +118,10 @@ final class ChatStore: ObservableObject {
 
         let isStartingNewChat = activeConversationId == nil
         var conversationId = activeConversationId
+        var reply: String?
 
         do {
-            for try await chunk in api.streamChatV2(message: trimmed, conversationId: conversationId, mode: mode) {
+            for try await chunk in api.streamChatV2(message: trimmed, conversationId: conversationId, mode: sendMode) {
                 if let cid = chunk.conversationId, !cid.isEmpty {
                     conversationId = cid
                     activeConversationId = cid
@@ -130,6 +138,8 @@ final class ChatStore: ObservableObject {
 
             if let idx = messages.firstIndex(where: { $0.id == assistantID }) {
                 messages[idx].isStreaming = false
+                let final = messages[idx].text.trimmingCharacters(in: .whitespacesAndNewlines)
+                reply = final.isEmpty ? nil : final
             }
 
             await resolveConversationId(conversationId, preferLatest: isStartingNewChat)
@@ -142,9 +152,11 @@ final class ChatStore: ObservableObject {
             }
             lastError = (error as? LocalizedError)?.errorDescription
             HapticService.error()
+            reply = nil
         }
 
         isSending = false
+        return reply
     }
 
     func sendImage(_ data: Data, caption: String?) async {

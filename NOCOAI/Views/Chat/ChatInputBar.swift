@@ -6,6 +6,7 @@ struct ChatInputBar: View {
     @Binding var text: String
     @FocusState.Binding var focused: Bool
     var onSend: () -> Void
+    var onVoice: (() -> Void)? = nil
 
     @State private var showAttachments = false
     @State private var photoItem: PhotosPickerItem?
@@ -60,6 +61,30 @@ struct ChatInputBar: View {
                             )
                             .shadow(color: focused ? NOCOAITheme.glowPrimary.opacity(0.35) : .clear, radius: focused ? 14 : 0)
                     )
+
+                Button {
+                    HapticService.medium()
+                    focused = false
+                    onVoice?()
+                } label: {
+                    Image(systemName: "waveform.circle.fill")
+                        .font(.system(size: 34))
+                        .foregroundStyle(
+                            LinearGradient(
+                                colors: [
+                                    Color(red: 0.35, green: 0.8, blue: 1),
+                                    Color(red: 0.65, green: 0.4, blue: 1),
+                                    Color(red: 1.0, green: 0.4, blue: 0.7)
+                                ],
+                                startPoint: .topLeading,
+                                endPoint: .bottomTrailing
+                            )
+                        )
+                        .shadow(color: Color(red: 0.55, green: 0.4, blue: 1).opacity(0.55), radius: 10)
+                }
+                .disabled(!connection.isOnline || connection.chat.isSending)
+                .opacity(connection.isOnline ? 1 : 0.4)
+                .accessibilityLabel("Sprachmodus")
 
                 Button(action: send) {
                     Image(systemName: "arrow.up.circle.fill")

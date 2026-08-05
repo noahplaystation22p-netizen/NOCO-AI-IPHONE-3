@@ -6,6 +6,7 @@ struct ChatHubView: View {
     @Environment(\.colorScheme) private var scheme
     @State private var input = ""
     @State private var showConversations = false
+    @State private var showVoice = false
     @FocusState private var inputFocused: Bool
 
     var body: some View {
@@ -49,11 +50,13 @@ struct ChatHubView: View {
                     }
                 }
 
-                ChatInputBar(text: $input, focused: $inputFocused) {
+                ChatInputBar(text: $input, focused: $inputFocused, onSend: {
                     let text = input
                     input = ""
                     Task { await connection.chat.send(text) }
-                }
+                }, onVoice: {
+                    showVoice = true
+                })
             }
             .nocoBackground()
             .navigationTitle(titleText)
@@ -75,6 +78,10 @@ struct ChatHubView: View {
             }
             .sheet(isPresented: $showConversations) {
                 ConversationListView()
+                    .environmentObject(connection)
+            }
+            .fullScreenCover(isPresented: $showVoice) {
+                VoiceModeView()
                     .environmentObject(connection)
             }
             .onAppear { HapticService.prepare() }

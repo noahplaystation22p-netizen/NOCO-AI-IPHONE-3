@@ -22,7 +22,9 @@
 	<key>NSCameraUsageDescription</key>
 	<string>NOCO AI nutzt die Kamera zum Scannen des Kopplungs-QR-Codes von deinem PC.</string>
 	<key>NSMicrophoneUsageDescription</key>
-	<string>NOCO AI benötigt das Mikrofon für Sprachmodus über deinen PC.</string>
+	<string>NOCO AI benötigt das Mikrofon für den Sprachmodus (Siri-artig über deinen PC).</string>
+	<key>NSSpeechRecognitionUsageDescription</key>
+	<string>NOCO AI wandelt deine Sprache in Text um und sendet ihn an deinen Windows-PC.</string>
 	<key>NSPhotoLibraryUsageDescription</key>
 	<string>NOCO AI benötigt Fotos für Bild-Uploads an deinen PC.</string>
 	<key>UILaunchScreen</key>

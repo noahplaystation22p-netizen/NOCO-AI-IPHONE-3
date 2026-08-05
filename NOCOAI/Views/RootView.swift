@@ -11,6 +11,6 @@ struct RootView: View {
                 PairingView()
             }
         }
-        .animation(.easeInOut(duration: 0.35), value: connection.isPaired)
+        .animation(.spring(response: 0.5, dampingFraction: 0.82), value: connection.isPaired)
     }
 }

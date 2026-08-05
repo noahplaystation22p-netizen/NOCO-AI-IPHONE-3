@@ -74,7 +74,7 @@ struct PairingView: View {
                     HStack(spacing: 10) {
                         IntelligenceThinkingDots()
                             .scaleEffect(0.85)
-                        Text("Intelligence Sync…")
+                        Text("NOCO Sync…")
                             .font(.footnote)
                             .foregroundStyle(.secondary)
                     }

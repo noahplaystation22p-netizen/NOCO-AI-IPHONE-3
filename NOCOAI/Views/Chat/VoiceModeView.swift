@@ -138,7 +138,7 @@ struct VoiceModeView: View {
                     color: connection.isOnline ? NOCOAITheme.success : NOCOAITheme.danger,
                     size: 7
                 )
-                Text(connection.isOnline ? "Intelligence Sync" : "Offline")
+                Text(connection.isOnline ? "NOCO Sync" : "Offline")
                     .font(.caption.weight(.semibold))
                     .foregroundStyle(connection.isOnline ? NOCOAITheme.success : NOCOAITheme.danger)
             }

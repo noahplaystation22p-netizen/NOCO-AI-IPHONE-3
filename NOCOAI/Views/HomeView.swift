@@ -60,13 +60,8 @@ struct HomeView: View {
         }
         .nocoBackground()
         .overlay {
-            FloatingIntelligenceDots(count: 8)
-                .opacity(0.28)
-                .allowsHitTesting(false)
-        }
-        .overlay {
-            IntelligenceBreathingAura()
-                .opacity(0.35)
+            FloatingIntelligenceDots(count: 3)
+                .opacity(0.2)
                 .allowsHitTesting(false)
         }
         .navigationTitle("System")

@@ -57,6 +57,7 @@ final class SpeakSessionController: ObservableObject {
             voice.sessionActive = true
             beginBackgroundKeepAlive()
             try voice.startListening(autoEnd: true)
+            HapticService.speakCue()
             statusLine = liveOk
                 ? "Live Activity an · Pause sendet sofort"
                 : "Zuhören aktiv · Live Activity prüfen (Einstellungen → NOCO AI)"
@@ -69,7 +70,6 @@ final class SpeakSessionController: ObservableObject {
                 }
                 pushLiveActivity(force: true)
             }
-            HapticService.medium()
         } catch {
             isRunning = false
             endBackgroundKeepAlive()
@@ -79,15 +79,19 @@ final class SpeakSessionController: ObservableObject {
         }
     }
 
-    func stop() {
+    func stop(playCue: Bool = true) {
+        if playCue { HapticService.speakCue() }
         resumeTask?.cancel()
         resumeTask = nil
-        isRunning = false
-        isMuted = false
-        voice.setMuted(false)
+        // Mute first so nothing else is captured/sent, then tear down
+        isMuted = true
+        voice.setMuted(true)
         voice.sessionActive = false
         voice.stopSpeaking(notifyFinished: false)
         voice.stopListening(cancel: true)
+        isRunning = false
+        isMuted = false
+        voice.setMuted(false)
         endBackgroundKeepAlive()
         SpeakLiveActivityManager.end()
         voice.phase = .idle
@@ -204,10 +208,20 @@ final class SpeakSessionController: ObservableObject {
     private func handleUtterance(_ text: String) async {
         guard isRunning, !isBusy, let connection else { return }
         guard !isMuted else { return }
+
+        // Voice command: end speak without sending to the PC
+        if Self.isEndSpeakCommand(text) {
+            statusLine = "Sprachmodus beendet"
+            HapticService.speakCue()
+            stop(playCue: false)
+            showSpeakUI = false
+            return
+        }
+
         isBusy = true
         defer { isBusy = false }
 
-        statusLine = "Intelligence Sync…"
+        statusLine = "NOCO Sync…"
         voice.phase = .processing
         pushLiveActivity(force: true)
         HapticService.send()
@@ -242,6 +256,33 @@ final class SpeakSessionController: ObservableObject {
             try? await Task.sleep(nanoseconds: 1_000_000_000)
             if isRunning { scheduleResumeListening(after: 0.2) }
         }
+    }
+
+    /// „Sprachmodus beenden“ / „end language mode“ — fully stop, never send as chat.
+    private static func isEndSpeakCommand(_ text: String) -> Bool {
+        let n = text
+            .lowercased()
+            .folding(options: .diacriticInsensitive, locale: Locale(identifier: "de_DE"))
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+        let compact = n.replacingOccurrences(of: "  ", with: " ")
+        let phrases = [
+            "sprachmodus beenden",
+            "ende sprachmodus",
+            "sprachmodus ende",
+            "end language mode",
+            "end speak",
+            "stop speak",
+            "speak beenden",
+            "speak stoppen",
+            "stoppe speak",
+            "noco speak stoppen",
+            "stopp sprachmodus",
+            "stop sprachmodus"
+        ]
+        if phrases.contains(where: { compact.contains($0) }) { return true }
+        // Exact short stops (avoid matching normal sentences)
+        let exact = ["stopp", "stop", "stopp speak", "stop speak"]
+        return exact.contains(compact)
     }
 
     func pushLiveActivity(force: Bool) {

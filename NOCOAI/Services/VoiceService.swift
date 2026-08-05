@@ -47,7 +47,7 @@ final class VoiceService: NSObject, ObservableObject {
     private var ttsEngineReady = false
     private var ttsUseAmplified = false
     private var ttsPendingBuffers = 0
-    private let ttsGain: Float = 8.5
+    private let ttsGain: Float = 2.6
 
     /// Quiet after speech / transcript pause before auto-send (fast).
     private let silenceToEnd: TimeInterval = 0.55
@@ -296,10 +296,10 @@ final class VoiceService: NSObject, ObservableObject {
         for (index, chunk) in chunks.enumerated() {
             let utterance = AVSpeechUtterance(string: chunk)
             utterance.voice = bestGermanVoice()
-            utterance.rate = AVSpeechUtteranceDefaultSpeechRate * 0.94
-            utterance.pitchMultiplier = 1.02
+            utterance.rate = AVSpeechUtteranceDefaultSpeechRate * 1.12
+            utterance.pitchMultiplier = 1.0
             utterance.volume = 1.0
-            utterance.preUtteranceDelay = index == 0 ? 0 : 0.04
+            utterance.preUtteranceDelay = index == 0 ? 0 : 0.02
             utterance.postUtteranceDelay = 0
 
             synthesizer.write(utterance) { [weak self] buffer in
@@ -371,10 +371,10 @@ final class VoiceService: NSObject, ObservableObject {
         for (index, chunk) in chunks.enumerated() {
             let utterance = AVSpeechUtterance(string: chunk)
             utterance.voice = bestGermanVoice()
-            utterance.rate = AVSpeechUtteranceDefaultSpeechRate * 0.94
-            utterance.pitchMultiplier = 1.02
+            utterance.rate = AVSpeechUtteranceDefaultSpeechRate * 1.12
+            utterance.pitchMultiplier = 1.0
             utterance.volume = 1.0
-            utterance.preUtteranceDelay = index == 0 ? 0 : 0.04
+            utterance.preUtteranceDelay = index == 0 ? 0 : 0.02
             utterance.postUtteranceDelay = 0
             synthesizer.speak(utterance)
         }
@@ -385,7 +385,7 @@ final class VoiceService: NSObject, ObservableObject {
             ttsEngine.attach(ttsPlayer)
             ttsEngine.connect(ttsPlayer, to: ttsEngine.mainMixerNode, format: format)
             // Extra headroom on mixer (linear > 1)
-            ttsEngine.mainMixerNode.outputVolume = 1.8
+            ttsEngine.mainMixerNode.outputVolume = 1.15
             ttsEngineReady = true
         }
         if !ttsEngine.isRunning {
@@ -413,7 +413,7 @@ final class VoiceService: NSObject, ObservableObject {
             for i in 0..<frames {
                 // Soft saturation keeps it loud without harsh digital clip
                 let boosted = samples[i] * gain
-                samples[i] = tanh(boosted * 1.05)
+                samples[i] = tanh(boosted * 0.72)
             }
         }
     }

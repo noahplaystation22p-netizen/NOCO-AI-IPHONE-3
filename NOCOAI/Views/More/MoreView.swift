@@ -1,6 +1,6 @@
 import SwiftUI
 
-/// Visual Intelligence hub — Speak, System & Settings; Code Assist in Settings.
+/// Studio hub — Speak, System & Settings; Code Assist in Settings.
 struct MoreView: View {
     @EnvironmentObject private var connection: ConnectionStore
     @Environment(\.colorScheme) private var scheme
@@ -21,6 +21,7 @@ struct MoreView: View {
                     IntelligenceWaveRibbon()
                         .frame(height: 28)
                         .padding(.horizontal, 8)
+                        .opacity(0.85)
 
                     LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible())], spacing: 14) {
                         Button {
@@ -65,7 +66,7 @@ struct MoreView: View {
                         .buttonStyle(.plain)
 
                         IntelligenceFeatureTile(
-                            title: "Intelligence Sync",
+                            title: "NOCO Sync",
                             subtitle: connection.isOnline ? "Live mit dem PC" : "Warte auf PC…",
                             systemImage: "arrow.triangle.2.circlepath",
                             accent: NOCOAITheme.glowPrimary
@@ -77,7 +78,7 @@ struct MoreView: View {
                     connectionCard
                         .opacity(appear ? 1 : 0)
 
-                    Text("NOCO AI Companion v3.5")
+                    Text("NOCO AI Companion v4.6")
                         .font(.caption2)
                         .foregroundStyle(.secondary)
                         .padding(.top, 4)
@@ -86,13 +87,9 @@ struct MoreView: View {
             }
             .nocoBackground()
             .overlay {
-                FloatingIntelligenceDots(count: 12)
+                FloatingIntelligenceDots(count: 2)
                     .opacity(0.35)
-                    .allowsHitTesting(false)
-            }
-            .overlay {
-                IntelligenceBreathingAura()
-                    .opacity(0.4)
+                    .opacity(0.22)
                     .allowsHitTesting(false)
             }
             .navigationTitle("Studio")
@@ -109,7 +106,7 @@ struct MoreView: View {
         GlassCard {
             VStack(alignment: .leading, spacing: 12) {
                 HStack {
-                    Text("Intelligence Sync")
+                    Text("NOCO Sync")
                         .font(.headline)
                     Spacer()
                     SyncBadge(active: connection.chat.isSyncActive)

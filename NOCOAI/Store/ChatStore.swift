@@ -15,6 +15,14 @@ final class ChatStore: ObservableObject {
     @Published var lastError: String?
     @Published var peerTyping = false
     @Published var peerTypingDraft: String?
+    @Published var chatLimitReached = false
+    @Published var isCompacting = false
+    private let softMessageLimit = 36
+    private let keepAfterCompact = 30
+    /// Vision replies can flash then vanish when sync reloads before the PC has persisted them.
+    private var stickyVisionAssistant: ChatMessage?
+    private var stickyVisionUntil: Date?
+    private var autoCompactForConversation: String?
 
     private var api: CompanionAPI?
     private var media: MediaURLBuilder?
@@ -101,8 +109,9 @@ final class ChatStore: ObservableObject {
             if isSending {
                 messages = mergeWithLocal(server: serverMessages)
             } else {
-                messages = serverMessages
+                messages = mergePreservingStickyVision(server: serverMessages)
             }
+            evaluateChatLimit()
         } catch {
             // Keep existing messages on transient errors — never wipe the thread
             lastError = (error as? LocalizedError)?.errorDescription
@@ -189,6 +198,7 @@ final class ChatStore: ObservableObject {
 
             await resolveConversationId(conversationId, preferLatest: isStartingNewChat)
             await syncFromServer()
+            evaluateChatLimit()
             HapticService.success()
         } catch is CancellationError {
             if let idx = messages.firstIndex(where: { $0.id == assistantID }) {
@@ -263,13 +273,28 @@ final class ChatStore: ObservableObject {
                 persistActiveConversation()
             }
 
+            var keptAssistant: ChatMessage?
             if let assistant = result.asAssistantMessage() {
-                messages.append(mapMessage(assistant))
+                let mapped = mapMessage(assistant)
+                messages.append(mapped)
+                keptAssistant = mapped
+                HapticService.messageReceived()
+            } else if let text = result.replyText, !text.isEmpty {
+                let mapped = ChatMessage(role: .assistant, text: text)
+                messages.append(mapped)
+                keptAssistant = mapped
                 HapticService.messageReceived()
             }
 
+            if let kept = keptAssistant {
+                stickyVisionAssistant = kept
+                stickyVisionUntil = Date().addingTimeInterval(90)
+            }
+
             await resolveConversationId(activeConversationId, preferLatest: isStartingNewChat)
-            await syncFromServer()
+            // Soft sync — never wipe a fresh vision reply if the server lags
+            await softSyncPreservingVision(localAssistant: keptAssistant)
+            evaluateChatLimit()
             HapticService.success()
         } catch {
             messages.append(ChatMessage(role: .assistant, text: "Bild-Upload fehlgeschlagen: \((error as? LocalizedError)?.errorDescription ?? error.localizedDescription)"))
@@ -544,13 +569,48 @@ final class ChatStore: ObservableObject {
     }
 
     private func mergeWithLocal(server: [ChatMessage]) -> [ChatMessage] {
-        guard let streaming = messages.last(where: { $0.isStreaming }) else { return server }
-        var merged = server
-        if !merged.contains(where: { $0.serverId == streaming.serverId && streaming.serverId != nil }) {
-            merged.append(streaming)
+        var merged = mergePreservingStickyVision(server: server)
+        if let streaming = messages.last(where: { $0.isStreaming }) {
+            if !merged.contains(where: { $0.serverId == streaming.serverId && streaming.serverId != nil }) {
+                merged.append(streaming)
+            }
         }
         return merged
     }
+
+    private func mergePreservingStickyVision(server: [ChatMessage]) -> [ChatMessage] {
+        var merged = server
+        // Keep local photo thumbnails
+        for local in messages where local.localImageData != nil {
+            if let idx = merged.firstIndex(where: {
+                $0.role == .user && $0.localImageData == nil &&
+                ($0.text == local.text || $0.id == local.id || $0.serverId == local.serverId)
+            }) {
+                merged[idx].localImageData = local.localImageData
+            } else if !merged.contains(where: { $0.id == local.id }) {
+                merged.append(local)
+            }
+        }
+
+        guard let snap = stickyVisionAssistant else { return merged }
+        if let until = stickyVisionUntil, until < Date() {
+            stickyVisionAssistant = nil
+            stickyVisionUntil = nil
+            return merged
+        }
+        let hasText = merged.contains {
+            $0.role == .assistant && !$0.text.isEmpty &&
+            ($0.text == snap.text || ($0.serverId != nil && $0.serverId == snap.serverId))
+        }
+        if hasText {
+            stickyVisionAssistant = nil
+            stickyVisionUntil = nil
+        } else if !merged.contains(where: { $0.id == snap.id }) {
+            merged.append(snap)
+        }
+        return merged
+    }
+
     /// Resize + JPEG so Ollama vision (moondream) does not 500 on huge phone photos.
     private static func jpegData(from data: Data) -> Data {
         guard let img = UIImage(data: data) else { return data }
@@ -564,6 +624,123 @@ final class ChatStore: ObservableObject {
             img.draw(in: CGRect(origin: .zero, size: target))
         }
         return resized.jpegData(compressionQuality: 0.82) ?? data
+    }
+
+    private func softSyncPreservingVision(localAssistant: ChatMessage?) async {
+        let snapshotUser = messages.filter { $0.localImageData != nil }
+        let snapshotAssistant = localAssistant ?? stickyVisionAssistant
+        if let snap = snapshotAssistant {
+            stickyVisionAssistant = snap
+            stickyVisionUntil = Date().addingTimeInterval(90)
+        }
+        await pollSync()
+        if let id = activeConversationId {
+            try? await Task.sleep(nanoseconds: 450_000_000)
+            await loadMessages(for: id)
+        }
+        await loadConversations()
+
+        // If server reload dropped the vision answer, put it back
+        if let snap = snapshotAssistant {
+            let hasText = messages.contains {
+                $0.role == .assistant && !$0.text.isEmpty &&
+                ($0.text == snap.text || $0.serverId == snap.serverId)
+            }
+            if !hasText {
+                messages.append(snap)
+                stickyVisionAssistant = snap
+                stickyVisionUntil = Date().addingTimeInterval(90)
+            }
+        }
+        // Restore local image thumbnails on matching user bubbles
+        for local in snapshotUser {
+            if let idx = messages.firstIndex(where: {
+                $0.role == .user && $0.localImageData == nil &&
+                ($0.text == local.text || $0.id == local.id)
+            }) {
+                messages[idx].localImageData = local.localImageData
+            }
+        }
+    }
+
+    private func evaluateChatLimit() {
+        let reached = messages.count >= softMessageLimit
+        chatLimitReached = reached || isCompacting
+        guard reached, !isCompacting else { return }
+        let key = activeConversationId ?? "local"
+        guard autoCompactForConversation != key else { return }
+        autoCompactForConversation = key
+        Task { await compactChatBecauseLimit() }
+    }
+
+    /// Summarize long chat, keep last N messages, drop the rest (new compact thread on PC).
+    func compactChatBecauseLimit() async {
+        guard let api, let oldId = activeConversationId, !isCompacting else { return }
+        isCompacting = true
+        chatLimitReached = true
+        defer { isCompacting = false }
+
+        let keep = Array(messages.suffix(keepAfterCompact))
+        let transcript = messages.suffix(80).map { msg in
+            let who = msg.role == .user ? "Nutzer" : "NOCO"
+            return "\(who): \(msg.text.prefix(500))"
+        }.joined(separator: "\n")
+
+        let prompt = """
+        Der Chat ist zu lang. Erstelle eine knappe Zusammenfassung auf Deutsch (8–12 Sätze)
+        der wichtigsten Fakten, Entscheidungen und offenen Punkte. Keine Floskeln.
+        Danach antwortet das System nur noch mit dieser Zusammenfassung.
+
+        Chat:
+        \(transcript.prefix(6000))
+        """
+
+        let summary = await sendAndReturnReply(prompt, modeOverride: .flash) ?? ""
+        let cleanSummary = summary.trimmingCharacters(in: .whitespacesAndNewlines)
+
+        do {
+            let created = try await api.createConversation(title: "Fortsetzung (Zusammenfassung)")
+            if let newId = created.resolvedId {
+                activeConversationId = newId
+                persistActiveConversation()
+                let summaryBubble = ChatMessage(
+                    role: .assistant,
+                    text: cleanSummary.isEmpty
+                        ? "Chat verdichtet — wir machen hier weiter."
+                        : "Zusammenfassung bisher:\n\n\(cleanSummary)"
+                )
+                messages = [summaryBubble] + keep
+                if !cleanSummary.isEmpty {
+                    _ = await sendAndReturnReply(
+                        "[Kontext aus vorherigem Chat]\n\(cleanSummary)\n\nBitte an diesen Kontext anknüpfen. Antworte nur kurz mit OK.",
+                        modeOverride: .flash
+                    )
+                    // Keep UI lean: summary + last messages (drop the seed exchange)
+                    messages = [summaryBubble] + keep
+                }
+                deletedIds.insert(oldId)
+                persistDeletedIds()
+                try? await api.deleteConversation(id: oldId)
+                conversations.removeAll { $0.id == oldId }
+                await loadConversations()
+                autoCompactForConversation = newId
+                chatLimitReached = false
+                HapticService.success()
+                return
+            }
+        } catch {
+            lastError = (error as? LocalizedError)?.errorDescription ?? error.localizedDescription
+            messages = Array(keep.suffix(keepAfterCompact))
+            if !cleanSummary.isEmpty {
+                messages.insert(
+                    ChatMessage(role: .assistant, text: "Zusammenfassung:\n\(cleanSummary)"),
+                    at: 0
+                )
+            }
+            chatLimitReached = messages.count >= softMessageLimit
+            autoCompactForConversation = nil
+            HapticService.error()
+        }
     }
 
 }

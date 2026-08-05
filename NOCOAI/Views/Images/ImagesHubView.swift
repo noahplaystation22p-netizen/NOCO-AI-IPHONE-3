@@ -8,6 +8,7 @@ struct ImagesHubView: View {
     @State private var selectedItem: GeneratedImageItem?
     @State private var reveal = false
     @FocusState private var promptFocused: Bool
+    @State private var draftPrompt = ""
 
     private let ideaPrompts = [
         "Neon-Stadt bei Regen, cinematic",
@@ -41,8 +42,8 @@ struct ImagesHubView: View {
             .overlay {
                 // Skip heavy overlays while generating — big lag win on older iPhones
                 if !connection.images.isGenerating {
-                    FloatingIntelligenceDots(count: 6)
-                        .opacity(0.22)
+                    FloatingIntelligenceDots(count: 2)
+                        .opacity(0.18)
                         .allowsHitTesting(false)
                 }
             }
@@ -52,6 +53,7 @@ struct ImagesHubView: View {
                     .environmentObject(connection)
             }
             .task {
+                draftPrompt = connection.images.prompt
                 await connection.refreshGallery()
                 withAnimation(.spring(response: 0.55, dampingFraction: 0.84)) {
                     appear = true
@@ -91,22 +93,11 @@ struct ImagesHubView: View {
                         .symbolEffect(.pulse, options: .repeating.speed(0.4))
                 }
 
-                TextField("Beschreibe dein Bild…", text: Binding(
-                    get: { connection.images.prompt },
-                    set: { connection.images.prompt = $0 }
-                ), axis: .vertical)
+                TextField("Beschreibe dein Bild…", text: $draftPrompt, axis: .vertical)
                 .lineLimit(3...6)
                 .focused($promptFocused)
                 .submitLabel(.done)
                 .onSubmit { promptFocused = false }
-                .onChange(of: connection.images.prompt) { _, newValue in
-                    if newValue.contains(where: { $0 == "\n" || $0 == "\r" }) {
-                        connection.images.prompt = newValue
-                            .replacingOccurrences(of: "\r", with: "")
-                            .replacingOccurrences(of: "\n", with: "")
-                        promptFocused = false
-                    }
-                }
                 .disabled(connection.images.isGenerating)
                 .padding(12)
                 .background(
@@ -123,6 +114,7 @@ struct ImagesHubView: View {
                         HStack(spacing: 8) {
                             ForEach(ideaPrompts, id: \.self) { tip in
                                 Button {
+                                    draftPrompt = tip
                                     connection.images.prompt = tip
                                     HapticService.selection()
                                 } label: {
@@ -163,6 +155,7 @@ struct ImagesHubView: View {
                 } else {
                     Button {
                         promptFocused = false
+                        connection.images.prompt = draftPrompt
                         reveal = false
                         HapticService.medium()
                         connection.images.startGenerate()
@@ -187,8 +180,8 @@ struct ImagesHubView: View {
                         .foregroundStyle(.white)
                         .shadow(color: NOCOAITheme.glowPrimary.opacity(0.4), radius: 12)
                     }
-                    .disabled(connection.images.prompt.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || !connection.isOnline)
-                    .opacity(connection.images.prompt.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || !connection.isOnline ? 0.5 : 1)
+                    .disabled(draftPrompt.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || !connection.isOnline)
+                    .opacity(draftPrompt.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || !connection.isOnline ? 0.5 : 1)
 
                     Text("Du kannst die App verlassen — du bekommst eine Mitteilung, wenn das Bild fertig ist.")
                         .font(.caption2)

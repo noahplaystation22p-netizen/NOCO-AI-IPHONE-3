@@ -1,3 +1,4 @@
+import AudioToolbox
 import UIKit
 
 enum HapticService {
@@ -8,6 +9,7 @@ enum HapticService {
     private static let notifyGen = UINotificationFeedbackGenerator()
     private static let selectGen = UISelectionFeedbackGenerator()
     private static var lastStreamTick = Date.distantPast
+    private static var lastSpeakCue = Date.distantPast
 
     static func prepare() {
         lightGen.prepare()
@@ -69,6 +71,17 @@ enum HapticService {
 
     static func messageReceived() {
         softGen.impactOccurred(intensity: 0.55)
+        softGen.prepare()
+    }
+
+    /// Soft ding + haptic when Speak starts or ends.
+    static func speakCue() {
+        let now = Date()
+        guard now.timeIntervalSince(lastSpeakCue) > 0.35 else { return }
+        lastSpeakCue = now
+        // 1057 ≈ soft “tock”; quieter than alert tones
+        AudioServicesPlaySystemSound(1057)
+        softGen.impactOccurred(intensity: 0.7)
         softGen.prepare()
     }
 }

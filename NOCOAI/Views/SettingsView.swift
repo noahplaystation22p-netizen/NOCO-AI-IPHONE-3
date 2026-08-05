@@ -13,7 +13,7 @@ struct SettingsView: View {
     var body: some View {
         NavigationStack {
             List {
-                Section("Intelligence Sync") {
+                Section("NOCO Sync") {
                     LabeledContent("PC-Adresse", value: connection.serverHost)
                     LabeledContent("Port", value: String(connection.serverPort))
                     LabeledContent("API", value: connection.baseURLString)
@@ -84,10 +84,10 @@ struct SettingsView: View {
                     }
                 }
 
-                Section("Shortcuts / Siri") {
-                    Text("Kurzbefehle-App → „Mit NOCO sprechen“ zum Home-Bildschirm oder Siri hinzufügen.")
+                Section("Kurzbefehl Speak") {
+                    Text("Kurzbefehle-App → „Mit NOCO sprechen“ zum Home-Bildschirm hinzufügen. Die App startet Speak im Hintergrund (Live Activity); das Speak-Fenster öffnet sich nicht.")
                         .font(.footnote)
-                    Text("Oder: „Hey Siri, mit NOCO AI sprechen“ · Link: nocoai://speak")
+                    Text("Link: nocoai://speak · Stoppen: „NOCO Sprachmodus beenden“")
                         .font(.caption2)
                         .foregroundStyle(.secondary)
                     Button("Speak jetzt testen") {
@@ -97,8 +97,8 @@ struct SettingsView: View {
                 }
 
                 Section("Info") {
-                    Text("NOCO AI Companion v4.5")
-                    Text("Speak · Shortcuts/Siri · Live-Sync · Bildideen")
+                    Text("NOCO AI Companion v4.6")
+                    Text("Speak · Kurzbefehle · Live-Sync · Bildideen")
                         .font(.footnote)
                         .foregroundStyle(NOCOAITheme.secondaryText(for: scheme))
                 }

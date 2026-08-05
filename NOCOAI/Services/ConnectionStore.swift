@@ -260,22 +260,22 @@ final class ConnectionStore: ObservableObject {
     /// Shortcuts / Siri / `nocoai://speak` — works even after cold start.
     func launchSpeakFromShortcut() {
         SpeakLaunchBridge.pendingStart = true
-        speak.openUI()
+        // Don't present Speak sheet — Live Activity + audio keep session usable in background
         Task { @MainActor in
-            // Wait until paired + online (cold launch needs a few ticks)
             for _ in 0..<40 {
                 if isPaired && isOnline { break }
                 try? await Task.sleep(nanoseconds: 250_000_000)
                 await refreshStatus(showLoading: false)
             }
             guard SpeakLaunchBridge.pendingStart else { return }
-            speak.openUI()
             if isOnline {
                 if !speak.isRunning {
                     speak.start()
                 }
                 SpeakLaunchBridge.clearPending()
+                HapticService.success()
             } else {
+                speak.openUI()
                 speak.statusLine = "PC offline — Companion starten, dann nochmal Shortcut"
             }
         }

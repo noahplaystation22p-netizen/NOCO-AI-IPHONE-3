@@ -213,7 +213,7 @@ struct IntelligenceMeshBackground: View {
     var body: some View {
         ZStack {
             IntelligenceAtmosphere()
-            FloatingIntelligenceDots(count: 16).opacity(0.4)
+            FloatingIntelligenceDots(count: 16).opacity(0.22)
 
             Circle()
                 .fill(NOCOAITheme.glowPrimary.opacity(scheme == .dark ? 0.2 : 0.12))
@@ -236,7 +236,7 @@ struct IntelligenceMeshBackground: View {
     }
 }
 
-/// Horizontal rainbow shimmer line (Apple Intelligence accent).
+/// Horizontal rainbow shimmer line (NOCO accent).
 struct IntelligenceShimmerLine: View {
     @State private var move = false
 

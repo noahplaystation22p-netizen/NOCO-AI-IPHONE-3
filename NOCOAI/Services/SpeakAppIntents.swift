@@ -34,7 +34,7 @@ enum SpeakLaunchBridge {
 struct StartSpeakIntent: AppIntent {
     static var title: LocalizedStringResource = "Mit NOCO sprechen"
     static var description = IntentDescription(
-        "Startet den Sprachmodus (wie Siri). Die App öffnet sich und hört sofort zu."
+        "Startet den Sprachmodus. Die App kommt kurz in den Vordergrund (Mikrofon), Speak läuft danach über die Live Activity."
     )
     static var openAppWhenRun: Bool = true
 

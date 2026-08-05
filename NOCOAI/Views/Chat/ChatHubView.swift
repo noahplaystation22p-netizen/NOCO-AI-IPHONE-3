@@ -62,6 +62,18 @@ struct ChatHubView: View {
                         .transition(.opacity.combined(with: .move(edge: .bottom)))
                 }
 
+                if connection.chat.chatLimitReached || connection.chat.isCompacting {
+                    ChatLimitBanner(
+                        isCompacting: connection.chat.isCompacting,
+                        onCompact: {
+                            Task { await connection.chat.compactChatBecauseLimit() }
+                        }
+                    )
+                    .padding(.horizontal, 16)
+                    .padding(.vertical, 6)
+                    .transition(.opacity.combined(with: .move(edge: .bottom)))
+                }
+
                 ChatInputBar(
                     text: $input,
                     focused: $inputFocused,
@@ -144,7 +156,7 @@ struct ChatHubView: View {
             }
             Text("Frag irgendetwas")
                 .font(.title3.weight(.semibold))
-            Text("Dein PC rechnet — Antworten streamen\nweich wie Apple Intelligence.")
+            Text("Dein PC rechnet — Antworten streamen\nweich flüssig und klar.")
                 .font(.subheadline)
                 .multilineTextAlignment(.center)
                 .foregroundStyle(NOCOAITheme.secondaryText(for: scheme))
@@ -157,7 +169,7 @@ struct ChatHubView: View {
             IntelligenceShimmerLine()
                 .padding(.horizontal, 60)
 
-            FloatingIntelligenceDots(count: 6)
+            FloatingIntelligenceDots(count: 3)
                 .frame(height: 56)
                 .padding(.horizontal, 36)
 
@@ -343,5 +355,42 @@ struct ConversationListView: View {
                 }
             }
         }
+    }
+}
+
+
+private struct ChatLimitBanner: View {
+    var isCompacting: Bool
+    var onCompact: () -> Void
+
+    var body: some View {
+        HStack(spacing: 12) {
+            Image(systemName: "text.badge.minus")
+                .foregroundStyle(NOCOAITheme.accent)
+            VStack(alignment: .leading, spacing: 2) {
+                Text(isCompacting ? "Chat wird verdichtet…" : "Chat-Limit erreicht")
+                    .font(.subheadline.weight(.semibold))
+                Text(isCompacting
+                     ? "Zusammenfassung läuft automatisch…"
+                     : "Über ~35 Nachrichten — verdichtet automatisch oder tippe hier.")
+                    .font(.caption2)
+                    .foregroundStyle(.secondary)
+            }
+            Spacer(minLength: 0)
+            if !isCompacting {
+                Button("Verdichten", action: onCompact)
+                    .font(.caption.weight(.bold))
+                    .buttonStyle(.borderedProminent)
+                    .controlSize(.small)
+            } else {
+                ProgressView()
+            }
+        }
+        .padding(12)
+        .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 16, style: .continuous))
+        .overlay(
+            RoundedRectangle(cornerRadius: 16, style: .continuous)
+                .stroke(NOCOAITheme.glowPrimary.opacity(0.35), lineWidth: 1)
+        )
     }
 }

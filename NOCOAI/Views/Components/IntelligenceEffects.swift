@@ -280,7 +280,7 @@ extension View {
     }
 }
 
-// MARK: - Extra Apple Intelligence motion kit
+// MARK: - Extra NOCO motion kit
 
 struct IntelligencePulseDot: View {
     var color: Color = NOCOAITheme.success
@@ -478,7 +478,7 @@ struct IntelligenceHeroBanner: View {
                         .foregroundStyle(.secondary)
                     HStack(spacing: 6) {
                         IntelligencePulseDot(color: online ? NOCOAITheme.success : NOCOAITheme.danger, size: 7)
-                        Text(online ? "Intelligence Sync aktiv" : "Offline")
+                        Text(online ? "NOCO Sync aktiv" : "Offline")
                             .font(.caption2.weight(.semibold))
                             .foregroundStyle(online ? NOCOAITheme.success : NOCOAITheme.danger)
                     }
@@ -702,7 +702,7 @@ extension View {
 
 // MARK: - v3.3 motion
 
-/// Soft breathing aurora behind content — Apple Intelligence feel.
+/// Soft breathing aurora behind content — NOCO feel.
 struct IntelligenceBreathingAura: View {
     @State private var breath = false
 

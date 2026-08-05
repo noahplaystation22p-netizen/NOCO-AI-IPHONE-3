@@ -156,7 +156,7 @@ struct ImagesHubView: View {
                     Button {
                         reveal = false
                         HapticService.medium()
-                        connection.images.startGenerate(conversationId: connection.chat.activeConversationId)
+                        connection.images.startGenerate()
                     } label: {
                         HStack {
                             Image(systemName: "sparkles")

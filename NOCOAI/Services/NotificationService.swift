@@ -23,25 +23,14 @@ enum AppNotificationService {
     }
 
     static func notifyImageStarted(prompt: String) async {
-        guard await requestAuthorizationIfNeeded() else { return }
-        guard UIApplication.shared.applicationState != .active else { return }
-
-        let content = UNMutableNotificationContent()
-        content.title = "Bildidee läuft"
-        content.body = "Dein PC erzeugt weiter: \(prompt.prefix(80))"
-        content.sound = nil
-        content.userInfo = ["screen": "images"]
-
-        let request = UNNotificationRequest(
-            identifier: imageRunningId,
-            content: content,
-            trigger: nil
-        )
-        try? await UNUserNotificationCenter.current().add(request)
+        // Progress is shown via Live Activity / Dynamic Island — no "started" push.
+        _ = prompt
     }
 
     static func notifyImageReady(prompt: String) async {
         guard await requestAuthorizationIfNeeded() else { return }
+        // Only when user left the app — in-app UI already shows the result
+        guard UIApplication.shared.applicationState != .active else { return }
 
         UNUserNotificationCenter.current().removeDeliveredNotifications(withIdentifiers: [imageRunningId])
         UNUserNotificationCenter.current().removePendingNotificationRequests(withIdentifiers: [imageRunningId])
@@ -106,15 +95,19 @@ final class ImageBackgroundKeeper {
     private var silentPlayer: AVAudioPlayer?
 
     func begin(reason: String = "NOCO Bildidee") {
-        end()
+        end(preserveAudioSession: true)
         bgTask = UIApplication.shared.beginBackgroundTask(withName: reason) { [weak self] in
-            Task { @MainActor in self?.end() }
+            Task { @MainActor in self?.end(preserveAudioSession: true) }
         }
-        startSilentAudioIfPossible()
+        // Don't steal Speak's playAndRecord session
+        let cat = AVAudioSession.sharedInstance().category
+        if cat != .playAndRecord {
+            startSilentAudioIfPossible()
+        }
     }
 
-    func end() {
-        stopSilentAudio()
+    func end(preserveAudioSession: Bool = false) {
+        stopSilentAudio(deactivateSession: !preserveAudioSession)
         if bgTask != .invalid {
             UIApplication.shared.endBackgroundTask(bgTask)
             bgTask = .invalid
@@ -141,10 +134,12 @@ final class ImageBackgroundKeeper {
         }
     }
 
-    private func stopSilentAudio() {
+    private func stopSilentAudio(deactivateSession: Bool) {
         silentPlayer?.stop()
         silentPlayer = nil
-        try? AVAudioSession.sharedInstance().setActive(false, options: .notifyOthersOnDeactivation)
+        if deactivateSession {
+            try? AVAudioSession.sharedInstance().setActive(false, options: .notifyOthersOnDeactivation)
+        }
     }
 
     private static func writeTinySilentWav(to url: URL) throws {

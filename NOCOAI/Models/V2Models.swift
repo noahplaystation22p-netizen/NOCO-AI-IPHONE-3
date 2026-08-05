@@ -145,6 +145,7 @@ struct ChatRequestV2: Encodable {
     let conversationId: String?
     let stream: Bool
     let mode: String?
+    let speak: Bool?
 }
 
 struct SyncEventsResponse: Decodable {

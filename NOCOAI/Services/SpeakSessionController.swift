@@ -84,6 +84,17 @@ final class SpeakSessionController: ObservableObject {
         }
     }
 
+    func ensureBackgroundPresence() {
+        guard isRunning else { return }
+        try? voice.activateBackgroundAudioSession()
+        beginBackgroundKeepAlive()
+        if !SpeakLiveActivityManager.isActive {
+            SpeakLiveActivityManager.start()
+        }
+        pushLiveActivity(force: true)
+        statusLine = "Speak läuft im Hintergrund (Island / Sperrbildschirm)"
+    }
+
     private func resumeListening() {
         guard isRunning, connection?.isOnline == true, !isBusy else { return }
         do {
@@ -107,7 +118,8 @@ final class SpeakSessionController: ObservableObject {
         HapticService.send()
 
         let prompt = VoiceService.voiceOnlyPrompt(text)
-        let reply = await connection.chat.sendAndReturnReply(prompt, modeOverride: VoiceSettings.defaultMode)
+        // Flash + chat history (same conversation) — speak rules applied on PC
+        let reply = await connection.chat.sendAndReturnReply(prompt, modeOverride: .flash, speak: true)
 
         guard isRunning else { return }
 
@@ -133,6 +145,9 @@ final class SpeakSessionController: ObservableObject {
 
     func pushLiveActivity(force: Bool) {
         guard isRunning else { return }
+        if !SpeakLiveActivityManager.isActive {
+            SpeakLiveActivityManager.start()
+        }
         let phase: SpeakActivityPhase
         switch voice.phase {
         case .listening: phase = .listening
@@ -148,7 +163,7 @@ final class SpeakSessionController: ObservableObject {
         case .speaking:
             detail = lastReply
         case .processing:
-            detail = "Nur Sprache · \(VoiceSettings.defaultMode.label)"
+            detail = "Blitz · mit Chat-Kontext"
         case .error(let m):
             detail = m
         case .idle:

@@ -76,6 +76,9 @@ final class ConnectionStore: ObservableObject {
 
     func onBackground() {
         images.handleDidEnterBackground()
+        if speak.isRunning {
+            speak.ensureBackgroundPresence()
+        }
     }
 
     func rebuildAPI() {
@@ -91,7 +94,31 @@ final class ConnectionStore: ObservableObject {
     private func bindStores() {
         chat.bind(api: api, host: serverHost, port: serverPort)
         images.bind(api: api, host: serverHost, port: serverPort)
+        images.onGenerationFinished = { [weak self] conversationId, prompt, url, data in
+            Task { @MainActor in
+                await self?.handleImageGenerationFinished(
+                    conversationId: conversationId,
+                    prompt: prompt,
+                    url: url,
+                    data: data
+                )
+            }
+        }
         code.bind(api: api)
+    }
+
+    private func handleImageGenerationFinished(
+        conversationId: String?,
+        prompt: String,
+        url: URL?,
+        data: Data?
+    ) async {
+        await chat.loadConversations()
+        if let cid = conversationId, !cid.isEmpty {
+            await chat.selectConversation(cid)
+        }
+        await images.loadFromConversations(chat.conversations, api: api)
+        openImagesTab()
     }
 
     private func bootstrapAfterPair() async {

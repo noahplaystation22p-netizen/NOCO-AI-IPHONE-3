@@ -53,6 +53,13 @@ struct ChatInputBar: View {
                     .onSubmit { send() }
                     .onChange(of: text) { _, newValue in
                         connection.chat.publishTyping(newValue)
+                        // Vertical TextField inserts newline on Return — treat as Send
+                        if newValue.contains(where: { $0 == "\n" || $0 == "\r" }) {
+                            text = newValue
+                                .replacingOccurrences(of: "\r", with: "")
+                                .replacingOccurrences(of: "\n", with: "")
+                            send()
+                        }
                     }
                     .onChange(of: focused) { _, isFocused in
                         if !isFocused { connection.chat.clearTyping() }

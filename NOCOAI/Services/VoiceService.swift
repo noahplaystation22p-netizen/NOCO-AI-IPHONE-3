@@ -403,16 +403,34 @@ final class VoiceService: NSObject, ObservableObject {
         return result
     }
 
-    /// Voice-only wrapper — no image/tools requests.
+    /// Plain user text for Speak — system rules live on the PC (speak flag), not in the message.
     static func voiceOnlyPrompt(_ userText: String) -> String {
-        """
-        [Speak-Modus — nur Sprache]
-        Antworte ausschließlich als gesprochene Antwort in klaren Sätzen.
-        Erstelle keine Bilder, keine Bildprompts, keine Galerie-Aktionen und keine Tool-Aufrufe.
-        Halte dich kurz und natürlich.
+        userText.trimmingCharacters(in: .whitespacesAndNewlines)
+    }
 
-        Nutzer: \(userText)
-        """
+    /// Drop instruction echo if the model still mirrors meta text.
+    static func stripSpeakEcho(_ reply: String) -> String {
+        var lines = reply
+            .replacingOccurrences(of: "\r\n", with: "\n")
+            .components(separatedBy: "\n")
+            .map { $0.trimmingCharacters(in: .whitespaces) }
+            .filter { !$0.isEmpty }
+
+        let junk = [
+            "speak-modus", "nur sprache", "gesprochene antwort", "keine bilder",
+            "bildprompts", "galerie-aktionen", "tool-aufrufe", "nutzer:",
+            "antworte ausschließlich", "halte dich kurz", "[speak"
+        ]
+        lines.removeAll { line in
+            let lower = line.lowercased()
+            return junk.contains(where: { lower.contains($0) })
+        }
+
+        var text = lines.joined(separator: " ").trimmingCharacters(in: .whitespacesAndNewlines)
+        if let range = text.range(of: #"^(antwort|answer)\s*:\s*"#, options: [.regularExpression, .caseInsensitive]) {
+            text = String(text[range.upperBound...]).trimmingCharacters(in: .whitespacesAndNewlines)
+        }
+        return text
     }
 }
 

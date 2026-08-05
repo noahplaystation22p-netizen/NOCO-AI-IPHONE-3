@@ -6,6 +6,7 @@ import WidgetKit
 struct NOCOAISpeakWidgetBundle: WidgetBundle {
     var body: some Widget {
         SpeakLiveActivityWidget()
+        ImageLiveActivityWidget()
     }
 }
 
@@ -137,5 +138,89 @@ struct SpeakMiniVisualizer: View {
             }
         }
         .animation(.easeOut(duration: 0.12), value: bars)
+    }
+}
+
+struct ImageLiveActivityWidget: Widget {
+    var body: some WidgetConfiguration {
+        ActivityConfiguration(for: ImageActivityAttributes.self) { context in
+            ImageLockScreenView(state: context.state, prompt: context.attributes.prompt)
+                .activityBackgroundTint(Color.black.opacity(0.4))
+                .activitySystemActionForegroundColor(.white)
+        } dynamicIsland: { context in
+            DynamicIsland {
+                DynamicIslandExpandedRegion(.leading) {
+                    Image(systemName: "photo.artframe")
+                        .foregroundStyle(.orange)
+                }
+                DynamicIslandExpandedRegion(.trailing) {
+                    Text(context.state.percentLabel)
+                        .font(.caption2.weight(.bold))
+                        .foregroundStyle(.white)
+                }
+                DynamicIslandExpandedRegion(.center) {
+                    VStack(spacing: 4) {
+                        Text(context.state.status)
+                            .font(.headline)
+                            .foregroundStyle(.white)
+                        Text(context.state.insight)
+                            .font(.caption2)
+                            .foregroundStyle(.white.opacity(0.7))
+                            .lineLimit(1)
+                    }
+                }
+                DynamicIslandExpandedRegion(.bottom) {
+                    ProgressView(value: context.state.progress)
+                        .tint(.orange)
+                        .padding(.top, 4)
+                }
+            } compactLeading: {
+                Image(systemName: "photo.artframe")
+                    .foregroundStyle(.orange)
+            } compactTrailing: {
+                Text(context.state.percentLabel)
+                    .font(.caption2.weight(.bold))
+                    .foregroundStyle(.orange)
+            } minimal: {
+                Image(systemName: "photo.fill")
+                    .foregroundStyle(.orange)
+            }
+            .widgetURL(URL(string: "nocoai://images"))
+        }
+    }
+}
+
+struct ImageLockScreenView: View {
+    let state: ImageActivityAttributes.ContentState
+    let prompt: String
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            HStack(spacing: 12) {
+                Image(systemName: state.isDone ? "checkmark.circle.fill" : "photo.artframe")
+                    .font(.title2)
+                    .foregroundStyle(state.isDone ? Color.green : Color.orange)
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(state.status)
+                        .font(.headline)
+                        .foregroundStyle(.white)
+                    Text(prompt)
+                        .font(.caption)
+                        .foregroundStyle(.white.opacity(0.7))
+                        .lineLimit(1)
+                }
+                Spacer(minLength: 0)
+                Text(state.etaLabel)
+                    .font(.caption.weight(.semibold))
+                    .foregroundStyle(.white.opacity(0.8))
+            }
+            ProgressView(value: state.progress)
+                .tint(.orange)
+            Text(state.insight)
+                .font(.caption2)
+                .foregroundStyle(.white.opacity(0.65))
+                .lineLimit(2)
+        }
+        .padding(16)
     }
 }

@@ -52,9 +52,12 @@ struct VoiceModeView: View {
             }
         }
         .onChange(of: scenePhase) { _, phase in
-            if speak.isRunning, phase != .active {
-                speak.statusLine = "Speak läuft im Hintergrund (Island / Sperrbildschirm)"
-                speak.pushLiveActivity(force: true)
+            if speak.isRunning {
+                if phase != .active {
+                    speak.ensureBackgroundPresence()
+                } else {
+                    speak.pushLiveActivity(force: true)
+                }
             }
         }
     }

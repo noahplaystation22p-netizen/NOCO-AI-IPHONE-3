@@ -79,10 +79,16 @@ extension CompanionAPI {
         )
     }
 
-    func streamChatV2(message: String, conversationId: String?, mode: AIMode) -> AsyncThrowingStream<ChatStreamChunk, Error> {
+    func streamChatV2(message: String, conversationId: String?, mode: AIMode, speak: Bool = false) -> AsyncThrowingStream<ChatStreamChunk, Error> {
         streamSSEChunks(
             path: "chat",
-            body: ChatRequestV2(message: message, conversationId: conversationId, stream: true, mode: mode == .auto ? nil : mode.rawValue)
+            body: ChatRequestV2(
+                message: message,
+                conversationId: conversationId,
+                stream: true,
+                mode: mode == .auto && !speak ? nil : (speak ? "flash" : mode.rawValue),
+                speak: speak ? true : nil
+            )
         )
     }
 

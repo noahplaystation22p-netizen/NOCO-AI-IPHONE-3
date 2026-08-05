@@ -6,10 +6,18 @@ enum SpeakLiveActivityManager {
     private static var activity: Activity<SpeakActivityAttributes>?
     private static var lastLevelUpdate: Date = .distantPast
 
-    static var isActive: Bool { activity != nil }
+    static var isActive: Bool {
+        if activity != nil { return true }
+        return !Activity<SpeakActivityAttributes>.activities.isEmpty
+    }
 
     static func start(sessionLabel: String = "NOCO Speak") {
         guard ActivityAuthorizationInfo().areActivitiesEnabled else { return }
+        // Reuse existing island activity if still alive
+        if let existing = Activity<SpeakActivityAttributes>.activities.first {
+            activity = existing
+            return
+        }
         end()
 
         let attributes = SpeakActivityAttributes(sessionLabel: sessionLabel)
@@ -41,6 +49,9 @@ enum SpeakLiveActivityManager {
         isOnline: Bool,
         force: Bool = false
     ) {
+        if activity == nil {
+            activity = Activity<SpeakActivityAttributes>.activities.first
+        }
         guard let activity else { return }
 
         let now = Date()

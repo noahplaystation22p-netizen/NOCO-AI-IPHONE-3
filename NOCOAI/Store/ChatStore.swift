@@ -113,7 +113,7 @@ final class ChatStore: ObservableObject {
 
     /// Sends a chat message and returns the final assistant text (for voice TTS).
     @discardableResult
-    func sendAndReturnReply(_ text: String, modeOverride: AIMode? = nil) async -> String? {
+    func sendAndReturnReply(_ text: String, modeOverride: AIMode? = nil, speak: Bool = false) async -> String? {
         let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty, let api, !isSending else { return nil }
 
@@ -122,7 +122,7 @@ final class ChatStore: ObservableObject {
 
         isSending = true
         lastError = nil
-        let sendMode = modeOverride ?? mode
+        let sendMode = speak ? .flash : (modeOverride ?? mode)
 
         let userMessage = ChatMessage(role: .user, text: trimmed)
         messages.append(userMessage)
@@ -135,7 +135,12 @@ final class ChatStore: ObservableObject {
         var reply: String?
 
         do {
-            for try await chunk in api.streamChatV2(message: trimmed, conversationId: conversationId, mode: sendMode) {
+            for try await chunk in api.streamChatV2(
+                message: trimmed,
+                conversationId: conversationId,
+                mode: sendMode,
+                speak: speak
+            ) {
                 if let cid = chunk.conversationId, !cid.isEmpty {
                     conversationId = cid
                     activeConversationId = cid
@@ -152,7 +157,11 @@ final class ChatStore: ObservableObject {
 
             if let idx = messages.firstIndex(where: { $0.id == assistantID }) {
                 messages[idx].isStreaming = false
-                let final = messages[idx].text.trimmingCharacters(in: .whitespacesAndNewlines)
+                var final = messages[idx].text.trimmingCharacters(in: .whitespacesAndNewlines)
+                if speak {
+                    final = VoiceService.stripSpeakEcho(final)
+                    messages[idx].text = final
+                }
                 reply = final.isEmpty ? nil : final
             }
 

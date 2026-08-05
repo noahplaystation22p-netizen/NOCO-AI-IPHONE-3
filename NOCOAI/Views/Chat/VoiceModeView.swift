@@ -281,3 +281,20 @@ struct VoiceModeView: View {
         return "Starten für Live-Gespräch"
     }
 }
+
+enum VoiceSettings {
+    static var defaultMode: AIMode {
+        get {
+            if let raw = UserDefaults.standard.string(forKey: "nocoai.voiceMode") {
+                let mode = AIMode.from(raw)
+                // Legacy Klar → keep Flash as Speak default
+                if raw == "normal" { return .flash }
+                return mode
+            }
+            return .flash
+        }
+        set {
+            UserDefaults.standard.set(newValue.rawValue, forKey: "nocoai.voiceMode")
+        }
+    }
+}

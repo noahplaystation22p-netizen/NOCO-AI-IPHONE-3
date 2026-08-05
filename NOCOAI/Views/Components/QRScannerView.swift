@@ -74,6 +74,7 @@ final class ScannerViewController: UIViewController, AVCaptureMetadataOutputObje
     var onCode: ((String) -> Void)?
     private let session = AVCaptureSession()
     private var didEmit = false
+    private var previewLayer: AVCaptureVideoPreviewLayer?
 
     override func viewDidLoad() {
         super.viewDidLoad()
@@ -88,14 +89,19 @@ final class ScannerViewController: UIViewController, AVCaptureMetadataOutputObje
         output.metadataObjectTypes = [.qr]
 
         let preview = AVCaptureVideoPreviewLayer(session: session)
-        preview.frame = view.layer.bounds
+        preview.frame = view.bounds
         preview.videoGravity = .resizeAspectFill
-        preview.autoresizingMask = [.layerWidthSizable, .layerHeightSizable]
         view.layer.addSublayer(preview)
+        self.previewLayer = preview
 
         DispatchQueue.global(qos: .userInitiated).async { [weak self] in
             self?.session.startRunning()
         }
+    }
+
+    override func viewDidLayoutSubviews() {
+        super.viewDidLayoutSubviews()
+        previewLayer?.frame = view.bounds
     }
 
     override func viewWillDisappear(_ animated: Bool) {

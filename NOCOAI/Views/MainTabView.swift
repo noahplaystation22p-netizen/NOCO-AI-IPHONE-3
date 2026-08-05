@@ -23,12 +23,6 @@ struct MainTabView: View {
                     Label("Studio", systemImage: "square.grid.2x2.fill")
                 }
                 .tag(2)
-
-            HomeView()
-                .tabItem {
-                    Label("System", systemImage: "desktopcomputer")
-                }
-                .tag(3)
         }
         .tint(NOCOAITheme.accent)
         .sensoryFeedback(.selection, trigger: selectedTab)

@@ -27,6 +27,9 @@ final class ConnectionStore: ObservableObject {
     private var pollTask: Task<Void, Never>?
     private var api: CompanionAPI?
     private var cancellables = Set<AnyCancellable>()
+    /// Hysteresis: require several consecutive failures before marking offline
+    private var consecutiveFailures = 0
+    private let offlineFailureThreshold = 3
 
     private enum Keys {
         static let host = "nocoai.host"
@@ -47,6 +50,7 @@ final class ConnectionStore: ObservableObject {
         rebuildAPI()
         speak.bind(connection: self)
         if isPaired {
+            prepareLocalNetworkAccess(host: serverHost, port: serverPort)
             chat.restoreSession()
             startPolling()
             bindStores()
@@ -56,6 +60,14 @@ final class ConnectionStore: ObservableObject {
 
     var baseURLString: String {
         "http://\(serverHost):\(serverPort)/api/v1/"
+    }
+
+    /// Call when app returns to foreground to keep Local Network permission warm.
+    func onForeground() {
+        guard isPaired, !serverHost.isEmpty else { return }
+        prepareLocalNetworkAccess(host: serverHost, port: serverPort)
+        chat.startSyncLoop()
+        Task { await refreshStatus() }
     }
 
     func rebuildAPI() {
@@ -174,6 +186,7 @@ final class ConnectionStore: ObservableObject {
             UserDefaults.standard.set(serverPort, forKey: Keys.port)
             UserDefaults.standard.set(deviceName, forKey: Keys.device)
             isPaired = true
+            consecutiveFailures = 0
             rebuildAPI()
             HapticService.success()
             await refreshStatus()
@@ -239,11 +252,16 @@ final class ConnectionStore: ObservableObject {
         do {
             let newStatus = try await api.fetchStatus()
             status = newStatus
-            isOnline = newStatus.online
+            // Companion reachable = online (independent of Ollama / AI readiness)
+            consecutiveFailures = 0
+            isOnline = true
             lastError = nil
             await loadFeatures()
         } catch {
-            isOnline = false
+            consecutiveFailures += 1
+            if consecutiveFailures >= offlineFailureThreshold {
+                isOnline = false
+            }
             if let err = error as? CompanionAPIError, case .unauthorized = err {
                 disconnect()
                 lastError = err.localizedDescription
@@ -259,6 +277,7 @@ final class ConnectionStore: ObservableObject {
         token = nil
         isPaired = false
         isOnline = false
+        consecutiveFailures = 0
         KeychainService.delete(account: Keys.token)
         rebuildAPI()
     }

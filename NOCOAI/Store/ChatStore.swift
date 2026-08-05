@@ -19,6 +19,8 @@ final class ChatStore: ObservableObject {
     private var syncCursor: String?
     private var syncTask: Task<Void, Never>?
     private var typingTask: Task<Void, Never>?
+    private var messageReloadTask: Task<Void, Never>?
+    private var pendingReloadConversationId: String?
     private var deletedIds: Set<String> = Set(UserDefaults.standard.stringArray(forKey: "nocoai.deletedChats") ?? [])
 
     private var syncIntervalNs: UInt64 {
@@ -48,6 +50,8 @@ final class ChatStore: ObservableObject {
     func stopSync() {
         syncTask?.cancel()
         syncTask = nil
+        messageReloadTask?.cancel()
+        messageReloadTask = nil
     }
 
     func loadConversations() async {
@@ -96,7 +100,8 @@ final class ChatStore: ObservableObject {
                 messages = serverMessages
             }
         } catch {
-            if !isSending { messages = [] }
+            // Keep existing messages on transient errors — never wipe the thread
+            lastError = (error as? LocalizedError)?.errorDescription
         }
     }
 
@@ -303,14 +308,73 @@ final class ChatStore: ObservableObject {
             isSyncActive = true
             lastSyncAt = .now
 
+            var needsConversationList = false
+            var messageReloadIds = Set<String>()
+
             for event in res.events {
-                await handle(event)
+                switch event.type {
+                case "message.added", "message.created":
+                    if let cid = event.conversationId, !deletedIds.contains(cid) {
+                        if activeConversationId == nil { activeConversationId = cid }
+                        if cid == activeConversationId {
+                            messageReloadIds.insert(cid)
+                        }
+                        needsConversationList = true
+                    }
+                case "conversation.updated", "conversation.created":
+                    let cid = event.conversationId
+                    if let cid, deletedIds.contains(cid) {
+                        try? await api.deleteConversation(id: cid)
+                        continue
+                    }
+                    needsConversationList = true
+                    if let cid, cid == activeConversationId {
+                        messageReloadIds.insert(cid)
+                    } else if activeConversationId == nil, let cid {
+                        activeConversationId = cid
+                        messageReloadIds.insert(cid)
+                    }
+                case "conversation.deleted":
+                    if let cid = event.conversationId {
+                        applyRemoteDelete(cid)
+                    }
+                case "typing.updated":
+                    guard let cid = event.conversationId, cid == activeConversationId else { continue }
+                    guard event.source != "mobile" else { continue }
+                    peerTyping = event.typing ?? true
+                    peerTypingDraft = event.draftPreview
+                default:
+                    break
+                }
+            }
+
+            if needsConversationList {
+                await loadConversations()
+            }
+            for cid in messageReloadIds {
+                scheduleMessageReload(cid)
+            }
+            if !messageReloadIds.isEmpty {
+                HapticService.messageReceived()
             }
 
             DispatchQueue.main.asyncAfter(deadline: .now() + 1.2) { [weak self] in
                 self?.isSyncActive = false
             }
-        } catch { }
+        } catch {
+            // Keep last good cursor; next poll retries
+        }
+    }
+
+    private func scheduleMessageReload(_ cid: String) {
+        pendingReloadConversationId = cid
+        messageReloadTask?.cancel()
+        messageReloadTask = Task { [weak self] in
+            try? await Task.sleep(nanoseconds: 160_000_000)
+            guard !Task.isCancelled, let self, let id = self.pendingReloadConversationId else { return }
+            self.pendingReloadConversationId = nil
+            await self.loadMessages(for: id)
+        }
     }
 
     private func applyTypingPresence(_ list: [TypingPresence]?) {
@@ -329,45 +393,6 @@ final class ChatStore: ObservableObject {
         if peerTyping != next || peerTypingDraft != draft {
             peerTyping = next
             peerTypingDraft = draft
-        }
-    }
-
-    private func handle(_ event: SyncEvent) async {
-        switch event.type {
-        case "message.added", "message.created":
-            if let cid = event.conversationId, !deletedIds.contains(cid) {
-                if activeConversationId == nil { activeConversationId = cid }
-                if cid == activeConversationId {
-                    await loadMessages(for: cid)
-                    HapticService.messageReceived()
-                }
-            }
-            await loadConversations()
-        case "conversation.updated", "conversation.created":
-            let cid = event.conversationId
-            if let cid, deletedIds.contains(cid) {
-                // Keep tombstones: ask server to drop again
-                try? await api?.deleteConversation(id: cid)
-                return
-            }
-            await loadConversations()
-            if let cid, cid == activeConversationId {
-                await loadMessages(for: cid)
-            } else if activeConversationId == nil, let cid {
-                activeConversationId = cid
-                await loadMessages(for: cid)
-            }
-        case "conversation.deleted":
-            if let cid = event.conversationId {
-                applyRemoteDelete(cid)
-            }
-        case "typing.updated":
-            guard let cid = event.conversationId, cid == activeConversationId else { return }
-            guard event.source != "mobile" else { return }
-            peerTyping = event.typing ?? true
-            peerTypingDraft = event.draftPreview
-        default:
-            break
         }
     }
 
@@ -401,8 +426,23 @@ final class ChatStore: ObservableObject {
         )
     }
 
+    /// Deterministic UUID so reload doesn't reshuffle ForEach identity.
     private func stableUUID(_ serverId: String) -> UUID {
-        UUID(uuidString: serverId) ?? UUID()
+        if let uuid = UUID(uuidString: serverId) { return uuid }
+        var bytes = [UInt8](repeating: 0, count: 16)
+        let data = Data(serverId.utf8)
+        for (i, b) in data.enumerated() {
+            bytes[i % 16] ^= b
+            bytes[(i * 7) % 16] &+= b &+ UInt8(i & 0xFF)
+        }
+        bytes[6] = (bytes[6] & 0x0F) | 0x40
+        bytes[8] = (bytes[8] & 0x3F) | 0x80
+        return UUID(uuid: (
+            bytes[0], bytes[1], bytes[2], bytes[3],
+            bytes[4], bytes[5], bytes[6], bytes[7],
+            bytes[8], bytes[9], bytes[10], bytes[11],
+            bytes[12], bytes[13], bytes[14], bytes[15]
+        ))
     }
 
     private func persistActiveConversation() {

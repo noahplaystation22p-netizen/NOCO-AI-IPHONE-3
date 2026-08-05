@@ -1,6 +1,6 @@
 import SwiftUI
 
-/// Visual Intelligence hub — Speak & Settings front and center; Code Assist tucked away.
+/// Visual Intelligence hub — Speak, System & Settings; Code Assist in Settings.
 struct MoreView: View {
     @EnvironmentObject private var connection: ConnectionStore
     @Environment(\.colorScheme) private var scheme
@@ -12,14 +12,15 @@ struct MoreView: View {
                 VStack(spacing: 18) {
                     IntelligenceHeroBanner(
                         title: "Studio",
-                        subtitle: "Speak & Einstellungen — Sync läuft live mit dem PC.",
+                        subtitle: "Speak, System & Sync — alles an einem Ort.",
                         online: connection.isOnline
                     )
                     .opacity(appear ? 1 : 0)
                     .offset(y: appear ? 0 : 12)
 
-                    IntelligenceShimmerLine()
-                        .padding(.horizontal, 24)
+                    IntelligenceWaveRibbon()
+                        .frame(height: 28)
+                        .padding(.horizontal, 8)
 
                     LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible())], spacing: 14) {
                         Button {
@@ -38,6 +39,19 @@ struct MoreView: View {
                         .opacity(connection.isOnline || connection.speak.isRunning ? 1 : 0.55)
 
                         NavigationLink {
+                            HomeView()
+                                .environmentObject(connection)
+                        } label: {
+                            IntelligenceFeatureTile(
+                                title: "System",
+                                subtitle: "GPU · CPU · RAM · Latenz",
+                                systemImage: "desktopcomputer",
+                                accent: NOCOAITheme.glowSecondary
+                            )
+                        }
+                        .buttonStyle(.plain)
+
+                        NavigationLink {
                             SettingsView()
                                 .environmentObject(connection)
                         } label: {
@@ -51,17 +65,10 @@ struct MoreView: View {
                         .buttonStyle(.plain)
 
                         IntelligenceFeatureTile(
-                            title: "Chat",
-                            subtitle: "Nachrichten & Tippen syncen live",
-                            systemImage: "bubble.left.and.bubble.right.fill",
+                            title: "Intelligence Sync",
+                            subtitle: connection.isOnline ? "Live mit dem PC" : "Warte auf PC…",
+                            systemImage: "arrow.triangle.2.circlepath",
                             accent: NOCOAITheme.glowPrimary
-                        )
-
-                        IntelligenceFeatureTile(
-                            title: "Bildideen",
-                            subtitle: "Eigener Tab unten",
-                            systemImage: "paintbrush.pointed.fill",
-                            accent: NOCOAITheme.glowSecondary
                         )
                     }
                     .opacity(appear ? 1 : 0)
@@ -70,7 +77,7 @@ struct MoreView: View {
                     connectionCard
                         .opacity(appear ? 1 : 0)
 
-                    Text("NOCO AI Companion v3.2")
+                    Text("NOCO AI Companion v3.3")
                         .font(.caption2)
                         .foregroundStyle(.secondary)
                         .padding(.top, 4)
@@ -79,8 +86,13 @@ struct MoreView: View {
             }
             .nocoBackground()
             .overlay {
-                FloatingIntelligenceDots(count: 10)
+                FloatingIntelligenceDots(count: 12)
                     .opacity(0.35)
+                    .allowsHitTesting(false)
+            }
+            .overlay {
+                IntelligenceBreathingAura()
+                    .opacity(0.4)
                     .allowsHitTesting(false)
             }
             .navigationTitle("Studio")
@@ -138,6 +150,16 @@ struct MoreView: View {
                             }
                         }
                     }
+                }
+
+                Button {
+                    Task { await connection.refreshStatus(showLoading: true) }
+                    HapticService.light()
+                } label: {
+                    Label("Verbindung prüfen", systemImage: "antenna.radiowaves.left.and.right")
+                        .font(.subheadline.weight(.semibold))
+                        .frame(maxWidth: .infinity)
+                        .padding(.vertical, 10)
                 }
 
                 Button(role: .destructive) {

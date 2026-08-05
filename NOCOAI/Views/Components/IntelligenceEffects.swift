@@ -550,3 +550,135 @@ extension View {
         modifier(IntelligenceTabGlow(active: active))
     }
 }
+
+// MARK: - v3.3 motion
+
+/// Soft breathing aurora behind content — Apple Intelligence feel.
+struct IntelligenceBreathingAura: View {
+    @State private var breath = false
+
+    var body: some View {
+        ZStack {
+            Ellipse()
+                .fill(
+                    RadialGradient(
+                        colors: [
+                            NOCOAITheme.glowPrimary.opacity(breath ? 0.28 : 0.12),
+                            .clear
+                        ],
+                        center: .center,
+                        startRadius: 10,
+                        endRadius: 180
+                    )
+                )
+                .frame(width: 340, height: 220)
+                .scaleEffect(breath ? 1.12 : 0.92)
+                .offset(y: -80)
+
+            Ellipse()
+                .fill(
+                    RadialGradient(
+                        colors: [
+                            NOCOAITheme.glowAccent.opacity(breath ? 0.18 : 0.08),
+                            .clear
+                        ],
+                        center: .center,
+                        startRadius: 8,
+                        endRadius: 140
+                    )
+                )
+                .frame(width: 260, height: 180)
+                .scaleEffect(breath ? 1.08 : 0.95)
+                .offset(x: 40, y: 120)
+        }
+        .blur(radius: 28)
+        .onAppear {
+            withAnimation(.easeInOut(duration: 3.4).repeatForever(autoreverses: true)) {
+                breath = true
+            }
+        }
+    }
+}
+
+/// Horizontal waveform ribbon (chat / studio headers).
+struct IntelligenceWaveRibbon: View {
+    var body: some View {
+        TimelineView(.animation(minimumInterval: 1 / 30)) { timeline in
+            Canvas { context, size in
+                let t = timeline.date.timeIntervalSinceReferenceDate
+                let midY = size.height * 0.5
+                var path = Path()
+                let steps = max(Int(size.width / 4), 20)
+                for i in 0...steps {
+                    let x = CGFloat(i) / CGFloat(steps) * size.width
+                    let wave =
+                        sin(x * 0.045 + t * 2.2) * 5 +
+                        sin(x * 0.09 + t * 3.1) * 2.5
+                    let y = midY + wave
+                    if i == 0 { path.move(to: CGPoint(x: x, y: y)) }
+                    else { path.addLine(to: CGPoint(x: x, y: y)) }
+                }
+                context.stroke(
+                    path,
+                    with: .linearGradient(
+                        Gradient(colors: [
+                            NOCOAITheme.glowPrimary.opacity(0.85),
+                            NOCOAITheme.glowSecondary.opacity(0.7),
+                            NOCOAITheme.glowAccent.opacity(0.8)
+                        ]),
+                        startPoint: .leading,
+                        endPoint: .trailing
+                    ),
+                    style: StrokeStyle(lineWidth: 2.2, lineCap: .round, lineJoin: .round)
+                )
+            }
+        }
+        .allowsHitTesting(false)
+    }
+}
+
+/// Morphing glow that reacts to online / sync state.
+struct IntelligenceConnectionGlow: View {
+    var online: Bool
+    var syncing: Bool
+    @State private var pulse = false
+
+    var body: some View {
+        Circle()
+            .fill(
+                (online ? NOCOAITheme.success : NOCOAITheme.danger)
+                    .opacity(pulse ? 0.35 : 0.12)
+            )
+            .frame(width: syncing ? 56 : 40, height: syncing ? 56 : 40)
+            .blur(radius: 14)
+            .scaleEffect(pulse ? 1.25 : 0.85)
+            .animation(.easeInOut(duration: syncing ? 0.7 : 1.6).repeatForever(autoreverses: true), value: pulse)
+            .onAppear { pulse = true }
+            .onChange(of: online) { _, _ in
+                pulse = false
+                withAnimation { pulse = true }
+            }
+    }
+}
+
+struct IntelligenceMessageArrive: ViewModifier {
+    @State private var shown = false
+
+    func body(content: Content) -> some View {
+        content
+            .opacity(shown ? 1 : 0)
+            .offset(y: shown ? 0 : 10)
+            .scaleEffect(shown ? 1 : 0.96)
+            .onAppear {
+                withAnimation(.spring(response: 0.42, dampingFraction: 0.78)) {
+                    shown = true
+                }
+            }
+    }
+}
+
+extension View {
+    func intelligenceMessageArrive() -> some View {
+        modifier(IntelligenceMessageArrive())
+    }
+}

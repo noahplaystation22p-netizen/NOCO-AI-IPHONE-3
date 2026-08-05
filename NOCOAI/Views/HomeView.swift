@@ -6,85 +6,93 @@ struct HomeView: View {
     @State private var appear = false
 
     var body: some View {
-        NavigationStack {
-            ScrollView {
-                VStack(spacing: 20) {
-                    IntelligenceHeroBanner(
-                        title: "System",
-                        subtitle: connection.serverHost,
-                        online: connection.isOnline
-                    )
+        ScrollView {
+            VStack(spacing: 20) {
+                IntelligenceHeroBanner(
+                    title: "System",
+                    subtitle: connection.serverHost,
+                    online: connection.isOnline
+                )
+                .opacity(appear ? 1 : 0)
+
+                IntelligenceWaveRibbon()
+                    .frame(height: 24)
+                    .padding(.horizontal, 4)
+
+                ringsRow
+                    .opacity(appear ? 1 : 0)
+                    .offset(y: appear ? 0 : 10)
+
+                smartHints
                     .opacity(appear ? 1 : 0)
 
-                    ringsRow
-                        .opacity(appear ? 1 : 0)
-                        .offset(y: appear ? 0 : 10)
-
-                    smartHints
-                        .opacity(appear ? 1 : 0)
-
-                    if let activity = connection.status.lastActivity, !activity.isEmpty {
-                        GlassCard {
-                            VStack(alignment: .leading, spacing: 8) {
-                                HStack {
-                                    Image(systemName: "clock.arrow.circlepath")
-                                        .foregroundStyle(NOCOAITheme.accent)
-                                        .symbolEffect(.pulse, options: .repeating.speed(0.35))
-                                    Text("Letzte Aktivität").font(.headline)
-                                }
-                                Text(activity)
-                                    .font(.subheadline)
-                                    .foregroundStyle(NOCOAITheme.secondaryText(for: scheme))
-                            }
-                            .frame(maxWidth: .infinity, alignment: .leading)
-                        }
-                    }
-
-                    if let model = connection.status.model, !model.isEmpty {
-                        GlassCard {
+                if let activity = connection.status.lastActivity, !activity.isEmpty {
+                    GlassCard {
+                        VStack(alignment: .leading, spacing: 8) {
                             HStack {
-                                Label("Modell", systemImage: "brain.head.profile")
-                                    .font(.subheadline.weight(.medium))
-                                Spacer()
-                                Text(model)
-                                    .font(.subheadline.weight(.semibold))
+                                Image(systemName: "clock.arrow.circlepath")
                                     .foregroundStyle(NOCOAITheme.accent)
+                                    .symbolEffect(.pulse, options: .repeating.speed(0.35))
+                                Text("Letzte Aktivität").font(.headline)
                             }
+                            Text(activity)
+                                .font(.subheadline)
+                                .foregroundStyle(NOCOAITheme.secondaryText(for: scheme))
+                        }
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                    }
+                }
+
+                if let model = connection.status.model, !model.isEmpty {
+                    GlassCard {
+                        HStack {
+                            Label("Modell", systemImage: "brain.head.profile")
+                                .font(.subheadline.weight(.medium))
+                            Spacer()
+                            Text(model)
+                                .font(.subheadline.weight(.semibold))
+                                .foregroundStyle(NOCOAITheme.accent)
                         }
                     }
                 }
-                .padding(20)
             }
-            .nocoBackground()
-            .overlay {
-                FloatingIntelligenceDots(count: 8)
-                    .opacity(0.28)
-                    .allowsHitTesting(false)
-            }
-            .navigationTitle("System")
-            .toolbar {
-                ToolbarItem(placement: .topBarTrailing) {
-                    Button {
-                        Task { await connection.refreshStatus(showLoading: true) }
-                    } label: {
-                        if connection.isRefreshing {
-                            ProgressView()
-                        } else {
-                            Image(systemName: "arrow.clockwise")
-                        }
+            .padding(20)
+        }
+        .nocoBackground()
+        .overlay {
+            FloatingIntelligenceDots(count: 8)
+                .opacity(0.28)
+                .allowsHitTesting(false)
+        }
+        .overlay {
+            IntelligenceBreathingAura()
+                .opacity(0.35)
+                .allowsHitTesting(false)
+        }
+        .navigationTitle("System")
+        .navigationBarTitleDisplayMode(.large)
+        .toolbar {
+            ToolbarItem(placement: .topBarTrailing) {
+                Button {
+                    Task { await connection.refreshStatus(showLoading: true) }
+                } label: {
+                    if connection.isRefreshing {
+                        ProgressView()
+                    } else {
+                        Image(systemName: "arrow.clockwise")
                     }
-                    .disabled(connection.isRefreshing)
                 }
+                .disabled(connection.isRefreshing)
             }
-            .refreshable {
-                await connection.refreshStatus(showLoading: true)
-                await connection.refreshGallery()
-            }
-            .task {
-                await connection.refreshGallery()
-                withAnimation(.spring(response: 0.55, dampingFraction: 0.84)) {
-                    appear = true
-                }
+        }
+        .refreshable {
+            await connection.refreshStatus(showLoading: true)
+            await connection.refreshGallery()
+        }
+        .task {
+            await connection.refreshGallery()
+            withAnimation(.spring(response: 0.55, dampingFraction: 0.84)) {
+                appear = true
             }
         }
     }

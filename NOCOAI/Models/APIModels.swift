@@ -15,13 +15,10 @@ struct PairingInfo: Decodable, Equatable {
     let pairUrl: String?
     let hostname: String?
 
+    // camelCase — CompanionAPI uses convertFromSnakeCase
     enum CodingKeys: String, CodingKey {
         case ip, host, pin, port, hostname
-        case qrData = "qr_data"
-        case qr = "qr"
-        case qrPayload
-        case pairUrl
-        case pair_url
+        case qrData, qr, qrPayload, pairUrl
     }
 
     init(ip: String, pin: String, port: Int? = 4747, qrData: String? = nil, pairUrl: String? = nil, hostname: String? = nil) {
@@ -49,7 +46,6 @@ struct PairingInfo: Decodable, Equatable {
             ?? c.decodeIfPresent(String.self, forKey: .qr)
             ?? c.decodeIfPresent(String.self, forKey: .qrPayload)
         pairUrl = try c.decodeIfPresent(String.self, forKey: .pairUrl)
-            ?? c.decodeIfPresent(String.self, forKey: .pair_url)
     }
 
     var resolvedPort: Int { port ?? 4747 }
@@ -62,29 +58,11 @@ struct PairingInfo: Decodable, Equatable {
 struct PairRequest: Encodable {
     let pin: String
     let deviceName: String
-
-    enum CodingKeys: String, CodingKey {
-        case pin
-        case deviceName = "device_name"
-    }
 }
 
 struct PairResponse: Decodable {
     let token: String
     let deviceId: String?
-
-    enum CodingKeys: String, CodingKey {
-        case token
-        case deviceId
-        case device_id
-    }
-
-    init(from decoder: Decoder) throws {
-        let c = try decoder.container(keyedBy: CodingKeys.self)
-        token = try c.decode(String.self, forKey: .token)
-        deviceId = try c.decodeIfPresent(String.self, forKey: .deviceId)
-            ?? c.decodeIfPresent(String.self, forKey: .device_id)
-    }
 }
 
 struct ServerStatus: Decodable, Equatable {
@@ -101,21 +79,13 @@ struct ServerStatus: Decodable, Equatable {
     let requestCount: Int?
     let tokenCount: Int?
 
+    // camelCase keys — CompanionAPI uses convertFromSnakeCase
     enum CodingKeys: String, CodingKey {
         case online, model, temperature
-        case gpuPercent = "gpu_percent"
-        case cpuPercent = "cpu_percent"
-        case ramUsedGB = "ram_used_gb"
-        case ramTotalGB = "ram_total_gb"
-        case responseTimeMs = "response_time_ms"
-        case temperatureC = "temperature_c"
-        case uptimeSeconds = "uptime_seconds"
-        case lastActivity = "last_activity"
-        case requestCount = "request_count"
-        case tokenCount = "token_count"
-        case gpu, ram, cpu
-        case activeModel = "active_model"
-        case system
+        case gpuPercent, cpuPercent, ramUsedGB, ramTotalGB
+        case responseTimeMs, temperatureC, uptimeSeconds
+        case lastActivity, requestCount, tokenCount
+        case gpu, ram, cpu, activeModel, system
     }
 
     init(
@@ -213,13 +183,6 @@ struct ServerStatus: Decodable, Equatable {
         let gpuPercent: Double?
         let ramUsedGB: Double?
         let ramTotalGB: Double?
-
-        enum CodingKeys: String, CodingKey {
-            case cpuPercent = "cpu_percent"
-            case gpuPercent = "gpu_percent"
-            case ramUsedGB = "ram_used_gb"
-            case ramTotalGB = "ram_total_gb"
-        }
     }
 
     private struct GPUMetric: Decodable {
@@ -237,23 +200,12 @@ struct ServerStatus: Decodable, Equatable {
         let totalGB: Double?
         let used: Double?
         let total: Double?
-
-        enum CodingKeys: String, CodingKey {
-            case usedGB = "used_gb"
-            case totalGB = "total_gb"
-            case used, total
-        }
     }
 }
 
 struct ChatRequest: Encodable {
     let message: String
     let conversationId: String?
-
-    enum CodingKeys: String, CodingKey {
-        case message
-        case conversationId = "conversation_id"
-    }
 }
 
 struct ChatStreamChunk: Decodable {

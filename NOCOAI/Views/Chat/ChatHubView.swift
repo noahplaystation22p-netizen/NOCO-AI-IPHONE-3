@@ -34,6 +34,7 @@ struct ChatHubView: View {
                                             await connection.chat.send(action.prompt(for: message.text))
                                         }
                                     }
+                                    .intelligenceMessageArrive()
                                     .id(message.id)
                                     .transition(.asymmetric(
                                         insertion: .opacity.combined(with: .move(edge: .bottom)).combined(with: .scale(scale: 0.96)),
@@ -145,6 +146,10 @@ struct ChatHubView: View {
                 .multilineTextAlignment(.center)
                 .foregroundStyle(NOCOAITheme.secondaryText(for: scheme))
                 .padding(.horizontal, 28)
+
+            IntelligenceWaveRibbon()
+                .frame(height: 32)
+                .padding(.horizontal, 40)
 
             IntelligenceShimmerLine()
                 .padding(.horizontal, 60)

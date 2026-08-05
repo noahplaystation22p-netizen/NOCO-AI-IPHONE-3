@@ -40,11 +40,6 @@ struct ConversationSummary: Identifiable, Decodable, Equatable {
     let type: String?
     let pinned: Bool?
     let favorite: Bool?
-
-    enum CodingKeys: String, CodingKey {
-        case id, title, type, pinned, favorite
-        case updatedAt = "updated_at"
-    }
 }
 
 struct ConversationListResponse: Decodable {
@@ -62,13 +57,6 @@ struct ConversationMessageDTO: Identifiable, Decodable, Equatable {
     let mediaPath: String?
     let imageUrl: String?
     let createdAt: String?
-
-    enum CodingKeys: String, CodingKey {
-        case id, role, content, type
-        case mediaPath = "media_path"
-        case imageUrl = "image_url"
-        case createdAt = "created_at"
-    }
 
     init(id: String, role: String, content: String, type: String? = nil, mediaPath: String? = nil, imageUrl: String? = nil, createdAt: String? = nil) {
         self.id = id
@@ -136,11 +124,6 @@ struct ChatRequestV2: Encodable {
     let conversationId: String?
     let stream: Bool
     let mode: String?
-
-    enum CodingKeys: String, CodingKey {
-        case message, stream, mode
-        case conversationId = "conversation_id"
-    }
 }
 
 struct SyncEventsResponse: Decodable {
@@ -158,12 +141,6 @@ struct SyncEvent: Decodable {
     let draftPreview: String?
     let source: String?
     let typing: Bool?
-
-    enum CodingKeys: String, CodingKey {
-        case type, title, message, source, typing
-        case conversationId = "conversation_id"
-        case draftPreview = "draft_preview"
-    }
 }
 
 struct TypingPresence: Decodable, Equatable {
@@ -172,12 +149,6 @@ struct TypingPresence: Decodable, Equatable {
     let draftPreview: String?
     let source: String?
     let at: String?
-
-    enum CodingKeys: String, CodingKey {
-        case typing, source, at
-        case conversationId = "conversation_id"
-        case draftPreview = "draft_preview"
-    }
 }
 
 struct FeaturesResponse: Decodable {
@@ -186,6 +157,7 @@ struct FeaturesResponse: Decodable {
     let code: Bool?
     let vision: Bool?
     let sync: Bool?
+    let typing: Bool?
 
     var enabled: [String] {
         var list: [String] = []
@@ -194,6 +166,7 @@ struct FeaturesResponse: Decodable {
         if code == true { list.append("Code") }
         if vision == true { list.append("Vision") }
         if sync == true { list.append("Sync") }
+        if typing == true { list.append("Tipp-Sync") }
         return list
     }
 }
@@ -201,23 +174,12 @@ struct FeaturesResponse: Decodable {
 struct ImageGenerateRequest: Encodable {
     let prompt: String
     let conversationId: String?
-
-    enum CodingKeys: String, CodingKey {
-        case prompt
-        case conversationId = "conversation_id"
-    }
 }
 
 struct ImageGenerateResponse: Decodable {
     let imageUrl: String?
     let jobId: String?
     let conversationId: String?
-
-    enum CodingKeys: String, CodingKey {
-        case imageUrl = "image_url"
-        case jobId = "job_id"
-        case conversationId = "conversation_id"
-    }
 }
 
 struct ImageProgressResponse: Decodable {
@@ -226,11 +188,6 @@ struct ImageProgressResponse: Decodable {
     let status: String?
     let imageUrl: String?
     let done: Bool?
-
-    enum CodingKeys: String, CodingKey {
-        case percent, progress, status, done
-        case imageUrl = "image_url"
-    }
 
     var value: Double { percent ?? progress ?? 0 }
 }
@@ -241,11 +198,6 @@ struct CodeSession: Identifiable, Decodable, Equatable {
     let language: String?
     let preview: String?
     let updatedAt: String?
-
-    enum CodingKeys: String, CodingKey {
-        case id, title, language, preview
-        case updatedAt = "updated_at"
-    }
 }
 
 struct CodeSessionListResponse: Decodable {
@@ -268,11 +220,6 @@ struct CodeChatRequest: Encodable {
 struct VisionRequest: Encodable {
     let message: String?
     let conversationId: String?
-
-    enum CodingKeys: String, CodingKey {
-        case message
-        case conversationId = "conversation_id"
-    }
 }
 
 struct VisionUploadResult: Decodable {
@@ -282,13 +229,6 @@ struct VisionUploadResult: Decodable {
     let mediaPath: String?
     let imageUrl: String?
     let conversationId: String?
-
-    enum CodingKeys: String, CodingKey {
-        case message, reply, content
-        case mediaPath = "media_path"
-        case imageUrl = "image_url"
-        case conversationId = "conversation_id"
-    }
 
     var replyText: String? {
         reply ?? content ?? message?.content

@@ -50,9 +50,9 @@ final class VoiceService: NSObject, ObservableObject {
     private let ttsGain: Float = 2.6
 
     /// Quiet after speech / transcript pause before auto-send (fast).
-    private let silenceToEnd: TimeInterval = 0.38
-    private let transcriptStableToEnd: TimeInterval = 0.32
-    private let minSpeechSeconds: TimeInterval = 0.18
+    private let silenceToEnd: TimeInterval = 0.26
+    private let transcriptStableToEnd: TimeInterval = 0.20
+    private let minSpeechSeconds: TimeInterval = 0.16
     private let speechLevelFactor: CGFloat = 2.6
 
     var preferredVoiceIdentifier: String {

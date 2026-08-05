@@ -20,7 +20,7 @@
 		<string>_noco._tcp</string>
 	</array>
 	<key>NSCameraUsageDescription</key>
-	<string>NOCO AI nutzt die Kamera zum Scannen des Kopplungs-QR-Codes von deinem PC.</string>
+	<string>NOCO AI nutzt die Kamera zum Scannen des Kopplungs-QR-Codes und für Foto-Uploads (Vision) an deinen PC.</string>
 	<key>NSMicrophoneUsageDescription</key>
 	<string>NOCO AI benötigt das Mikrofon für Speak (Shortcuts/Siri und In-App-Sprachmodus über deinen PC).</string>
 	<key>NSSpeechRecognitionUsageDescription</key>

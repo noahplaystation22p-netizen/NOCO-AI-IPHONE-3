@@ -196,11 +196,21 @@ final class ChatStore: ObservableObject {
                 reply = final.isEmpty ? nil : final
             }
 
-            await resolveConversationId(conversationId, preferLatest: isStartingNewChat)
-            // Speak: skip sync delay so TTS starts ASAP
-            if !speak {
-                await syncFromServer()
+            // Speak: return ASAP — resolve/sync in background so TTS starts sooner
+            if speak {
+                let finalReply = reply
+                let cid = conversationId
+                let starting = isStartingNewChat
+                Task { @MainActor in
+                    await resolveConversationId(cid, preferLatest: starting)
+                    evaluateChatLimit()
+                }
+                HapticService.success()
+                isSending = false
+                return finalReply
             }
+            await resolveConversationId(conversationId, preferLatest: isStartingNewChat)
+            await syncFromServer()
             evaluateChatLimit()
             HapticService.success()
         } catch is CancellationError {

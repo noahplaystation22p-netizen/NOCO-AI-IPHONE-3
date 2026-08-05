@@ -58,7 +58,7 @@ struct MoreView: View {
                         } label: {
                             IntelligenceFeatureTile(
                                 title: "Einstellungen",
-                                subtitle: "Sync, Speak, Stimme",
+                                subtitle: "Profil · Speak · Sync",
                                 systemImage: "gearshape.fill",
                                 accent: NOCOAITheme.glowAccent
                             )
@@ -78,7 +78,7 @@ struct MoreView: View {
                     connectionCard
                         .opacity(appear ? 1 : 0)
 
-                    Text("NOCO AI Companion v4.6")
+                    Text("NOCO AI Companion v4.8")
                         .font(.caption2)
                         .foregroundStyle(.secondary)
                         .padding(.top, 4)

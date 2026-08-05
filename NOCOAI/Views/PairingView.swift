@@ -18,25 +18,24 @@ struct PairingView: View {
     var body: some View {
         ZStack {
             IntelligenceAtmosphere()
-            FloatingIntelligenceDots(count: 10)
+            FloatingIntelligenceDots(count: 4)
+                .opacity(0.35)
 
             VStack(spacing: 24) {
                 Spacer(minLength: 28)
 
                 ZStack {
-                    PixelSphereView(size: 240, intensity: 0.85)
-                        .opacity(0.9)
-                    IntelligenceOrbitRings(size: 190)
-                        .opacity(0.55)
+                    PixelSphereView(size: 200, intensity: 0.7, phase: isPairingFromQR ? .locking : .idle, pixelCount: 72)
+                        .opacity(0.75)
                     BrandLogo(size: 84)
                         .scaleEffect(appear ? 1 : 0.88)
                 }
-                .frame(height: 230)
+                .frame(height: 200)
 
                 VStack(spacing: 10) {
                     Text("NOCO AI")
                         .font(.system(size: 36, weight: .semibold, design: .rounded))
-                    Text("Scanne den QR-Code auf deinem PC.\nDann einfach fragen.")
+                    Text("Scanne den QR-Code auf deinem PC.\nPixel reagieren, sobald er erkannt wird.")
                         .font(.body)
                         .foregroundStyle(.secondary)
                         .multilineTextAlignment(.center)
@@ -121,21 +120,8 @@ struct PairingView: View {
         }
         .fullScreenCover(isPresented: $showQRScanner) {
             NavigationStack {
-                ZStack {
-                    QRScannerView { code in
-                        Task { await pairFromQR(code) }
-                    }
-                    VStack {
-                        IntelligenceOrbitRings(size: 160)
-                            .opacity(0.35)
-                            .padding(.top, 80)
-                        Spacer()
-                        FloatingIntelligenceDots(count: 10)
-                            .frame(height: 100)
-                            .opacity(0.5)
-                            .padding(.bottom, 40)
-                    }
-                    .allowsHitTesting(false)
+                QRScannerView { code in
+                    Task { await pairFromQR(code) }
                 }
                 .ignoresSafeArea()
                 .navigationTitle("QR scannen")

@@ -834,40 +834,59 @@ extension View {
     }
 }
 
-// MARK: - Pixel sphere (decorative pairing aura — QR still does the scan)
+// MARK: - Pixel sphere (pairing aura — reacts when QR is found)
 
-/// Lightweight colorful pixel-orb that swings around a center. Cheap (~48 dots).
+enum PixelSpherePhase: Equatable {
+    case idle
+    case locking
+    case success
+}
+
+/// Fibonacci-sphere pixel orb — centered, denser, with lock/success phases.
 struct PixelSphereView: View {
     var size: CGFloat = 220
     var intensity: Double = 1
-
-    @State private var phase = false
-
-    private let count = 48
+    var phase: PixelSpherePhase = .idle
+    var pixelCount: Int = 88
 
     var body: some View {
-        TimelineView(.animation(minimumInterval: 1 / 24)) { timeline in
+        TimelineView(.animation(minimumInterval: 1 / 30)) { timeline in
             let t = timeline.date.timeIntervalSinceReferenceDate
             Canvas { ctx, canvasSize in
                 let mid = CGPoint(x: canvasSize.width / 2, y: canvasSize.height / 2)
-                let r = min(canvasSize.width, canvasSize.height) * 0.42
-                let swing = sin(t * 1.15) * 10
-                let tilt = cos(t * 0.85) * 0.35
-                for i in 0..<count {
-                    let u = Double(i) / Double(count)
-                    let lat = (u * 2 - 1) * .pi / 2
-                    let lon = u * .pi * 8 + t * 1.4 + Double(i) * 0.17
-                    let x = cos(lat) * cos(lon)
-                    let y = sin(lat)
-                    let z = cos(lat) * sin(lon)
-                    // simple perspective
-                    let depth = (z * 0.55 + 0.7)
-                    let px = mid.x + CGFloat(x) * r * CGFloat(depth) + CGFloat(swing)
-                    let py = mid.y + CGFloat(y * cos(tilt) - z * sin(tilt)) * r * CGFloat(depth)
-                    let s = max(1.6, 3.8 * depth) * intensity
-                    let hue = (u + t * 0.08).truncatingRemainder(dividingBy: 1)
-                    let color = Color(hue: hue, saturation: 0.85, brightness: 0.95)
-                        .opacity(0.35 + 0.55 * depth)
+                let baseR = min(canvasSize.width, canvasSize.height) * 0.40
+                let golden = Double.pi * (3 - sqrt(5))
+
+                let converge: Double
+                let spin: Double
+                switch phase {
+                case .idle:
+                    converge = 1
+                    spin = t * 0.55
+                case .locking:
+                    converge = 0.55 + 0.2 * sin(t * 6)
+                    spin = t * 1.8
+                case .success:
+                    let pulse = abs(sin(t * 4.2))
+                    converge = 0.25 + pulse * 0.95
+                    spin = t * 2.4
+                }
+
+                for i in 0..<pixelCount {
+                    let y = 1 - (Double(i) / Double(max(pixelCount - 1, 1))) * 2
+                    let radiusAtY = sqrt(max(0, 1 - y * y))
+                    let theta = golden * Double(i) + spin
+                    let x = cos(theta) * radiusAtY
+                    let z = sin(theta) * radiusAtY
+
+                    let depth = (z * 0.5 + 0.75)
+                    let r = baseR * CGFloat(converge)
+                    let px = mid.x + CGFloat(x) * r * CGFloat(depth)
+                    let py = mid.y + CGFloat(y) * r * CGFloat(depth)
+                    let s = max(1.4, (phase == .success ? 4.6 : 3.4) * depth) * intensity
+                    let hue = (Double(i) / Double(pixelCount) + t * 0.06).truncatingRemainder(dividingBy: 1)
+                    let color = Color(hue: hue, saturation: 0.88, brightness: 1)
+                        .opacity(0.28 + 0.62 * depth)
                     let rect = CGRect(x: px - s / 2, y: py - s / 2, width: s, height: s)
                     ctx.fill(Path(ellipseIn: rect), with: .color(color))
                 }
@@ -875,39 +894,24 @@ struct PixelSphereView: View {
         }
         .frame(width: size, height: size)
         .allowsHitTesting(false)
-        .onAppear {
-            phase.toggle()
-        }
+        .animation(.easeInOut(duration: 0.35), value: phase)
     }
 }
 
-/// Soft aurora ring used around QR / scanner frames.
+/// Soft aurora ring + reactive pixels around the QR scan frame.
 struct IntelligenceScanAura: View {
-    @State private var spin = false
+    var phase: PixelSpherePhase = .idle
 
     var body: some View {
         ZStack {
-            PixelSphereView(size: 260, intensity: 0.9)
-                .blur(radius: 0.2)
+            PixelSphereView(size: 300, intensity: phase == .success ? 1.15 : 0.75, phase: phase, pixelCount: 96)
+                .blur(radius: phase == .idle ? 0.4 : 0)
+                .opacity(phase == .success ? 1 : 0.85)
+            // Keep the scan window clear — no solid ball over the QR
             Circle()
-                .stroke(
-                    AngularGradient(
-                        colors: [
-                            Color(red: 0.4, green: 0.85, blue: 1),
-                            Color(red: 0.7, green: 0.4, blue: 1),
-                            Color(red: 1.0, green: 0.45, blue: 0.7),
-                            Color(red: 0.4, green: 0.95, blue: 0.7),
-                            Color(red: 0.4, green: 0.85, blue: 1)
-                        ],
-                        center: .center
-                    ),
-                    lineWidth: 2
-                )
-                .frame(width: 168, height: 168)
-                .rotationEffect(.degrees(spin ? 360 : 0))
-                .animation(.linear(duration: 10).repeatForever(autoreverses: false), value: spin)
+                .fill(Color.black.opacity(0.001))
+                .frame(width: 210, height: 210)
         }
-        .onAppear { spin = true }
         .allowsHitTesting(false)
     }
 }

@@ -13,7 +13,6 @@ enum SpeakLiveActivityManager {
 
     static func start(sessionLabel: String = "NOCO Speak") {
         guard ActivityAuthorizationInfo().areActivitiesEnabled else { return }
-        // Reuse existing island activity if still alive
         if let existing = Activity<SpeakActivityAttributes>.activities.first {
             activity = existing
             return
@@ -24,16 +23,21 @@ enum SpeakLiveActivityManager {
         let state = SpeakActivityAttributes.ContentState(
             phaseRaw: SpeakActivityPhase.listening.rawValue,
             title: SpeakActivityPhase.listening.title,
-            detail: "Sprich — Pause beendet automatisch",
-            level: 0,
-            bars: Array(repeating: 0.15, count: 7),
-            isOnline: true
+            detail: "Sprich — Pause sendet automatisch",
+            level: 0.2,
+            bars: Array(repeating: 0.2, count: 7),
+            isOnline: true,
+            isMuted: false
         )
 
         do {
+            // Shows Lock Screen banner + Dynamic Island immediately
             activity = try Activity.request(
                 attributes: attributes,
-                content: .init(state: state, staleDate: nil),
+                content: .init(
+                    state: state,
+                    staleDate: Date().addingTimeInterval(60 * 30)
+                ),
                 pushType: nil
             )
         } catch {
@@ -47,6 +51,7 @@ enum SpeakLiveActivityManager {
         level: Double,
         bars: [Double],
         isOnline: Bool,
+        isMuted: Bool = false,
         force: Bool = false
     ) {
         if activity == nil {
@@ -56,37 +61,50 @@ enum SpeakLiveActivityManager {
 
         let now = Date()
         if !force, phase == .listening || phase == .speaking {
-            if now.timeIntervalSince(lastLevelUpdate) < 0.2 { return }
+            if now.timeIntervalSince(lastLevelUpdate) < 0.18 { return }
         }
         lastLevelUpdate = now
 
+        let title: String
+        if isMuted && phase != .speaking {
+            title = "Stumm"
+        } else {
+            title = phase.title
+        }
+
         let state = SpeakActivityAttributes.ContentState(
             phaseRaw: phase.rawValue,
-            title: phase.title,
-            detail: String(detail.prefix(80)),
+            title: title,
+            detail: String(detail.prefix(100)),
             level: min(max(level, 0), 1),
             bars: bars.map { min(max($0, 0), 1) },
-            isOnline: isOnline
+            isOnline: isOnline,
+            isMuted: isMuted
         )
 
         Task {
-            await activity.update(.init(state: state, staleDate: nil))
+            await activity.update(
+                .init(state: state, staleDate: Date().addingTimeInterval(60 * 30))
+            )
         }
     }
 
     static func end() {
-        guard let activity else { return }
+        let activities = Activity<SpeakActivityAttributes>.activities
         let final = SpeakActivityAttributes.ContentState(
             phaseRaw: SpeakActivityPhase.idle.rawValue,
             title: "Speak beendet",
             detail: "",
             level: 0,
             bars: Array(repeating: 0.1, count: 7),
-            isOnline: true
+            isOnline: true,
+            isMuted: false
         )
         Task {
-            await activity.end(.init(state: final, staleDate: nil), dismissalPolicy: .immediate)
+            for act in activities {
+                await act.end(.init(state: final, staleDate: nil), dismissalPolicy: .immediate)
+            }
         }
-        self.activity = nil
+        activity = nil
     }
 }

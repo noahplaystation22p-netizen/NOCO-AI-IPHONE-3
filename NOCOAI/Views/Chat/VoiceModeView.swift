@@ -106,6 +106,11 @@ struct VoiceModeView: View {
                     .font(.caption2.weight(.semibold))
                     .foregroundStyle(.secondary)
             }
+            if speak.isMuted {
+                Text("MUTE")
+                    .font(.caption2.weight(.bold))
+                    .foregroundStyle(.orange)
+            }
         }
         .padding(.horizontal, 12)
         .padding(.vertical, 6)
@@ -137,6 +142,31 @@ struct VoiceModeView: View {
             Text(controlHint)
                 .font(.caption.weight(.semibold))
                 .foregroundStyle(.secondary)
+
+            if speak.isRunning {
+                Button {
+                    HapticService.selection()
+                    speak.toggleMute()
+                } label: {
+                    HStack(spacing: 8) {
+                        Image(systemName: speak.isMuted ? "mic.slash.fill" : "mic.fill")
+                        Text(speak.isMuted ? "Mute aus · wieder sprechen" : "Mute · nur zuhören")
+                            .font(.subheadline.weight(.semibold))
+                    }
+                    .foregroundStyle(speak.isMuted ? .orange : .primary)
+                    .frame(width: 240, height: 44)
+                    .background(
+                        Capsule()
+                            .fill(speak.isMuted ? Color.orange.opacity(0.18) : Color.primary.opacity(0.08))
+                            .overlay(
+                                Capsule().stroke(
+                                    speak.isMuted ? Color.orange.opacity(0.5) : Color.clear,
+                                    lineWidth: 1
+                                )
+                            )
+                    )
+                }
+            }
 
             Button {
                 HapticService.medium()
@@ -177,7 +207,7 @@ struct VoiceModeView: View {
 
             if voice.phase == .speaking {
                 Button("Antwort überspringen") {
-                    voice.stopSpeaking()
+                    voice.stopSpeaking(notifyFinished: true)
                 }
                 .font(.footnote.weight(.medium))
             }
@@ -187,14 +217,15 @@ struct VoiceModeView: View {
     private var controlHint: String {
         if !connection.isOnline { return "Keine Verbindung" }
         if speak.isRunning {
+            if speak.isMuted { return "Stumm: Mic aus — Antwort wird trotzdem vorgelesen" }
             switch voice.phase {
-            case .listening: return "Laut = hohe Balken · Leise = niedrige Balken"
+            case .listening: return "Leiser = Pause → sendet automatisch"
             case .processing: return "Nur Text-Antwort — keine Bilder"
-            case .speaking: return "Spoken Reply · danach wieder Zuhören"
-            default: return "Session aktiv im Hintergrund möglich"
+            case .speaking: return "Wiedergabe · danach wieder Zuhören"
+            default: return "Live Activity auf Sperrbildschirm + Island"
             }
         }
-        return "Startet Zuhören + Dynamic Island"
+        return "Startet Live Activity + Zuhören"
     }
 }
 

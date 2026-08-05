@@ -13,19 +13,20 @@ struct NOCOAISpeakWidgetBundle: WidgetBundle {
 struct SpeakLiveActivityWidget: Widget {
     var body: some WidgetConfiguration {
         ActivityConfiguration(for: SpeakActivityAttributes.self) { context in
+            // Lock Screen + banner (not just Dynamic Island)
             SpeakLockScreenView(state: context.state, label: context.attributes.sessionLabel)
-                .activityBackgroundTint(Color.black.opacity(0.35))
+                .activityBackgroundTint(Color.black.opacity(0.55))
                 .activitySystemActionForegroundColor(.white)
         } dynamicIsland: { context in
             DynamicIsland {
                 DynamicIslandExpandedRegion(.leading) {
-                    Image(systemName: islandIcon(context.state.phaseRaw))
-                        .foregroundStyle(.cyan)
+                    Image(systemName: islandIcon(context.state))
+                        .foregroundStyle(context.state.isMuted ? .orange : .cyan)
                 }
                 DynamicIslandExpandedRegion(.trailing) {
-                    Text(context.state.isOnline ? "Live" : "Offline")
+                    Text(context.state.isMuted ? "Mute" : (context.state.isOnline ? "Live" : "Offline"))
                         .font(.caption2.weight(.bold))
-                        .foregroundStyle(context.state.isOnline ? .green : .red)
+                        .foregroundStyle(context.state.isMuted ? .orange : (context.state.isOnline ? .green : .red))
                 }
                 DynamicIslandExpandedRegion(.center) {
                     VStack(spacing: 4) {
@@ -35,33 +36,34 @@ struct SpeakLiveActivityWidget: Widget {
                         Text(context.state.detail)
                             .font(.caption2)
                             .foregroundStyle(.white.opacity(0.7))
-                            .lineLimit(1)
+                            .lineLimit(2)
                     }
                 }
                 DynamicIslandExpandedRegion(.bottom) {
                     SpeakMiniVisualizer(bars: context.state.bars, level: context.state.level)
-                        .frame(height: 28)
+                        .frame(height: 32)
                         .padding(.top, 4)
                 }
             } compactLeading: {
-                Image(systemName: islandIcon(context.state.phaseRaw))
-                    .foregroundStyle(.cyan)
+                Image(systemName: islandIcon(context.state))
+                    .foregroundStyle(context.state.isMuted ? .orange : .cyan)
             } compactTrailing: {
                 SpeakMiniVisualizer(bars: Array(context.state.bars.prefix(5)), level: context.state.level, barWidth: 2.5, spacing: 2)
                     .frame(width: 36, height: 16)
             } minimal: {
-                Image(systemName: "waveform")
-                    .foregroundStyle(.cyan)
+                Image(systemName: context.state.isMuted ? "mic.slash.fill" : "waveform")
+                    .foregroundStyle(context.state.isMuted ? .orange : .cyan)
             }
             .widgetURL(URL(string: "nocoai://speak"))
         }
     }
 
-    private func islandIcon(_ phase: String) -> String {
-        switch phase {
+    private func islandIcon(_ state: SpeakActivityAttributes.ContentState) -> String {
+        if state.isMuted { return "mic.slash.fill" }
+        switch state.phaseRaw {
         case "listening": return "ear.fill"
         case "processing": return "sparkles"
-        case "speaking": return "speaker.wave.2.fill"
+        case "speaking": return "speaker.wave.3.fill"
         case "error": return "exclamationmark.circle"
         default: return "mic.fill"
         }
@@ -73,42 +75,55 @@ struct SpeakLockScreenView: View {
     let label: String
 
     var body: some View {
-        HStack(spacing: 14) {
-            ZStack {
-                Circle()
-                    .fill(
-                        AngularGradient(
-                            colors: [.cyan, .purple, .mint, .cyan],
-                            center: .center
+        VStack(alignment: .leading, spacing: 12) {
+            HStack(spacing: 12) {
+                ZStack {
+                    Circle()
+                        .fill(
+                            AngularGradient(
+                                colors: state.isMuted
+                                    ? [.orange, .yellow, .orange]
+                                    : [.cyan, .purple, .mint, .cyan],
+                                center: .center
+                            )
                         )
-                    )
-                    .frame(width: 42, height: 42)
-                    .blur(radius: 0.5)
-                    .opacity(0.85)
-                Image(systemName: "sparkles")
-                    .foregroundStyle(.white)
-                    .font(.system(size: 16, weight: .semibold))
+                        .frame(width: 48, height: 48)
+                        .opacity(0.9)
+                    Image(systemName: state.isMuted ? "mic.slash.fill" : "waveform.circle.fill")
+                        .foregroundStyle(.white)
+                        .font(.system(size: 20, weight: .semibold))
+                }
+
+                VStack(alignment: .leading, spacing: 3) {
+                    Text(label)
+                        .font(.caption2.weight(.semibold))
+                        .foregroundStyle(.white.opacity(0.65))
+                    Text(state.title)
+                        .font(.title3.weight(.bold))
+                        .foregroundStyle(.white)
+                    Text(state.detail)
+                        .font(.subheadline)
+                        .foregroundStyle(.white.opacity(0.8))
+                        .lineLimit(3)
+                }
+
+                Spacer(minLength: 0)
+
+                VStack(alignment: .trailing, spacing: 4) {
+                    Text(state.isMuted ? "MUTE" : (state.isOnline ? "LIVE" : "OFF"))
+                        .font(.caption2.weight(.bold))
+                        .foregroundStyle(state.isMuted ? .orange : (state.isOnline ? .green : .red))
+                    Text("\(Int(state.level * 100))%")
+                        .font(.caption.weight(.semibold))
+                        .foregroundStyle(.white.opacity(0.7))
+                }
             }
 
-            VStack(alignment: .leading, spacing: 4) {
-                Text(label)
-                    .font(.caption2.weight(.semibold))
-                    .foregroundStyle(.white.opacity(0.65))
-                Text(state.title)
-                    .font(.headline)
-                    .foregroundStyle(.white)
-                Text(state.detail)
-                    .font(.caption)
-                    .foregroundStyle(.white.opacity(0.75))
-                    .lineLimit(2)
-            }
-
-            Spacer(minLength: 0)
-
-            SpeakMiniVisualizer(bars: state.bars, level: state.level)
-                .frame(width: 70, height: 34)
+            SpeakMiniVisualizer(bars: state.bars, level: state.level, barWidth: 7, spacing: 5)
+                .frame(maxWidth: .infinity)
+                .frame(height: 44)
         }
-        .padding(16)
+        .padding(18)
     }
 }
 
@@ -133,7 +148,7 @@ struct SpeakMiniVisualizer: View {
                             endPoint: .top
                         )
                     )
-                    .frame(width: barWidth, height: max(4, CGFloat(value) * 30 + CGFloat(level) * 4))
+                    .frame(width: barWidth, height: max(6, CGFloat(value) * 38 + CGFloat(level) * 6))
                     .opacity(0.55 + value * 0.45)
             }
         }

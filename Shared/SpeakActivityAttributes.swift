@@ -10,6 +10,7 @@ struct SpeakActivityAttributes: ActivityAttributes {
         var level: Double
         var bars: [Double]
         var isOnline: Bool
+        var isMuted: Bool
     }
 
     var sessionLabel: String

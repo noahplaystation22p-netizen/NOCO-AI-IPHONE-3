@@ -15,14 +15,13 @@ final class VoiceService: NSObject, ObservableObject {
     @Published var phase: VoicePhase = .idle
     @Published var liveTranscript = ""
     @Published var level: CGFloat = 0
-    /// Multi-band visualizer values 0...1
     @Published var bands: [CGFloat] = Array(repeating: 0.12, count: 16)
     @Published var isAuthorized = false
     @Published var sessionActive = false
+    /// When true: mic off, no auto-send — TTS still plays.
+    @Published var isMuted = false
 
-    /// Fired when silence detector decides the user finished speaking.
     var onAutoUtterance: ((String) -> Void)?
-    /// Fired when TTS fully finishes (for continuous listen loop).
     var onSpeakFinished: (() -> Void)?
 
     private let speechRecognizer = SFSpeechRecognizer(locale: Locale(identifier: "de-DE"))
@@ -31,7 +30,6 @@ final class VoiceService: NSObject, ObservableObject {
     private var recognitionTask: SFSpeechRecognitionTask?
     private let synthesizer = AVSpeechSynthesizer()
 
-    // Silence / end-of-utterance detection
     private var noiseFloor: CGFloat = 0.02
     private var speechStarted = false
     private var speechStartAt: Date?
@@ -40,11 +38,13 @@ final class VoiceService: NSObject, ObservableObject {
     private var lastTranscript = ""
     private var silenceTask: Task<Void, Never>?
     private var autoFinishArmed = false
+    private var pendingSpeakChunks = 0
+    private var speakFinishedNotified = false
 
-    /// Seconds of quiet after speech before we auto-send.
-    private let silenceToEnd: TimeInterval = 0.72
-    private let minSpeechSeconds: TimeInterval = 0.28
-    private let speechLevelFactor: CGFloat = 2.4
+    /// Quiet after speech before auto-send.
+    private let silenceToEnd: TimeInterval = 0.85
+    private let minSpeechSeconds: TimeInterval = 0.32
+    private let speechLevelFactor: CGFloat = 2.2
 
     var preferredVoiceIdentifier: String {
         get { UserDefaults.standard.string(forKey: "nocoai.voiceId") ?? "" }
@@ -62,6 +62,7 @@ final class VoiceService: NSObject, ObservableObject {
     override init() {
         super.init()
         synthesizer.delegate = self
+        synthesizer.usesApplicationAudioSession = true
     }
 
     func requestPermissions() async -> Bool {
@@ -77,19 +78,46 @@ final class VoiceService: NSObject, ObservableObject {
         return isAuthorized
     }
 
-    /// Configure session for background-capable speak + listen.
+    /// Mic + background-capable duplex session.
     func activateBackgroundAudioSession() throws {
         let session = AVAudioSession.sharedInstance()
         try session.setCategory(
             .playAndRecord,
-            mode: .voiceChat,
-            options: [.defaultToSpeaker, .allowBluetooth, .mixWithOthers]
+            mode: .default,
+            options: [.defaultToSpeaker, .allowBluetooth, .duckOthers]
         )
-        try session.setActive(true, options: .notifyOthersOnDeactivation)
+        try session.overrideOutputAudioPort(.speaker)
+        try session.setActive(true, options: [])
+    }
+
+    /// Loud TTS route — avoid voiceChat ducking; force speaker.
+    func activateLoudPlaybackSession() throws {
+        let session = AVAudioSession.sharedInstance()
+        try session.setCategory(
+            .playAndRecord,
+            mode: .spokenAudio,
+            options: [.defaultToSpeaker, .allowBluetoothA2DP]
+        )
+        try session.overrideOutputAudioPort(.speaker)
+        try session.setActive(true, options: [])
+    }
+
+    func setMuted(_ muted: Bool) {
+        isMuted = muted
+        if muted {
+            autoFinishArmed = false
+            stopListening(cancel: true)
+            if case .listening = phase { phase = .idle }
+            liveTranscript = ""
+        }
     }
 
     func startListening(autoEnd: Bool = true) throws {
-        stopSpeaking()
+        guard !isMuted else {
+            phase = .idle
+            return
+        }
+        stopSpeaking(notifyFinished: false)
         stopListening(cancel: true)
         autoFinishArmed = autoEnd
 
@@ -105,9 +133,16 @@ final class VoiceService: NSObject, ObservableObject {
         recognitionRequest.shouldReportPartialResults = true
         recognitionRequest.taskHint = .dictation
         recognitionRequest.addsPunctuation = true
+        if #available(iOS 17.0, *) {
+            recognitionRequest.requiresOnDeviceRecognition = false
+        }
 
         let input = audioEngine.inputNode
         let format = input.outputFormat(forBus: 0)
+        guard format.sampleRate > 0, format.channelCount > 0 else {
+            phase = .error("Mikrofon nicht bereit")
+            return
+        }
         input.removeTap(onBus: 0)
         input.installTap(onBus: 0, bufferSize: 1024, format: format) { [weak self] buffer, _ in
             self?.recognitionRequest?.append(buffer)
@@ -132,6 +167,7 @@ final class VoiceService: NSObject, ObservableObject {
         recognitionTask = speechRecognizer.recognitionTask(with: recognitionRequest) { [weak self] result, error in
             guard let self else { return }
             Task { @MainActor in
+                guard !self.isMuted else { return }
                 if let result {
                     let text = result.bestTranscription.formattedString
                     if text != self.liveTranscript {
@@ -141,7 +177,6 @@ final class VoiceService: NSObject, ObservableObject {
                             self.speechStarted = true
                         }
                     }
-                    // Final result from recognizer can also complete
                     if result.isFinal, self.autoFinishArmed, !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
                         self.emitAutoUtteranceIfNeeded(force: true)
                     }
@@ -192,43 +227,58 @@ final class VoiceService: NSObject, ObservableObject {
         let cleaned = Self.cleanForSpeech(text)
         guard !cleaned.isEmpty else {
             phase = .idle
-            onSpeakFinished?()
+            notifySpeakFinishedOnce()
             return
         }
 
-        stopSpeaking()
+        stopSpeaking(notifyFinished: false)
+        stopListening(cancel: true)
+
         do {
-            // Keep playAndRecord so background mic session stays warm
-            try activateBackgroundAudioSession()
-        } catch { /* continue */ }
+            try activateLoudPlaybackSession()
+        } catch {
+            try? activateBackgroundAudioSession()
+        }
 
         let chunks = Self.speechChunks(from: cleaned)
+        pendingSpeakChunks = chunks.count
+        speakFinishedNotified = false
         phase = .speaking
         HapticService.soft()
 
-        // Soft synthetic visualizer while speaking
         Task { await animateSpeakingBands() }
 
         for (index, chunk) in chunks.enumerated() {
             let utterance = AVSpeechUtterance(string: chunk)
             utterance.voice = bestGermanVoice()
-            // Slightly quicker than default, still natural
-            utterance.rate = AVSpeechUtteranceDefaultSpeechRate * 0.98
-            utterance.pitchMultiplier = 1.0
+            utterance.rate = AVSpeechUtteranceDefaultSpeechRate * 0.96
+            utterance.pitchMultiplier = 1.05
+            // Max utterance volume; session route boosts perceived loudness
             utterance.volume = 1.0
-            utterance.preUtteranceDelay = index == 0 ? 0.02 : 0.06
-            utterance.postUtteranceDelay = 0.04
+            utterance.preUtteranceDelay = index == 0 ? 0.05 : 0.08
+            utterance.postUtteranceDelay = 0.05
             synthesizer.speak(utterance)
         }
     }
 
-    func stopSpeaking() {
+    func stopSpeaking(notifyFinished: Bool = true) {
+        let wasSpeaking = synthesizer.isSpeaking || phase == .speaking
         if synthesizer.isSpeaking {
             synthesizer.stopSpeaking(at: .immediate)
         }
+        pendingSpeakChunks = 0
         if case .speaking = phase {
             phase = .idle
         }
+        if notifyFinished, wasSpeaking {
+            notifySpeakFinishedOnce()
+        }
+    }
+
+    private func notifySpeakFinishedOnce() {
+        guard !speakFinishedNotified else { return }
+        speakFinishedNotified = true
+        onSpeakFinished?()
     }
 
     func availableGermanVoices() -> [AVSpeechSynthesisVoice] {
@@ -243,7 +293,7 @@ final class VoiceService: NSObject, ObservableObject {
         silenceTask?.cancel()
         silenceTask = Task { [weak self] in
             while !Task.isCancelled {
-                try? await Task.sleep(nanoseconds: 120_000_000)
+                try? await Task.sleep(nanoseconds: 100_000_000)
                 await MainActor.run {
                     self?.emitAutoUtteranceIfNeeded(force: false)
                 }
@@ -252,6 +302,7 @@ final class VoiceService: NSObject, ObservableObject {
     }
 
     private func emitAutoUtteranceIfNeeded(force: Bool) {
+        guard !isMuted else { return }
         guard autoFinishArmed, case .listening = phase else { return }
         let text = liveTranscript.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !text.isEmpty, speechStarted else { return }
@@ -273,6 +324,7 @@ final class VoiceService: NSObject, ObservableObject {
     }
 
     private func processAudio(_ buffer: AVAudioPCMBuffer) {
+        guard !isMuted else { return }
         guard let channel = buffer.floatChannelData?[0] else { return }
         let frames = Int(buffer.frameLength)
         guard frames > 0 else { return }
@@ -286,11 +338,10 @@ final class VoiceService: NSObject, ObservableObject {
         let boosted = min(rms * 10, 1)
         level = level * 0.55 + boosted * 0.45
 
-        // Adaptive noise floor
         if !speechStarted {
             noiseFloor = noiseFloor * 0.95 + level * 0.05
         }
-        let speechThreshold = max(0.045, noiseFloor * speechLevelFactor)
+        let speechThreshold = max(0.04, noiseFloor * speechLevelFactor)
 
         if level > speechThreshold {
             if !speechStarted {
@@ -300,7 +351,6 @@ final class VoiceService: NSObject, ObservableObject {
             lastVoiceAt = Date()
         }
 
-        // Multi-band visualizer from buffer slices
         let bandCount = bands.count
         let slice = max(frames / bandCount, 1)
         var next = bands
@@ -325,7 +375,7 @@ final class VoiceService: NSObject, ObservableObject {
             var next = bands
             for i in 0..<next.count {
                 let wave = abs(sin(Date().timeIntervalSinceReferenceDate * 9 + Double(i) * 0.55))
-                next[i] = CGFloat(0.2 + wave * 0.65)
+                next[i] = CGFloat(0.25 + wave * 0.75)
             }
             bands = next
             level = next.reduce(0, +) / CGFloat(next.count)
@@ -339,7 +389,6 @@ final class VoiceService: NSObject, ObservableObject {
            let preferred = voices.first(where: { $0.identifier == preferredVoiceIdentifier }) {
             return preferred
         }
-        // Prefer neural / premium de-DE voices for more natural speech
         let deDE = voices.filter { $0.language.lowercased().hasPrefix("de-de") }
         let pool = deDE.isEmpty ? voices : deDE
         if let premium = pool.first(where: { $0.quality == .premium }) { return premium }
@@ -403,12 +452,10 @@ final class VoiceService: NSObject, ObservableObject {
         return result
     }
 
-    /// Plain user text for Speak — system rules live on the PC (speak flag), not in the message.
     static func voiceOnlyPrompt(_ userText: String) -> String {
         userText.trimmingCharacters(in: .whitespacesAndNewlines)
     }
 
-    /// Drop instruction echo if the model still mirrors meta text.
     static func stripSpeakEcho(_ reply: String) -> String {
         var lines = reply
             .replacingOccurrences(of: "\r\n", with: "\n")
@@ -440,7 +487,7 @@ extension VoiceService: AVSpeechSynthesizerDelegate {
             if !synthesizer.isSpeaking {
                 self.phase = .idle
                 HapticService.success()
-                self.onSpeakFinished?()
+                self.notifySpeakFinishedOnce()
             }
         }
     }

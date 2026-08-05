@@ -29,6 +29,18 @@ struct MainTabView: View {
         .onChange(of: selectedTab) { _, _ in
             HapticService.selection()
         }
+        .onChange(of: connection.pendingTab) { _, tab in
+            if let tab {
+                selectedTab = tab
+                connection.pendingTab = nil
+            }
+        }
+        .onAppear {
+            if let tab = connection.pendingTab {
+                selectedTab = tab
+                connection.pendingTab = nil
+            }
+        }
         .fullScreenCover(isPresented: Binding(
             get: { connection.speak.showSpeakUI },
             set: { connection.speak.showSpeakUI = $0 }

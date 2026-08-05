@@ -59,9 +59,19 @@ final class ImageStore: ObservableObject {
         "Noch einen Moment — CPU rechnet…"
     ]
 
+    private var generateTask: Task<Void, Never>?
+
     func bind(api: CompanionAPI?, host: String, port: Int) {
         self.api = api
         self.media = MediaURLBuilder(host: host, port: port)
+    }
+
+    /// Fire-and-forget so leaving the screen / app does not cancel generation.
+    func startGenerate(conversationId: String? = nil) {
+        guard !isGenerating else { return }
+        generateTask = Task { [weak self] in
+            await self?.generate(conversationId: conversationId)
+        }
     }
 
     func loadFromConversations(_ conversations: [ConversationSummary], api: CompanionAPI?) async {
@@ -108,6 +118,8 @@ final class ImageStore: ObservableObject {
         lastPrompt = trimmed
         HapticService.medium()
 
+        _ = await AppNotificationService.requestAuthorizationIfNeeded()
+        ImageBackgroundKeeper.shared.begin()
         startInsightLoop()
         startProgressPolling()
 
@@ -117,6 +129,7 @@ final class ImageStore: ObservableObject {
             insightTask?.cancel()
             insightTask = nil
             isGenerating = false
+            ImageBackgroundKeeper.shared.end()
         }
 
         do {
@@ -145,6 +158,7 @@ final class ImageStore: ObservableObject {
             phase = .error
             statusText = "Kein Bild in der Antwort"
             HapticService.error()
+            await AppNotificationService.notifyImageFailed(statusText)
         } catch {
             guard !cancelled else {
                 phase = .idle
@@ -154,6 +168,24 @@ final class ImageStore: ObservableObject {
             phase = .error
             statusText = (error as? LocalizedError)?.errorDescription ?? error.localizedDescription
             HapticService.error()
+            await AppNotificationService.notifyImageFailed(statusText)
+        }
+    }
+
+    /// Call when app enters background during generation.
+    func handleDidEnterBackground() {
+        guard isGenerating else { return }
+        ImageBackgroundKeeper.shared.begin()
+        Task {
+            await AppNotificationService.notifyImageStarted(prompt: lastPrompt.isEmpty ? prompt : lastPrompt)
+        }
+    }
+
+    /// Call when returning to foreground.
+    func handleDidBecomeActive() {
+        AppNotificationService.clearBadge()
+        if isGenerating {
+            ImageBackgroundKeeper.shared.begin()
         }
     }
 
@@ -162,12 +194,16 @@ final class ImageStore: ObservableObject {
         cancelled = true
         statusText = "Wird abgebrochen…"
         phase = .idle
+        generateTask?.cancel()
+        generateTask = nil
         try? await api?.interruptImage()
         pollTask?.cancel()
         insightTask?.cancel()
         isGenerating = false
         progress = 0
         etaSeconds = nil
+        ImageBackgroundKeeper.shared.end()
+        AppNotificationService.clearRunningNotification()
         HapticService.soft()
         statusText = "Abgebrochen"
     }
@@ -298,6 +334,9 @@ final class ImageStore: ObservableObject {
         let item = GeneratedImageItem(prompt: prompt, url: url, localData: data)
         gallery.insert(item, at: 0)
         HapticService.success()
+        Task {
+            await AppNotificationService.notifyImageReady(prompt: prompt)
+        }
     }
 
     private func download(url: URL) async throws -> Data {

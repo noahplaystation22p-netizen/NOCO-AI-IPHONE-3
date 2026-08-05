@@ -17,6 +17,8 @@ final class ConnectionStore: ObservableObject {
     @Published var pendingDeepLink: PairingDeepLink?
     @Published var localNetworkHint: String?
     @Published var features: FeaturesResponse?
+    /// Tab to open after notification / deep link (0 Chat, 1 Bildideen, 2 Studio)
+    @Published var pendingTab: Int?
 
     let chat = ChatStore()
     let images = ImageStore()
@@ -64,10 +66,16 @@ final class ConnectionStore: ObservableObject {
 
     /// Call when app returns to foreground to keep Local Network permission warm.
     func onForeground() {
+        images.handleDidBecomeActive()
+        AppNotificationService.clearBadge()
         guard isPaired, !serverHost.isEmpty else { return }
         prepareLocalNetworkAccess(host: serverHost, port: serverPort)
         chat.startSyncLoop()
         Task { await refreshStatus() }
+    }
+
+    func onBackground() {
+        images.handleDidEnterBackground()
     }
 
     func rebuildAPI() {
@@ -205,11 +213,17 @@ final class ConnectionStore: ObservableObject {
     }
 
     func handleIncomingURL(_ url: URL) {
-        if url.host == "speak" || url.path.contains("speak") {
+        let host = (url.host ?? "").lowercased()
+        let path = url.path.lowercased()
+        if host == "speak" || path.contains("speak") {
             speak.openUI()
             if !speak.isRunning {
                 speak.start()
             }
+            return
+        }
+        if host == "images" || host == "bildideen" || path.contains("images") || path.contains("bild") {
+            pendingTab = 1
             return
         }
         guard let link = PairingDeepLink.from(url: url) else { return }
@@ -217,6 +231,10 @@ final class ConnectionStore: ObservableObject {
         if let pin = link.pin, !pin.isEmpty {
             Task { await pair(host: link.host, port: link.port, pin: pin) }
         }
+    }
+
+    func openImagesTab() {
+        pendingTab = 1
     }
 
     func applyQRCode(_ raw: String) {

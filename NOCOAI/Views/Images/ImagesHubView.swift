@@ -156,9 +156,7 @@ struct ImagesHubView: View {
                     Button {
                         reveal = false
                         HapticService.medium()
-                        Task {
-                            await connection.images.generate(conversationId: connection.chat.activeConversationId)
-                        }
+                        connection.images.startGenerate(conversationId: connection.chat.activeConversationId)
                     } label: {
                         HStack {
                             Image(systemName: "sparkles")
@@ -182,6 +180,11 @@ struct ImagesHubView: View {
                     }
                     .disabled(connection.images.prompt.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || !connection.isOnline)
                     .opacity(connection.images.prompt.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || !connection.isOnline ? 0.5 : 1)
+
+                    Text("Du kannst die App verlassen — du bekommst eine Mitteilung, wenn das Bild fertig ist.")
+                        .font(.caption2)
+                        .foregroundStyle(.secondary)
+                        .fixedSize(horizontal: false, vertical: true)
                 }
 
                 if connection.images.phase == .error, !connection.images.statusText.isEmpty {

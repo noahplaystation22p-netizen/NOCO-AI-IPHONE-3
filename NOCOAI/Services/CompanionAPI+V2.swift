@@ -100,13 +100,22 @@ extension CompanionAPI {
         )
     }
 
-    func uploadVisionImage(imageData: Data, filename: String, message: String?, conversationId: String?) async throws -> VisionUploadResult {
+    func uploadVisionImage(
+        imageData: Data,
+        filename: String,
+        message: String?,
+        conversationId: String?,
+        qualityProfile: String? = nil,
+        ocrLength: Int? = nil
+    ) async throws -> VisionUploadResult {
         var fields: [String: String] = [:]
         let caption = (message?.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty == false)
             ? message!
             : "Beschreibe ausführlich auf Deutsch, was auf dem Bild zu sehen ist."
         fields["message"] = caption
         if let conversationId { fields["conversation_id"] = conversationId }
+        if let qualityProfile, !qualityProfile.isEmpty { fields["quality_profile"] = qualityProfile }
+        if let ocrLength { fields["ocr_length"] = String(ocrLength) }
 
         // Do NOT fall back to /chat — that duplicates the user-image on the PC.
         return try await uploadMultipart(

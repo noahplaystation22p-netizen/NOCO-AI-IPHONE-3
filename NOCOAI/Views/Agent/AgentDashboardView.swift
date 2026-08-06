@@ -91,15 +91,11 @@ struct AgentDashboardView: View {
                     .foregroundStyle(.secondary)
             }
             Spacer()
-            if connection.isOnline {
-                Label("PC", systemImage: "checkmark.circle.fill")
-                    .font(.caption2.weight(.semibold))
-                    .foregroundStyle(NOCOAITheme.success)
-            } else {
-                Label("Offline", systemImage: "wifi.slash")
-                    .font(.caption2)
-                    .foregroundStyle(.secondary)
-            }
+            AgentCoreOrb(
+                isActive: session.isWorking || session.activeTask?.status == "running",
+                progress: Double(session.activeTask?.progress ?? 0)
+            )
+            .scaleEffect(0.85)
         }
         .opacity(appear ? 1 : 0)
     }
@@ -278,7 +274,12 @@ struct AgentDashboardView: View {
     }
 
     private func stepRow(_ step: AgentStep, current: Int) -> some View {
-        HStack(alignment: .top, spacing: 10) {
+        let icons = ["🧠", "🔎", "📋", "⚙️", "✅"]
+        let icon = icons[min(step.index, icons.count - 1)]
+        return HStack(alignment: .top, spacing: 10) {
+            Text(icon)
+                .font(.caption)
+                .padding(.top, 2)
             Circle()
                 .fill(stepColor(step.status))
                 .frame(width: 10, height: 10)

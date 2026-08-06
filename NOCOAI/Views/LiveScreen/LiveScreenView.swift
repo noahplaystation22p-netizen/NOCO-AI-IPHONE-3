@@ -35,7 +35,19 @@ struct LiveScreenView: View {
                 ScrollViewReader { proxy in
                     ScrollView {
                         VStack(spacing: 16) {
+                            if session.isActive || session.isAnalyzing {
+                                LiveScreenIntelligenceWave(phase: session.phase)
+                                    .padding(.horizontal, 4)
+                                    .transition(.opacity.combined(with: .scale(0.98)))
+                            }
+
                             floatingPreviewCard
+
+                            if !session.suggestedActions.isEmpty {
+                                suggestedActionsRow
+                            }
+
+                            qualityPicker
                             modePicker
                             if !session.turns.isEmpty {
                                 conversationStack
@@ -101,13 +113,15 @@ struct LiveScreenView: View {
                 .opacity(0.85)
             RadialGradient(
                 colors: [
-                    session.mode.accent.opacity(scheme == .dark ? 0.22 : 0.14),
+                    session.phase.color.opacity(scheme == .dark ? 0.28 : 0.16),
+                    session.mode.accent.opacity(scheme == .dark ? 0.18 : 0.10),
                     .clear
                 ],
                 center: .topTrailing,
                 startRadius: 20,
-                endRadius: 320
+                endRadius: 340
             )
+            .animation(.easeInOut(duration: 0.55), value: session.phase)
             .animation(.easeInOut(duration: 0.55), value: session.mode)
         }
         .ignoresSafeArea()
@@ -133,7 +147,7 @@ struct LiveScreenView: View {
             VStack(alignment: .leading, spacing: 2) {
                 Text("NOCO Live Screen")
                     .font(.system(size: 20, weight: .bold, design: .rounded))
-                Text(session.statusLine)
+                Text("\(session.phase.title) · \(session.statusLine)")
                     .font(.caption)
                     .foregroundStyle(.secondary)
             }
@@ -310,6 +324,59 @@ struct LiveScreenView: View {
     }
 
     // MARK: - Modes
+
+    private var suggestedActionsRow: some View {
+        ScrollView(.horizontal, showsIndicators: false) {
+            HStack(spacing: 8) {
+                ForEach(session.suggestedActions) { action in
+                    Button {
+                        HapticService.selection()
+                        Task { await session.analyze(userPrompt: action.prompt) }
+                    } label: {
+                        Label(action.title, systemImage: action.systemImage)
+                            .font(.caption.weight(.semibold))
+                            .padding(.horizontal, 12)
+                            .padding(.vertical, 9)
+                            .background(.ultraThinMaterial, in: Capsule())
+                    }
+                    .disabled(!session.isActive || session.isAnalyzing)
+                }
+            }
+        }
+    }
+
+    private var qualityPicker: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            if !session.activeModelLabel.isEmpty {
+                Text("NOCO nutzt: \(session.activeModelLabel)")
+                    .font(.caption2.weight(.medium))
+                    .foregroundStyle(.secondary)
+            }
+            ScrollView(.horizontal, showsIndicators: false) {
+                HStack(spacing: 8) {
+                    ForEach(LiveScreenQuality.allCases) { q in
+                        Button {
+                            HapticService.selection()
+                            session.quality = q
+                        } label: {
+                            Text(q.title)
+                                .font(.caption.weight(.semibold))
+                                .foregroundStyle(session.quality == q ? Color.white : Color.primary)
+                                .padding(.horizontal, 12)
+                                .padding(.vertical, 8)
+                                .background {
+                                    if session.quality == q {
+                                        Capsule().fill(session.phase.color.gradient)
+                                    } else {
+                                        Capsule().fill(.ultraThinMaterial)
+                                    }
+                                }
+                        }
+                    }
+                }
+            }
+        }
+    }
 
     private var modePicker: some View {
         ScrollView(.horizontal, showsIndicators: false) {

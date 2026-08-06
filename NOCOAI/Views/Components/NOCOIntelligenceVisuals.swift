@@ -1,0 +1,101 @@
+import SwiftUI
+
+/// Animated intelligence wave — color encodes Live Screen phase.
+struct LiveScreenIntelligenceWave: View {
+    var phase: LiveScreenPhase
+    @State private var t: CGFloat = 0
+
+    var body: some View {
+        TimelineView(.animation(minimumInterval: 1.0 / 60.0, paused: false)) { timeline in
+            let time = timeline.date.timeIntervalSinceReferenceDate
+            Canvas { context, size in
+                let midY = size.height * 0.5
+                let amp: CGFloat = phase == .idle ? 4 : (phase == .done ? 6 : 11)
+                let speed = phase == .understanding ? 2.4 : 1.6
+                var path = Path()
+                for x in stride(from: 0, through: size.width, by: 2) {
+                    let y = midY
+                        + sin((x / size.width) * .pi * 3 + time * speed) * amp
+                        + sin((x / size.width) * .pi * 7 + time * speed * 1.3) * (amp * 0.35)
+                    if x == 0 { path.move(to: CGPoint(x: x, y: y)) }
+                    else { path.addLine(to: CGPoint(x: x, y: y)) }
+                }
+                context.stroke(
+                    path,
+                    with: .linearGradient(
+                        Gradient(colors: [
+                            phase.color.opacity(0.2),
+                            phase.color,
+                            Color(red: 1, green: 0.7, blue: 0.85).opacity(0.85),
+                            phase.color.opacity(0.35)
+                        ]),
+                        startPoint: .zero,
+                        endPoint: CGPoint(x: size.width, y: 0)
+                    ),
+                    style: StrokeStyle(lineWidth: phase == .idle ? 2 : 3, lineCap: .round)
+                )
+            }
+        }
+        .frame(height: 36)
+        .blur(radius: phase == .idle ? 0.2 : 0.4)
+        .animation(.easeInOut(duration: 0.45), value: phase)
+        .onAppear { t = 1 }
+    }
+}
+
+/// Living agent core — rainbow/glass identity orb.
+struct AgentCoreOrb: View {
+    var isActive: Bool
+    var progress: Double
+    @State private var spin = false
+
+    var body: some View {
+        ZStack {
+            Circle()
+                .fill(
+                    AngularGradient(
+                        colors: [
+                            Color(red: 0.35, green: 0.85, blue: 0.75),
+                            Color(red: 0.45, green: 0.55, blue: 1.0),
+                            Color(red: 0.85, green: 0.45, blue: 0.95),
+                            Color(red: 1.0, green: 0.7, blue: 0.45),
+                            Color(red: 0.35, green: 0.85, blue: 0.75)
+                        ],
+                        center: .center
+                    )
+                )
+                .frame(width: 72, height: 72)
+                .blur(radius: isActive ? 10 : 6)
+                .opacity(0.85)
+                .rotationEffect(.degrees(spin ? 360 : 0))
+                .animation(.linear(duration: isActive ? 6 : 14).repeatForever(autoreverses: false), value: spin)
+
+            Circle()
+                .fill(.ultraThinMaterial)
+                .frame(width: 54, height: 54)
+                .overlay(
+                    Circle()
+                        .stroke(
+                            LinearGradient(
+                                colors: [.white.opacity(0.5), .clear, .white.opacity(0.25)],
+                                startPoint: .topLeading,
+                                endPoint: .bottomTrailing
+                            ),
+                            lineWidth: 1
+                        )
+                )
+
+            Image(systemName: "brain.head.profile")
+                .font(.system(size: 22, weight: .semibold))
+                .foregroundStyle(.primary)
+
+            Circle()
+                .trim(from: 0, to: max(0.04, progress / 100))
+                .stroke(Color(red: 0.35, green: 0.85, blue: 0.7), style: StrokeStyle(lineWidth: 3, lineCap: .round))
+                .frame(width: 64, height: 64)
+                .rotationEffect(.degrees(-90))
+                .animation(.spring(response: 0.5, dampingFraction: 0.85), value: progress)
+        }
+        .onAppear { spin = true }
+    }
+}

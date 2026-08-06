@@ -53,6 +53,7 @@
 		NA00000100000000000000A1 /* AgentModels.swift in Sources */ = {isa = PBXBuildFile; fileRef = NA00000200000000000000A1 /* AgentModels.swift */; };
 		NA00000100000000000000A2 /* AgentSessionController.swift in Sources */ = {isa = PBXBuildFile; fileRef = NA00000200000000000000A2 /* AgentSessionController.swift */; };
 		NA00000100000000000000A3 /* AgentDashboardView.swift in Sources */ = {isa = PBXBuildFile; fileRef = NA00000200000000000000A3 /* AgentDashboardView.swift */; };
+		NA00000100000000000000A4 /* NOCOIntelligenceVisuals.swift in Sources */ = {isa = PBXBuildFile; fileRef = NA00000200000000000000A4 /* NOCOIntelligenceVisuals.swift */; };
 		NA0000010000000000000021 /* CompanionAPI+V2.swift in Sources */ = {isa = PBXBuildFile; fileRef = NA0000020000000000000021 /* CompanionAPI+V2.swift */; };
 		NA0000010000000000000022 /* ChatStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = NA0000020000000000000022 /* ChatStore.swift */; };
 		NA0000010000000000000023 /* ImageStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = NA0000020000000000000023 /* ImageStore.swift */; };
@@ -155,6 +156,7 @@
 		NA00000200000000000000A1 /* AgentModels.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AgentModels.swift; sourceTree = "<group>"; };
 		NA00000200000000000000A2 /* AgentSessionController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AgentSessionController.swift; sourceTree = "<group>"; };
 		NA00000200000000000000A3 /* AgentDashboardView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AgentDashboardView.swift; sourceTree = "<group>"; };
+		NA00000200000000000000A4 /* NOCOIntelligenceVisuals.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NOCOIntelligenceVisuals.swift; sourceTree = "<group>"; };
 		NA0000020000000000000021 /* CompanionAPI+V2.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "CompanionAPI+V2.swift"; sourceTree = "<group>"; };
 		NA0000020000000000000022 /* ChatStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ChatStore.swift; sourceTree = "<group>"; };
 		NA0000020000000000000023 /* ImageStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ImageStore.swift; sourceTree = "<group>"; };
@@ -341,6 +343,7 @@
 				NA0000020000000000000025 /* ModePicker.swift */,
 				NA0000020000000000000026 /* SyncBadge.swift */,
 				NA000002000000000000002D /* IntelligenceEffects.swift */,
+				NA00000200000000000000A4 /* NOCOIntelligenceVisuals.swift */,
 				NA000002000000000000002F /* VoiceRainbowOrb.swift */,
 				NA0000020000000000000032 /* WritingToolsView.swift */,
 			);
@@ -641,6 +644,7 @@
 				NA00000100000000000000A1 /* AgentModels.swift in Sources */,
 				NA00000100000000000000A2 /* AgentSessionController.swift in Sources */,
 				NA00000100000000000000A3 /* AgentDashboardView.swift in Sources */,
+				NA00000100000000000000A4 /* NOCOIntelligenceVisuals.swift in Sources */,
 				NA0000010000000000000021 /* CompanionAPI+V2.swift in Sources */,
 				NA0000010000000000000022 /* ChatStore.swift in Sources */,
 				NA0000010000000000000023 /* ImageStore.swift in Sources */,

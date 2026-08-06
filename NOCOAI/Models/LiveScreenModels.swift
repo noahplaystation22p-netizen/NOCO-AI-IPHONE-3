@@ -83,6 +83,80 @@ enum LiveScreenMode: String, CaseIterable, Identifiable, Codable {
     }
 }
 
+enum LiveScreenPhase: String, Equatable {
+    case idle
+    case recognizing
+    case understanding
+    case answering
+    case done
+
+    var title: String {
+        switch self {
+        case .idle: return "Bereit"
+        case .recognizing: return "Erkennen"
+        case .understanding: return "Verstehen"
+        case .answering: return "Antwort"
+        case .done: return "Fertig"
+        }
+    }
+
+    var color: Color {
+        switch self {
+        case .idle: return Color(red: 0.55, green: 0.62, blue: 0.75)
+        case .recognizing: return Color(red: 0.35, green: 0.62, blue: 1.0) // blue
+        case .understanding: return Color(red: 0.72, green: 0.48, blue: 1.0) // violet
+        case .answering: return Color(red: 0.95, green: 0.55, blue: 0.75)
+        case .done: return Color(red: 0.28, green: 0.85, blue: 0.58) // green
+        }
+    }
+}
+
+enum LiveScreenQuality: String, CaseIterable, Identifiable, Codable {
+    case auto
+    case fast
+    case accurate
+    case creative
+    case developer
+    case offline
+
+    var id: String { rawValue }
+
+    var title: String {
+        switch self {
+        case .auto: return "Auto"
+        case .fast: return "Schnell"
+        case .accurate: return "Genau"
+        case .creative: return "Kreativ"
+        case .developer: return "Entwickler"
+        case .offline: return "Offline"
+        }
+    }
+}
+
+struct LiveScreenSuggestedAction: Identifiable, Equatable {
+    let id: String
+    let title: String
+    let prompt: String
+    let systemImage: String
+
+    static func from(ocr: String, mode: LiveScreenMode) -> [LiveScreenSuggestedAction] {
+        var list: [LiveScreenSuggestedAction] = []
+        let lower = ocr.lowercased()
+        if lower.contains("error") || lower.contains("fehler") || lower.contains("exception") || lower.contains("failed") {
+            list.append(.init(id: "err", title: "Fehlermeldung analysieren", prompt: "Analysiere die Fehlermeldung und schlage konkrete Lösungen vor.", systemImage: "exclamationmark.triangle.fill"))
+        }
+        if ocr.count > 120 {
+            list.append(.init(id: "sum", title: "Text zusammenfassen", prompt: "Fasse den sichtbaren Text kurz und klar zusammen.", systemImage: "text.alignleft"))
+        }
+        list.append(.init(id: "steps", title: "Schritt für Schritt", prompt: "Erkläre Schritt für Schritt, was ich als Nächstes tun soll.", systemImage: "list.number"))
+        list.append(.init(id: "reply", title: "Antwort erstellen", prompt: "Formuliere eine passende Antwort oder Nachricht basierend auf dem Bildschirm.", systemImage: "bubble.left.and.bubble.right.fill"))
+        if mode == .assist {
+            list.append(.init(id: "act", title: "Aktionen vorschlagen", prompt: "Schlage 3 sinnvolle nächste Aktionen vor.", systemImage: "sparkles"))
+        }
+        return Array(list.prefix(4))
+    }
+}
+
 /// Extensible capture kinds — Broadcast / Camera / AR can plug in later.
 enum LiveScreenCaptureKind: String, Codable {
     case photoLibrary

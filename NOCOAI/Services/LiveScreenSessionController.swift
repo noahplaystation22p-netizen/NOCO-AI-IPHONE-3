@@ -8,9 +8,13 @@ final class LiveScreenSessionController: ObservableObject {
     @Published private(set) var isActive = false
     @Published private(set) var hasConsent = false
     @Published var mode: LiveScreenMode = .help
+    @Published var quality: LiveScreenQuality = .auto
+    @Published private(set) var phase: LiveScreenPhase = .idle
     @Published private(set) var turns: [LiveScreenTurn] = []
     @Published private(set) var latestPreview: UIImage?
     @Published private(set) var latestOCRPreview: String = ""
+    @Published private(set) var suggestedActions: [LiveScreenSuggestedAction] = []
+    @Published private(set) var activeModelLabel: String = ""
     @Published private(set) var isAnalyzing = false
     @Published private(set) var statusLine = "Bereit"
     @Published private(set) var lastError: String?
@@ -74,9 +78,12 @@ final class LiveScreenSessionController: ObservableObject {
         replayCapture = nil
         isActive = false
         isAnalyzing = false
+        phase = .idle
         latestFrame = nil
         latestPreview = nil
         latestOCRPreview = ""
+        suggestedActions = []
+        activeModelLabel = ""
         captureKind = nil
         statusLine = "Beendet"
         HapticService.soft()
@@ -104,6 +111,7 @@ final class LiveScreenSessionController: ObservableObject {
         lastFrameFingerprint = fingerprint
 
         statusLine = "OCR…"
+        withAnimation(.easeInOut(duration: 0.35)) { phase = .recognizing }
         let ocr = await LiveScreenOCR.recognizeText(in: image)
         let frame = LiveScreenFrame(
             jpegData: jpeg,
@@ -117,7 +125,9 @@ final class LiveScreenSessionController: ObservableObject {
         latestPreview = image
         latestOCRPreview = String(ocr.prefix(400))
         captureKind = source
+        suggestedActions = LiveScreenSuggestedAction.from(ocr: ocr, mode: mode)
         statusLine = ocr.isEmpty ? "Bild bereit" : "Text erkannt · bereit"
+        withAnimation(.easeInOut(duration: 0.35)) { phase = .idle }
         HapticService.soft()
 
         if autoAnalyze || (autoAssistEnabled && mode == .assist && source != .inAppReplay) {
@@ -211,7 +221,8 @@ final class LiveScreenSessionController: ObservableObject {
         turns.append(LiveScreenTurn(role: .user, text: userPrompt?.isEmpty == false ? userPrompt! : mode.defaultUserPrompt, thumbnailJPEG: thumb))
 
         isAnalyzing = true
-        statusLine = "Vision + Kontext…"
+        statusLine = "Erkennen → Verstehen…"
+        withAnimation(.easeInOut(duration: 0.35)) { phase = .understanding }
         lastError = nil
         HapticService.prepare()
         HapticService.rigid()
@@ -220,26 +231,38 @@ final class LiveScreenSessionController: ObservableObject {
         }
 
         do {
+            withAnimation(.easeInOut(duration: 0.35)) { phase = .answering }
+            statusLine = "Antwort wird formuliert…"
             let result = try await companion.uploadVisionImage(
                 imageData: frame.jpegData,
                 filename: "livescreen.jpg",
                 message: prompt,
-                conversationId: conversationId
+                conversationId: conversationId,
+                qualityProfile: quality.rawValue,
+                ocrLength: frame.ocrText.count
             )
             if let cid = result.conversationId, !cid.isEmpty {
                 conversationId = cid
             }
-            let reply = result.replyText?.trimmingCharacters(in: .whitespacesAndNewlines)
+            var reply = result.replyText?.trimmingCharacters(in: .whitespacesAndNewlines)
                 ?? "Keine Antwort von der Bildanalyse."
+            if let range = reply.range(of: "\n—\nNOCO nutzt:") {
+                activeModelLabel = String(reply[range.upperBound...]).trimmingCharacters(in: .whitespacesAndNewlines)
+                reply = String(reply[..<range.lowerBound]).trimmingCharacters(in: .whitespacesAndNewlines)
+            }
             turns.append(LiveScreenTurn(role: .assistant, text: reply))
-            statusLine = "Bereit"
+            statusLine = activeModelLabel.isEmpty ? "Fertig" : "Fertig · \(activeModelLabel)"
+            withAnimation(.spring(response: 0.45, dampingFraction: 0.86)) { phase = .done }
             HapticService.messageReceived()
             HapticService.success()
+            try? await Task.sleep(nanoseconds: 900_000_000)
+            withAnimation(.easeInOut(duration: 0.4)) { phase = .idle }
         } catch {
             let msg = (error as? LocalizedError)?.errorDescription ?? error.localizedDescription
             lastError = msg
             turns.append(LiveScreenTurn(role: .assistant, text: "Analyse fehlgeschlagen: \(msg)"))
             statusLine = "Fehler"
+            withAnimation(.easeInOut(duration: 0.3)) { phase = .idle }
             HapticService.error()
         }
     }

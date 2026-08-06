@@ -125,7 +125,7 @@ struct KeyboardCustomizationView: View {
             }
 
             if !customs.isEmpty {
-                Section("Deine Shortcuts verwalten") {
+                Section {
                     ForEach(customs) { item in
                         Button {
                             editing = item
@@ -162,6 +162,8 @@ struct KeyboardCustomizationView: View {
                             }
                         }
                     }
+                } header: {
+                    Text("Deine Shortcuts verwalten")
                 } footer: {
                     Text("„Endgültig löschen“ entfernt den Shortcut komplett. Zum nur Ausblenden: in „Auf der Tastatur“ wischen.")
                 }

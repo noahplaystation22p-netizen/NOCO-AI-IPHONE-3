@@ -1,5 +1,6 @@
 import Combine
 import Foundation
+import SwiftUI
 import UIKit
 
 /// Orchestrates consent → capture → OCR → vision → contextual reply.

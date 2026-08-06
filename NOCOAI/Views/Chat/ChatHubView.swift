@@ -465,11 +465,15 @@ private struct ChatBubble: View {
 
     @ViewBuilder
     private var bubbleText: some View {
+        let styled = Text(message.text)
+            .font(.body)
+            .foregroundStyle(message.role == .user ? .white : NOCOAITheme.primaryText(for: scheme))
         let content = HStack(alignment: .bottom, spacing: 6) {
-            Text(message.text)
-                .font(.body)
-                .foregroundStyle(message.role == .user ? .white : NOCOAITheme.primaryText(for: scheme))
-                .textSelection(allowTextSelection ? .enabled : .disabled)
+            if allowTextSelection {
+                styled.textSelection(.enabled)
+            } else {
+                styled
+            }
             if message.isStreaming {
                 StreamingGlowCursor()
             }

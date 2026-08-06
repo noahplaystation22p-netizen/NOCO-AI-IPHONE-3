@@ -583,7 +583,7 @@ final class ChatStore: ObservableObject {
     /// Runs the Companion Agent task engine and mirrors progress into Chat.
     private func runAgentGoalInChat(
         _ goal: String,
-        assistantID: String,
+        assistantID: UUID,
         conversationId: String?,
         isStartingNewChat: Bool
     ) async -> String? {
@@ -676,7 +676,7 @@ final class ChatStore: ObservableObject {
         }
     }
 
-    private func pollAgentTaskUntilDone(taskId: String, assistantID: String) async {
+    private func pollAgentTaskUntilDone(taskId: String, assistantID: UUID) async {
         guard let api else { return }
         let terminal: Set<String> = ["completed", "failed", "cancelled"]
         do {
@@ -696,7 +696,7 @@ final class ChatStore: ObservableObject {
 
     private func streamAgentPowerFallback(
         goal: String,
-        assistantID: String,
+        assistantID: UUID,
         conversationId: String?,
         isStartingNewChat: Bool
     ) async -> String? {
@@ -761,7 +761,7 @@ final class ChatStore: ObservableObject {
         return reply
     }
 
-    private func setAssistantText(_ id: String, _ text: String, streaming: Bool) {
+    private func setAssistantText(_ id: UUID, _ text: String, streaming: Bool) {
         guard let idx = messages.firstIndex(where: { $0.id == id }) else { return }
         messages[idx].text = text
         messages[idx].isStreaming = streaming

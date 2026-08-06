@@ -6,13 +6,14 @@ struct KeyboardRootView: View {
 
     var body: some View {
         VStack(spacing: 0) {
+            aiHeader
             aiToolbar
             statusBar
             KeyboardLayoutView(model: model)
                 .padding(.horizontal, 4)
                 .padding(.bottom, 6)
         }
-        .padding(.top, 6)
+        .padding(.top, 4)
         .background(keyboardBackground)
         .overlay {
             if model.isProcessing || model.showIntelligenceBurst {
@@ -21,54 +22,94 @@ struct KeyboardRootView: View {
                     title: model.overlayTitle
                 )
                 .transition(.asymmetric(
-                    insertion: .opacity.combined(with: .scale(scale: 0.9)),
-                    removal: .opacity.combined(with: .scale(scale: 1.04))
+                    insertion: .opacity.combined(with: .scale(scale: 0.94)),
+                    removal: .opacity.combined(with: .scale(scale: 1.02))
                 ))
             }
         }
-        .animation(.spring(response: 0.42, dampingFraction: 0.78), value: model.isProcessing)
-        .animation(.spring(response: 0.45, dampingFraction: 0.75), value: model.showIntelligenceBurst)
-        .animation(.easeInOut(duration: 0.25), value: model.animationPhase)
+        .animation(.spring(response: 0.42, dampingFraction: 0.82), value: model.isProcessing)
+        .animation(.spring(response: 0.45, dampingFraction: 0.8), value: model.showIntelligenceBurst)
+        .animation(.easeInOut(duration: 0.22), value: model.animationPhase)
     }
+
+    // MARK: - Header
+
+    private var aiHeader: some View {
+        HStack(spacing: 8) {
+            ZStack {
+                Circle()
+                    .fill(
+                        LinearGradient(
+                            colors: [
+                                Color(red: 0.45, green: 0.72, blue: 1.0),
+                                Color(red: 0.55, green: 0.88, blue: 0.92)
+                            ],
+                            startPoint: .topLeading,
+                            endPoint: .bottomTrailing
+                        )
+                    )
+                    .frame(width: 18, height: 18)
+                    .opacity(0.9)
+                Image(systemName: "sparkles")
+                    .font(.system(size: 9, weight: .bold))
+                    .foregroundStyle(.white)
+            }
+
+            Text("NOCO")
+                .font(.system(size: 12, weight: .bold, design: .rounded))
+                .tracking(1.1)
+                .foregroundStyle(scheme == .dark ? .white.opacity(0.92) : Color(red: 0.12, green: 0.14, blue: 0.2))
+
+            Text("AI")
+                .font(.system(size: 10, weight: .semibold, design: .rounded))
+                .padding(.horizontal, 6)
+                .padding(.vertical, 2)
+                .background(
+                    Capsule(style: .continuous)
+                        .fill(Color(red: 0.35, green: 0.55, blue: 1.0).opacity(scheme == .dark ? 0.28 : 0.14))
+                )
+                .foregroundStyle(Color(red: 0.35, green: 0.55, blue: 1.0))
+
+            Spacer(minLength: 0)
+
+            if model.isProcessing {
+                Text("arbeitet…")
+                    .font(.system(size: 10, weight: .medium, design: .rounded))
+                    .foregroundStyle(.secondary)
+                    .transition(.opacity)
+            }
+        }
+        .padding(.horizontal, 14)
+        .padding(.bottom, 2)
+    }
+
+    // MARK: - Toolbar chips
 
     private var aiToolbar: some View {
         ScrollView(.horizontal, showsIndicators: false) {
-            HStack(spacing: 8) {
+            HStack(spacing: 7) {
                 ForEach(model.toolbarChips) { chip in
                     Button {
                         model.runChip(chip)
                     } label: {
                         HStack(spacing: 5) {
                             Image(systemName: chip.systemImage)
-                                .font(.caption.weight(.semibold))
+                                .font(.system(size: 11, weight: .semibold))
                             Text(chip.title)
-                                .font(.caption.weight(.semibold))
+                                .font(.system(size: 12, weight: .semibold, design: .rounded))
                         }
-                        .padding(.horizontal, 12)
+                        .padding(.horizontal, 11)
                         .padding(.vertical, 8)
-                        .background(
-                            Capsule(style: .continuous)
-                                .fill(chipFill(for: chip))
-                                .overlay(
-                                    Capsule(style: .continuous)
-                                        .stroke(chipStroke, lineWidth: 1)
-                                )
-                                .shadow(
-                                    color: chip.isPrimary || chip.isCustom
-                                        ? Color(red: 0.35, green: 0.45, blue: 1).opacity(0.4)
-                                        : .clear,
-                                    radius: 8, y: 2
-                                )
-                        )
+                        .background(chipBackground(for: chip))
                         .foregroundStyle(chipForeground(for: chip))
                     }
                     .buttonStyle(SoftPressStyle())
                     .disabled(model.isProcessing)
-                    .opacity(model.isProcessing ? 0.55 : 1)
+                    .opacity(model.isProcessing ? 0.5 : 1)
                 }
             }
             .padding(.horizontal, 10)
-            .padding(.vertical, 4)
+            .padding(.vertical, 5)
         }
     }
 
@@ -76,10 +117,14 @@ struct KeyboardRootView: View {
         HStack(spacing: 8) {
             Circle()
                 .fill(statusColor)
-                .frame(width: 7, height: 7)
-                .shadow(color: statusColor.opacity(0.75), radius: 3)
+                .frame(width: 6, height: 6)
+                .overlay(
+                    Circle()
+                        .stroke(statusColor.opacity(0.35), lineWidth: 3)
+                        .blur(radius: 0.5)
+                )
             Text(model.statusLine)
-                .font(.caption2.weight(.medium))
+                .font(.system(size: 11, weight: .medium, design: .rounded))
                 .foregroundStyle(.secondary)
                 .lineLimit(1)
                 .contentTransition(.opacity)
@@ -88,23 +133,50 @@ struct KeyboardRootView: View {
                 Button("App öffnen") {
                     model.openAppForSync()
                 }
-                .font(.caption2.weight(.semibold))
+                .font(.system(size: 11, weight: .semibold, design: .rounded))
                 .buttonStyle(.borderedProminent)
+                .tint(Color(red: 0.32, green: 0.52, blue: 0.98))
                 .controlSize(.mini)
             }
         }
-        .padding(.horizontal, 14)
-        .padding(.vertical, 4)
+        .padding(.horizontal, 12)
+        .padding(.vertical, 5)
+        .background(
+            RoundedRectangle(cornerRadius: 10, style: .continuous)
+                .fill(scheme == .dark
+                      ? Color.white.opacity(0.05)
+                      : Color.white.opacity(0.45))
+                .overlay(
+                    RoundedRectangle(cornerRadius: 10, style: .continuous)
+                        .stroke(scheme == .dark
+                                ? Color.white.opacity(0.08)
+                                : Color.black.opacity(0.05), lineWidth: 0.5)
+                )
+        )
+        .padding(.horizontal, 10)
+        .padding(.bottom, 4)
     }
 
     private var keyboardBackground: some View {
         ZStack {
             (scheme == .dark
-             ? Color(red: 0.11, green: 0.11, blue: 0.12)
-             : Color(red: 0.82, green: 0.83, blue: 0.85))
+             ? Color(red: 0.09, green: 0.095, blue: 0.12)
+             : Color(red: 0.80, green: 0.82, blue: 0.86))
+
+            // Soft AI wash — cool cyan/silver, not purple
             LinearGradient(
                 colors: [
-                    Color.white.opacity(scheme == .dark ? 0.05 : 0.4),
+                    Color(red: 0.45, green: 0.7, blue: 1.0).opacity(scheme == .dark ? 0.12 : 0.18),
+                    Color(red: 0.55, green: 0.9, blue: 0.88).opacity(scheme == .dark ? 0.06 : 0.1),
+                    .clear
+                ],
+                startPoint: .topLeading,
+                endPoint: .bottomTrailing
+            )
+
+            LinearGradient(
+                colors: [
+                    Color.white.opacity(scheme == .dark ? 0.04 : 0.35),
                     .clear
                 ],
                 startPoint: .top,
@@ -116,169 +188,144 @@ struct KeyboardRootView: View {
 
     private var statusColor: Color {
         if !model.hasFullAccess || !model.isConfigured { return .orange }
-        if model.isProcessing { return Color(red: 0.35, green: 0.65, blue: 1) }
+        if model.isProcessing { return Color(red: 0.4, green: 0.7, blue: 1) }
         if model.lastError != nil { return .red }
-        return Color(red: 0.25, green: 0.82, blue: 0.5)
+        return Color(red: 0.3, green: 0.84, blue: 0.58)
     }
 
-    private func chipFill(for chip: KeyboardToolbarChip) -> some ShapeStyle {
-        if chip.isPrimary {
-            return AnyShapeStyle(
-                LinearGradient(
-                    colors: [
-                        Color(red: 0.32, green: 0.52, blue: 1),
-                        Color(red: 0.52, green: 0.42, blue: 0.95)
-                    ],
-                    startPoint: .leading,
-                    endPoint: .trailing
+    @ViewBuilder
+    private func chipBackground(for chip: KeyboardToolbarChip) -> some View {
+        let shape = RoundedRectangle(cornerRadius: 11, style: .continuous)
+        ZStack {
+            if chip.isPrimary {
+                shape.fill(
+                    LinearGradient(
+                        colors: [
+                            Color(red: 0.34, green: 0.56, blue: 1.0),
+                            Color(red: 0.42, green: 0.78, blue: 0.95)
+                        ],
+                        startPoint: .topLeading,
+                        endPoint: .bottomTrailing
+                    )
                 )
-            )
-        }
-        if chip.isAnswer {
-            return AnyShapeStyle(
-                LinearGradient(
-                    colors: [
-                        Color(red: 0.2, green: 0.75, blue: 0.65),
-                        Color(red: 0.35, green: 0.55, blue: 1)
-                    ],
-                    startPoint: .leading,
-                    endPoint: .trailing
+            } else if chip.isAnswer {
+                shape.fill(
+                    LinearGradient(
+                        colors: [
+                            Color(red: 0.22, green: 0.72, blue: 0.68),
+                            Color(red: 0.38, green: 0.62, blue: 0.95)
+                        ],
+                        startPoint: .topLeading,
+                        endPoint: .bottomTrailing
+                    )
                 )
-            )
-        }
-        if chip.isCustom {
-            return AnyShapeStyle(
-                LinearGradient(
-                    colors: [
-                        Color(red: 0.95, green: 0.45, blue: 0.7),
-                        Color(red: 0.55, green: 0.4, blue: 1)
-                    ],
-                    startPoint: .leading,
-                    endPoint: .trailing
+            } else if chip.isCustom {
+                shape.fill(.ultraThinMaterial)
+                shape.fill(
+                    LinearGradient(
+                        colors: [
+                            Color(red: 0.4, green: 0.7, blue: 1.0).opacity(0.28),
+                            Color(red: 0.5, green: 0.9, blue: 0.85).opacity(0.18)
+                        ],
+                        startPoint: .topLeading,
+                        endPoint: .bottomTrailing
+                    )
                 )
-            )
+                shape.stroke(
+                    LinearGradient(
+                        colors: [
+                            Color(red: 0.45, green: 0.75, blue: 1.0).opacity(0.7),
+                            Color(red: 0.55, green: 0.9, blue: 0.85).opacity(0.45)
+                        ],
+                        startPoint: .topLeading,
+                        endPoint: .bottomTrailing
+                    ),
+                    lineWidth: 1
+                )
+            } else {
+                shape.fill(.ultraThinMaterial)
+                shape.fill(scheme == .dark
+                           ? Color.white.opacity(0.06)
+                           : Color.white.opacity(0.55))
+                shape.stroke(
+                    scheme == .dark ? Color.white.opacity(0.12) : Color.black.opacity(0.06),
+                    lineWidth: 0.5
+                )
+            }
         }
-        return AnyShapeStyle(.ultraThinMaterial)
     }
 
     private func chipForeground(for chip: KeyboardToolbarChip) -> Color {
-        (chip.isPrimary || chip.isAnswer || chip.isCustom) ? .white : .primary
-    }
-
-    private var chipStroke: Color {
-        scheme == .dark ? Color.white.opacity(0.14) : Color.black.opacity(0.08)
+        if chip.isPrimary || chip.isAnswer { return .white }
+        if chip.isCustom {
+            return scheme == .dark ? Color(red: 0.75, green: 0.9, blue: 1.0) : Color(red: 0.2, green: 0.38, blue: 0.72)
+        }
+        return .primary
     }
 }
 
-/// Rich Apple Intelligence–style rainbow aurora while rewriting into the field.
+// MARK: - Rewrite overlay (clean Apple Intelligence–style aurora)
+
 private struct IntelligenceRewriteOverlay: View {
     var phase: KeyboardViewModel.AnimationPhase
     var title: String
 
     @State private var spin = false
     @State private var pulse = false
-    @State private var orbit = false
-    @State private var sparkle = false
-    @State private var hue = false
-    @State private var ribbon = false
+    @State private var drift = false
 
-    private let rainbow: [Color] = [
-        Color(red: 0.3, green: 0.85, blue: 1),
-        Color(red: 0.4, green: 0.55, blue: 1),
-        Color(red: 0.75, green: 0.4, blue: 1),
-        Color(red: 0.95, green: 0.4, blue: 0.75),
-        Color(red: 1.0, green: 0.65, blue: 0.35),
-        Color(red: 0.45, green: 0.95, blue: 0.7),
-        Color(red: 0.3, green: 0.85, blue: 1)
+    private let aurora: [Color] = [
+        Color(red: 0.45, green: 0.78, blue: 1.0),
+        Color(red: 0.55, green: 0.88, blue: 0.92),
+        Color(red: 0.7, green: 0.78, blue: 1.0),
+        Color(red: 0.5, green: 0.92, blue: 0.82),
+        Color(red: 0.45, green: 0.78, blue: 1.0)
     ]
 
     var body: some View {
         ZStack {
-            RoundedRectangle(cornerRadius: 22, style: .continuous)
-                .fill(.black.opacity(0.18))
+            RoundedRectangle(cornerRadius: 20, style: .continuous)
+                .fill(.black.opacity(0.14))
 
-            // Full rainbow mesh
-            AngularGradient(colors: rainbow, center: .center)
-                .blur(radius: 38)
-                .opacity(pulse ? 0.7 : 0.38)
-                .scaleEffect(pulse ? 1.2 : 0.92)
+            AngularGradient(colors: aurora, center: .center)
+                .blur(radius: 42)
+                .opacity(pulse ? 0.55 : 0.28)
+                .scaleEffect(pulse ? 1.12 : 0.94)
                 .rotationEffect(.degrees(spin ? 360 : 0))
-                .hueRotation(.degrees(hue ? 24 : -16))
                 .blendMode(.plusLighter)
 
-            ForEach(0..<4, id: \.self) { i in
-                Circle()
-                    .fill(rainbow[i].opacity(0.5))
-                    .frame(width: 120 + CGFloat(i * 28), height: 120 + CGFloat(i * 28))
-                    .blur(radius: 30)
-                    .offset(
-                        x: orbit ? CGFloat(30 - i * 10) : CGFloat(-26 + i * 9),
-                        y: pulse ? CGFloat(-20 + i * 5) : CGFloat(18 - i * 4)
-                    )
-                    .blendMode(.plusLighter)
-            }
+            Circle()
+                .fill(aurora[0].opacity(0.35))
+                .frame(width: 140, height: 140)
+                .blur(radius: 36)
+                .offset(x: drift ? 28 : -22, y: pulse ? -16 : 14)
+                .blendMode(.plusLighter)
 
-            // Sweeping ribbon
-            Capsule()
-                .fill(
-                    LinearGradient(
-                        colors: [.clear, .white.opacity(0.7), rainbow[2].opacity(0.5), .clear],
-                        startPoint: .leading,
-                        endPoint: .trailing
-                    )
-                )
-                .frame(width: 260, height: 64)
-                .rotationEffect(.degrees(-18))
-                .offset(x: ribbon ? 140 : -140)
-                .blur(radius: 8)
-                .opacity(0.85)
+            Circle()
+                .fill(aurora[3].opacity(0.3))
+                .frame(width: 110, height: 110)
+                .blur(radius: 30)
+                .offset(x: drift ? -24 : 20, y: pulse ? 18 : -12)
+                .blendMode(.plusLighter)
 
-            ForEach(0..<12, id: \.self) { i in
-                Image(systemName: "sparkle")
-                    .font(.system(size: CGFloat(6 + i % 4 * 2), weight: .bold))
-                    .foregroundStyle(rainbow[i % 6].opacity(sparkle ? 1 : 0.15))
-                    .offset(
-                        x: cos(Double(i) / 12 * .pi * 2) * (sparkle ? 88 : 70),
-                        y: sin(Double(i) / 12 * .pi * 2) * (sparkle ? 58 : 48)
-                    )
-                    .scaleEffect(sparkle ? 1.25 : 0.55)
-                    .rotationEffect(.degrees(spin ? Double(i * 30) : 0))
-            }
-
-            VStack(spacing: 10) {
+            VStack(spacing: 8) {
                 ZStack {
                     Circle()
-                        .fill(
-                            RadialGradient(
-                                colors: [.white.opacity(0.4), rainbow[2].opacity(0.25), .clear],
-                                center: .center,
-                                startRadius: 2,
-                                endRadius: 40
-                            )
+                        .stroke(
+                            AngularGradient(colors: aurora, center: .center),
+                            lineWidth: 2.5
                         )
-                        .frame(width: 78, height: 78)
-                        .scaleEffect(pulse ? 1.14 : 0.88)
-
-                    Circle()
-                        .stroke(AngularGradient(colors: rainbow, center: .center), lineWidth: 4)
-                        .frame(width: 52, height: 52)
+                        .frame(width: 46, height: 46)
                         .rotationEffect(.degrees(spin ? 360 : 0))
-                        .shadow(color: rainbow[2].opacity(0.85), radius: 14)
 
                     Circle()
-                        .fill(
-                            RadialGradient(
-                                colors: [.white.opacity(0.6), rainbow[1].opacity(0.2), .clear],
-                                center: .center,
-                                startRadius: 1,
-                                endRadius: 20
-                            )
-                        )
-                        .frame(width: 40, height: 40)
-                        .scaleEffect(pulse ? 1.08 : 0.92)
+                        .fill(.ultraThinMaterial)
+                        .frame(width: 34, height: 34)
 
-                    Image(systemName: phase == .success ? "checkmark" : (phase == .writing ? "wand.and.stars" : "sparkles"))
-                        .font(.system(size: 17, weight: .bold))
+                    Image(systemName: phase == .success
+                          ? "checkmark"
+                          : (phase == .writing ? "wand.and.stars" : "sparkles"))
+                        .font(.system(size: 14, weight: .semibold))
                         .foregroundStyle(.white)
                         .symbolEffect(.bounce, value: phase)
                         .symbolEffect(.pulse, options: .repeating, value: phase == .thinking || phase == .writing)
@@ -286,33 +333,40 @@ private struct IntelligenceRewriteOverlay: View {
 
                 if phase == .thinking, !title.isEmpty {
                     Text(title)
-                        .font(.caption.weight(.semibold))
+                        .font(.system(size: 12, weight: .semibold, design: .rounded))
                         .foregroundStyle(.white.opacity(0.95))
-                        .shadow(color: .black.opacity(0.35), radius: 6)
-                        .transition(.opacity.combined(with: .scale(scale: 0.96)))
+                        .shadow(color: .black.opacity(0.25), radius: 4)
+                        .transition(.opacity)
                 }
             }
-            .padding(.horizontal, phase == .thinking ? 22 : 18)
-            .padding(.vertical, 14)
+            .padding(.horizontal, phase == .thinking ? 20 : 16)
+            .padding(.vertical, 12)
             .background(
                 Capsule(style: .continuous)
-                    .fill(.ultraThinMaterial.opacity(0.9))
+                    .fill(.ultraThinMaterial.opacity(0.92))
                     .overlay(
                         Capsule(style: .continuous)
-                            .stroke(AngularGradient(colors: rainbow, center: .center), lineWidth: 1.5)
+                            .stroke(
+                                LinearGradient(
+                                    colors: [
+                                        Color.white.opacity(0.55),
+                                        aurora[0].opacity(0.45),
+                                        aurora[3].opacity(0.35)
+                                    ],
+                                    startPoint: .topLeading,
+                                    endPoint: .bottomTrailing
+                                ),
+                                lineWidth: 1
+                            )
                     )
-                    .shadow(color: rainbow[2].opacity(0.55), radius: 22, y: 6)
             )
-            .animation(.spring(response: 0.4, dampingFraction: 0.82), value: phase)
+            .animation(.spring(response: 0.38, dampingFraction: 0.84), value: phase)
         }
         .allowsHitTesting(false)
         .onAppear {
-            withAnimation(.linear(duration: 2.8).repeatForever(autoreverses: false)) { spin = true }
-            withAnimation(.easeInOut(duration: 1.2).repeatForever(autoreverses: true)) { pulse = true }
-            withAnimation(.easeInOut(duration: 1.9).repeatForever(autoreverses: true)) { orbit = true }
-            withAnimation(.easeInOut(duration: 0.75).repeatForever(autoreverses: true)) { sparkle = true }
-            withAnimation(.easeInOut(duration: 2.8).repeatForever(autoreverses: true)) { hue = true }
-            withAnimation(.easeInOut(duration: 1.6).repeatForever(autoreverses: true)) { ribbon = true }
+            withAnimation(.linear(duration: 4.2).repeatForever(autoreverses: false)) { spin = true }
+            withAnimation(.easeInOut(duration: 1.4).repeatForever(autoreverses: true)) { pulse = true }
+            withAnimation(.easeInOut(duration: 2.2).repeatForever(autoreverses: true)) { drift = true }
         }
     }
 }
@@ -320,8 +374,8 @@ private struct IntelligenceRewriteOverlay: View {
 private struct SoftPressStyle: ButtonStyle {
     func makeBody(configuration: Configuration) -> some View {
         configuration.label
-            .scaleEffect(configuration.isPressed ? 0.94 : 1)
-            .opacity(configuration.isPressed ? 0.88 : 1)
-            .animation(.easeOut(duration: 0.12), value: configuration.isPressed)
+            .scaleEffect(configuration.isPressed ? 0.95 : 1)
+            .opacity(configuration.isPressed ? 0.9 : 1)
+            .animation(.easeOut(duration: 0.11), value: configuration.isPressed)
     }
 }

@@ -163,12 +163,21 @@ private struct LetterKey: View {
             .frame(maxWidth: .infinity)
             .frame(height: 46)
             .background(
-                RoundedRectangle(cornerRadius: 8, style: .continuous)
+                RoundedRectangle(cornerRadius: 9, style: .continuous)
                     .fill(keyFill)
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 9, style: .continuous)
+                            .stroke(
+                                scheme == .dark
+                                ? Color.white.opacity(pressed ? 0.08 : 0.12)
+                                : Color.white.opacity(0.7),
+                                lineWidth: 0.5
+                            )
+                    )
                     .shadow(
-                        color: .black.opacity(scheme == .dark ? 0.4 : 0.18),
-                        radius: pressed ? 0 : 0.6,
-                        y: pressed ? 0 : 1.2
+                        color: .black.opacity(scheme == .dark ? 0.35 : 0.14),
+                        radius: pressed ? 0 : 0.5,
+                        y: pressed ? 0 : 1
                     )
             )
             .overlay(alignment: .top) {
@@ -225,9 +234,11 @@ private struct LetterKey: View {
 
     private var keyFill: Color {
         if pressed {
-            return scheme == .dark ? Color(white: 0.55) : Color(white: 0.92)
+            return scheme == .dark ? Color(red: 0.42, green: 0.43, blue: 0.48) : Color(white: 0.9)
         }
-        return scheme == .dark ? Color(white: 0.45) : .white
+        return scheme == .dark
+            ? Color(red: 0.34, green: 0.35, blue: 0.39)
+            : Color(red: 0.99, green: 0.995, blue: 1.0)
     }
 
     private var popupFill: Color {
@@ -305,9 +316,18 @@ private struct ModifierKey: View {
         .frame(width: width, height: 46)
         .foregroundStyle(prominent ? .white : .primary)
         .background(
-            RoundedRectangle(cornerRadius: 8, style: .continuous)
+            RoundedRectangle(cornerRadius: 9, style: .continuous)
                 .fill(fill)
-                .shadow(color: .black.opacity(pressed ? 0 : 0.12), radius: 0.5, y: 1)
+                .overlay(
+                    RoundedRectangle(cornerRadius: 9, style: .continuous)
+                        .stroke(
+                            prominent
+                            ? Color.white.opacity(0.22)
+                            : (scheme == .dark ? Color.white.opacity(0.1) : Color.black.opacity(0.04)),
+                            lineWidth: 0.5
+                        )
+                )
+                .shadow(color: .black.opacity(pressed ? 0 : 0.1), radius: 0.4, y: 1)
         )
         .scaleEffect(pressed ? 0.96 : 1)
         .contentShape(Rectangle())
@@ -323,12 +343,27 @@ private struct ModifierKey: View {
         )
     }
 
-    private var fill: Color {
-        if prominent { return Color(red: 0.28, green: 0.48, blue: 0.98) }
-        if active || pressed {
-            return scheme == .dark ? Color.white.opacity(0.55) : .white
+    private var fill: AnyShapeStyle {
+        if prominent {
+            return AnyShapeStyle(
+                LinearGradient(
+                    colors: [
+                        Color(red: 0.34, green: 0.56, blue: 1.0),
+                        Color(red: 0.4, green: 0.72, blue: 0.95)
+                    ],
+                    startPoint: .top,
+                    endPoint: .bottom
+                )
+            )
         }
-        return scheme == .dark ? Color(white: 0.28) : Color(white: 0.72)
+        if active || pressed {
+            return AnyShapeStyle(scheme == .dark ? Color.white.opacity(0.52) : Color.white)
+        }
+        return AnyShapeStyle(
+            scheme == .dark
+            ? Color(red: 0.22, green: 0.23, blue: 0.27)
+            : Color(red: 0.70, green: 0.72, blue: 0.76)
+        )
     }
 }
 
@@ -343,11 +378,15 @@ private struct SpaceKey: View {
             .frame(maxWidth: .infinity)
             .frame(height: 46)
             .background(
-                RoundedRectangle(cornerRadius: 8, style: .continuous)
+                RoundedRectangle(cornerRadius: 9, style: .continuous)
                     .fill(scheme == .dark
-                          ? Color(white: pressed ? 0.55 : 0.45)
-                          : (pressed ? Color(white: 0.92) : .white))
-                    .shadow(color: .black.opacity(0.12), radius: 0.5, y: 1)
+                          ? Color(red: 0.34, green: 0.35, blue: 0.39).opacity(pressed ? 0.85 : 1)
+                          : (pressed ? Color(white: 0.9) : Color(red: 0.99, green: 0.995, blue: 1.0)))
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 9, style: .continuous)
+                            .stroke(scheme == .dark ? Color.white.opacity(0.1) : Color.white.opacity(0.65), lineWidth: 0.5)
+                    )
+                    .shadow(color: .black.opacity(0.1), radius: 0.4, y: 1)
             )
             .contentShape(Rectangle())
             .gesture(

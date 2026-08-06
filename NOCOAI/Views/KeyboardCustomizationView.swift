@@ -2,7 +2,6 @@ import SwiftUI
 
 /// Customize NOCO keyboard AI chips: reorder built-ins + create smart prompt shortcuts.
 struct KeyboardCustomizationView: View {
-    @Environment(\.dismiss) private var dismiss
     @Environment(\.colorScheme) private var scheme
 
     @State private var order: [String] = KeyboardChipPreferences.chipOrder
@@ -20,13 +19,33 @@ struct KeyboardCustomizationView: View {
     var body: some View {
         List {
             Section {
-                Text("Ziehen zum Sortieren. Eigene Shortcuts = dein Prompt + Name auf der Tastatur.")
-                    .font(.footnote)
-                    .foregroundStyle(.secondary)
-                    .listRowBackground(Color.clear)
+                previewStrip
+                    .listRowInsets(EdgeInsets(top: 12, leading: 12, bottom: 12, trailing: 12))
+                    .listRowBackground(
+                        RoundedRectangle(cornerRadius: 16, style: .continuous)
+                            .fill(
+                                LinearGradient(
+                                    colors: scheme == .dark
+                                    ? [
+                                        Color(red: 0.1, green: 0.12, blue: 0.18),
+                                        Color(red: 0.08, green: 0.1, blue: 0.14)
+                                    ]
+                                    : [
+                                        Color(red: 0.92, green: 0.94, blue: 0.99),
+                                        Color(red: 0.88, green: 0.92, blue: 0.96)
+                                    ],
+                                    startPoint: .topLeading,
+                                    endPoint: .bottomTrailing
+                                )
+                            )
+                    )
+            } header: {
+                Text("Vorschau")
+            } footer: {
+                Text("So erscheinen deine Chips auf der Tastatur. Tippe „Bearbeiten“ zum Sortieren.")
             }
 
-            Section("Reihenfolge auf der Tastatur") {
+            Section("Reihenfolge") {
                 ForEach(order, id: \.self) { token in
                     chipRow(for: token)
                 }
@@ -44,11 +63,13 @@ struct KeyboardCustomizationView: View {
                     showEditor = true
                 } label: {
                     Label("Neuen Shortcut erstellen", systemImage: "plus.circle.fill")
+                        .font(.body.weight(.semibold))
+                        .foregroundStyle(NOCOAITheme.accent)
                 }
             } header: {
                 Text("Eigene KI-Shortcuts")
             } footer: {
-                Text("Beispiel-Prompts: „Alles in Großbuchstaben“, „Als Aufzählung“, „Als Markdown-Tabelle“, „Kommas entfernen“, „Formeller umschreiben“.")
+                Text("Name + Prompt. Tippen auf der Tastatur führt die Anweisung am markierten Text aus — z. B. Großbuchstaben, Tabelle, Liste, Kommas weg.")
             }
 
             if !customs.isEmpty {
@@ -59,9 +80,13 @@ struct KeyboardCustomizationView: View {
                             showEditor = true
                         } label: {
                             HStack(spacing: 12) {
-                                Image(systemName: item.systemImage)
-                                    .foregroundStyle(NOCOAITheme.accent)
-                                    .frame(width: 28)
+                                ZStack {
+                                    RoundedRectangle(cornerRadius: 10, style: .continuous)
+                                        .fill(NOCOAITheme.accent.opacity(0.14))
+                                        .frame(width: 36, height: 36)
+                                    Image(systemName: item.systemImage)
+                                        .foregroundStyle(NOCOAITheme.accent)
+                                }
                                 VStack(alignment: .leading, spacing: 3) {
                                     Text(item.name)
                                         .font(.body.weight(.semibold))
@@ -72,8 +97,8 @@ struct KeyboardCustomizationView: View {
                                         .lineLimit(2)
                                 }
                                 Spacer()
-                                Image(systemName: "pencil")
-                                    .font(.caption)
+                                Image(systemName: "chevron.right")
+                                    .font(.caption.weight(.semibold))
                                     .foregroundStyle(.tertiary)
                             }
                         }
@@ -92,11 +117,20 @@ struct KeyboardCustomizationView: View {
                 Button {
                     save()
                 } label: {
-                    Label(savedFlash ? "Gespeichert ✓" : "Für Tastatur speichern", systemImage: "checkmark.circle.fill")
+                    HStack {
+                        Spacer()
+                        Label(
+                            savedFlash ? "Gespeichert" : "Für Tastatur speichern",
+                            systemImage: savedFlash ? "checkmark.circle.fill" : "arrow.down.circle.fill"
+                        )
+                        .font(.body.weight(.semibold))
+                        Spacer()
+                    }
                 }
                 .disabled(savedFlash)
+                .tint(savedFlash ? NOCOAITheme.success : NOCOAITheme.accent)
             } footer: {
-                Text("Danach ggf. Tastatur kurz wechseln (Globus), damit die Chips neu laden. Vollzugriff muss an sein.")
+                Text("Danach kurz Globus tippen, damit die Chips neu laden. Vollzugriff muss an sein.")
             }
         }
         .navigationTitle("Tastatur anpassen")
@@ -127,9 +161,82 @@ struct KeyboardCustomizationView: View {
         .onAppear {
             order = KeyboardChipPreferences.chipOrder
             customs = KeyboardChipPreferences.customShortcuts
-            // Ensure all builtins present once
             ensureBuiltinsInOrder()
         }
+    }
+
+    private var previewStrip: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            HStack(spacing: 6) {
+                Image(systemName: "sparkles")
+                    .font(.system(size: 10, weight: .bold))
+                    .foregroundStyle(NOCOAITheme.accent)
+                Text("NOCO AI")
+                    .font(.system(size: 11, weight: .bold, design: .rounded))
+                    .tracking(0.6)
+                Spacer()
+                Text("\(order.count) Chips")
+                    .font(.caption2.weight(.medium))
+                    .foregroundStyle(.secondary)
+            }
+
+            ScrollView(.horizontal, showsIndicators: false) {
+                HStack(spacing: 7) {
+                    ForEach(order, id: \.self) { token in
+                        previewChip(for: token)
+                    }
+                }
+            }
+        }
+    }
+
+    @ViewBuilder
+    private func previewChip(for token: String) -> some View {
+        let title: String
+        let icon: String
+        let primary: Bool
+        if token.hasPrefix("custom:") {
+            let id = String(token.dropFirst("custom:".count))
+            let c = customs.first(where: { $0.id == id })
+            title = c?.name ?? "?"
+            icon = c?.systemImage ?? "sparkles"
+            primary = false
+        } else if let action = KeyboardAIAction(rawValue: token) {
+            title = action.title
+            icon = action.systemImage
+            primary = action.isPrimary
+        } else {
+            title = token
+            icon = "questionmark"
+            primary = false
+        }
+
+        HStack(spacing: 4) {
+            Image(systemName: icon)
+                .font(.system(size: 10, weight: .semibold))
+            Text(title)
+                .font(.system(size: 11, weight: .semibold, design: .rounded))
+        }
+        .padding(.horizontal, 10)
+        .padding(.vertical, 7)
+        .foregroundStyle(primary ? .white : .primary)
+        .background(
+            RoundedRectangle(cornerRadius: 10, style: .continuous)
+                .fill(
+                    primary
+                    ? AnyShapeStyle(
+                        LinearGradient(
+                            colors: [
+                                Color(red: 0.34, green: 0.56, blue: 1.0),
+                                Color(red: 0.42, green: 0.78, blue: 0.95)
+                            ],
+                            startPoint: .topLeading,
+                            endPoint: .bottomTrailing
+                        )
+                    )
+                    : AnyShapeStyle(Color.primary.opacity(scheme == .dark ? 0.12 : 0.08))
+                )
+        )
     }
 
     @ViewBuilder
@@ -203,7 +310,6 @@ struct KeyboardCustomizationView: View {
         for id in KeyboardChipPreferences.defaultOrder where !next.contains(id) {
             next.append(id)
         }
-        // Drop unknown custom tokens without matching shortcut
         let customIds = Set(customs.map(\.id))
         next = next.filter { token in
             if token.hasPrefix("custom:") {
@@ -218,7 +324,6 @@ struct KeyboardCustomizationView: View {
         ensureBuiltinsInOrder()
         KeyboardChipPreferences.save(order: order, customs: customs)
         KeyboardChipPreferences.pushToKeyboard()
-        // Also refresh credentials bridge so SideStore keyboards pick up disk files
         CompanionCredentials.refreshFromDisk()
         HapticService.success()
         withAnimation {
@@ -251,8 +356,12 @@ private struct ShortcutEditorSheet: View {
     var body: some View {
         NavigationStack {
             Form {
-                Section("Name auf der Tastatur") {
+                Section {
                     TextField("z. B. Großbuchstaben", text: $shortcut.name)
+                } header: {
+                    Text("Name auf der Tastatur")
+                } footer: {
+                    Text("Kurz halten — erscheint als Chip über den Tasten.")
                 }
 
                 Section("Symbol") {
@@ -301,6 +410,7 @@ private struct ShortcutEditorSheet: View {
                             Text(tip)
                                 .font(.caption)
                                 .foregroundStyle(.primary)
+                                .multilineTextAlignment(.leading)
                         }
                     }
                 }

@@ -130,33 +130,49 @@ struct SettingsView: View {
                 }
 
                 Section {
-                    Label {
+                    HStack(spacing: 14) {
+                        ZStack {
+                            RoundedRectangle(cornerRadius: 12, style: .continuous)
+                                .fill(
+                                    LinearGradient(
+                                        colors: [
+                                            Color(red: 0.34, green: 0.56, blue: 1.0),
+                                            Color(red: 0.42, green: 0.78, blue: 0.95)
+                                        ],
+                                        startPoint: .topLeading,
+                                        endPoint: .bottomTrailing
+                                    )
+                                )
+                                .frame(width: 44, height: 44)
+                            Image(systemName: "keyboard.fill")
+                                .font(.system(size: 18, weight: .semibold))
+                                .foregroundStyle(.white)
+                        }
+
                         VStack(alignment: .leading, spacing: 4) {
                             Text("NOCO AI Tastatur")
                                 .font(.body.weight(.semibold))
                             Text(CompanionCredentials.isConfigured
-                                  ? "PC-Verbindung bereit für die Tastatur"
-                                  : "Zuerst mit dem PC koppeln")
+                                  ? "Bereit — PC-Verbindung freigegeben"
+                                  : "Noch nicht bereit — zuerst PC koppeln")
                                 .font(.caption)
                                 .foregroundStyle(.secondary)
                         }
-                    } icon: {
-                        Image(systemName: "keyboard")
-                            .foregroundStyle(NOCOAITheme.accent)
+                        Spacer(minLength: 0)
+                        Circle()
+                            .fill(CompanionCredentials.isConfigured ? NOCOAITheme.success : Color.orange)
+                            .frame(width: 8, height: 8)
                     }
+                    .padding(.vertical, 2)
 
-                    Text("""
-                    1. App mit dem PC koppeln (muss online sein)
-                    2. Unten „Zugangsdaten für Tastatur aktualisieren“ tippen
-                    3. iPhone-Einstellungen → Allgemein → Tastatur → NOCO AI hinzufügen
-                    4. Bei NOCO AI: „Vollzugriff erlauben“ einschalten
-                    5. Globus halten → NOCO AI → Text markieren → Aktion tippen
-
-                    Was ist eine App Group?
-                    App und Tastatur sind getrennte Programme. Die App Group ist ein gemeinsames Schließfach für Login-Daten. In SideStore bitte App Groups für App und Tastatur aktiv lassen (group.de.noco.nocoai). Zusätzlich hilft der Button „Zugangsdaten aktualisieren“.
-                    """)
-                    .font(.footnote)
-                    .foregroundStyle(.secondary)
+                    VStack(alignment: .leading, spacing: 10) {
+                        keyboardSetupStep(1, "App mit dem PC koppeln (online)")
+                        keyboardSetupStep(2, "Zugangsdaten unten aktualisieren")
+                        keyboardSetupStep(3, "iPhone → Tastatur → NOCO AI hinzufügen")
+                        keyboardSetupStep(4, "Vollzugriff erlauben")
+                        keyboardSetupStep(5, "Text markieren → KI-Chip tippen")
+                    }
+                    .padding(.vertical, 4)
 
                     Button {
                         HapticService.open()
@@ -169,28 +185,33 @@ struct SettingsView: View {
                         KeyboardChipPreferences.pushToKeyboard()
                         HapticService.success()
                     } label: {
-                        Label("Zugangsdaten für Tastatur aktualisieren", systemImage: "arrow.triangle.2.circlepath")
+                        Label("Zugangsdaten aktualisieren", systemImage: "arrow.triangle.2.circlepath")
+                            .frame(maxWidth: .infinity)
                     }
+                    .buttonStyle(.borderedProminent)
+                    .tint(NOCOAITheme.accent)
                     .disabled(!connection.isPaired)
 
                     NavigationLink {
                         KeyboardCustomizationView()
                     } label: {
                         Label {
-                            VStack(alignment: .leading, spacing: 2) {
+                            VStack(alignment: .leading, spacing: 3) {
                                 Text("Tastatur anpassen")
-                                Text("Reihenfolge · eigene KI-Shortcuts")
+                                    .font(.body.weight(.semibold))
+                                Text("Chips sortieren · eigene KI-Shortcuts mit Prompt")
                                     .font(.caption)
                                     .foregroundStyle(.secondary)
                             }
                         } icon: {
                             Image(systemName: "slider.horizontal.3")
+                                .foregroundStyle(NOCOAITheme.accent)
                         }
                     }
                 } header: {
                     Text("KI-Tastatur")
                 } footer: {
-                    Text("Ohne Vollzugriff kein Netzwerk. Eigene Shortcuts: Name + Prompt — dann auf der Tastatur tippen.")
+                    Text("App Group group.de.noco.nocoai in SideStore aktiv lassen. Ohne Vollzugriff kein Netzwerk. Nach Anpassen kurz Globus tippen, damit Chips neu laden.")
                 }
 
                 Section("Erweitert") {
@@ -238,8 +259,8 @@ struct SettingsView: View {
                 }
 
                 Section("Info") {
-                    Text("NOCO AI Companion v6.1")
-                    Text("Custom keyboard shortcuts")
+                    Text("NOCO AI Companion v6.2")
+                    Text("Premium keyboard · custom AI shortcuts")
                         .font(.footnote)
                         .foregroundStyle(NOCOAITheme.secondaryText(for: scheme))
                 }
@@ -270,6 +291,20 @@ struct SettingsView: View {
                 previewSynth.stopSpeaking(at: .immediate)
                 connection.profile.setName(nameDraft)
             }
+        }
+    }
+
+    private func keyboardSetupStep(_ n: Int, _ text: String) -> some View {
+        HStack(alignment: .top, spacing: 10) {
+            Text("\(n)")
+                .font(.caption2.weight(.bold))
+                .foregroundStyle(.white)
+                .frame(width: 18, height: 18)
+                .background(Circle().fill(NOCOAITheme.accent.opacity(0.9)))
+            Text(text)
+                .font(.footnote)
+                .foregroundStyle(.secondary)
+                .fixedSize(horizontal: false, vertical: true)
         }
     }
 

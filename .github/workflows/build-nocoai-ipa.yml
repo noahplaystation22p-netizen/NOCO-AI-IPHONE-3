@@ -22,24 +22,42 @@ jobs:
           set -eo pipefail
           mkdir -p build
 
-          xcodebuild clean build \
-            -project NOCOAI.xcodeproj \
-            -scheme NOCOAI \
-            -configuration Release \
-            -sdk iphoneos \
-            -destination 'generic/platform=iOS' \
-            -derivedDataPath build/DerivedData \
-            CODE_SIGNING_ALLOWED=NO \
-            CODE_SIGNING_REQUIRED=NO \
-            CODE_SIGN_IDENTITY="" \
-            CODE_SIGNING_STYLE=Manual \
-            VALIDATE_PRODUCT=NO \
-            2>&1 | tee build/xcodebuild.log
+          run_build() {
+            rm -rf build/DerivedData
+            # Avoid flaky Xcode 26 WMO / asset-catalog service crashes on GHA
+            xcodebuild clean build \
+              -project NOCOAI.xcodeproj \
+              -scheme NOCOAI \
+              -configuration Release \
+              -sdk iphoneos \
+              -destination 'generic/platform=iOS' \
+              -derivedDataPath build/DerivedData \
+              -jobs 2 \
+              CODE_SIGNING_ALLOWED=NO \
+              CODE_SIGNING_REQUIRED=NO \
+              CODE_SIGN_IDENTITY="" \
+              CODE_SIGNING_STYLE=Manual \
+              VALIDATE_PRODUCT=NO \
+              SWIFT_COMPILATION_MODE=incremental \
+              SWIFT_WHOLE_MODULE_OPTIMIZATION=NO \
+              2>&1 | tee build/xcodebuild.log
+            grep -q "BUILD SUCCEEDED" build/xcodebuild.log
+          }
 
-          if ! grep -q "BUILD SUCCEEDED" build/xcodebuild.log; then
-            echo "=== xcodebuild failed ==="
-            grep -E "error:|fatal error:|BUILD FAILED" build/xcodebuild.log | tail -40 || tail -80 build/xcodebuild.log
-            exit 1
+          if ! run_build; then
+            if grep -qi "build system has crashed\|unexpected service error" build/xcodebuild.log; then
+              echo "=== Xcode build system crashed — retrying once ==="
+              sleep 5
+              if ! run_build; then
+                echo "=== xcodebuild failed after retry ==="
+                grep -E "error:|fatal error:|BUILD FAILED" build/xcodebuild.log | tail -40 || tail -80 build/xcodebuild.log
+                exit 1
+              fi
+            else
+              echo "=== xcodebuild failed ==="
+              grep -E "error:|fatal error:|BUILD FAILED" build/xcodebuild.log | tail -40 || tail -80 build/xcodebuild.log
+              exit 1
+            fi
           fi
 
           APP_PATH=$(find build/DerivedData -name "NOCOAI.app" -type d | head -1)

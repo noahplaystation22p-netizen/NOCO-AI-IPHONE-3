@@ -4,7 +4,6 @@ import SwiftUI
 struct SettingsView: View {
     @EnvironmentObject private var connection: ConnectionStore
     @Environment(\.colorScheme) private var scheme
-    @State private var voiceMode: AIMode = VoiceSettings.defaultMode
     @State private var autoSpeak = true
     @State private var voiceId = ""
     @State private var voices: [AVSpeechSynthesisVoice] = []
@@ -23,16 +22,6 @@ struct SettingsView: View {
                 }
 
                 Section {
-                    Picker("Denkmodus", selection: $voiceMode) {
-                        ForEach([AIMode.auto, .think, .flash]) { mode in
-                            Text("\(mode.label) — \(mode.subtitle)").tag(mode)
-                        }
-                    }
-                    .onChange(of: voiceMode) { _, newValue in
-                        VoiceSettings.defaultMode = newValue
-                        HapticService.modeChange()
-                    }
-
                     Toggle("Antworten vorlesen", isOn: $autoSpeak)
                         .onChange(of: autoSpeak) { _, newValue in
                             UserDefaults.standard.set(newValue, forKey: "nocoai.autoSpeak")
@@ -59,7 +48,7 @@ struct SettingsView: View {
                 } header: {
                     Text("Speak")
                 } footer: {
-                    Text("Kamera/Vision nur im Sprachmodus — auf Wunsch oder bei „Was ist das?“. Denkmodus steuert nur Tempo und Tiefe.")
+                    Text("Speak antwortet immer im Flash-Modus (schnell). Kamera/Vision nur im Sprachmodus.")
                 }
 
                 Section {
@@ -249,7 +238,7 @@ struct SettingsView: View {
             .navigationTitle("Einstellungen")
             .onAppear {
                 voicePreviewArmed = false
-                voiceMode = VoiceSettings.defaultMode
+                VoiceSettings.defaultMode = .flash
                 if UserDefaults.standard.object(forKey: "nocoai.autoSpeak") == nil {
                     autoSpeak = true
                 } else {

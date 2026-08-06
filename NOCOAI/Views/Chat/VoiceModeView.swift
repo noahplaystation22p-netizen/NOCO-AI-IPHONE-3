@@ -309,7 +309,7 @@ struct VoiceModeView: View {
 
     private var modeChip: some View {
         HStack(spacing: 8) {
-            Text(VoiceSettings.defaultMode.label)
+            Text("Flash")
                 .font(.caption2.weight(.bold))
             if speak.isRunning {
                 Text("· Live")
@@ -544,16 +544,15 @@ struct VoiceModeView: View {
 enum VoiceSettings {
     static var defaultMode: AIMode {
         get {
+            // Speak is Flash-only for speed — ignore legacy Auto/Think prefs.
             if let raw = UserDefaults.standard.string(forKey: "nocoai.voiceMode") {
                 let mode = AIMode.from(raw)
-                if raw == "normal" { return .flash }
-                return mode
+                if mode == .flash || mode == .knowledge { return .flash }
             }
-            // Auto: short → Flash, complex → Think — smarter Speak replies.
-            return .auto
+            return .flash
         }
         set {
-            UserDefaults.standard.set(newValue.rawValue, forKey: "nocoai.voiceMode")
+            UserDefaults.standard.set(AIMode.flash.rawValue, forKey: "nocoai.voiceMode")
         }
     }
 }

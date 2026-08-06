@@ -6,6 +6,7 @@ import UniformTypeIdentifiers
 /// Minimal chat composer — all extras live in the + panel.
 struct ChatInputBar: View {
     @EnvironmentObject private var connection: ConnectionStore
+    @Environment(\.colorScheme) private var scheme
     @Binding var text: String
     @FocusState.Binding var focused: Bool
     var onSend: () -> Void
@@ -20,7 +21,13 @@ struct ChatInputBar: View {
     @State private var showFilePicker = false
     @State private var showQuickPicker = false
     @State private var plusAnchor: CGPoint = .zero
-    @State private var suppressPlusTap = false
+    /// Unified press tracking — avoids LongPress stealing taps.
+    @State private var plusTouchStart: Date?
+    @State private var plusTouchOrigin: CGPoint = .zero
+    @State private var plusLongArmed = false
+
+    private let plusLongThreshold: TimeInterval = 0.38
+    private let plusTapSlop: CGFloat = 14
 
     var body: some View {
         VStack(spacing: 8) {
@@ -107,16 +114,27 @@ struct ChatInputBar: View {
             }
         }
         .padding(.horizontal, 14)
-        .padding(.top, 12)
-        .padding(.bottom, 6)
+        .padding(.top, 8)
+        .padding(.bottom, 8)
+        // Opaque bar so material/aura never bleeds over the chat (“Frag NOCO”).
         .background {
-            ZStack {
-                Rectangle().fill(.ultraThinMaterial)
-                IntelligenceBreathingAura()
-                    .opacity(0.35)
-                    .allowsHitTesting(false)
-            }
+            Rectangle()
+                .fill(Color(.systemBackground).opacity(scheme == .dark ? 0.92 : 0.94))
+                .overlay(Rectangle().fill(.ultraThinMaterial.opacity(0.55)))
+                .overlay(alignment: .top) {
+                    LinearGradient(
+                        colors: [
+                            Color(.systemBackground).opacity(0.98),
+                            Color(.systemBackground).opacity(0)
+                        ],
+                        startPoint: .top,
+                        endPoint: .bottom
+                    )
+                    .frame(height: 10)
+                }
         }
+        .compositingGroup()
+        .shadow(color: .black.opacity(0.08), radius: 8, y: -2)
         .sheet(isPresented: $showPlus) {
             PlusToolsPanel(
                 onCamera: { showCamera = true },
@@ -172,68 +190,86 @@ struct ChatInputBar: View {
     }
 
     private var plusButton: some View {
-        Button {
-            guard !suppressPlusTap, !showQuickPicker else { return }
-            HapticService.open()
-            showPlus = true
-        } label: {
-            Image(systemName: "plus.circle.fill")
-                .font(.system(size: 32))
-                .foregroundStyle(NOCOAITheme.accent)
-                .shadow(color: NOCOAITheme.glowPrimary.opacity(0.35), radius: 6)
-                .symbolEffect(.bounce, value: showPlus || showQuickPicker)
-        }
-        .buttonStyle(.plain)
-        .background(
-            GeometryReader { g in
-                Color.clear.preference(
-                    key: PlusAnchorKey.self,
-                    value: CGPoint(
-                        x: g.frame(in: .global).midX,
-                        y: g.frame(in: .global).midY
+        Image(systemName: "plus.circle.fill")
+            .font(.system(size: 32))
+            .foregroundStyle(NOCOAITheme.accent)
+            .shadow(color: NOCOAITheme.glowPrimary.opacity(0.35), radius: 6)
+            .symbolEffect(.bounce, value: showPlus || showQuickPicker)
+            .frame(width: 44, height: 44)
+            .contentShape(Rectangle())
+            .background(
+                GeometryReader { g in
+                    Color.clear.preference(
+                        key: PlusAnchorKey.self,
+                        value: CGPoint(
+                            x: g.frame(in: .global).midX,
+                            y: g.frame(in: .global).midY
+                        )
                     )
-                )
+                }
+            )
+            .onPreferenceChange(PlusAnchorKey.self) { plusAnchor = $0 }
+            .gesture(plusPressGesture)
+            .accessibilityLabel("Werkzeuge")
+            .accessibilityHint("Tippen für detailliertes Menü, gedrückt halten für Schnellauswahl")
+            .accessibilityAddTraits(.isButton)
+            .accessibilityAction {
+                HapticService.open()
+                showPlus = true
             }
-        )
-        .onPreferenceChange(PlusAnchorKey.self) { plusAnchor = $0 }
-        .contentShape(Circle().inset(by: -8))
-        .simultaneousGesture(plusGesture)
-        .accessibilityLabel("Werkzeuge")
-        .accessibilityHint("Tippen für detailliertes Menü, gedrückt halten für Schnellauswahl")
     }
 
-    /// Long-press only — tap opens the detailed Werkzeuge sheet.
-    private var plusGesture: some Gesture {
-        LongPressGesture(minimumDuration: 0.34)
-            .sequenced(before: DragGesture(minimumDistance: 0, coordinateSpace: .global))
+    /// One DragGesture: short release = detailed sheet; hold = quick picker + slide to select.
+    private var plusPressGesture: some Gesture {
+        DragGesture(minimumDistance: 0, coordinateSpace: .global)
             .onChanged { value in
-                switch value {
-                case .first(true):
-                    if !showQuickPicker {
-                        suppressPlusTap = true
-                        showQuickPicker = true
-                        focused = false
-                        PlusQuickPickerWindow.show(anchor: plusAnchor, highlight: .camera)
-                        HapticService.rigid()
-                    }
-                case .second(true, let drag):
-                    if let drag {
-                        PlusQuickPickerWindow.update(finger: drag.location, highlight: nil)
-                    }
-                default:
-                    break
+                if plusTouchStart == nil {
+                    plusTouchStart = Date()
+                    plusTouchOrigin = value.startLocation
+                    plusLongArmed = false
+                }
+                let held = Date().timeIntervalSince(plusTouchStart ?? .now)
+                let moved = hypot(
+                    value.location.x - plusTouchOrigin.x,
+                    value.location.y - plusTouchOrigin.y
+                )
+                if !plusLongArmed, held >= plusLongThreshold, moved < 40 {
+                    plusLongArmed = true
+                    showQuickPicker = true
+                    focused = false
+                    PlusQuickPickerWindow.show(anchor: plusAnchor, highlight: .camera)
+                    HapticService.rigid()
+                }
+                if plusLongArmed {
+                    PlusQuickPickerWindow.update(finger: value.location, highlight: nil)
                 }
             }
-            .onEnded { _ in
-                let selected = PlusQuickPickerWindow.currentHighlight
-                PlusQuickPickerWindow.hide(animated: true)
-                showQuickPicker = false
-                if let selected {
+            .onEnded { value in
+                let start = plusTouchStart ?? .now
+                let held = Date().timeIntervalSince(start)
+                let moved = hypot(
+                    value.location.x - plusTouchOrigin.x,
+                    value.location.y - plusTouchOrigin.y
+                )
+                let wasLong = plusLongArmed
+                plusTouchStart = nil
+                plusLongArmed = false
+
+                if wasLong {
+                    let selected = PlusQuickPickerWindow.currentHighlight
+                    PlusQuickPickerWindow.hide(animated: true)
+                    showQuickPicker = false
+                    if let selected {
+                        HapticService.open()
+                        performQuickAction(selected)
+                    }
+                } else if held < plusLongThreshold, moved < plusTapSlop, !showQuickPicker {
+                    // Clean tap → detailed Werkzeuge panel only
                     HapticService.open()
-                    performQuickAction(selected)
-                }
-                DispatchQueue.main.asyncAfter(deadline: .now() + 0.45) {
-                    suppressPlusTap = false
+                    showPlus = true
+                } else {
+                    PlusQuickPickerWindow.hide(animated: true)
+                    showQuickPicker = false
                 }
             }
     }

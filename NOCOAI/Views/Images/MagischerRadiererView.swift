@@ -43,11 +43,12 @@ struct MagischerRadiererView: View {
     @State private var photoItem: PhotosPickerItem?
     @State private var sourceImage: UIImage?
     @State private var brushSize: CGFloat = 36
+    @State private var selectTool: MaskSelectTool = .paint
     @State private var preset: Preset = .erase
     @State private var instruction = Preset.erase.defaultText
     @State private var isWorking = false
     @State private var workProgress: Double = 0
-    @State private var status = "Foto wählen · bemalen · Entfernen"
+    @State private var status = "Foto wählen · bemalen oder Antippen"
     @State private var resultImage: UIImage?
     @State private var canvas = MaskCanvasController()
     @State private var showLibrary = false
@@ -56,6 +57,7 @@ struct MagischerRadiererView: View {
     @State private var isPainting = false
     @State private var maskReady = false
     @State private var errorAlert: String?
+    @State private var isAutoSelecting = false
     @FocusState private var promptFocused: Bool
 
     var body: some View {
@@ -144,7 +146,7 @@ struct MagischerRadiererView: View {
                 .font(.subheadline.weight(.semibold))
                 .foregroundStyle(NOCOAITheme.accent)
                 .contentTransition(.opacity)
-            Text("Nur der bemalte Bereich ändert sich.")
+            Text("Bemalen oder antippen — Auto erkennt die Kontur.")
                 .font(.caption)
                 .foregroundStyle(.secondary)
         }
@@ -161,11 +163,19 @@ struct MagischerRadiererView: View {
                     image: sourceImage,
                     controller: canvas,
                     brushSize: brushSize,
+                    tool: selectTool,
                     onPaintingChange: { painting in
                         isPainting = painting
                     },
                     onMaskChanged: { painted in
                         maskReady = painted
+                        if painted, selectTool == .auto {
+                            status = "Objekt erkannt — Entfernen tippen"
+                        }
+                    },
+                    onAutoBusy: { busy in
+                        isAutoSelecting = busy
+                        if busy { status = "Erkenne Kontur…" }
                     }
                 )
                     .clipShape(RoundedRectangle(cornerRadius: 20, style: .continuous))
@@ -232,8 +242,21 @@ struct MagischerRadiererView: View {
                 if p == .custom || p == .replace { promptFocused = true }
             }
 
+            Picker("Auswahl", selection: $selectTool) {
+                ForEach(MaskSelectTool.allCases) { t in
+                    Label(t.title, systemImage: t.systemImage).tag(t)
+                }
+            }
+            .pickerStyle(.segmented)
+            .onChange(of: selectTool) { _, tool in
+                HapticService.selection()
+                status = tool == .auto
+                    ? "Objekt antippen — Kontur wird erkannt"
+                    : "Bereich bemalen"
+            }
+
             HStack(spacing: 12) {
-                Image(systemName: "paintbrush.pointed.fill")
+                Image(systemName: selectTool == .auto ? "circle.dashed" : "paintbrush.pointed.fill")
                     .foregroundStyle(NOCOAITheme.accent)
                 Slider(value: $brushSize, in: 14...64)
                 Text("\(Int(brushSize))")
@@ -241,6 +264,10 @@ struct MagischerRadiererView: View {
                     .foregroundStyle(.secondary)
                     .frame(width: 28, alignment: .trailing)
             }
+            Text(selectTool == .auto ? "Kreis = Auto-Radius" : "Pinselgröße")
+                .font(.caption2)
+                .foregroundStyle(.secondary)
+                .frame(maxWidth: .infinity, alignment: .leading)
 
             HStack(spacing: 10) {
                 Button {
@@ -258,7 +285,7 @@ struct MagischerRadiererView: View {
                     HapticService.soft()
                     canvas.clear()
                     maskReady = false
-                    status = "Bereich bemalen"
+                    status = selectTool == .auto ? "Objekt antippen" : "Bereich bemalen"
                 } label: {
                     Label("Maske löschen", systemImage: "trash")
                         .font(.subheadline.weight(.semibold))
@@ -266,7 +293,7 @@ struct MagischerRadiererView: View {
                         .padding(.vertical, 11)
                 }
                 .buttonStyle(.bordered)
-                .disabled(sourceImage == nil || isWorking)
+                .disabled(sourceImage == nil || isWorking || isAutoSelecting)
             }
         }
     }
@@ -778,6 +805,27 @@ private struct MagicEraserTheater: View {
 
 // MARK: - Canvas
 
+enum MaskSelectTool: String, CaseIterable, Identifiable {
+    case paint
+    case auto
+
+    var id: String { rawValue }
+
+    var title: String {
+        switch self {
+        case .paint: return "Pinsel"
+        case .auto: return "Auto"
+        }
+    }
+
+    var systemImage: String {
+        switch self {
+        case .paint: return "paintbrush.pointed.fill"
+        case .auto: return "circle.dashed"
+        }
+    }
+}
+
 final class MaskCanvasController: ObservableObject {
     weak var drawView: MaskDrawView?
     var hasPaint: Bool { drawView?.hasPaint == true }
@@ -800,28 +848,34 @@ struct MaskPaintCanvas: UIViewRepresentable {
     let image: UIImage
     @ObservedObject var controller: MaskCanvasController
     var brushSize: CGFloat
+    var tool: MaskSelectTool
     var onPaintingChange: ((Bool) -> Void)?
     var onMaskChanged: ((Bool) -> Void)?
+    var onAutoBusy: ((Bool) -> Void)?
 
     func makeUIView(context: Context) -> MaskDrawView {
         let v = MaskDrawView(image: image)
         v.brushSize = brushSize
+        v.tool = tool
         v.onPaintingChange = onPaintingChange
         v.onMaskChanged = { painted in
             controller.notifyPaintChanged()
             onMaskChanged?(painted)
         }
+        v.onAutoBusy = onAutoBusy
         controller.drawView = v
         return v
     }
 
     func updateUIView(_ uiView: MaskDrawView, context: Context) {
         uiView.brushSize = brushSize
+        uiView.tool = tool
         uiView.onPaintingChange = onPaintingChange
         uiView.onMaskChanged = { painted in
             controller.notifyPaintChanged()
             onMaskChanged?(painted)
         }
+        uiView.onAutoBusy = onAutoBusy
         if uiView.baseImage.size != image.size {
             uiView.setBaseImage(image)
         }
@@ -832,14 +886,25 @@ struct MaskPaintCanvas: UIViewRepresentable {
 final class MaskDrawView: UIView {
     private(set) var baseImage: UIImage
     private var maskLayer = CAShapeLayer()
+    private var cursorLayer = CAShapeLayer()
     private var path = UIBezierPath()
     private(set) var hasPaint = false
-    var brushSize: CGFloat = 36
+    var brushSize: CGFloat = 36 {
+        didSet { updateCursor() }
+    }
+    var tool: MaskSelectTool = .paint {
+        didSet {
+            cursorLayer.isHidden = tool != .auto
+            updateCursor()
+        }
+    }
     var onPaintingChange: ((Bool) -> Void)?
     var onMaskChanged: ((Bool) -> Void)?
+    var onAutoBusy: ((Bool) -> Void)?
     private var strokeHue: CGFloat = 0.55
     private var strokeSamples = 0
     private var lastTouch: CGPoint = .zero
+    private var autoTask: Task<Void, Never>?
 
     init(image: UIImage) {
         self.baseImage = image
@@ -847,12 +912,18 @@ final class MaskDrawView: UIView {
         isMultipleTouchEnabled = false
         backgroundColor = .black
         contentMode = .scaleAspectFit
-        // Rainbow Intelligence stroke (not flat red/pink)
         maskLayer.strokeColor = UIColor(hue: strokeHue, saturation: 0.9, brightness: 1, alpha: 0.72).cgColor
-        maskLayer.fillColor = UIColor.clear.cgColor
+        maskLayer.fillColor = UIColor(hue: strokeHue, saturation: 0.85, brightness: 1, alpha: 0.28).cgColor
         maskLayer.lineCap = .round
         maskLayer.lineJoin = .round
         layer.addSublayer(maskLayer)
+
+        cursorLayer.fillColor = UIColor.clear.cgColor
+        cursorLayer.strokeColor = UIColor.systemCyan.withAlphaComponent(0.95).cgColor
+        cursorLayer.lineWidth = 2
+        cursorLayer.lineDashPattern = [6, 4]
+        cursorLayer.isHidden = true
+        layer.addSublayer(cursorLayer)
     }
 
     required init?(coder: NSCoder) { fatalError() }
@@ -864,11 +935,13 @@ final class MaskDrawView: UIView {
     }
 
     func clear() {
+        autoTask?.cancel()
         path = UIBezierPath()
         maskLayer.path = nil
         hasPaint = false
         strokeSamples = 0
         onMaskChanged?(false)
+        updateCursor()
     }
 
     override func draw(_ rect: CGRect) {
@@ -879,7 +952,25 @@ final class MaskDrawView: UIView {
     override func layoutSubviews() {
         super.layoutSubviews()
         maskLayer.frame = bounds
+        cursorLayer.frame = bounds
         setNeedsDisplay()
+        updateCursor()
+    }
+
+    private func updateCursor(at point: CGPoint? = nil) {
+        guard tool == .auto else {
+            cursorLayer.path = nil
+            return
+        }
+        let center = point ?? lastTouch
+        let r = max(18, brushSize * 0.55)
+        guard center != .zero || point != nil else {
+            cursorLayer.path = nil
+            return
+        }
+        cursorLayer.path = UIBezierPath(
+            ovalIn: CGRect(x: center.x - r, y: center.y - r, width: r * 2, height: r * 2)
+        ).cgPath
     }
 
     private func setParentScrollEnabled(_ enabled: Bool) {
@@ -900,6 +991,7 @@ final class MaskDrawView: UIView {
         strokeHue = strokeHue + 0.035
         if strokeHue > 1 { strokeHue -= 1 }
         maskLayer.strokeColor = UIColor(hue: strokeHue, saturation: 0.92, brightness: 1, alpha: 0.75).cgColor
+        maskLayer.fillColor = UIColor(hue: strokeHue, saturation: 0.85, brightness: 1, alpha: 0.28).cgColor
     }
 
     private func markPainted() {
@@ -910,8 +1002,17 @@ final class MaskDrawView: UIView {
 
     override func touchesBegan(_ touches: Set<UITouch>, with event: UIEvent?) {
         guard let p = touches.first?.location(in: self) else { return }
-        setParentScrollEnabled(false)
         lastTouch = p
+        updateCursor(at: p)
+
+        if tool == .auto {
+            setParentScrollEnabled(false)
+            HapticService.whisper()
+            runAutoSelect(at: p)
+            return
+        }
+
+        setParentScrollEnabled(false)
         strokeSamples = 0
         path.move(to: p)
         path.lineWidth = brushSize
@@ -922,6 +1023,8 @@ final class MaskDrawView: UIView {
     override func touchesMoved(_ touches: Set<UITouch>, with event: UIEvent?) {
         guard let p = touches.first?.location(in: self) else { return }
         lastTouch = p
+        updateCursor(at: p)
+        guard tool == .paint else { return }
         strokeSamples += 1
         path.addLine(to: p)
         path.lineWidth = brushSize
@@ -932,7 +1035,8 @@ final class MaskDrawView: UIView {
     }
 
     override func touchesEnded(_ touches: Set<UITouch>, with event: UIEvent?) {
-        // Short tap still paints a dab so tiny marks count
+        defer { setParentScrollEnabled(true) }
+        guard tool == .paint else { return }
         if strokeSamples == 0 {
             let dab = UIBezierPath(
                 ovalIn: CGRect(
@@ -947,11 +1051,41 @@ final class MaskDrawView: UIView {
             maskLayer.lineWidth = brushSize
             markPainted()
         }
-        setParentScrollEnabled(true)
     }
 
     override func touchesCancelled(_ touches: Set<UITouch>, with event: UIEvent?) {
         setParentScrollEnabled(true)
+    }
+
+    private func runAutoSelect(at viewPoint: CGPoint) {
+        autoTask?.cancel()
+        onAutoBusy?(true)
+        let image = baseImage
+        let fit = aspectFitRect(for: image.size, in: bounds)
+        let brush = brushSize
+        autoTask = Task.detached(priority: .userInitiated) {
+            let region = MaskAutoSelect.fastRegion(
+                image: image,
+                viewPoint: viewPoint,
+                imageRectInView: fit,
+                radiusHint: brush
+            )
+            await MainActor.run { [weak self] in
+                guard let self else { return }
+                self.onAutoBusy?(false)
+                guard !Task.isCancelled else { return }
+                guard let region, !region.isEmpty else {
+                    HapticService.warning()
+                    return
+                }
+                self.advanceRainbowStroke()
+                self.path.append(region)
+                self.maskLayer.path = self.path.cgPath
+                self.maskLayer.lineWidth = max(2, self.brushSize * 0.15)
+                self.markPainted()
+                HapticService.success()
+            }
+        }
     }
 
     /// A1111: white = inpaint, black = keep
@@ -971,11 +1105,13 @@ final class MaskDrawView: UIView {
             let sy = CGFloat(h) / fit.height
             ctx.cgContext.translateBy(x: -fit.origin.x * sx, y: -fit.origin.y * sy)
             ctx.cgContext.scaleBy(x: sx, y: sy)
+            UIColor.white.setFill()
             UIColor.white.setStroke()
             let exportPath = path.copy() as? UIBezierPath ?? path
             exportPath.lineWidth = brushSize
             exportPath.lineCapStyle = .round
             exportPath.lineJoinStyle = .round
+            exportPath.fill()
             exportPath.stroke()
         }
         return img.pngData()
@@ -989,6 +1125,120 @@ final class MaskDrawView: UIView {
         return CGRect(x: (bounds.width - w) / 2, y: (bounds.height - h) / 2, width: w, height: h)
     }
 }
+
+/// Ultra-fast local object pick: color flood-fill on a tiny preview + soft radius bias.
+enum MaskAutoSelect {
+    static func fastRegion(
+        image: UIImage,
+        viewPoint: CGPoint,
+        imageRectInView: CGRect,
+        radiusHint: CGFloat
+    ) -> UIBezierPath? {
+        guard imageRectInView.width > 1, imageRectInView.height > 1,
+              let cg = image.cgImage else { return nil }
+
+        let ix = (viewPoint.x - imageRectInView.minX) / imageRectInView.width
+        let iy = (viewPoint.y - imageRectInView.minY) / imageRectInView.height
+        guard ix >= 0, ix <= 1, iy >= 0, iy <= 1 else { return nil }
+
+        let maxSide = 160
+        let srcW = cg.width
+        let srcH = cg.height
+        let scale = min(CGFloat(maxSide) / CGFloat(srcW), CGFloat(maxSide) / CGFloat(srcH), 1)
+        let w = max(8, Int((CGFloat(srcW) * scale).rounded()))
+        let h = max(8, Int((CGFloat(srcH) * scale).rounded()))
+
+        guard let tiny = downsample(cg, width: w, height: h),
+              let data = tiny.dataProvider?.data,
+              let ptr = CFDataGetBytePtr(data) else { return nil }
+
+        let bpp = tiny.bitsPerPixel / 8
+        let bpr = tiny.bytesPerRow
+        let sx = min(w - 1, max(0, Int(ix * CGFloat(w))))
+        let sy = min(h - 1, max(0, Int(iy * CGFloat(h))))
+
+        func sample(_ x: Int, _ y: Int) -> (r: Int, g: Int, b: Int) {
+            let o = y * bpr + x * bpp
+            return (Int(ptr[o]), Int(ptr[o + 1]), Int(ptr[o + 2]))
+        }
+
+        let seed = sample(sx, sy)
+        let tol = 38
+        var visited = [UInt8](repeating: 0, count: w * h)
+        var stack = [(sx, sy)]
+        visited[sy * w + sx] = 1
+        var filled = [(Int, Int)]()
+        filled.reserveCapacity(2048)
+        let maxPixels = w * h / 2
+
+        while let (x, y) = stack.popLast(), filled.count < maxPixels {
+            let c = sample(x, y)
+            let dr = abs(c.r - seed.r)
+            let dg = abs(c.g - seed.g)
+            let db = abs(c.b - seed.b)
+            guard dr + dg + db <= tol * 3 else { continue }
+            filled.append((x, y))
+            let n = [(x + 1, y), (x - 1, y), (x, y + 1), (x, y - 1)]
+            for (nx, ny) in n {
+                guard nx >= 0, ny >= 0, nx < w, ny < h else { continue }
+                let i = ny * w + nx
+                if visited[i] == 0 {
+                    visited[i] = 1
+                    stack.append((nx, ny))
+                }
+            }
+        }
+
+        // Soft circle bias around tap so thin objects still get coverage
+        let rPix = max(3, Int((radiusHint / imageRectInView.width) * CGFloat(w) * 0.55))
+        for dy in -rPix...rPix {
+            for dx in -rPix...rPix where dx * dx + dy * dy <= rPix * rPix {
+                let x = sx + dx, y = sy + dy
+                guard x >= 0, y >= 0, x < w, y < h else { continue }
+                let i = y * w + x
+                if visited[i] == 0 {
+                    visited[i] = 1
+                    filled.append((x, y))
+                }
+            }
+        }
+
+        guard filled.count > 8 else { return nil }
+
+        let path = UIBezierPath()
+        let cellW = imageRectInView.width / CGFloat(w)
+        let cellH = imageRectInView.height / CGFloat(h)
+        let stamp = max(cellW, cellH) * 1.15
+        for (x, y) in filled {
+            let cx = imageRectInView.minX + (CGFloat(x) + 0.5) * cellW
+            let cy = imageRectInView.minY + (CGFloat(y) + 0.5) * cellH
+            path.append(UIBezierPath(ovalIn: CGRect(
+                x: cx - stamp * 0.5,
+                y: cy - stamp * 0.5,
+                width: stamp,
+                height: stamp
+            )))
+        }
+        return path
+    }
+
+    private static func downsample(_ image: CGImage, width: Int, height: Int) -> CGImage? {
+        let colorSpace = CGColorSpaceCreateDeviceRGB()
+        guard let ctx = CGContext(
+            data: nil,
+            width: width,
+            height: height,
+            bitsPerComponent: 8,
+            bytesPerRow: width * 4,
+            space: colorSpace,
+            bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue
+        ) else { return nil }
+        ctx.interpolationQuality = .low
+        ctx.draw(image, in: CGRect(x: 0, y: 0, width: width, height: height))
+        return ctx.makeImage()
+    }
+}
+
 
 private extension UIImage {
     func resizedToFit(maxSide: CGFloat) -> UIImage {

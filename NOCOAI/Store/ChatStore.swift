@@ -199,16 +199,16 @@ final class ChatStore: ObservableObject {
         isSending = true
         lastError = nil
         workPhase = .understanding
-        // Speak must honor modeOverride (Think/Auto) — don't force Flash.
-        let uiMode = modeOverride ?? (speak ? .flash : mode)
+        // Speak is always Flash (fast). Chat Auto can still pick Think.
+        let uiMode = speak ? .flash : (modeOverride ?? mode)
         var effectiveMode = uiMode
 
         // Soft intelligence: Auto only picks depth (Think/Flash). Never auto-activates Vision/Agent/tools.
-        if uiMode == .auto {
+        if !speak, uiMode == .auto {
             if let depth = ModeIntelligence.recommendDepth(text: trimmed) {
                 effectiveMode = depth.mode
             }
-            if !speak, !suppressRecommendationUntilEmpty,
+            if !suppressRecommendationUntilEmpty,
                let rec = ModeIntelligence.recommend(text: trimmed),
                rec.mode == .agent {
                 modeRecommendation = ModeRecommendation(mode: rec.mode, reason: rec.reason)
@@ -219,7 +219,7 @@ final class ChatStore: ObservableObject {
             }
         }
 
-        ModeIntelligence.recordUse(speak ? effectiveMode : uiMode)
+        ModeIntelligence.recordUse(speak ? .flash : uiMode)
 
         // Agent clarifying answers → continue previous goal
         var agentGoal = trimmed

@@ -49,12 +49,12 @@ final class VoiceService: NSObject, ObservableObject {
     private var ttsPendingBuffers = 0
     private let ttsGain: Float = 2.6
 
-    /// Wait for a clear end of speech — let the user finish mid-thought pauses.
-    private let silenceToEnd: TimeInterval = 2.15
-    private let transcriptStableToEnd: TimeInterval = 1.45
-    private let minSpeechSeconds: TimeInterval = 0.7
-    private let naturalEndQuiet: TimeInterval = 1.65
-    private let endConfirmGrace: TimeInterval = 0.48
+    /// Wait for a clear end of speech — finish mid-thought, then Flash answers fast.
+    private let silenceToEnd: TimeInterval = 1.85
+    private let transcriptStableToEnd: TimeInterval = 1.25
+    private let minSpeechSeconds: TimeInterval = 0.6
+    private let naturalEndQuiet: TimeInterval = 1.45
+    private let endConfirmGrace: TimeInterval = 0.35
     private let speechLevelFactor: CGFloat = 2.5
 
     /// Calm, clear TTS — slightly under system default.
@@ -670,11 +670,8 @@ final class VoiceService: NSObject, ObservableObject {
     static func voiceOnlyPrompt(_ userText: String) -> String {
         let trimmed = userText.trimmingCharacters(in: .whitespacesAndNewlines)
         return """
-        [NOCO SPEAK]
-        Der Nutzer hat ausgesprochen. Antworte jetzt als gesprochenes Gespräch auf Deutsch.
-        Regeln: verstehe Absicht und Kontext; antworte direkt mit klarer Logik; kurz und natürlich \
-        (meist 2–5 Sätze, länger nur wenn nötig); keine Meta-Kommentare, keine Tool-/Bild-Hinweise, \
-        keine Aufzählungsnummern zum Vorlesen.
+        [NOCO SPEAK · FLASH]
+        Kurze gesprochene Antwort auf Deutsch. Direkt, klar, 1–4 Sätze. Keine Meta-Kommentare.
         Nutzer: \(trimmed)
         """
     }

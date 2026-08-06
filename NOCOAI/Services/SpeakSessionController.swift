@@ -309,8 +309,6 @@ final class SpeakSessionController: ObservableObject {
         voice.phase = .processing
         pushLiveActivity(force: true)
         HapticService.send()
-        // Brief beat so the UI shows listening→processing before network work.
-        try? await Task.sleep(nanoseconds: 180_000_000)
         guard isRunning else {
             isBusy = false
             return
@@ -409,25 +407,17 @@ final class SpeakSessionController: ObservableObject {
                 let prompt = VoiceService.voiceOnlyPrompt(text)
                 reply = await connection.chat.sendAndReturnReply(
                     prompt,
-                    modeOverride: VoiceSettings.defaultMode == .think ? .think : .flash,
+                    modeOverride: .flash,
                     speak: true
                 )
             }
         } else {
+            // Speak always uses Flash — fast spoken replies, never Think/Auto.
             let prompt = VoiceService.voiceOnlyPrompt(text)
-            let depth: AIMode = {
-                switch VoiceSettings.defaultMode {
-                case .think: return .think
-                case .auto:
-                    return ModeIntelligence.recommendDepth(text: text)?.mode ?? .flash
-                case .knowledge: return .knowledge
-                default: return .flash
-                }
-            }()
-            statusLine = depth == .think ? "Denke nach…" : "Verarbeite…"
+            statusLine = "Verarbeite…"
             reply = await connection.chat.sendAndReturnReply(
                 prompt,
-                modeOverride: depth,
+                modeOverride: .flash,
                 speak: true
             )
         }

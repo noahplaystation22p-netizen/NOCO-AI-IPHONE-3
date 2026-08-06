@@ -222,8 +222,8 @@ struct SettingsView: View {
                 }
 
                 Section("Info") {
-                    Text("NOCO AI Companion v5.9")
-                    Text("Tastatur-Log · Antwort · Haptics")
+                    Text("NOCO AI Companion v6.0")
+                    Text("Vision fix · Radierer rainbow")
                         .font(.footnote)
                         .foregroundStyle(NOCOAITheme.secondaryText(for: scheme))
                 }

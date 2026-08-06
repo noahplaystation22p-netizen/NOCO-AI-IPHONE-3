@@ -53,6 +53,7 @@ struct MagischerRadiererView: View {
     @State private var showLibrary = false
     @State private var revealResult = false
     @State private var maskPulse = false
+    @State private var isPainting = false
     @FocusState private var promptFocused: Bool
 
     var body: some View {
@@ -70,6 +71,7 @@ struct MagischerRadiererView: View {
             }
             .padding(20)
         }
+        .scrollDisabled(isPainting || isWorking)
         .nocoBackground()
         .overlay {
             if isWorking {
@@ -121,15 +123,25 @@ struct MagischerRadiererView: View {
                 .fill(.ultraThinMaterial)
 
             if let sourceImage {
-                MaskPaintCanvas(image: sourceImage, controller: canvas, brushSize: brushSize)
+                MaskPaintCanvas(
+                    image: sourceImage,
+                    controller: canvas,
+                    brushSize: brushSize,
+                    onPaintingChange: { painting in
+                        isPainting = painting
+                    }
+                )
                     .clipShape(RoundedRectangle(cornerRadius: 20, style: .continuous))
                     .padding(8)
                     .overlay {
                         if canvas.hasPaint {
                             RoundedRectangle(cornerRadius: 20, style: .continuous)
                                 .stroke(
-                                    Color(red: 0.95, green: 0.4, blue: 0.75).opacity(maskPulse ? 0.55 : 0.2),
-                                    lineWidth: 2
+                                    AngularGradient(
+                                        colors: rainbowColors,
+                                        center: .center
+                                    ).opacity(maskPulse ? 0.7 : 0.35),
+                                    lineWidth: 2.5
                                 )
                                 .padding(8)
                                 .allowsHitTesting(false)
@@ -612,16 +624,19 @@ struct MaskPaintCanvas: UIViewRepresentable {
     let image: UIImage
     @ObservedObject var controller: MaskCanvasController
     var brushSize: CGFloat
+    var onPaintingChange: ((Bool) -> Void)?
 
     func makeUIView(context: Context) -> MaskDrawView {
         let v = MaskDrawView(image: image)
         v.brushSize = brushSize
+        v.onPaintingChange = onPaintingChange
         controller.drawView = v
         return v
     }
 
     func updateUIView(_ uiView: MaskDrawView, context: Context) {
         uiView.brushSize = brushSize
+        uiView.onPaintingChange = onPaintingChange
         if uiView.baseImage.size != image.size {
             uiView.setBaseImage(image)
         }
@@ -635,6 +650,8 @@ final class MaskDrawView: UIView {
     private var path = UIBezierPath()
     private(set) var hasPaint = false
     var brushSize: CGFloat = 36
+    var onPaintingChange: ((Bool) -> Void)?
+    private var strokeHue: CGFloat = 0.55
 
     init(image: UIImage) {
         self.baseImage = image
@@ -642,7 +659,8 @@ final class MaskDrawView: UIView {
         isMultipleTouchEnabled = false
         backgroundColor = .black
         contentMode = .scaleAspectFit
-        maskLayer.strokeColor = UIColor.systemPink.withAlphaComponent(0.55).cgColor
+        // Rainbow Intelligence stroke (not flat red/pink)
+        maskLayer.strokeColor = UIColor(hue: strokeHue, saturation: 0.9, brightness: 1, alpha: 0.72).cgColor
         maskLayer.fillColor = UIColor.clear.cgColor
         maskLayer.lineCap = .round
         maskLayer.lineJoin = .round
@@ -674,11 +692,30 @@ final class MaskDrawView: UIView {
         setNeedsDisplay()
     }
 
+    private func setParentScrollEnabled(_ enabled: Bool) {
+        var view: UIView? = self
+        while let current = view {
+            if let scroll = current as? UIScrollView {
+                scroll.isScrollEnabled = enabled
+            }
+            view = current.superview
+        }
+        onPaintingChange?(!enabled)
+    }
+
+    private func advanceRainbowStroke() {
+        strokeHue = strokeHue + 0.035
+        if strokeHue > 1 { strokeHue -= 1 }
+        maskLayer.strokeColor = UIColor(hue: strokeHue, saturation: 0.92, brightness: 1, alpha: 0.75).cgColor
+    }
+
     override func touchesBegan(_ touches: Set<UITouch>, with event: UIEvent?) {
         guard let p = touches.first?.location(in: self) else { return }
+        setParentScrollEnabled(false)
         path.move(to: p)
         path.lineWidth = brushSize
         hasPaint = true
+        advanceRainbowStroke()
         HapticService.whisper()
     }
 
@@ -688,6 +725,15 @@ final class MaskDrawView: UIView {
         path.lineWidth = brushSize
         maskLayer.path = path.cgPath
         maskLayer.lineWidth = brushSize
+        advanceRainbowStroke()
+    }
+
+    override func touchesEnded(_ touches: Set<UITouch>, with event: UIEvent?) {
+        setParentScrollEnabled(true)
+    }
+
+    override func touchesCancelled(_ touches: Set<UITouch>, with event: UIEvent?) {
+        setParentScrollEnabled(true)
     }
 
     /// A1111: white = inpaint, black = keep

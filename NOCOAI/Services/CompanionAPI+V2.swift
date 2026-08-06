@@ -183,24 +183,37 @@ extension CompanionAPI {
             let steps: Int
             let denoisingStrength: Double
         }
-        var request = try authorizedRequest(path: "images/inpaint", method: "POST")
-        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
-        request.timeoutInterval = 360
-        request.httpBody = try encoder.encode(
-            Body(
-                prompt: prompt,
-                imageBase64: imageJPEG.base64EncodedString(),
-                maskBase64: maskPNG.base64EncodedString(),
-                conversationId: conversationId,
-                width: 512,
-                height: 512,
-                steps: steps,
-                denoisingStrength: denoisingStrength
-            )
+        let body = Body(
+            prompt: prompt,
+            imageBase64: imageJPEG.base64EncodedString(),
+            maskBase64: maskPNG.base64EncodedString(),
+            conversationId: conversationId,
+            width: 512,
+            height: 512,
+            steps: steps,
+            denoisingStrength: denoisingStrength
         )
-        let (data, response) = try await session.data(for: request)
-        try validate(response: response, data: data, isPairRequest: false)
-        return try decoder.decode(ImageGenerateResponse.self, from: data)
+        // Try primary + aliases (older companions / path quirks)
+        var lastError: Error?
+        for path in ["images/inpaint", "images/erase", "images/magic-erase", "inpaint"] {
+            do {
+                var request = try authorizedRequest(path: path, method: "POST")
+                request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+                request.timeoutInterval = 360
+                request.httpBody = try encoder.encode(body)
+                let (data, response) = try await session.data(for: request)
+                try validate(response: response, data: data, isPairRequest: false)
+                return try decoder.decode(ImageGenerateResponse.self, from: data)
+            } catch {
+                lastError = error
+                let msg = (error as? LocalizedError)?.errorDescription?.lowercased() ?? ""
+                if msg.contains("unbekannte") || msg.contains("route") || msg.contains("404") {
+                    continue
+                }
+                throw error
+            }
+        }
+        throw lastError ?? CompanionAPIError.server("Inpaint fehlgeschlagen — Companion neu starten")
     }
 
     func imageProgress(jobId: String? = nil) async throws -> ImageProgressResponse {

@@ -754,12 +754,14 @@ final class ChatStore: ObservableObject {
     /// Moondream often returns closed VQA junk like "NO" / "NO NO NO".
     private static func isUselessVisionReply(_ text: String) -> Bool {
         let t = text.trimmingCharacters(in: .whitespacesAndNewlines)
-        if t.count < 8 { return true }
+        if t.count < 18 { return true }
         let lower = t.lowercased()
+            .replacingOccurrences(of: "[^a-zäöüß0-9\\s]", with: " ", options: .regularExpression)
+            .replacingOccurrences(of: "\\s+", with: " ", options: .regularExpression)
+            .trimmingCharacters(in: .whitespacesAndNewlines)
         if lower == "no" || lower == "nein" || lower == "yes" || lower == "ja" { return true }
-        let compact = lower.replacingOccurrences(of: "[\\s.!?,;]+", with: " ", options: .regularExpression)
-        let words = compact.split(separator: " ").map(String.init)
-        if words.count <= 6, words.allSatisfy({ ["no", "nein", "yes", "ja"].contains($0) }) {
+        let words = lower.split(separator: " ").map(String.init)
+        if words.count <= 8, words.allSatisfy({ ["no", "nein", "yes", "ja"].contains($0) }) {
             return true
         }
         return false

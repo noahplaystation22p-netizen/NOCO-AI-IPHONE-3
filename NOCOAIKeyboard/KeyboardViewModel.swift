@@ -13,6 +13,7 @@ final class KeyboardViewModel: ObservableObject {
     @Published var lastError: String?
     @Published var showIntelligenceBurst = false
     @Published var animationPhase: AnimationPhase = .idle
+    @Published var overlayTitle = "…"
 
     enum AnimationPhase: Equatable {
         case idle, thinking, writing, success
@@ -136,6 +137,7 @@ final class KeyboardViewModel: ObservableObject {
         isProcessing = true
         showIntelligenceBurst = true
         animationPhase = .thinking
+        overlayTitle = "\(action.title)…"
         lastError = nil
         statusLine = "\(action.title)…"
         UIImpactFeedbackGenerator(style: .medium).impactOccurred(intensity: 0.7)
@@ -154,16 +156,19 @@ final class KeyboardViewModel: ObservableObject {
                 let result = try await KeyboardAIClient.rewrite(action: action, text: source)
                 if Task.isCancelled { return }
                 animationPhase = .writing
-                statusLine = "Schreibt…"
+                // No meta copy — result streams straight into the field
+                overlayTitle = ""
+                statusLine = action.title
                 clearCharacters(deleteCount)
                 await typewriterInsert(result)
                 if Task.isCancelled { return }
                 animationPhase = .success
-                statusLine = "Fertig · \(action.title)"
+                overlayTitle = ""
+                statusLine = "Fertig"
                 notifyHaptic.notificationOccurred(.success)
                 syncDocumentSnapshot()
-                try? await Task.sleep(nanoseconds: 550_000_000)
-                withAnimation(.easeOut(duration: 0.28)) {
+                try? await Task.sleep(nanoseconds: 480_000_000)
+                withAnimation(.easeOut(duration: 0.3)) {
                     showIntelligenceBurst = false
                     animationPhase = .idle
                 }

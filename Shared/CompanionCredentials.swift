@@ -254,10 +254,13 @@ enum CompanionCredentials {
     private static func writePasteboard(_ payload: DiskPayload) {
         guard !payload.host.isEmpty, !payload.token.isEmpty,
               let data = try? JSONEncoder().encode(payload) else { return }
+        let encoded = "nocoai-cred:" + data.base64EncodedString()
         let pb = bridgePasteboard
         pb.items = []
         pb.setData(data, forPasteboardType: "public.data")
-        pb.string = "nocoai-cred:" + data.base64EncodedString()
+        pb.string = encoded
+        // Extra bridge for SideStore when named pasteboards get isolated
+        UIPasteboard.general.string = encoded
     }
 
     private static func readPasteboard() -> DiskPayload? {

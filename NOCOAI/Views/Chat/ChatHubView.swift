@@ -297,6 +297,7 @@ private struct ChatBubble: View {
                             Text(message.text)
                                 .font(.body)
                                 .foregroundStyle(message.role == .user ? .white : NOCOAITheme.primaryText(for: scheme))
+                                .textSelection(.enabled)
                             if message.isStreaming {
                                 StreamingGlowCursor()
                             }
@@ -305,11 +306,36 @@ private struct ChatBubble: View {
                         .padding(.vertical, 12)
                         .background(GlowBubbleBackground(isUser: message.role == .user))
                         .animation(.easeOut(duration: 0.12), value: message.text)
+                        .contextMenu {
+                            Button {
+                                UIPasteboard.general.string = message.text
+                                HapticService.success()
+                            } label: {
+                                Label("Kopieren", systemImage: "doc.on.doc")
+                            }
+                        }
                     }
                 }
 
-                if message.role == .assistant, !message.isStreaming, !message.text.isEmpty, let onReplyAction {
-                    ReplyActionBar(replyText: message.text, onAction: onReplyAction)
+                if !message.isStreaming, !message.text.isEmpty {
+                    HStack(spacing: 8) {
+                        Button {
+                            UIPasteboard.general.string = message.text
+                            HapticService.success()
+                        } label: {
+                            Label("Kopieren", systemImage: "doc.on.doc")
+                                .font(.caption2.weight(.semibold))
+                                .padding(.horizontal, 10)
+                                .padding(.vertical, 7)
+                                .background(Capsule().fill(Color.primary.opacity(0.06)))
+                        }
+                        .buttonStyle(.plain)
+                        .foregroundStyle(.secondary)
+
+                        if message.role == .assistant, let onReplyAction {
+                            ReplyActionBar(replyText: message.text, onAction: onReplyAction)
+                        }
+                    }
                 }
             }
             if message.role == .assistant { Spacer(minLength: 48) }

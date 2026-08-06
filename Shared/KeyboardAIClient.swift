@@ -60,8 +60,8 @@ enum KeyboardAIClient {
         let code = (response as? HTTPURLResponse)?.statusCode ?? 0
         guard (200..<300).contains(code) else { throw ClientError.http(code) }
 
-        if let text = extractReply(from: data) {
-            let clean = KeyboardAIAction.sanitize(text)
+        if let reply = extractReply(from: data) {
+            let clean = KeyboardAIAction.sanitize(reply, action: action, original: text)
             guard !clean.isEmpty else { throw ClientError.empty }
             return clean
         }

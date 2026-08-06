@@ -213,8 +213,8 @@ struct SettingsView: View {
                 }
 
                 Section("Info") {
-                    Text("NOCO AI Companion v5.5")
-                    Text("Magischer Radierer · Vision · Tastatur")
+                    Text("NOCO AI Companion v5.6")
+                    Text("Kopieren · Rewrite-only · Intelligence")
                         .font(.footnote)
                         .foregroundStyle(NOCOAITheme.secondaryText(for: scheme))
                 }

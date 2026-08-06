@@ -461,18 +461,26 @@ struct MagischerRadiererView: View {
         HapticService.medium()
 
         let progressTask = Task {
+            var waitedAtHold = 0
             while !Task.isCancelled {
-                try? await Task.sleep(nanoseconds: 260_000_000)
+                try? await Task.sleep(nanoseconds: 280_000_000)
                 await MainActor.run {
                     if workProgress < 0.88 {
-                        workProgress = min(0.88, workProgress + Double.random(in: 0.03...0.07))
+                        workProgress = min(0.88, workProgress + Double.random(in: 0.025...0.055))
                         if workProgress < 0.35 {
                             status = "Maske lesen…"
                         } else if workProgress < 0.65 {
                             status = preset == .erase ? "Entfernen auf dem PC…" : "Magie auf dem PC…"
                         } else {
-                            status = "Nur Detail neu zeichnen…"
+                            status = "Detail neu zeichnen…"
                         }
+                    } else if workProgress < 0.96 {
+                        // Stay near 88–96% while waiting on Stable Diffusion (normal)
+                        waitedAtHold += 1
+                        workProgress = min(0.96, workProgress + 0.004)
+                        status = waitedAtHold < 25
+                            ? "PC arbeitet noch… bitte warten"
+                            : "Immer noch am PC — SD kann 1–2 Min dauern"
                     }
                 }
             }
@@ -561,118 +569,126 @@ private struct MagicEraserTheater: View {
     ]
 
     var body: some View {
-        ZStack {
-            Color.black.opacity(0.58)
-                .ignoresSafeArea()
-                .background(.ultraThinMaterial)
+        GeometryReader { geo in
+            let w = max(geo.size.width, 1)
+            let h = max(geo.size.height, 1)
+            ZStack {
+                // Full-bleed black so the photo underneath never peeks through
+                Color.black.opacity(0.82)
+                    .frame(width: w, height: h)
+                    .ignoresSafeArea()
 
-            AngularGradient(colors: rainbow, center: .center)
-                .blur(radius: 58)
-                .opacity(pulse ? 0.5 : 0.25)
-                .scaleEffect(pulse ? 1.3 : 0.92)
-                .rotationEffect(.degrees(spin ? 360 : 0))
-                .blendMode(.plusLighter)
-                .ignoresSafeArea()
+                // Wide aurora — fills the screen so you don't see a round cutout
+                AngularGradient(colors: rainbow, center: .center)
+                    .frame(width: w * 1.6, height: h * 1.6)
+                    .blur(radius: 70)
+                    .opacity(pulse ? 0.55 : 0.28)
+                    .scaleEffect(pulse ? 1.15 : 1.0)
+                    .rotationEffect(.degrees(spin ? 360 : 0))
+                    .blendMode(.plusLighter)
+                    .position(x: w / 2, y: h / 2)
 
-            Capsule()
-                .fill(LinearGradient(
-                    colors: [.clear, .white.opacity(0.7), rainbow[2].opacity(0.5), .clear],
-                    startPoint: .leading, endPoint: .trailing
-                ))
-                .frame(width: 300, height: 80)
-                .rotationEffect(.degrees(-20))
-                .offset(x: hue ? 150 : -150, y: -50)
-                .blur(radius: 10)
-                .blendMode(.plusLighter)
+                Capsule()
+                    .fill(LinearGradient(
+                        colors: [.clear, .white.opacity(0.65), rainbow[2].opacity(0.45), .clear],
+                        startPoint: .leading, endPoint: .trailing
+                    ))
+                    .frame(width: min(w * 1.1, 520), height: 100)
+                    .rotationEffect(.degrees(-18))
+                    .offset(x: hue ? w * 0.35 : -w * 0.35, y: -h * 0.12)
+                    .blur(radius: 14)
+                    .blendMode(.plusLighter)
 
-            VStack(spacing: 22) {
-                ZStack {
-                    AngularGradient(colors: rainbow, center: .center)
-                        .frame(width: 260, height: 260)
-                        .blur(radius: 48)
-                        .opacity(pulse ? 0.7 : 0.38)
-                        .scaleEffect(pulse ? 1.16 : 0.88)
-                        .rotationEffect(.degrees(spin ? 360 : 0))
-                        .blendMode(.plusLighter)
+                VStack(spacing: 22) {
+                    ZStack {
+                        AngularGradient(colors: rainbow, center: .center)
+                            .frame(width: min(w * 0.78, 340), height: min(w * 0.78, 340))
+                            .blur(radius: 52)
+                            .opacity(pulse ? 0.75 : 0.4)
+                            .scaleEffect(pulse ? 1.12 : 0.94)
+                            .rotationEffect(.degrees(spin ? 360 : 0))
+                            .blendMode(.plusLighter)
 
-                    ForEach(0..<4, id: \.self) { i in
-                        Circle()
-                            .stroke(rainbow[i].opacity(ripple ? 0.05 : 0.42 - Double(i) * 0.08), lineWidth: 2)
-                            .frame(width: 100 + CGFloat(i * 38), height: 100 + CGFloat(i * 38))
-                            .scaleEffect(ripple ? 1.42 : 0.88)
-                    }
-
-                    Circle()
-                        .stroke(
-                            AngularGradient(colors: rainbow, center: .center),
-                            lineWidth: 6
-                        )
-                        .frame(width: 118, height: 118)
-                        .rotationEffect(.degrees(spin ? 360 : 0))
-                        .shadow(color: Color(red: 0.7, green: 0.4, blue: 1).opacity(0.85), radius: 20)
-
-                    Circle()
-                        .trim(from: 0, to: max(0.04, min(progress, 1)))
-                        .stroke(
-                            AngularGradient(colors: [.white, rainbow[0], rainbow[5]], center: .center),
-                            style: StrokeStyle(lineWidth: 4, lineCap: .round)
-                        )
-                        .frame(width: 96, height: 96)
-                        .rotationEffect(.degrees(-90))
-                        .animation(.easeOut(duration: 0.3), value: progress)
-
-                    Image(systemName: "wand.and.stars")
-                        .font(.system(size: 32, weight: .bold))
-                        .foregroundStyle(.white)
-                        .symbolEffect(.pulse, options: .repeating)
-                        .symbolEffect(.bounce, value: pct / 5)
-                        .scaleEffect(pulse ? 1.12 : 0.92)
-
-                    ForEach(0..<14, id: \.self) { i in
-                        Image(systemName: "sparkle")
-                            .font(.system(size: CGFloat(5 + i % 5 * 2), weight: .bold))
-                            .foregroundStyle(rainbow[i % (rainbow.count - 1)].opacity(spark ? 1 : 0.15))
-                            .offset(
-                                x: cos(Double(i) / 14 * .pi * 2) * (spark ? 94 : 70),
-                                y: sin(Double(i) / 14 * .pi * 2) * (spark ? 94 : 70)
-                            )
-                            .scaleEffect(spark ? 1.25 : 0.5)
-                    }
-                }
-                .frame(height: 260)
-                .hueRotation(.degrees(hue ? 32 : -16))
-
-                VStack(spacing: 8) {
-                    Text("\(pct)%")
-                        .font(.system(size: 36, weight: .bold, design: .rounded).monospacedDigit())
-                        .foregroundStyle(.white)
-                        .contentTransition(.numericText())
-                        .shadow(color: rainbow[2].opacity(0.55), radius: 12)
-                    Text(status)
-                        .font(.subheadline.weight(.semibold))
-                        .foregroundStyle(.white.opacity(0.95))
-                        .multilineTextAlignment(.center)
-                    Text("Apple Intelligence · nur Maske")
-                        .font(.caption.weight(.medium))
-                        .foregroundStyle(.white.opacity(0.55))
-                }
-                .padding(.horizontal, 30)
-                .padding(.vertical, 18)
-                .background(
-                    Capsule(style: .continuous)
-                        .fill(.ultraThinMaterial.opacity(0.9))
-                        .overlay(
-                            Capsule(style: .continuous)
-                                .stroke(
-                                    AngularGradient(colors: rainbow, center: .center),
-                                    lineWidth: 1.6
+                        ForEach(0..<4, id: \.self) { i in
+                            Circle()
+                                .stroke(rainbow[i].opacity(ripple ? 0.05 : 0.4 - Double(i) * 0.08), lineWidth: 2.2)
+                                .frame(
+                                    width: min(w * 0.42, 160) + CGFloat(i * 42),
+                                    height: min(w * 0.42, 160) + CGFloat(i * 42)
                                 )
-                        )
-                        .shadow(color: rainbow[2].opacity(0.4), radius: 22, y: 8)
-                )
+                                .scaleEffect(ripple ? 1.35 : 0.92)
+                        }
+
+                        Circle()
+                            .stroke(AngularGradient(colors: rainbow, center: .center), lineWidth: 7)
+                            .frame(width: min(w * 0.36, 150), height: min(w * 0.36, 150))
+                            .rotationEffect(.degrees(spin ? 360 : 0))
+                            .shadow(color: Color(red: 0.7, green: 0.4, blue: 1).opacity(0.85), radius: 24)
+
+                        Circle()
+                            .trim(from: 0, to: max(0.04, min(progress, 1)))
+                            .stroke(
+                                AngularGradient(colors: [.white, rainbow[0], rainbow[5]], center: .center),
+                                style: StrokeStyle(lineWidth: 4.5, lineCap: .round)
+                            )
+                            .frame(width: min(w * 0.3, 126), height: min(w * 0.3, 126))
+                            .rotationEffect(.degrees(-90))
+                            .animation(.easeOut(duration: 0.3), value: progress)
+
+                        Image(systemName: "wand.and.stars")
+                            .font(.system(size: 34, weight: .bold))
+                            .foregroundStyle(.white)
+                            .symbolEffect(.pulse, options: .repeating)
+                            .symbolEffect(.bounce, value: pct / 5)
+                            .scaleEffect(pulse ? 1.1 : 0.94)
+
+                        ForEach(0..<14, id: \.self) { i in
+                            Image(systemName: "sparkle")
+                                .font(.system(size: CGFloat(5 + i % 5 * 2), weight: .bold))
+                                .foregroundStyle(rainbow[i % (rainbow.count - 1)].opacity(spark ? 1 : 0.15))
+                                .offset(
+                                    x: cos(Double(i) / 14 * .pi * 2) * (spark ? min(w * 0.28, 110) : min(w * 0.22, 85)),
+                                    y: sin(Double(i) / 14 * .pi * 2) * (spark ? min(w * 0.28, 110) : min(w * 0.22, 85))
+                                )
+                                .scaleEffect(spark ? 1.25 : 0.5)
+                        }
+                    }
+                    .frame(height: min(w * 0.72, 300))
+                    .hueRotation(.degrees(hue ? 32 : -16))
+
+                    VStack(spacing: 8) {
+                        Text("\(pct)%")
+                            .font(.system(size: 36, weight: .bold, design: .rounded).monospacedDigit())
+                            .foregroundStyle(.white)
+                            .contentTransition(.numericText())
+                            .shadow(color: rainbow[2].opacity(0.55), radius: 12)
+                        Text(status)
+                            .font(.subheadline.weight(.semibold))
+                            .foregroundStyle(.white.opacity(0.95))
+                            .multilineTextAlignment(.center)
+                            .padding(.horizontal, 12)
+                        Text(pct >= 88 ? "Normal — warte auf Stable Diffusion" : "Apple Intelligence · nur Maske")
+                            .font(.caption.weight(.medium))
+                            .foregroundStyle(.white.opacity(0.55))
+                    }
+                    .padding(.horizontal, 28)
+                    .padding(.vertical, 18)
+                    .frame(maxWidth: min(w - 32, 360))
+                    .background(
+                        RoundedRectangle(cornerRadius: 22, style: .continuous)
+                            .fill(.ultraThinMaterial.opacity(0.92))
+                            .overlay(
+                                RoundedRectangle(cornerRadius: 22, style: .continuous)
+                                    .stroke(AngularGradient(colors: rainbow, center: .center), lineWidth: 1.6)
+                            )
+                            .shadow(color: rainbow[2].opacity(0.4), radius: 22, y: 8)
+                    )
+                }
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
             }
-            .padding(24)
+            .frame(width: w, height: h)
         }
+        .ignoresSafeArea()
         .allowsHitTesting(true)
         .onAppear {
             withAnimation(.linear(duration: 1.9).repeatForever(autoreverses: false)) { spin = true }

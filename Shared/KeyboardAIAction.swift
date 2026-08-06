@@ -102,15 +102,20 @@ enum KeyboardAIAction: String, CaseIterable, Identifiable {
             """
         case .complete:
             return """
-            Du bist ein Satz-Ergänzer für die Tastatur — kein Chatbot.
-            Der TEXT ist ein unvollständiges Fragment / Stichworte. Formuliere daraus einen natürlichen, fertigen Satz.
-            Sprache des Fragments behalten (Deutsch oder Englisch).
-            Ergänze sinnvolle, wahrscheinliche Details (wer/was/wann), aber keine lange Geschichte.
-            Maximal 1–2 kurze Sätze. Kein Intro, kein Markdown, keine Anführungszeichen um den ganzen Satz.
+            Aufgabe: SATZERGÄNZUNG — aus dem Fragment GENAU EINEN fertigen Satz machen.
+
+            Regeln (streng):
+            - Ausgabe = NUR dieser eine Satz. Nichts davor, nichts danach.
+            - Kein zweiter Satz, kein Absatz, keine Liste, kein Markdown.
+            - Kein Intro („Gerne“, „Hier ist“, „Klar“), keine Anführungszeichen um den Satz.
+            - Sprache des Fragments behalten (DE oder EN).
+            - Sinnvolle, kurze Ergänzung (wer/was/wann) — aber keine Geschichte.
+            - Endet mit Punkt (oder !/? wenn passend).
 
             Beispiele:
             TEXT: Treffen morgen
             RICHTIG: Wir treffen uns morgen.
+            FALSCH: Wir treffen uns morgen. Ich freue mich schon!
             TEXT: Meet tomorrow
             RICHTIG: I'll meet you tomorrow.
             TEXT: muss noch einkaufen
@@ -248,22 +253,20 @@ enum KeyboardAIAction: String, CaseIterable, Identifiable {
         }
 
         if action == .complete {
-            // Keep short completions; drop chatter after first 2 sentences if runaway
-            let maxLen = max(48, orig.count * 6 + 40)
+            // Exactly one sentence — strip chatter and extra sentences
+            let endMarks: Set<Character> = [".", "!", "?", "。", "！", "？"]
+            if let idx = s.firstIndex(where: { endMarks.contains($0) }) {
+                s = String(s[...idx]).trimmingCharacters(in: .whitespacesAndNewlines)
+            } else if let nl = s.firstIndex(of: "\n") {
+                s = String(s[..<nl]).trimmingCharacters(in: .whitespacesAndNewlines)
+            }
+            // Soft length cap so models don't write essays
+            let maxLen = max(40, orig.count * 5 + 28)
             if s.count > maxLen {
-                let endMarks: Set<Character> = [".", "!", "?", "。", "！", "？"]
-                var cuts = 0
-                var end = s.endIndex
-                for (i, ch) in s.enumerated() {
-                    if endMarks.contains(ch) {
-                        cuts += 1
-                        if cuts >= 2 {
-                            end = s.index(s.startIndex, offsetBy: i + 1)
-                            break
-                        }
-                    }
-                }
-                s = String(s[..<end]).trimmingCharacters(in: .whitespacesAndNewlines)
+                s = String(s.prefix(maxLen)).trimmingCharacters(in: .whitespacesAndNewlines)
+            }
+            if !s.isEmpty, let last = s.last, !endMarks.contains(last) {
+                s += "."
             }
             return s
         }

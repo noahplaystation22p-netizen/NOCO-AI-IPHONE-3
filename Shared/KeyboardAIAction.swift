@@ -1,4 +1,4 @@
-import Foundation
+﻿import Foundation
 
 /// AI rewrite actions for the keyboard (flash-mode, text-only rewrite — never Q&A).
 enum KeyboardAIAction: String, CaseIterable, Identifiable {
@@ -65,9 +65,10 @@ enum KeyboardAIAction: String, CaseIterable, Identifiable {
             return """
             \(rewriterRule)
             \(example)
-            Aufgabe: Korrigiere Rechtschreibung, Grammatik und Zeichensetzung. Formuliere höchstens leicht klarer.
-            Behalte dieselbe Absicht, denselben Fragetyp und ungefähr dieselbe Länge (±20%, nicht länger!).
-            Wenn der Text eine Frage ist, bleibt es eine Frage — beantworte sie nicht.
+            Aufgabe: NUR Rechtschreibung, Grammatik und Zeichensetzung korrigieren.
+            Formuliere höchstens minimal klarer. Gleiche Länge (±15%). Keine längere Fassung.
+            Wenn der Text eine Frage ist, bleibt es eine Frage — beantworte sie NICHT.
+            Keine Definitionen, kein Wissen, keine Erklärungen.
 
             TEXT:
             \(t)

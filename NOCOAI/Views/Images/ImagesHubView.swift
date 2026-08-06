@@ -9,6 +9,7 @@ struct ImagesHubView: View {
     @State private var reveal = false
     @FocusState private var promptFocused: Bool
     @State private var draftPrompt = ""
+    @State private var openEraser = false
 
     private let ideaPrompts = [
         "Neon-Stadt bei Regen, cinematic",
@@ -34,9 +35,18 @@ struct ImagesHubView: View {
 
                     createCard
 
-                    NavigationLink {
+                    NavigationLink(isActive: $openEraser) {
                         MagischerRadiererView()
                             .environmentObject(connection)
+                    } label: {
+                        EmptyView()
+                    }
+                    .frame(width: 0, height: 0)
+                    .hidden()
+
+                    Button {
+                        HapticService.open()
+                        openEraser = true
                     } label: {
                         HStack(spacing: 14) {
                             ZStack {
@@ -59,7 +69,7 @@ struct ImagesHubView: View {
                                 Text("Magischer Radierer")
                                     .font(.headline)
                                     .foregroundStyle(.primary)
-                                Text("Bemalen → entfernen oder ändern")
+                                Text("Bemalen → Anweisung tippen → fertig")
                                     .font(.caption)
                                     .foregroundStyle(.secondary)
                             }
@@ -99,11 +109,21 @@ struct ImagesHubView: View {
             .onChange(of: connection.pendingGalleryImageId) { _, _ in
                 focusPendingGalleryImage()
             }
+            .onChange(of: connection.pendingOpenEraser) { _, open in
+                if open {
+                    openEraser = true
+                    connection.pendingOpenEraser = false
+                }
+            }
             .onChange(of: connection.pendingGalleryImageURL) { _, _ in
                 focusPendingGalleryImage()
             }
             .onAppear {
                 focusPendingGalleryImage()
+                if connection.pendingOpenEraser {
+                    openEraser = true
+                    connection.pendingOpenEraser = false
+                }
             }
             .task {
                 draftPrompt = connection.images.prompt

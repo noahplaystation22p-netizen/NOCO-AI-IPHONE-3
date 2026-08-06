@@ -33,8 +33,24 @@ final class KeyboardViewController: UIInputViewController {
         model.syncDocumentSnapshot()
     }
 
+    /// Custom schemes often fail via `extensionContext.open` from keyboards — use responder chain.
     func openURL(_ url: URL) {
-        extensionContext?.open(url, completionHandler: nil)
+        var responder: UIResponder? = self
+        while let r = responder {
+            let sel = Selector(("openURL:"))
+            if r.responds(to: sel) {
+                r.perform(sel, with: url)
+                return
+            }
+            responder = r.next
+        }
+        extensionContext?.open(url) { [weak self] ok in
+            DispatchQueue.main.async {
+                if !ok {
+                    self?.model.statusLine = "App öffnen fehlgeschlagen — Vollzugriff?"
+                }
+            }
+        }
     }
 
     override func updateViewConstraints() {

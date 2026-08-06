@@ -310,8 +310,15 @@ final class ChatStore: ObservableObject {
             }
 
             if let kept = keptAssistant {
-                stickyVisionAssistant = kept
-                stickyVisionUntil = Date().addingTimeInterval(90)
+                // Guard against moondream-style "NO" if PC isn't updated yet
+                if Self.isUselessVisionReply(kept.text) {
+                    if let idx = messages.firstIndex(where: { $0.id == kept.id }) {
+                        messages[idx].text = "Bildanalyse unklar — bitte Companion (NOCO AI X) neu starten und nochmal senden."
+                    }
+                } else {
+                    stickyVisionAssistant = kept
+                    stickyVisionUntil = Date().addingTimeInterval(90)
+                }
             }
 
             await resolveConversationId(activeConversationId, preferLatest: isStartingNewChat)
@@ -735,6 +742,20 @@ final class ChatStore: ObservableObject {
             img.draw(in: CGRect(origin: .zero, size: target))
         }
         return resized.jpegData(compressionQuality: 0.82) ?? data
+    }
+
+    /// Moondream often returns closed VQA junk like "NO" / "NO NO NO".
+    private static func isUselessVisionReply(_ text: String) -> Bool {
+        let t = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        if t.count < 8 { return true }
+        let lower = t.lowercased()
+        if lower == "no" || lower == "nein" || lower == "yes" || lower == "ja" { return true }
+        let compact = lower.replacingOccurrences(of: "[\\s.!?,;]+", with: " ", options: .regularExpression)
+        let words = compact.split(separator: " ").map(String.init)
+        if words.count <= 6, words.allSatisfy({ ["no", "nein", "yes", "ja"].contains($0) }) {
+            return true
+        }
+        return false
     }
 
     private func softSyncPreservingVision(localAssistant: ChatMessage?) async {

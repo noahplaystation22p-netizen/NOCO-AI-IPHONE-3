@@ -13,10 +13,13 @@ struct MagischerRadiererView: View {
     @State private var brushSize: CGFloat = 36
     @State private var instruction = ""
     @State private var isWorking = false
-    @State private var status = "Foto wählen, Bereich bemalen, dann Anweisung tippen"
+    @State private var workProgress: Double = 0
+    @State private var status = "1 Foto · 2 bemalen · 3 Anweisung · 4 Magisch"
     @State private var resultImage: UIImage?
     @State private var canvas = MaskCanvasController()
     @State private var showLibrary = false
+    @State private var revealResult = false
+    @State private var maskPulse = false
     @FocusState private var promptFocused: Bool
 
     var body: some View {
@@ -34,6 +37,13 @@ struct MagischerRadiererView: View {
             .padding(20)
         }
         .nocoBackground()
+        .overlay {
+            if isWorking {
+                MagicEraserTheater(progress: workProgress, status: status)
+                    .transition(.opacity.combined(with: .scale(scale: 0.96)))
+            }
+        }
+        .animation(.spring(response: 0.45, dampingFraction: 0.82), value: isWorking)
         .navigationTitle("Magischer Radierer")
         .navigationBarTitleDisplayMode(.inline)
         .photosPicker(isPresented: $showLibrary, selection: $photoItem, matching: .images)
@@ -49,18 +59,24 @@ struct MagischerRadiererView: View {
         } message: {
             Text(status)
         }
+        .onAppear {
+            withAnimation(.easeInOut(duration: 1.2).repeatForever(autoreverses: true)) {
+                maskPulse = true
+            }
+        }
     }
 
     private var header: some View {
         VStack(alignment: .leading, spacing: 8) {
             Text("Bereich bemalen → KI ändert genau dort")
                 .font(.subheadline.weight(.semibold))
-            Text("Weiß/Magenta = wird bearbeitet. Rest bleibt. z. B. „entferne den Baum“ oder „mach den Himmel dramatischer“.")
+            Text("Pinsel = Maske. Dann tippen, was passieren soll — z. B. „entferne den Baum“ oder „Himmel dramatischer“.")
                 .font(.footnote)
                 .foregroundStyle(.secondary)
             Text(status)
                 .font(.caption)
                 .foregroundStyle(NOCOAITheme.accent)
+                .contentTransition(.opacity)
         }
         .frame(maxWidth: .infinity, alignment: .leading)
     }
@@ -69,15 +85,45 @@ struct MagischerRadiererView: View {
         ZStack {
             RoundedRectangle(cornerRadius: 22, style: .continuous)
                 .fill(.ultraThinMaterial)
+
             if let sourceImage {
                 MaskPaintCanvas(image: sourceImage, controller: canvas, brushSize: brushSize)
                     .clipShape(RoundedRectangle(cornerRadius: 20, style: .continuous))
                     .padding(8)
+                    .overlay {
+                        if canvas.hasPaint {
+                            RoundedRectangle(cornerRadius: 20, style: .continuous)
+                                .stroke(
+                                    Color(red: 0.95, green: 0.4, blue: 0.75).opacity(maskPulse ? 0.55 : 0.2),
+                                    lineWidth: 2
+                                )
+                                .padding(8)
+                                .allowsHitTesting(false)
+                        }
+                    }
             } else {
                 VStack(spacing: 12) {
-                    Image(systemName: "paintbrush.pointed.fill")
-                        .font(.system(size: 40))
-                        .foregroundStyle(NOCOAITheme.accent)
+                    ZStack {
+                        Circle()
+                            .fill(
+                                AngularGradient(
+                                    colors: [
+                                        Color(red: 0.4, green: 0.7, blue: 1),
+                                        Color(red: 0.75, green: 0.4, blue: 1),
+                                        Color(red: 0.95, green: 0.5, blue: 0.75),
+                                        Color(red: 0.4, green: 0.7, blue: 1)
+                                    ],
+                                    center: .center
+                                )
+                            )
+                            .frame(width: 72, height: 72)
+                            .blur(radius: 18)
+                            .opacity(0.7)
+                        Image(systemName: "paintbrush.pointed.fill")
+                            .font(.system(size: 36))
+                            .foregroundStyle(NOCOAITheme.accent)
+                            .symbolEffect(.pulse, options: .repeating)
+                    }
                     Text("Foto aus der Galerie wählen")
                         .font(.subheadline.weight(.medium))
                     Button {
@@ -133,7 +179,7 @@ struct MagischerRadiererView: View {
 
     private var promptCard: some View {
         VStack(alignment: .leading, spacing: 8) {
-            Text("Anweisung")
+            Text("Was soll passieren?")
                 .font(.caption.weight(.semibold))
                 .foregroundStyle(.secondary)
             TextField("z. B. entferne das Auto / mach Haare rot…", text: $instruction, axis: .vertical)
@@ -143,6 +189,15 @@ struct MagischerRadiererView: View {
                 .background(
                     RoundedRectangle(cornerRadius: 16, style: .continuous)
                         .fill(.ultraThinMaterial)
+                        .overlay(
+                            RoundedRectangle(cornerRadius: 16, style: .continuous)
+                                .stroke(
+                                    promptFocused
+                                        ? NOCOAITheme.glowPrimary.opacity(0.55)
+                                        : Color.clear,
+                                    lineWidth: 1.2
+                                )
+                        )
                 )
         }
     }
@@ -151,16 +206,21 @@ struct MagischerRadiererView: View {
         Button {
             Task { await runEraser() }
         } label: {
-            HStack {
-                if isWorking { ProgressView().tint(.white) }
-                Text(isWorking ? "KI arbeitet…" : "Magisch bearbeiten")
+            HStack(spacing: 10) {
+                Image(systemName: "wand.and.stars")
+                    .symbolEffect(.bounce, value: isWorking)
+                Text(isWorking ? "Magie läuft…" : "Magisch bearbeiten")
                     .font(.headline)
             }
             .frame(maxWidth: .infinity)
             .padding(.vertical, 16)
             .background(
                 LinearGradient(
-                    colors: [Color(red: 0.35, green: 0.55, blue: 1), Color(red: 0.7, green: 0.4, blue: 0.95)],
+                    colors: [
+                        Color(red: 0.35, green: 0.55, blue: 1),
+                        Color(red: 0.7, green: 0.4, blue: 0.95),
+                        Color(red: 0.95, green: 0.45, blue: 0.7)
+                    ],
                     startPoint: .leading,
                     endPoint: .trailing
                 ),
@@ -182,6 +242,26 @@ struct MagischerRadiererView: View {
                 .scaledToFit()
                 .clipShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
                 .shadow(color: NOCOAITheme.glowPrimary.opacity(0.35), radius: 18)
+                .scaleEffect(revealResult ? 1 : 0.92)
+                .opacity(revealResult ? 1 : 0)
+                .overlay {
+                    if revealResult {
+                        RoundedRectangle(cornerRadius: 18, style: .continuous)
+                            .stroke(
+                                LinearGradient(
+                                    colors: [
+                                        Color.white.opacity(0.6),
+                                        Color(red: 0.6, green: 0.5, blue: 1).opacity(0.4),
+                                        .clear
+                                    ],
+                                    startPoint: .topLeading,
+                                    endPoint: .bottomTrailing
+                                ),
+                                lineWidth: 1.5
+                            )
+                            .allowsHitTesting(false)
+                    }
+                }
             Button {
                 UIImageWriteToSavedPhotosAlbum(image, nil, nil, nil)
                 HapticService.success()
@@ -198,6 +278,7 @@ struct MagischerRadiererView: View {
            let ui = UIImage(data: data) {
             sourceImage = ui
             resultImage = nil
+            revealResult = false
             canvas.clear()
             status = "Bereich bemalen, dann Anweisung tippen"
             HapticService.success()
@@ -226,15 +307,35 @@ struct MagischerRadiererView: View {
             HapticService.warning()
             return
         }
+        _ = maskPNG
         // Match SD working size (512) for reliable mask alignment
         let working = sourceImage.resizedToFit(maxSide: 512)
         guard let jpeg = working.jpegData(compressionQuality: 0.9),
               let maskForSD = canvas.exportMaskPNG(matching: working) else { return }
 
         isWorking = true
+        workProgress = 0.08
         promptFocused = false
-        status = "Magischer Radierer läuft auf dem PC…"
+        status = "Maske wird gelesen…"
         HapticService.medium()
+
+        let progressTask = Task {
+            while !Task.isCancelled {
+                try? await Task.sleep(nanoseconds: 280_000_000)
+                await MainActor.run {
+                    if workProgress < 0.88 {
+                        workProgress = min(0.88, workProgress + Double.random(in: 0.03...0.07))
+                        if workProgress < 0.35 {
+                            status = "Pinselspur analysieren…"
+                        } else if workProgress < 0.65 {
+                            status = "Magie auf dem PC…"
+                        } else {
+                            status = "Pixel neu zeichnen…"
+                        }
+                    }
+                }
+            }
+        }
 
         do {
             let result = try await connection.images.runInpaint(
@@ -242,13 +343,23 @@ struct MagischerRadiererView: View {
                 imageJPEG: jpeg,
                 maskPNG: maskForSD
             )
+            progressTask.cancel()
+            workProgress = 1
+            status = "Fertig"
             if let b64 = result.imageBase64 {
                 let cleaned = b64
                     .replacingOccurrences(of: "\n", with: "")
                     .replacingOccurrences(of: "data:image/png;base64,", with: "")
                     .replacingOccurrences(of: "data:image/jpeg;base64,", with: "")
                 if let data = Data(base64Encoded: cleaned), let ui = UIImage(data: data) {
-                    resultImage = ui
+                    try? await Task.sleep(nanoseconds: 350_000_000)
+                    withAnimation(.spring(response: 0.55, dampingFraction: 0.82)) {
+                        isWorking = false
+                        resultImage = ui
+                    }
+                    withAnimation(.spring(response: 0.6, dampingFraction: 0.78).delay(0.05)) {
+                        revealResult = true
+                    }
                     status = "Fertig ✨"
                     HapticService.success()
                     connection.images.ingestEditedImage(
@@ -257,23 +368,160 @@ struct MagischerRadiererView: View {
                         path: result.resolvedPath
                     )
                 } else {
+                    isWorking = false
                     status = "Fehler: Bild konnte nicht gelesen werden"
                     HapticService.error()
                 }
-            } else if let path = result.resolvedPath,
-                      let url = URL(string: path) ?? nil {
+            } else if result.resolvedPath != nil {
+                isWorking = false
                 status = "Fertig — siehe Galerie"
                 HapticService.success()
-                _ = url
             } else {
+                isWorking = false
                 status = "Fehler: Keine Bilddaten vom PC"
                 HapticService.error()
             }
         } catch {
+            progressTask.cancel()
+            isWorking = false
             status = "Fehler: \((error as? LocalizedError)?.errorDescription ?? error.localizedDescription)"
             HapticService.error()
         }
-        isWorking = false
+    }
+}
+
+// MARK: - Apple Intelligence–style eraser theater
+
+private struct MagicEraserTheater: View {
+    var progress: Double
+    var status: String
+
+    @State private var spin = false
+    @State private var pulse = false
+    @State private var spark = false
+    @State private var ripple = false
+
+    private var pct: Int { Int((min(max(progress, 0), 1) * 100).rounded()) }
+
+    var body: some View {
+        ZStack {
+            Color.black.opacity(0.42)
+                .ignoresSafeArea()
+                .background(.ultraThinMaterial)
+
+            VStack(spacing: 22) {
+                ZStack {
+                    // Aurora blobs
+                    ForEach(0..<3, id: \.self) { i in
+                        Circle()
+                            .fill(blob(i).opacity(0.5))
+                            .frame(width: 160 + CGFloat(i * 28), height: 160 + CGFloat(i * 28))
+                            .blur(radius: 34)
+                            .offset(
+                                x: pulse ? CGFloat(20 - i * 10) : CGFloat(-18 + i * 8),
+                                y: pulse ? CGFloat(-14 + i * 5) : CGFloat(12 - i * 4)
+                            )
+                            .blendMode(.plusLighter)
+                    }
+
+                    // Ripple rings
+                    ForEach(0..<3, id: \.self) { i in
+                        Circle()
+                            .stroke(Color.white.opacity(ripple ? 0.0 : 0.35 - Double(i) * 0.1), lineWidth: 1.5)
+                            .frame(width: 90 + CGFloat(i * 36), height: 90 + CGFloat(i * 36))
+                            .scaleEffect(ripple ? 1.35 : 0.85)
+                    }
+
+                    // Rotating angular ring
+                    Circle()
+                        .stroke(
+                            AngularGradient(
+                                colors: [
+                                    Color(red: 0.4, green: 0.8, blue: 1),
+                                    Color(red: 0.85, green: 0.4, blue: 1),
+                                    Color(red: 0.95, green: 0.55, blue: 0.75),
+                                    Color(red: 0.4, green: 0.9, blue: 0.85),
+                                    Color(red: 0.4, green: 0.8, blue: 1)
+                                ],
+                                center: .center
+                            ),
+                            lineWidth: 4
+                        )
+                        .frame(width: 108, height: 108)
+                        .rotationEffect(.degrees(spin ? 360 : 0))
+                        .shadow(color: Color(red: 0.55, green: 0.4, blue: 1).opacity(0.7), radius: 14)
+
+                    // Progress arc
+                    Circle()
+                        .trim(from: 0, to: max(0.04, min(progress, 1)))
+                        .stroke(
+                            Color.white.opacity(0.85),
+                            style: StrokeStyle(lineWidth: 3, lineCap: .round)
+                        )
+                        .frame(width: 88, height: 88)
+                        .rotationEffect(.degrees(-90))
+                        .animation(.easeOut(duration: 0.35), value: progress)
+
+                    Image(systemName: "wand.and.stars")
+                        .font(.system(size: 28, weight: .semibold))
+                        .foregroundStyle(.white)
+                        .symbolEffect(.pulse, options: .repeating)
+                        .scaleEffect(pulse ? 1.08 : 0.94)
+
+                    // Sparkles
+                    ForEach(0..<8, id: \.self) { i in
+                        Image(systemName: "sparkle")
+                            .font(.system(size: CGFloat(7 + i % 3 * 2), weight: .bold))
+                            .foregroundStyle(.white.opacity(spark ? 0.95 : 0.2))
+                            .offset(
+                                x: cos(Double(i) / 8 * .pi * 2) * (spark ? 78 : 64),
+                                y: sin(Double(i) / 8 * .pi * 2) * (spark ? 78 : 64)
+                            )
+                    }
+                }
+                .frame(height: 220)
+
+                VStack(spacing: 8) {
+                    Text("\(pct)%")
+                        .font(.title.weight(.bold).monospacedDigit())
+                        .foregroundStyle(.white)
+                        .contentTransition(.numericText())
+                    Text(status)
+                        .font(.subheadline.weight(.semibold))
+                        .foregroundStyle(.white.opacity(0.9))
+                        .multilineTextAlignment(.center)
+                    Text("Magischer Radierer")
+                        .font(.caption.weight(.medium))
+                        .foregroundStyle(.white.opacity(0.55))
+                }
+                .padding(.horizontal, 28)
+                .padding(.vertical, 16)
+                .background(
+                    Capsule(style: .continuous)
+                        .fill(.ultraThinMaterial.opacity(0.85))
+                        .overlay(
+                            Capsule(style: .continuous)
+                                .stroke(Color.white.opacity(0.25), lineWidth: 1)
+                        )
+                )
+            }
+            .padding(24)
+        }
+        .allowsHitTesting(true)
+        .onAppear {
+            withAnimation(.linear(duration: 2.8).repeatForever(autoreverses: false)) { spin = true }
+            withAnimation(.easeInOut(duration: 1.2).repeatForever(autoreverses: true)) { pulse = true }
+            withAnimation(.easeInOut(duration: 0.9).repeatForever(autoreverses: true)) { spark = true }
+            withAnimation(.easeOut(duration: 1.8).repeatForever(autoreverses: false)) { ripple = true }
+        }
+    }
+
+    private func blob(_ i: Int) -> Color {
+        switch i {
+        case 0: return Color(red: 0.35, green: 0.7, blue: 1)
+        case 1: return Color(red: 0.7, green: 0.4, blue: 1)
+        default: return Color(red: 0.95, green: 0.5, blue: 0.75)
+        }
     }
 }
 

@@ -19,6 +19,8 @@ final class ConnectionStore: ObservableObject {
     @Published var features: FeaturesResponse?
     /// Tab to open after notification / deep link (0 Chat, 1 Bildideen, 2 Studio)
     @Published var pendingTab: Int?
+    /// Open Magischer Radierer after switching to Bildideen
+    @Published var pendingOpenEraser = false
     /// Open this gallery image after switching to Bildideen
     @Published var pendingGalleryImageURL: URL?
     @Published var pendingGalleryImageId: String?
@@ -294,7 +296,14 @@ final class ConnectionStore: ObservableObject {
             return
         }
         if host == "speak" || path.contains("speak") || host == "siri" {
+            // From keyboard: show Speak UI so Sprachmodus is obvious
+            speak.openUI()
             launchSpeakFromShortcut()
+            return
+        }
+        if host == "eraser" || host == "radierer" || path.contains("eraser") || path.contains("radierer") {
+            pendingTab = 1
+            pendingOpenEraser = true
             return
         }
         if host == "images" || host == "bildideen" || path.contains("images") || path.contains("bild") {

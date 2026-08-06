@@ -33,8 +33,9 @@ struct VoiceModeView: View {
                 ZStack {
                     if !cameraOn {
                         IntelligenceVoiceStage(phase: voice.phase, level: voice.level, bands: voice.bands)
-                            .frame(maxHeight: 260)
+                            .frame(maxHeight: 280)
                             .padding(.horizontal, 4)
+                            .padding(.top, 6)
                     } else {
                         compactVoiceMeter
                     }
@@ -71,7 +72,7 @@ struct VoiceModeView: View {
             if !connection.isOnline {
                 speak.statusLine = "PC offline — Companion in NOCO AI X starten"
             } else if !speak.isRunning {
-                speak.statusLine = "Starten → Pause sendet. Kamera jederzeit zuschaltbar."
+                speak.statusLine = "Rede aus — danach verarbeitet NOCO und antwortet."
             }
         }
         .onChange(of: scenePhase) { _, phase in
@@ -211,8 +212,14 @@ struct VoiceModeView: View {
             .padding(.vertical, 5)
             .background(
                 Capsule(style: .continuous)
-                    .fill(NOCOAITheme.accent.opacity(0.12))
+                    .fill(NOCOAITheme.accent.opacity(0.12 + Double(voice.level) * 0.18))
+                    .overlay(
+                        Capsule(style: .continuous)
+                            .stroke(NOCOAITheme.accent.opacity(0.25 + Double(voice.level) * 0.45), lineWidth: 1)
+                    )
             )
+            .scaleEffect(1 + voice.level * (voice.phase == .listening ? 0.08 : 0.03))
+            .animation(.easeOut(duration: 0.06), value: voice.level)
     }
 
     private var promptPanel: some View {
@@ -481,7 +488,7 @@ struct VoiceModeView: View {
         if speak.isMuted { return "Mute an — Antworten hörst du trotzdem" }
         if speak.isRunning {
             switch voice.phase {
-            case .listening: return "Pause → sendet sofort"
+            case .listening: return "Rede aus — dann Antwort"
             case .processing: return "Warte auf PC…"
             case .speaking: return "Danach wieder Zuhören"
             default: return "Live"
@@ -542,7 +549,8 @@ enum VoiceSettings {
                 if raw == "normal" { return .flash }
                 return mode
             }
-            return .flash
+            // Auto: short → Flash, complex → Think — smarter Speak replies.
+            return .auto
         }
         set {
             UserDefaults.standard.set(newValue.rawValue, forKey: "nocoai.voiceMode")

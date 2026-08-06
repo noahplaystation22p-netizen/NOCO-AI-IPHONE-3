@@ -58,6 +58,8 @@ final class ChatStore: ObservableObject {
     private var pendingReloadConversationId: String?
     private var deletedIds: Set<String> = Set(UserDefaults.standard.stringArray(forKey: "nocoai.deletedChats") ?? [])
     private var applyingRemoteMode = false
+    /// Gallery ingest after in-chat image generation (wired by ConnectionStore).
+    var onImageCreated: ((String, URL?, Data?) -> Void)?
 
     private var syncIntervalNs: UInt64 {
         if isSending { return 2_500_000_000 }
@@ -197,15 +199,16 @@ final class ChatStore: ObservableObject {
         isSending = true
         lastError = nil
         workPhase = .understanding
-        let uiMode = speak ? .flash : (modeOverride ?? mode)
+        // Speak must honor modeOverride (Think/Auto) — don't force Flash.
+        let uiMode = modeOverride ?? (speak ? .flash : mode)
         var effectiveMode = uiMode
 
         // Soft intelligence: Auto only picks depth (Think/Flash). Never auto-activates Vision/Agent/tools.
-        if !speak, uiMode == .auto {
+        if uiMode == .auto {
             if let depth = ModeIntelligence.recommendDepth(text: trimmed) {
                 effectiveMode = depth.mode
             }
-            if !suppressRecommendationUntilEmpty,
+            if !speak, !suppressRecommendationUntilEmpty,
                let rec = ModeIntelligence.recommend(text: trimmed),
                rec.mode == .agent {
                 modeRecommendation = ModeRecommendation(mode: rec.mode, reason: rec.reason)
@@ -216,7 +219,7 @@ final class ChatStore: ObservableObject {
             }
         }
 
-        ModeIntelligence.recordUse(speak ? mode : uiMode)
+        ModeIntelligence.recordUse(speak ? effectiveMode : uiMode)
 
         // Agent clarifying answers → continue previous goal
         var agentGoal = trimmed
@@ -257,6 +260,22 @@ final class ChatStore: ObservableObject {
             }
             isSending = false
             return agentReply
+        }
+
+        // Image compose: idea → prompt → generate in background, result stays in chat.
+        if effectiveMode.isImageCompose, !speak {
+            workPhase = .understanding
+            let imageReply = await runImageCreateInChat(
+                trimmed,
+                assistantID: assistantID,
+                conversationId: conversationId,
+                isStartingNewChat: isStartingNewChat
+            )
+            workPhase = .done
+            try? await Task.sleep(nanoseconds: 350_000_000)
+            workPhase = .idle
+            isSending = false
+            return imageReply
         }
 
         do {
@@ -455,10 +474,10 @@ final class ChatStore: ObservableObject {
 
         do {
             workPhase = .analyzing
-            let result = try await api.uploadVisionImage(
-                imageData: jpeg,
-                filename: "upload.jpg",
-                message: userText,
+            let result = try await Self.uploadVisionWithRetry(
+                api: api,
+                jpeg: jpeg,
+                userText: userText,
                 conversationId: activeConversationId
             )
             workPhase = .executing
@@ -643,7 +662,7 @@ final class ChatStore: ObservableObject {
         ModeIntelligence.recordUse(newMode)
         modeRecommendation = nil
         suppressRecommendationUntilEmpty = false
-        if newMode == .agent {
+        if newMode == .agent || newMode == .image {
             HapticService.open()
         }
         guard !applyingRemoteMode else { return }
@@ -1008,6 +1027,153 @@ final class ChatStore: ObservableObject {
         guard let idx = messages.firstIndex(where: { $0.id == id }) else { return }
         messages[idx].text = text
         messages[idx].isStreaming = streaming
+    }
+
+    /// Idea → prompt → txt2img, with live status + final image bubble in chat.
+    private func runImageCreateInChat(
+        _ idea: String,
+        assistantID: UUID,
+        conversationId: String?,
+        isStartingNewChat: Bool
+    ) async -> String? {
+        guard let api else {
+            setAssistantText(assistantID, "Nicht verbunden.", streaming: false)
+            return nil
+        }
+
+        setAssistantText(assistantID, "Formuliere Prompt…", streaming: true)
+        workPhase = .analyzing
+        let prompt = await refineImagePrompt(idea)
+        let displayPrompt = prompt.trimmingCharacters(in: .whitespacesAndNewlines)
+        setAssistantText(assistantID, "Erstelle Bild…\n\n\(displayPrompt)", streaming: true)
+        workPhase = .executing
+
+        ImageBackgroundKeeper.shared.begin(reason: "NOCO Bild erstellen")
+        ImageLiveActivityManager.start(prompt: displayPrompt)
+        defer {
+            ImageBackgroundKeeper.shared.end(preserveAudioSession: true)
+        }
+
+        let resolved = ImageGenMode.auto.resolved(for: displayPrompt)
+        let params = resolved.engineParams
+
+        let progressTask = Task { @MainActor [weak self] in
+            while !Task.isCancelled {
+                try? await Task.sleep(nanoseconds: 1_200_000_000)
+                guard !Task.isCancelled, let self else { return }
+                guard let prog = try? await api.imageProgress() else { continue }
+                let status = ImageStore.chatFriendlyProgress(prog)
+                self.setAssistantText(assistantID, "\(status)\n\n\(displayPrompt)", streaming: true)
+                ImageLiveActivityManager.update(
+                    progress: prog.normalizedProgress,
+                    status: status,
+                    insight: status,
+                    etaSeconds: nil,
+                    phase: .rendering,
+                    force: false
+                )
+            }
+        }
+
+        do {
+            let res = try await api.generateImage(
+                prompt: displayPrompt,
+                conversationId: conversationId,
+                width: params.width,
+                height: params.height,
+                steps: params.steps
+            )
+            progressTask.cancel()
+
+            if let cid = res.conversationId, !cid.isEmpty {
+                activeConversationId = cid
+                persistActiveConversation()
+            }
+
+            var localData: Data?
+            if let b64 = res.imageBase64 {
+                let cleaned = b64
+                    .replacingOccurrences(of: "\n", with: "")
+                    .replacingOccurrences(of: "data:image/png;base64,", with: "")
+                    .replacingOccurrences(of: "data:image/jpeg;base64,", with: "")
+                localData = Data(base64Encoded: cleaned)
+            }
+
+            var imageURL = media?.url(for: res.resolvedPath)
+            if localData == nil, let downloadURL = imageURL {
+                localData = try? await URLSession.shared.data(from: downloadURL).0
+            }
+
+            let replyText = "Fertig\n\n\(displayPrompt)"
+            if let idx = messages.firstIndex(where: { $0.id == assistantID }) {
+                messages[idx] = ChatMessage(
+                    id: assistantID,
+                    role: .assistant,
+                    text: replyText,
+                    isStreaming: false,
+                    imageURL: imageURL,
+                    localImageData: localData,
+                    modelLabel: AIMode.image.modelHint
+                )
+            }
+
+            onImageCreated?(displayPrompt, imageURL, localData)
+            ImageLiveActivityManager.complete(prompt: displayPrompt)
+            await resolveConversationId(activeConversationId, preferLatest: isStartingNewChat)
+            await softSyncPreservingVision(localAssistant: messages.first(where: { $0.id == assistantID }))
+            evaluateChatLimit()
+            HapticService.success()
+            HapticService.messageReceived()
+            return replyText
+        } catch {
+            progressTask.cancel()
+            let msg = (error as? LocalizedError)?.errorDescription ?? error.localizedDescription
+            setAssistantText(assistantID, "Bild erstellen fehlgeschlagen: \(msg)", streaming: false)
+            ImageLiveActivityManager.fail(msg)
+            lastError = msg
+            HapticService.error()
+            return nil
+        }
+    }
+
+    private func refineImagePrompt(_ idea: String) async -> String {
+        let cleaned = idea.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard let api, cleaned.count > 2 else { return cleaned }
+
+        let instruction = """
+        Du bist Prompt-Engineer. Formuliere aus der Idee EINEN starken Bildprompt (Englisch, detailliert, max 45 Wörter).
+        Nur der Prompt — keine Anführungszeichen, kein Kommentar, keine Einleitung.
+        Idee: \(cleaned)
+        """
+
+        var out = ""
+        do {
+            for try await chunk in api.streamChatV2(
+                message: instruction,
+                conversationId: nil,
+                mode: .flash,
+                speak: false,
+                agentPower: false
+            ) {
+                if let text = chunk.content, !text.isEmpty {
+                    out += text
+                }
+                if chunk.done == true { break }
+            }
+        } catch {
+            return cleaned
+        }
+
+        var prompt = out
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+            .trimmingCharacters(in: CharacterSet(charactersIn: "\"'`"))
+        if let first = prompt.split(separator: "\n", omittingEmptySubsequences: true).first {
+            prompt = String(first).trimmingCharacters(in: .whitespacesAndNewlines)
+        }
+        if prompt.count < 8 || prompt.lowercased().hasPrefix("sorry") || prompt.lowercased().hasPrefix("ich ") {
+            return cleaned
+        }
+        return prompt
     }
 
     private static func formatAgentChatProgress(_ task: AgentTask, goal: String? = nil) -> String {
@@ -1428,7 +1594,7 @@ final class ChatStore: ObservableObject {
         return merged
     }
 
-    /// Resize + JPEG so Ollama vision (moondream) does not 500 on huge phone photos.
+    /// Resize + JPEG so vision uploads stay reliable on mobile networks.
     private static func jpegData(from data: Data) -> Data {
         guard let img = UIImage(data: data) else { return data }
         let maxSide: CGFloat = 1280
@@ -1436,11 +1602,56 @@ final class ChatStore: ObservableObject {
         let h = img.size.height
         let scale = min(1, maxSide / max(w, h))
         let target = CGSize(width: max(1, floor(w * scale)), height: max(1, floor(h * scale)))
-        let renderer = UIGraphicsImageRenderer(size: target)
-        let resized = renderer.image { _ in
+        let format = UIGraphicsImageRendererFormat.default()
+        format.scale = 1
+        format.opaque = true
+        let renderer = UIGraphicsImageRenderer(size: target, format: format)
+        let resized = renderer.image { ctx in
+            UIColor.white.setFill()
+            ctx.fill(CGRect(origin: .zero, size: target))
             img.draw(in: CGRect(origin: .zero, size: target))
         }
-        return resized.jpegData(compressionQuality: 0.82) ?? data
+        // Prefer a stable size budget (~1.2 MB) for multipart uploads
+        for quality in [0.82, 0.72, 0.62, 0.52] as [CGFloat] {
+            if let jpeg = resized.jpegData(compressionQuality: quality), jpeg.count <= 1_250_000 {
+                return jpeg
+            }
+        }
+        return resized.jpegData(compressionQuality: 0.48) ?? data
+    }
+
+    private static func uploadVisionWithRetry(
+        api: CompanionAPI,
+        jpeg: Data,
+        userText: String,
+        conversationId: String?,
+        filename: String = "upload.jpg",
+        qualityProfile: String? = nil,
+        source: String? = nil,
+        attempts: Int = 3
+    ) async throws -> VisionUploadResult {
+        var lastError: Error?
+        for attempt in 1...attempts {
+            do {
+                return try await api.uploadVisionImage(
+                    imageData: jpeg,
+                    filename: filename,
+                    message: userText,
+                    conversationId: conversationId,
+                    qualityProfile: qualityProfile,
+                    source: source
+                )
+            } catch {
+                lastError = error
+                let msg = (error as? LocalizedError)?.errorDescription?.lowercased() ?? error.localizedDescription.lowercased()
+                let retryable = msg.contains("timeout") || msg.contains("network") || msg.contains("timed out")
+                    || msg.contains("verbindung") || msg.contains("offline") || msg.contains("500")
+                    || msg.contains("reset") || msg.contains("broken") || msg.contains("socket")
+                guard attempt < attempts, retryable else { throw error }
+                try? await Task.sleep(nanoseconds: UInt64(attempt) * 700_000_000)
+            }
+        }
+        throw lastError ?? CompanionAPIError.unreachable
     }
 
     /// Moondream often returns closed VQA junk like "NO" / "NO NO NO".
@@ -1492,11 +1703,12 @@ final class ChatStore: ObservableObject {
         isSending = true
         defer { isSending = false }
         do {
-            let result = try await api.uploadVisionImage(
-                imageData: Self.jpegData(from: jpeg),
-                filename: "speak-vision.jpg",
-                message: prompt,
+            let result = try await Self.uploadVisionWithRetry(
+                api: api,
+                jpeg: Self.jpegData(from: jpeg),
+                userText: prompt,
                 conversationId: activeConversationId,
+                filename: "speak-vision.jpg",
                 qualityProfile: LiveScreenQuality.recommend(ocr: "", userPrompt: userText).rawValue,
                 source: "speak_vision"
             )

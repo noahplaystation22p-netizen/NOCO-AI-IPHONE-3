@@ -47,7 +47,7 @@ struct MagischerRadiererView: View {
     @State private var instruction = Preset.erase.defaultText
     @State private var isWorking = false
     @State private var workProgress: Double = 0
-    @State private var status = "1 Foto · 2 bemalen · 3 Anweisung · 4 Magisch"
+    @State private var status = "Foto wählen · bemalen · Entfernen"
     @State private var resultImage: UIImage?
     @State private var canvas = MaskCanvasController()
     @State private var showLibrary = false
@@ -59,33 +59,44 @@ struct MagischerRadiererView: View {
     @FocusState private var promptFocused: Bool
 
     var body: some View {
-        VStack(spacing: 0) {
-            header
-                .padding(.horizontal, 20)
-                .padding(.top, 10)
-                .padding(.bottom, 6)
+        ScrollView {
+            VStack(spacing: 14) {
+                header
+                    .padding(.horizontal, 20)
+                    .padding(.top, 8)
 
-            canvasCard
-                .padding(.horizontal, 16)
-                .frame(minHeight: 240, maxHeight: 300)
+                canvasCard
+                    .padding(.horizontal, 16)
+                    .frame(minHeight: 340)
 
-            VStack(spacing: 12) {
-                toolGrid
+                toolBar
+                    .padding(.horizontal, 16)
+
                 if preset == .custom || preset == .replace {
                     promptCard
+                        .padding(.horizontal, 16)
                 }
-                actionButtons
+
                 if let resultImage {
                     resultCard(resultImage)
+                        .padding(.horizontal, 16)
                 }
             }
-            .padding(.horizontal, 16)
-            .padding(.top, 12)
             .padding(.bottom, 16)
-
-            Spacer(minLength: 0)
         }
         .nocoBackground()
+        .safeAreaInset(edge: .bottom, spacing: 0) {
+            actionButtons
+                .padding(.horizontal, 16)
+                .padding(.top, 10)
+                .padding(.bottom, 10)
+                .background {
+                    Rectangle()
+                        .fill(.ultraThinMaterial)
+                        .ignoresSafeArea(edges: .bottom)
+                        .shadow(color: .black.opacity(0.12), radius: 12, y: -4)
+                }
+        }
         .overlay {
             if isWorking {
                 MagicEraserTheater(progress: workProgress, status: status)
@@ -95,6 +106,8 @@ struct MagischerRadiererView: View {
         .animation(.spring(response: 0.45, dampingFraction: 0.82), value: isWorking)
         .navigationTitle("Magischer Radierer")
         .navigationBarTitleDisplayMode(.inline)
+        .onAppear { connection.hideMainTabBar = true }
+        .onDisappear { connection.hideMainTabBar = false }
         .photosPicker(isPresented: $showLibrary, selection: $photoItem, matching: .images)
         .onChange(of: photoItem) { item in
             guard let item else { return }
@@ -108,7 +121,7 @@ struct MagischerRadiererView: View {
                     if status.hasPrefix("Fehler:") {
                         status = maskReady
                             ? "Bereit — Entfernen tippen"
-                            : "Bereich bemalen — Standard: Entfernen"
+                            : "Bereich bemalen"
                     }
                 }
             }
@@ -125,36 +138,14 @@ struct MagischerRadiererView: View {
     }
 
     private var header: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            Text("Nur der bemalte Bereich ändert sich")
-                .font(.subheadline.weight(.semibold))
-            Text("Gleiche Bilder-Engine wie Bildideen (Stable Diffusion). Bei 96 % oft nur kalter Start — Engine starten hilft.")
-                .font(.footnote)
-                .foregroundStyle(.secondary)
+        VStack(alignment: .leading, spacing: 4) {
             Text(status)
-                .font(.caption)
+                .font(.subheadline.weight(.semibold))
                 .foregroundStyle(NOCOAITheme.accent)
                 .contentTransition(.opacity)
-
-            HStack(spacing: 10) {
-                Button {
-                    HapticService.open()
-                    Task { await startEngineTapped() }
-                } label: {
-                    Label(
-                        connection.images.isPreparingEngine
-                            ? "Engine startet…"
-                            : (connection.status.stableDiffusion == true ? "Engine bereit" : "Bilder-Engine starten"),
-                        systemImage: connection.status.stableDiffusion == true ? "checkmark.circle.fill" : "bolt.circle.fill"
-                    )
-                    .font(.caption.weight(.semibold))
-                    .frame(maxWidth: .infinity)
-                    .padding(.vertical, 10)
-                }
-                .buttonStyle(.borderedProminent)
-                .disabled(!connection.isOnline || connection.images.isPreparingEngine || isWorking)
-                .tint(connection.status.stableDiffusion == true ? .green : NOCOAITheme.accent)
-            }
+            Text("Nur der bemalte Bereich ändert sich.")
+                .font(.caption)
+                .foregroundStyle(.secondary)
         }
         .frame(maxWidth: .infinity, alignment: .leading)
     }
@@ -193,25 +184,16 @@ struct MagischerRadiererView: View {
                         }
                     }
             } else {
-                VStack(spacing: 12) {
-                    ZStack {
-                        Circle()
-                            .fill(
-                                AngularGradient(
-                                    colors: rainbowColors,
-                                    center: .center
-                                )
-                            )
-                            .frame(width: 78, height: 78)
-                            .blur(radius: 16)
-                            .opacity(0.75)
-                        Image(systemName: "paintbrush.pointed.fill")
-                            .font(.system(size: 36))
-                            .foregroundStyle(NOCOAITheme.accent)
-                            .symbolEffect(.pulse, options: .repeating)
-                    }
-                    Text("Foto aus der Galerie wählen")
-                        .font(.subheadline.weight(.medium))
+                VStack(spacing: 14) {
+                    Image(systemName: "photo.on.rectangle.angled")
+                        .font(.system(size: 40, weight: .light))
+                        .foregroundStyle(NOCOAITheme.accent)
+                    Text("Foto wählen")
+                        .font(.subheadline.weight(.semibold))
+                    Text("Dann den Bereich bemalen, den du ändern willst.")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                        .multilineTextAlignment(.center)
                     Button {
                         HapticService.open()
                         showLibrary = true
@@ -221,150 +203,91 @@ struct MagischerRadiererView: View {
                     }
                     .buttonStyle(.borderedProminent)
                 }
-                .padding(40)
+                .padding(36)
             }
         }
         .frame(minHeight: 340)
         .overlay(
             RoundedRectangle(cornerRadius: 22, style: .continuous)
-                .stroke(NOCOAITheme.glowPrimary.opacity(0.35), lineWidth: 1)
+                .stroke(NOCOAITheme.glowPrimary.opacity(0.28), lineWidth: 1)
         )
     }
 
-    private var toolGrid: some View {
-        VStack(alignment: .leading, spacing: 10) {
-            HStack {
-                Text("Pinsel \(Int(brushSize))")
-                    .font(.caption.weight(.semibold))
-                Slider(value: $brushSize, in: 12...72)
+    private var toolBar: some View {
+        VStack(spacing: 12) {
+            Picker("Aktion", selection: $preset) {
+                ForEach(Preset.allCases) { p in
+                    Text(p.title).tag(p)
+                }
+            }
+            .pickerStyle(.segmented)
+            .onChange(of: preset) { _, p in
+                HapticService.selection()
+                if p != .custom {
+                    instruction = p.defaultText
+                } else if instruction == Preset.erase.defaultText || instruction == Preset.replace.defaultText {
+                    instruction = ""
+                }
+                if p == .custom || p == .replace { promptFocused = true }
             }
 
-            LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible())], spacing: 10) {
-                ForEach(Preset.allCases) { p in
-                    Button {
-                        HapticService.selection()
-                        withAnimation(.spring(response: 0.35, dampingFraction: 0.82)) {
-                            preset = p
-                            if p != .custom {
-                                instruction = p.defaultText
-                            } else if instruction == Preset.erase.defaultText || instruction == Preset.replace.defaultText {
-                                instruction = ""
-                            }
-                            if p == .custom || p == .replace { promptFocused = true }
-                        }
-                    } label: {
-                        VStack(alignment: .leading, spacing: 8) {
-                            Image(systemName: p.systemImage)
-                                .font(.title3.weight(.semibold))
-                                .foregroundStyle(preset == p ? .white : NOCOAITheme.accent)
-                            Text(p.title)
-                                .font(.subheadline.weight(.bold))
-                                .foregroundStyle(preset == p ? .white : .primary)
-                            Text(presetBlurb(p))
-                                .font(.caption2)
-                                .foregroundStyle(preset == p ? .white.opacity(0.85) : .secondary)
-                                .lineLimit(2)
-                        }
-                        .frame(maxWidth: .infinity, alignment: .leading)
-                        .padding(14)
-                        .background {
-                            RoundedRectangle(cornerRadius: 16, style: .continuous)
-                                .fill(preset == p
-                                      ? Color(red: 0.45, green: 0.4, blue: 0.95).opacity(0.95)
-                                      : Color.primary.opacity(0.05))
-                        }
-                        .overlay(
-                            RoundedRectangle(cornerRadius: 16, style: .continuous)
-                                .stroke(NOCOAITheme.glowPrimary.opacity(preset == p ? 0.5 : 0.2), lineWidth: 1)
-                        )
-                    }
-                    .buttonStyle(IntelligencePressStyle(haptic: { HapticService.soft() }))
-                }
+            HStack(spacing: 12) {
+                Image(systemName: "paintbrush.pointed.fill")
+                    .foregroundStyle(NOCOAITheme.accent)
+                Slider(value: $brushSize, in: 14...64)
+                Text("\(Int(brushSize))")
+                    .font(.caption.monospacedDigit().weight(.semibold))
+                    .foregroundStyle(.secondary)
+                    .frame(width: 28, alignment: .trailing)
+            }
 
+            HStack(spacing: 10) {
                 Button {
                     HapticService.light()
                     showLibrary = true
                 } label: {
-                    gridUtility(title: "Foto", subtitle: "Galerie öffnen", icon: "photo.on.rectangle")
+                    Label("Foto", systemImage: "photo")
+                        .font(.subheadline.weight(.semibold))
+                        .frame(maxWidth: .infinity)
+                        .padding(.vertical, 11)
                 }
-                .buttonStyle(IntelligencePressStyle(haptic: { HapticService.soft() }))
+                .buttonStyle(.bordered)
 
                 Button {
                     HapticService.soft()
                     canvas.clear()
                     maskReady = false
-                    status = "Bereich bemalen — Standard: Entfernen"
+                    status = "Bereich bemalen"
                 } label: {
-                    gridUtility(title: "Maske", subtitle: "Bemalung löschen", icon: "trash")
+                    Label("Maske löschen", systemImage: "trash")
+                        .font(.subheadline.weight(.semibold))
+                        .frame(maxWidth: .infinity)
+                        .padding(.vertical, 11)
                 }
-                .buttonStyle(IntelligencePressStyle(haptic: { HapticService.soft() }))
+                .buttonStyle(.bordered)
                 .disabled(sourceImage == nil || isWorking)
             }
         }
     }
 
-    private func presetBlurb(_ p: Preset) -> String {
-        switch p {
-        case .erase: return "Objekt entfernen, Hintergrund füllen"
-        case .replace: return "Markiertes durch etwas Neues ersetzen"
-        case .custom: return "Eigene Anweisung schreiben"
-        }
-    }
-
-    private func gridUtility(title: String, subtitle: String, icon: String) -> some View {
-        VStack(alignment: .leading, spacing: 8) {
-            Image(systemName: icon)
-                .font(.title3.weight(.semibold))
-                .foregroundStyle(NOCOAITheme.accent)
-            Text(title)
-                .font(.subheadline.weight(.bold))
-            Text(subtitle)
-                .font(.caption2)
-                .foregroundStyle(.secondary)
-                .lineLimit(2)
-        }
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .padding(14)
-        .background(
-            RoundedRectangle(cornerRadius: 16, style: .continuous)
-                .fill(.ultraThinMaterial)
-                .overlay(
-                    RoundedRectangle(cornerRadius: 16, style: .continuous)
-                        .stroke(NOCOAITheme.glowPrimary.opacity(0.22), lineWidth: 1)
-                )
-        )
-    }
-
-    private var controls: some View { EmptyView() }
-    private var presetRow: some View { EmptyView() }
-
     private var promptCard: some View {
         VStack(alignment: .leading, spacing: 8) {
-            Text(preset == .erase ? "Anweisung (Standard: Entfernen)" : "Anweisung")
+            Text(preset == .replace ? "Ersetzen durch…" : "Eigene Anweisung")
                 .font(.caption.weight(.semibold))
                 .foregroundStyle(.secondary)
             TextField(
                 preset == .replace
-                    ? "z. B. blauer Himmel / rote Haare…"
-                    : "z. B. entferne das Auto…",
+                    ? "z. B. blauer Himmel…"
+                    : "z. B. entferne das Auto…",
                 text: $instruction,
                 axis: .vertical
             )
             .lineLimit(2...4)
             .focused($promptFocused)
-            .padding(14)
+            .padding(12)
             .background(
-                RoundedRectangle(cornerRadius: 16, style: .continuous)
+                RoundedRectangle(cornerRadius: 14, style: .continuous)
                     .fill(.ultraThinMaterial)
-                    .overlay(
-                        RoundedRectangle(cornerRadius: 16, style: .continuous)
-                            .stroke(
-                                promptFocused
-                                    ? NOCOAITheme.glowPrimary.opacity(0.55)
-                                    : Color.clear,
-                                lineWidth: 1.2
-                            )
-                    )
             )
         }
     }
@@ -376,21 +299,21 @@ struct MagischerRadiererView: View {
             HStack(spacing: 10) {
                 Image(systemName: "wand.and.stars")
                     .symbolEffect(.bounce, value: isWorking)
-                Text(isWorking ? "Magie läuft…" : (preset == .erase ? "Entfernen" : "Magisch bearbeiten"))
+                Text(isWorking ? "Läuft…" : (preset == .erase ? "Entfernen" : "Anwenden"))
                     .font(.headline)
             }
             .frame(maxWidth: .infinity)
-            .padding(.vertical, 16)
+            .padding(.vertical, 15)
             .background(
                 LinearGradient(
                     colors: rainbowColors.dropLast(),
                     startPoint: .leading,
                     endPoint: .trailing
                 ),
-                in: RoundedRectangle(cornerRadius: 18, style: .continuous)
+                in: RoundedRectangle(cornerRadius: 16, style: .continuous)
             )
             .foregroundStyle(.white)
-            .shadow(color: Color(red: 0.45, green: 0.4, blue: 1).opacity(0.45), radius: 16, y: 6)
+            .shadow(color: Color(red: 0.45, green: 0.4, blue: 1).opacity(0.4), radius: 14, y: 5)
         }
         .disabled(isWorking || sourceImage == nil || effectivePrompt.isEmpty || !maskReady)
         .opacity(sourceImage == nil || !maskReady ? 0.5 : 1)
@@ -417,18 +340,42 @@ struct MagischerRadiererView: View {
             Image(uiImage: image)
                 .resizable()
                 .scaledToFit()
-                .clipShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
-                .shadow(color: NOCOAITheme.glowPrimary.opacity(0.35), radius: 18)
-                .scaleEffect(revealResult ? 1 : 0.92)
+                .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
+                .shadow(color: NOCOAITheme.glowPrimary.opacity(0.28), radius: 14)
+                .scaleEffect(revealResult ? 1 : 0.94)
                 .opacity(revealResult ? 1 : 0)
-            Button {
-                UIImageWriteToSavedPhotosAlbum(image, nil, nil, nil)
-                HapticService.success()
-                status = "In Fotos gespeichert"
-            } label: {
-                Label("In Fotos speichern", systemImage: "square.and.arrow.down")
+
+            HStack(spacing: 10) {
+                Button {
+                    withAnimation(.spring(response: 0.4, dampingFraction: 0.84)) {
+                        sourceImage = image
+                        resultImage = nil
+                        revealResult = false
+                        maskReady = false
+                        canvas.clear()
+                        status = "Weiter bearbeiten — neu bemalen"
+                    }
+                    HapticService.open()
+                } label: {
+                    Label("Weiter bearbeiten", systemImage: "paintbrush.pointed")
+                        .font(.subheadline.weight(.semibold))
+                        .frame(maxWidth: .infinity)
+                        .padding(.vertical, 11)
+                }
+                .buttonStyle(.bordered)
+
+                Button {
+                    UIImageWriteToSavedPhotosAlbum(image, nil, nil, nil)
+                    HapticService.success()
+                    status = "In Fotos gespeichert"
+                } label: {
+                    Label("Speichern", systemImage: "square.and.arrow.down")
+                        .font(.subheadline.weight(.semibold))
+                        .frame(maxWidth: .infinity)
+                        .padding(.vertical, 11)
+                }
+                .buttonStyle(.borderedProminent)
             }
-            .buttonStyle(.borderedProminent)
         }
     }
 
@@ -440,7 +387,7 @@ struct MagischerRadiererView: View {
             revealResult = false
             maskReady = false
             canvas.clear()
-            status = "Bereich bemalen — Standard: Entfernen"
+            status = "Bereich bemalen"
             HapticService.success()
         } else {
             presentError("Foto konnte nicht geladen werden")
@@ -461,7 +408,7 @@ struct MagischerRadiererView: View {
             return "PC nicht erreichbar (Netzwerk). Companion starten, gleiches WLAN, Port 4747."
         }
         if lower.contains("stable diffusion") || lower.contains("nicht bereit") || lower.contains("bilder-engine") {
-            return "Bilder-Engine (Stable Diffusion) nicht bereit — oben „Bilder-Engine starten“ tippen und 30–90s warten. Gleiche Engine wie Bildideen."
+            return "Bilder-Engine noch nicht bereit — Entfernen nochmal tippen, dann startet sie automatisch (30–90s beim ersten Mal)."
         }
         if lower.contains("unbekannte") || lower.contains("route") || lower.contains("404") {
             return "Inpaint-Route fehlt — NOCO AI X Companion neu starten."
@@ -469,19 +416,6 @@ struct MagischerRadiererView: View {
         return raw
             .replacingOccurrences(of: "Fehler: ", with: "")
             .trimmingCharacters(in: .whitespacesAndNewlines)
-    }
-
-    private func startEngineTapped() async {
-        status = "Bilder-Engine startet auf dem PC…"
-        let ok = await connection.images.prepareEngine()
-        await connection.refreshStatus(showLoading: false)
-        if ok {
-            status = "Bilder-Engine bereit — bemalen & Entfernen"
-        } else {
-            status = connection.images.engineStatusText.isEmpty
-                ? "Engine startet noch — in 30s nochmal tippen"
-                : connection.images.engineStatusText
-        }
     }
 
     private func runEraser() async {
@@ -503,7 +437,7 @@ struct MagischerRadiererView: View {
             return
         }
 
-        let working = sourceImage.resizedToFit(maxSide: 512)
+        let working = sourceImage.resizedToFit(maxSide: 768)
         guard let jpeg = working.jpegData(compressionQuality: 0.9),
               let maskForSD = canvas.exportMaskPNG(matching: working) else {
             presentError("Maske konnte nicht exportiert werden — nochmal bemalen")
@@ -552,7 +486,7 @@ struct MagischerRadiererView: View {
                         if workProgress < 0.28 {
                             status = "Bilder-Engine prüfen…"
                         } else if workProgress < 0.55 {
-                            status = preset == .erase ? "Entfernen auf dem PC…" : "Magie auf dem PC…"
+                            status = preset == .erase ? "Entfernen…" : "Magie…"
                         } else {
                             status = "Detail neu zeichnen…"
                         }
@@ -572,7 +506,7 @@ struct MagischerRadiererView: View {
                         } else if waitedAtHold < 90 {
                             status = "Immer noch am PC — oft kalter SD-Start (1–2 Min)"
                         } else {
-                            status = "Lange Wartezeit — ggf. Bilder-Engine starten"
+                            status = "Lange Wartezeit — bitte kurz warten oder Verbindung prüfen"
                         }
                         ImageLiveActivityManager.update(
                             progress: workProgress,

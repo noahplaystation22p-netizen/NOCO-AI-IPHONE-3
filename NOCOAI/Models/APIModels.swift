@@ -121,6 +121,25 @@ struct ServerStatus: Decodable, Equatable {
         self.stableDiffusion = stableDiffusion
     }
 
+    /// Prefer server latency; otherwise fill with measured round-trip.
+    func withMeasuredLatency(_ ms: Double) -> ServerStatus {
+        ServerStatus(
+            online: online,
+            model: model,
+            gpuPercent: gpuPercent,
+            cpuPercent: cpuPercent,
+            ramUsedGB: ramUsedGB,
+            ramTotalGB: ramTotalGB,
+            responseTimeMs: responseTimeMs ?? ms,
+            temperatureC: temperatureC,
+            uptimeSeconds: uptimeSeconds,
+            lastActivity: lastActivity,
+            requestCount: requestCount,
+            tokenCount: tokenCount,
+            stableDiffusion: stableDiffusion
+        )
+    }
+
     init(from decoder: Decoder) throws {
         let c = try decoder.container(keyedBy: CodingKeys.self)
         online = try c.decodeIfPresent(Bool.self, forKey: .online) ?? true
@@ -137,7 +156,6 @@ struct ServerStatus: Decodable, Equatable {
 
         temperatureC = try c.decodeIfPresent(Double.self, forKey: .temperatureC)
             ?? c.decodeIfPresent(Double.self, forKey: .temperature)
-        responseTimeMs = try c.decodeIfPresent(Double.self, forKey: .responseTimeMs)
         uptimeSeconds = try c.decodeIfPresent(Double.self, forKey: .uptimeSeconds)
         lastActivity = try c.decodeIfPresent(String.self, forKey: .lastActivity)
         requestCount = try c.decodeIfPresent(Int.self, forKey: .requestCount)
@@ -173,17 +191,27 @@ struct ServerStatus: Decodable, Equatable {
         } else if let ramObj = try? c.decode(RAMMetric.self, forKey: .ram) {
             decodedRAMUsed = ramObj.usedGB ?? ramObj.used
             decodedRAMTotal = ramObj.totalGB ?? ramObj.total
-        } else if let sys = try? c.decode(SystemMetric.self, forKey: .system) {
+        }
+
+        // Always merge nested `system` — companion often puts GPU/RAM only there
+        // while CPU stays flat. Previously system was skipped whenever ramUsedGB existed.
+        if let sys = try? c.decode(SystemMetric.self, forKey: .system) {
             decodedCPU = decodedCPU ?? sys.cpuPercent
             decodedGPU = decodedGPU ?? sys.gpuPercent
-            decodedRAMUsed = sys.ramUsedGB
-            decodedRAMTotal = sys.ramTotalGB
+            decodedRAMUsed = decodedRAMUsed ?? sys.ramUsedGB
+            decodedRAMTotal = decodedRAMTotal ?? sys.ramTotalGB
+        }
+
+        var decodedLatency = try c.decodeIfPresent(Double.self, forKey: .responseTimeMs)
+        if decodedLatency == nil, let sys = try? c.decode(SystemMetric.self, forKey: .system) {
+            decodedLatency = sys.latencyMs ?? sys.responseTimeMs
         }
 
         gpuPercent = decodedGPU
         cpuPercent = decodedCPU
         ramUsedGB = decodedRAMUsed
         ramTotalGB = decodedRAMTotal
+        responseTimeMs = decodedLatency
     }
 
     private struct ActiveModelInfo: Decodable {
@@ -196,6 +224,8 @@ struct ServerStatus: Decodable, Equatable {
         let gpuPercent: Double?
         let ramUsedGB: Double?
         let ramTotalGB: Double?
+        let latencyMs: Double?
+        let responseTimeMs: Double?
     }
 
     private struct GPUMetric: Decodable {

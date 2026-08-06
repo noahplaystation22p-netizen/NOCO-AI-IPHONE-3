@@ -1,6 +1,7 @@
 import Foundation
 import SwiftUI
 import UIKit
+import Combine
 
 /// App-scoped Speak session so audio + Live Activity survive leaving the Speak UI.
 @MainActor
@@ -25,6 +26,10 @@ final class SpeakSessionController: ObservableObject {
     private var wired = false
     private var bgTask: UIBackgroundTaskIdentifier = .invalid
     private var resumeTask: Task<Void, Never>?
+    /// One queued utterance while NOCO is processing / speaking.
+    private var pendingUtterance: String?
+    private var consecutiveFailures = 0
+    private var cancellables = Set<AnyCancellable>()
 
     /// Live Screen / vision gate — true while Speak is busy or TTS is playing.
     var isBusyForVision: Bool {
@@ -38,13 +43,17 @@ final class SpeakSessionController: ObservableObject {
         self.connection = connection
         guard !wired else { return }
         wired = true
+        voice.objectWillChange.sink { [weak self] _ in
+            self?.objectWillChange.send()
+        }.store(in: &cancellables)
         voice.onAutoUtterance = { [weak self] text in
-            Task { await self?.handleUtterance(text) }
+            Task { await self?.enqueueUtterance(text) }
         }
         voice.onSpeakFinished = { [weak self] in
             self?.connection?.liveScreen.suppressAutoVision = false
             self?.connection?.liveScreen.resumeQueuedAnalysisIfNeeded()
             self?.scheduleResumeListening(after: 0.05)
+            self?.objectWillChange.send()
         }
     }
 
@@ -259,8 +268,33 @@ final class SpeakSessionController: ObservableObject {
         }
     }
 
+    private func enqueueUtterance(_ text: String) async {
+        let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else { return }
+        if isBusy || (voice.phase == .processing) {
+            // Keep latest user intent while busy — don't drop speech.
+            pendingUtterance = trimmed
+            statusLine = "Einen Moment — ich höre dich noch…"
+            return
+        }
+        if case .speaking = voice.phase {
+            pendingUtterance = trimmed
+            return
+        }
+        await handleUtterance(trimmed)
+        if let next = pendingUtterance {
+            pendingUtterance = nil
+            await handleUtterance(next)
+        }
+    }
+
     private func handleUtterance(_ text: String) async {
-        guard isRunning, !isBusy, let connection else { return }
+        guard isRunning, !isBusy, let connection else {
+            if isBusy {
+                pendingUtterance = text
+            }
+            return
+        }
         guard !isMuted else { return }
 
         // Voice command: end speak without sending to the PC (only while Speak is active)
@@ -270,12 +304,17 @@ final class SpeakSessionController: ObservableObject {
         }
 
         isBusy = true
-        defer { isBusy = false }
 
-        statusLine = "NOCO Sync…"
+        statusLine = "Verarbeite…"
         voice.phase = .processing
         pushLiveActivity(force: true)
         HapticService.send()
+        // Brief beat so the UI shows listening→processing before network work.
+        try? await Task.sleep(nanoseconds: 180_000_000)
+        guard isRunning else {
+            isBusy = false
+            return
+        }
 
         // Answer from Live Screen memory without a new frame upload
         if Self.asksForScreenMemory(text) {
@@ -290,7 +329,11 @@ final class SpeakSessionController: ObservableObject {
                 """
                 lastReply = reply
                 try? await Task.sleep(nanoseconds: 220_000_000)
-                guard isRunning else { return }
+                guard isRunning else {
+                    isBusy = false
+                    return
+                }
+                consecutiveFailures = 0
                 if voice.autoSpeakReplies {
                     connection.liveScreen.suppressAutoVision = true
                     statusLine = "Spoken Reply…"
@@ -299,13 +342,15 @@ final class SpeakSessionController: ObservableObject {
                     startSpeakWatchdog()
                 } else {
                     voice.phase = .idle
+                    isBusy = false
                     scheduleResumeListening(after: 0.05)
+                    await drainPendingUtterance()
                 }
                 return
             }
         }
 
-        let reply: String?
+        var reply: String?
         let wantsVision = (visionCameraEnabled || screenShareEnabled) && (
             pendingVisionJPEG != nil || Self.asksForVision(text)
         )
@@ -375,9 +420,11 @@ final class SpeakSessionController: ObservableObject {
                 case .think: return .think
                 case .auto:
                     return ModeIntelligence.recommendDepth(text: text)?.mode ?? .flash
+                case .knowledge: return .knowledge
                 default: return .flash
                 }
             }()
+            statusLine = depth == .think ? "Denke nach…" : "Verarbeite…"
             reply = await connection.chat.sendAndReturnReply(
                 prompt,
                 modeOverride: depth,
@@ -385,13 +432,57 @@ final class SpeakSessionController: ObservableObject {
             )
         }
 
-        guard isRunning else { return }
+        guard isRunning else {
+            isBusy = false
+            return
+        }
 
+        // One automatic retry on empty / transport failures — never invent a chatty fallback.
+        if reply == nil || reply?.isEmpty == true {
+            consecutiveFailures += 1
+            let raw = connection.chat.lastError ?? ""
+            statusLine = "Ich hatte kurz ein Problem mit der Verbindung. Ich versuche es erneut."
+            voice.phase = .processing
+            pushLiveActivity(force: true)
+            try? await Task.sleep(nanoseconds: 450_000_000)
+            guard isRunning else {
+                isBusy = false
+                return
+            }
+            let prompt = VoiceService.voiceOnlyPrompt(text)
+            reply = await connection.chat.sendAndReturnReply(
+                prompt,
+                modeOverride: .flash,
+                speak: true
+            )
+            if reply == nil || reply?.isEmpty == true {
+                let msg = Self.friendlySpeakError(raw.isEmpty ? (connection.chat.lastError ?? "") : raw)
+                statusLine = msg
+                voice.phase = .error(msg)
+                pushLiveActivity(force: true)
+                if voice.autoSpeakReplies, consecutiveFailures <= 2 {
+                    isBusy = false
+                    voice.speak(msg)
+                    startSpeakWatchdog()
+                } else {
+                    isBusy = false
+                    try? await Task.sleep(nanoseconds: 900_000_000)
+                    if isRunning { scheduleResumeListening(after: 0.2) }
+                    await drainPendingUtterance()
+                }
+                return
+            }
+        }
+
+        consecutiveFailures = 0
         if let reply, !reply.isEmpty {
             lastReply = reply
             // Natural beat before speaking — feels less abrupt
             try? await Task.sleep(nanoseconds: 280_000_000)
-            guard isRunning else { return }
+            guard isRunning else {
+                isBusy = false
+                return
+            }
             if voice.autoSpeakReplies {
                 statusLine = "Spoken Reply…"
                 pushLiveActivity(force: true)
@@ -404,16 +495,34 @@ final class SpeakSessionController: ObservableObject {
                 connection.liveScreen.suppressAutoVision = false
                 connection.liveScreen.resumeQueuedAnalysisIfNeeded()
                 voice.phase = .idle
+                isBusy = false
                 scheduleResumeListening(after: 0.05)
+                await drainPendingUtterance()
             }
         } else {
-            let msg = connection.chat.lastError ?? "Keine Antwort"
-            statusLine = msg
-            voice.phase = .error(msg)
-            pushLiveActivity(force: true)
-            try? await Task.sleep(nanoseconds: 1_000_000_000)
-            if isRunning { scheduleResumeListening(after: 0.2) }
+            isBusy = false
+            scheduleResumeListening(after: 0.2)
+            await drainPendingUtterance()
         }
+    }
+
+    private func drainPendingUtterance() async {
+        guard let next = pendingUtterance, isRunning, !isBusy else { return }
+        pendingUtterance = nil
+        await handleUtterance(next)
+    }
+
+    private static func friendlySpeakError(_ raw: String) -> String {
+        let low = raw.lowercased()
+        if low.contains("offline") || low.contains("unreachable") || low.contains("nicht erreichbar")
+            || low.contains("timed out") || low.contains("timeout") || low.contains("network")
+            || low.contains("verbindung") || low.contains("host is down") || low.contains("error 64") {
+            return "Ich hatte kurz ein Problem mit der Verbindung. Ich versuche es erneut, wenn du weitersprichst."
+        }
+        if raw.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+            return "Die Antwort ist nicht angekommen. Bitte wiederhole kurz, was du gesagt hast."
+        }
+        return "Kurz gestört — ich bin wieder bereit. Sag es gerne noch einmal."
     }
 
     /// Capture one still for the next vision-aware utterance (no continuous upload).

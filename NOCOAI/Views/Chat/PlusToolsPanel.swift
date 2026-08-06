@@ -50,6 +50,10 @@ struct PlusToolsPanel: View {
                             HapticService.open()
                             dismiss()
                         },
+                        .init("Speak / Vision", "waveform.circle.fill", Color(red: 0.45, green: 0.85, blue: 0.7)) {
+                            connection.speak.openUI()
+                            dismiss()
+                        },
                         .init("Live Screen", "rectangle.inset.filled.and.person.filled", Color(red: 0.98, green: 0.55, blue: 0.35)) {
                             connection.pendingOpenLiveScreen = true
                             connection.pendingTab = 2
@@ -70,7 +74,7 @@ struct PlusToolsPanel: View {
                 }
             }
         }
-        .presentationDetents([.height(520), .medium])
+        .presentationDetents([.height(560), .medium])
         .presentationDragIndicator(.visible)
         .presentationCornerRadius(28)
         .onAppear {

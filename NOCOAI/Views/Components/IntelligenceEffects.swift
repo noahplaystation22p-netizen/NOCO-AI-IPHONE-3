@@ -44,7 +44,7 @@ struct IntelligenceAtmosphere: View {
         }
         .ignoresSafeArea()
         .onAppear {
-            withAnimation(.easeInOut(duration: 9.5).repeatForever(autoreverses: true)) {
+            withAnimation(.easeInOut(duration: 14).repeatForever(autoreverses: true)) {
                 phase = true
             }
         }
@@ -245,13 +245,13 @@ struct GlowBubbleBackground: View {
             )
             .onAppear {
                 guard streaming else { return }
-                withAnimation(.easeInOut(duration: 1.4).repeatForever(autoreverses: true)) {
+                withAnimation(.easeInOut(duration: 2.2).repeatForever(autoreverses: true)) {
                     shimmer = true
                 }
             }
             .onChange(of: streaming) { _, on in
                 if on {
-                    withAnimation(.easeInOut(duration: 1.4).repeatForever(autoreverses: true)) {
+                    withAnimation(.easeInOut(duration: 2.2).repeatForever(autoreverses: true)) {
                         shimmer = true
                     }
                 } else {
@@ -290,78 +290,38 @@ struct IntelligenceThinkingDots: View {
     }
 }
 
-/// Premium thinking indicator — calm motion, elapsed time, soft progress.
+/// Soft thinking indicator — calm, minimal.
 struct IntelligenceThinkingStatus: View {
     @State private var startedAt = Date()
     @State private var elapsed: TimeInterval = 0
     @State private var pulse = false
-    @State private var phraseIndex = 0
-    @State private var progress: CGFloat = 0.12
-
-    private let phrases = [
-        "Thinking about your request…",
-        "Denkt über deine Anfrage nach…",
-        "Formuliert eine Antwort…"
-    ]
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 10) {
-            HStack(spacing: 10) {
-                Text("🧠")
-                    .font(.system(size: 20))
-                    .scaleEffect(pulse ? 1.08 : 0.94)
-                    .opacity(pulse ? 1 : 0.75)
-                    .animation(.easeInOut(duration: 1.1).repeatForever(autoreverses: true), value: pulse)
+        HStack(spacing: 10) {
+            Circle()
+                .fill(NOCOAITheme.glowPrimary.opacity(pulse ? 0.85 : 0.4))
+                .frame(width: 8, height: 8)
+                .animation(.easeInOut(duration: 0.9).repeatForever(autoreverses: true), value: pulse)
 
-                Text(phrases[phraseIndex % phrases.count])
-                    .font(.subheadline.weight(.semibold))
-                    .foregroundStyle(.primary.opacity(0.88))
-                    .contentTransition(.opacity)
-                    .animation(.easeInOut(duration: 0.35), value: phraseIndex)
-            }
+            Text("Denkt nach…")
+                .font(.subheadline.weight(.medium))
+                .foregroundStyle(.primary.opacity(0.85))
 
-            GeometryReader { geo in
-                ZStack(alignment: .leading) {
-                    Capsule()
-                        .fill(Color.primary.opacity(0.08))
-                    Capsule()
-                        .fill(
-                            LinearGradient(
-                                colors: [
-                                    NOCOAITheme.glowPrimary.opacity(0.85),
-                                    NOCOAITheme.glowSecondary.opacity(0.7)
-                                ],
-                                startPoint: .leading,
-                                endPoint: .trailing
-                            )
-                        )
-                        .frame(width: max(18, geo.size.width * progress))
-                }
-            }
-            .frame(height: 3)
+            Spacer(minLength: 0)
 
             Text(elapsedLabel)
-                .font(.caption2.weight(.medium).monospacedDigit())
+                .font(.caption2.monospacedDigit())
                 .foregroundStyle(.secondary)
         }
-        .padding(.horizontal, 16)
-        .padding(.vertical, 14)
-        .frame(minWidth: 200, alignment: .leading)
+        .padding(.horizontal, 14)
+        .padding(.vertical, 12)
+        .frame(minWidth: 160, alignment: .leading)
         .background(GlowBubbleBackground(isUser: false))
         .onAppear { pulse = true }
         .task {
             while !Task.isCancelled {
-                try? await Task.sleep(nanoseconds: 200_000_000)
+                try? await Task.sleep(nanoseconds: 1_000_000_000)
                 elapsed = Date().timeIntervalSince(startedAt)
-                // Soft indeterminate progress that eases toward ~0.92
-                let t = min(elapsed / 18, 1)
-                progress = 0.12 + CGFloat(1 - pow(1 - t, 1.6)) * 0.8
-            }
-        }
-        .task {
-            while !Task.isCancelled {
-                try? await Task.sleep(nanoseconds: 2_800_000_000)
-                phraseIndex = (phraseIndex + 1) % phrases.count
             }
         }
     }

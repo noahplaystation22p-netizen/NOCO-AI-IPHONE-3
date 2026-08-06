@@ -58,12 +58,21 @@ final class ImageStore: ObservableObject {
     private var sawRealProgress = false
 
     private let insights = [
-        "PC bereitet Stable Diffusion vor…",
         "Motiv nimmt Form an…",
         "Licht & Farbe entstehen…",
         "Details werden gezeichnet…",
-        "Feinschliff auf dem PC…",
-        "Noch einen Moment — CPU rechnet…"
+        "Noch einen Moment…",
+        "Feinschliff…",
+        "Gleich fertig…"
+    ]
+
+    private let thinkInsights = [
+        "Höhere Qualität, mehr Schritte…",
+        "Details entstehen…",
+        "Braucht etwas länger — das ist normal…",
+        "Feinschliff…",
+        "Noch einen Moment…",
+        "Gleich fertig…"
     ]
 
     private var generateTask: Task<Void, Never>?
@@ -136,9 +145,9 @@ final class ImageStore: ObservableObject {
         lastResolvedMode = resolved
         let params = resolved.engineParams
         statusText = resolved == .think
-            ? "Think-Qualität · PC rechnet gründlicher…"
-            : (resolved == .flash ? "Flash · schnelle Generierung…" : "Sende an PC…")
-        insightText = insights[0]
+            ? "Erstelle Bild in hoher Qualität…"
+            : "Erstelle Bild…"
+        insightText = resolved == .think ? thinkInsights[0] : insights[0]
         etaSeconds = resolved == .think ? 420 : 200
         startedAt = .now
         sawRealProgress = false
@@ -277,7 +286,7 @@ final class ImageStore: ObservableObject {
     func prepareEngine() async -> Bool {
         guard let api, !isPreparingEngine else { return false }
         isPreparingEngine = true
-        engineStatusText = "Bilder-Engine startet auf dem PC…"
+        engineStatusText = "Bilder-Engine startet…"
         statusText = engineStatusText
         defer { isPreparingEngine = false }
         do {
@@ -388,8 +397,9 @@ final class ImageStore: ObservableObject {
             while !Task.isCancelled {
                 try? await Task.sleep(nanoseconds: 4_500_000_000)
                 guard let self, self.isGenerating else { return }
-                i = (i + 1) % self.insights.count
-                self.insightText = self.insights[i]
+                let pool = self.lastResolvedMode == .think ? self.thinkInsights : self.insights
+                i = (i + 1) % pool.count
+                self.insightText = pool[i]
                 self.pushImageLiveActivity(force: false)
             }
         }
@@ -430,19 +440,52 @@ final class ImageStore: ObservableObject {
                 etaSeconds = max(30, Int(240 - elapsed))
             }
 
-            if let step = prog.stepLabel {
-                statusText = step
-            } else if let info = prog.textinfo, !info.isEmpty {
-                statusText = info
-            } else if phase == .preparing {
-                statusText = "Engine startet…"
-            } else {
-                statusText = "Generiere… \(Int(progress * 100))%"
-            }
+            statusText = Self.friendlyProgressStatus(
+                progress: prog,
+                phase: phase,
+                percent: Int(progress * 100),
+                isThink: lastResolvedMode == .think
+            )
             pushImageLiveActivity(force: false)
         } catch {
             // Keep animating through transient poll errors
         }
+    }
+
+    /// Prefer clear German status — never surface raw SD English chatter.
+    private static func friendlyProgressStatus(
+        progress prog: ImageProgressResponse,
+        phase: Phase,
+        percent: Int,
+        isThink _: Bool
+    ) -> String {
+        if let step = prog.state?.samplingStep, let steps = prog.state?.samplingSteps, steps > 0 {
+            return "Erstellt Bild… Schritt \(step)/\(steps)"
+        }
+        if let raw = prog.textinfo?.trimmingCharacters(in: .whitespacesAndNewlines), !raw.isEmpty {
+            let low = raw.lowercased()
+            // Drop noisy / nonsensical engine strings
+            let junk = ["more than", "no more", "waiting", "loading model", "model loaded", "error"]
+            if !junk.contains(where: { low.contains($0) }), raw.count < 60, !raw.contains("http") {
+                if low.hasPrefix("step ") || low.contains("sampling") {
+                    return "Erstellt Bild… \(percent)%"
+                }
+            }
+        }
+        if phase == .preparing {
+            return "Startet…"
+        }
+        return "Erstellt Bild… \(percent)%"
+    }
+
+    /// Shared progress copy for in-chat image generation.
+    static func chatFriendlyProgress(_ prog: ImageProgressResponse) -> String {
+        friendlyProgressStatus(
+            progress: prog,
+            phase: .rendering,
+            percent: Int(prog.normalizedProgress * 100),
+            isThink: false
+        )
     }
 
     private func pushImageLiveActivity(force: Bool) {
@@ -486,6 +529,15 @@ final class ImageStore: ObservableObject {
             // Only after the image bytes/URL are actually ready
             await AppNotificationService.notifyImageReady(prompt: prompt)
         }
+    }
+
+    /// Add a chat-generated image to the gallery without switching tabs.
+    func ingestFromChat(prompt: String, url: URL?, data: Data?) {
+        lastImageData = data
+        lastImageURL = url
+        lastPrompt = prompt
+        let item = GeneratedImageItem(prompt: prompt, url: url, localData: data)
+        gallery.insert(item, at: 0)
     }
 
     private func download(url: URL) async throws -> Data {

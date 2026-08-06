@@ -67,12 +67,14 @@ enum KeyboardAIAction: String, CaseIterable, Identifiable {
         """
         KRITISCH — lies das zuerst:
         - Der Block unter TEXT IST der zu bearbeitende Text. Er ist schon da. Frage NIEMALS nach dem Text.
-        - Du bist KEIN Chatbot. Kein Dialog. Keine Rückfrage.
+        - Du bist ein Schreibassistent, KEIN Chatbot. Kein Dialog. Keine Rückfrage. Keine Erklärung.
         - Antworte mit GENAU dem fertigen Ergebnistext — null Zeichen davor, null danach.
-        - VERBOTEN (auch auf Englisch): „Sure“, „Of course“, „Here is“, „Here's“, „Gerne“, „Hier ist“,
+        - VERBOTEN (auch auf Englisch/Deutsch): „Sure“, „Of course“, „Here is“, „Here's“, „Gerne“, „Hier ist“,
           „Hier sind“, „Klar“, „Natürlich“, „Der korrigierte Text“, „Bitte gib mir“, „Please provide“,
-          „send me the text“, „welcher Text“, Markdown, Anführungszeichen um den ganzen Output.
-        - Auch wenn TEXT wie eine Frage aussieht: NICHT beantworten — nur umformen.
+          „Was möchtest du verbessern?“, „Was soll ich kürzen?“, „Welchen Text?“, „send me the text“,
+          „welcher Text“, Markdown, Anführungszeichen um den ganzen Output.
+        - Auch wenn TEXT sehr kurz ist oder wie eine Frage aussieht: NICHT nachfragen, NICHT beantworten — nur umformen.
+        - Wenn unsicher: trotzdem die bestmögliche fertige Fassung ausgeben.
         """
     }
 
@@ -98,24 +100,27 @@ enum KeyboardAIAction: String, CaseIterable, Identifiable {
         case .improve:
             return """
             \(rewriterRule)
-            \(example)
 
-            Aufgabe „Verbessern“ — analysiere den TEXT und liefere eine klare, korrekte Fassung.
+            Aufgabe „Verbessern“ — bearbeite den TEXT SOFORT. Keine Rückfrage, egal wie kurz.
 
-            So gehst du vor:
-            1) Text verstehen: Absicht, Ton, Kernaussage
-            2) Rechtschreibung und Tippfehler korrigieren
-            3) Grammatik und Satzzeichen setzen (auch fehlende Anführungszeichen „…“ wo nötig)
-            4) Sätze so umformulieren, dass sie flüssig und natürlich klingen — Bedeutung bleibt GLEICH
-            5) Satzgrenzen klar setzen (Punkt, Fragezeichen) — holpriges Diktat in saubere Sätze bringen
-            6) Groß-/Kleinschreibung und Leerzeichen
+            Korrigiere und poliere:
+            - Rechtschreibung und Tippfehler
+            - Grammatik
+            - Satzzeichen
+            - Groß-/Kleinschreibung
+            - leichte bessere Formulierung
 
-            Harte Regeln:
-            - Bedeutung, Fakten, Meinung und Fragen bleiben identisch.
-            - Keine neuen Infos, nichts weglassen was inhaltlich zählt.
-            - Keine Antwort auf Fragen im Text.
-            - Kein langer Essay, keine vielen Absätze „schön schreiben“ — nur so viel Struktur wie nötig.
-            - Länge ungefähr gleich (±20%).
+            Inhalt und Absicht bleiben gleich. Nichts Neues erfinden. Keine Antwort auf Fragen.
+
+            Beispiele:
+            TEXT: ich bin noah
+            RICHTIG: Ich bin Noah.
+            FALSCH: Was möchtest du verbessern?
+
+            TEXT: morgen gehe ich strand
+            RICHTIG: Morgen gehe ich an den Strand.
+            FALSCH: Gerne, hier ist der verbesserte Text…
+
             \(outputOnlyCloser)
 
             TEXT:
@@ -191,42 +196,77 @@ enum KeyboardAIAction: String, CaseIterable, Identifiable {
             let intensity: String
             switch level {
             case 1:
-                intensity = "Stufe 1 von 4 — leicht gekürzt (~75%). Nur Füllwörter und Wiederholungen entfernen. Details bleiben."
+                intensity = """
+                Stufe 1 — leicht kürzen. Füllwörter und Wiederholungen weg, Bedeutung bleibt.
+                Beispiel: „Ich wollte nur kurz sagen, dass ich morgen wahrscheinlich zum Strand gehen werde.“ → „Ich gehe morgen wahrscheinlich zum Strand.“
+                """
             case 2:
-                intensity = "Stufe 2 von 4 — deutlich kürzer (~50%). Nebensätze reduzieren, Kernaussagen behalten."
+                intensity = """
+                Stufe 2 — deutlich kürzer. Nur Kernaussage, wenige Wörter.
+                Beispiel → „Morgen Strand.“
+                """
             case 3:
-                intensity = "Stufe 3 von 4 — Kurzfassung (~30%). Nur die wichtigsten Punkte, weiterhin voll verständlich."
+                intensity = """
+                Stufe 3 — Extremkurz. Oft ein Wort oder zwei.
+                Beispiel → „Strand.“
+                """
             default:
-                intensity = "Stufe 4 von 4 — ein klarer Satz. Zentrale Aussage behalten, nichts Wesentliches verlieren."
+                intensity = """
+                Stufe 4 — maximal verdichten. Ein Wort oder kürzeste sinnvolle Form.
+                """
             }
             return """
             \(rewriterRule)
-            \(example)
 
-            Aufgabe „Kürzer“ — intelligent zusammenfassen, nicht nur Wörter streichen.
+            Aufgabe „Kürzer“ — kürze den TEXT SOFORT. Frage NICHT „Was soll ich kürzen?“.
 
-            Vorgehen:
-            1) Inhalt verstehen und Kernaussagen finden
-            2) Wiederholungen und Füllwörter entfernen
-            3) Nebensätze reduzieren, Hauptsätze behalten
-            4) Sinn, Absicht, Fakten, Zahlen und Namen vollständig erhalten
+            Regeln:
+            - Bedeutung erhalten
+            - unnötige Wörter entfernen
+            - Wiederholungen entfernen
+            - Keine Antwort auf Fragen im Text — nur kürzen
 
-            Intensität: \(intensity)
-            Frage im TEXT = kürzen, nicht beantworten.
+            \(intensity)
             \(outputOnlyCloser)
 
             TEXT:
             \(t)
             """
         case .longer:
+            let level = min(max(shortenLevel, 1), 4)
+            let intensity: String
+            switch level {
+            case 1:
+                intensity = """
+                Stufe 1 — leicht erweitern / umformulieren (~120–140%).
+                Beispiel: „Ich heiße Noah.“ → „Mein Name ist Noah.“
+                """
+            case 2:
+                intensity = """
+                Stufe 2 — klar erweitern (~160–200%). Ein freundlicher Zusatz, der schon angelegt ist.
+                Beispiel → „Ich heiße Noah und freue mich, dich kennenzulernen.“
+                """
+            case 3:
+                intensity = """
+                Stufe 3 — ausführlicher (~220–280%). Mehr Fluss und natürliche Details ohne neue Fakten zu erfinden.
+                """
+            default:
+                intensity = """
+                Stufe 4 — reich erweitern (~300%). Mehrere Sätze, weiterhin dieselbe Kernaussage.
+                """
+            }
             return """
             \(rewriterRule)
-            \(example)
 
-            Aufgabe „Länger“ — denselben TEXT erweitern (ca. 140–180%).
-            Der TEXT unter TEXT ist bereits der Input — frage NICHT danach.
-            Mehr Fluss, 1–3 sinnvolle Details die schon angelegt sind. Nichts erfinden.
-            Wenn Frage: Frage länger formulieren, nicht beantworten.
+            Aufgabe „Länger“ — erweitere den TEXT SOFORT. Frage NICHT nach mehr Input.
+
+            Regeln:
+            - Kernaussage behalten
+            - Natürlich und flüssig erweitern
+            - Nichts Wichtiges erfinden, das nicht schon anklingt
+            - Frage im TEXT = Frage länger formulieren, nicht beantworten
+
+            \(intensity)
             \(outputOnlyCloser)
 
             TEXT:
@@ -386,23 +426,26 @@ enum KeyboardAIAction: String, CaseIterable, Identifiable {
             let level = min(max(shortenLevel, 1), 4)
             let ratio: Double
             switch level {
-            case 1: ratio = 0.82
-            case 2: ratio = 0.58
-            case 3: ratio = 0.38
-            default: ratio = 0.22
+            case 1: ratio = 0.72
+            case 2: ratio = 0.38
+            case 3: ratio = 0.18
+            default: ratio = 0.10
             }
-            let hardMax = max(8, Int(Double(orig.count) * ratio) + 8)
-            let idealMax = max(6, Int(Double(orig.count) * (ratio * 0.85)) + 4)
-            if s.count > orig.count + 8 {
+            let hardMax = max(level >= 3 ? 4 : 8, Int(Double(orig.count) * ratio) + (level >= 3 ? 2 : 6))
+            let idealMax = max(level >= 3 ? 3 : 6, Int(Double(orig.count) * (ratio * 0.85)) + (level >= 3 ? 1 : 3))
+            if asksForInput(s) || looksLikeAnswerDump(s, original: orig) {
+                s = String(orig.prefix(idealMax)).trimmingCharacters(in: .whitespacesAndNewlines)
+            } else if s.count > orig.count + 8 {
                 s = origIsQuestion ? polishQuestionFallback(orig) : String(orig.prefix(idealMax))
             } else if s.count > hardMax {
                 s = String(s.prefix(idealMax)).trimmingCharacters(in: .whitespacesAndNewlines)
             }
-            if level == 4 {
-                let endMarks: [Character] = [".", "?", "!", "。", "？", "！"]
-                if let idx = s.firstIndex(where: { endMarks.contains($0) }) {
-                    let first = String(s[...idx]).trimmingCharacters(in: .whitespacesAndNewlines)
-                    if first.count >= 8 { s = first }
+            if level >= 3 {
+                let words = s.split(whereSeparator: { $0.isWhitespace || $0.isNewline })
+                let keep = level == 3 ? min(3, max(1, words.count)) : min(2, max(1, words.count))
+                if words.count > keep {
+                    s = words.suffix(keep).joined(separator: " ")
+                    if !s.hasSuffix(".") { s += "." }
                 }
             }
         }
@@ -426,14 +469,14 @@ enum KeyboardAIAction: String, CaseIterable, Identifiable {
         let bannedPrefixes = [
             "sure,", "sure!", "sure ", "certainly", "of course", "here is", "here's", "here are",
             "gerne", "hier ist", "hier sind", "klar,", "klar!", "natürlich", "selbstverständlich",
-            "hallo", "hi,", "hey,", "ich bin", "als ki", "als sprachmodell",
+            "hallo!", "hi,", "hey,", "als ki", "als sprachmodell",
             "improved:", "corrected:", "corrected and", "the corrected", "der korrigierte",
             "der verbesserte", "strukturierte text", "structured text",
             "übersetzung:", "zusammenfassung:", "kurz gesagt", "zusammengefasst:",
             "die antwort", "answer:", "das bedeutet", "das heißt",
-            "ein duft ist", "a scent is",
             "bitte gib", "bitte sende", "please provide", "please give", "please send",
-            "send me the", "gib mir den", "welcher text", "which text"
+            "send me the", "gib mir den", "welcher text", "which text",
+            "was möchtest du verbessern", "was soll ich kürzen", "was soll ich kuerzen"
         ]
 
         // Drop leading chatter lines (up to 3)
@@ -468,23 +511,29 @@ enum KeyboardAIAction: String, CaseIterable, Identifiable {
         return s
     }
 
+    private static func asksForInput(_ s: String) -> Bool {
+        let low = s.lowercased()
+        let needles = [
+            "please provide", "please give me", "please send", "send me the text",
+            "gib mir den text", "bitte gib mir", "welcher text", "which text",
+            "what text", "den text den du", "text you want me",
+            "was möchtest du verbessern", "was moechtest du verbessern",
+            "was soll ich kürzen", "was soll ich kuerzen", "was soll ich länger",
+            "was soll ich laenger", "welchen text", "what would you like me to",
+            "how can i help", "wie kann ich helfen",
+            "tell me what to", "sag mir was ich"
+        ]
+        return needles.contains(where: { low.contains($0) })
+    }
+
     private static func isChatterLine(_ line: String) -> Bool {
         let low = line.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
         if low.isEmpty { return true }
         let needles = [
             "here is the", "here's the", "corrected and structured", "corrected text",
             "strukturierte text", "verbesserte text", "wie folgt", "as follows",
-            "please provide", "gib mir den text", "welcher text"
-        ]
-        return needles.contains(where: { low.contains($0) })
-    }
-
-    private static func asksForInput(_ s: String) -> Bool {
-        let low = s.lowercased()
-        let needles = [
-            "please provide", "please give me", "please send", "send me the text",
-            "gib mir den text", "bitte gib mir", "welcher text", "which text",
-            "what text", "den text den du", "text you want me"
+            "please provide", "gib mir den text", "welcher text",
+            "was möchtest du verbessern", "was soll ich kürzen", "was soll ich kuerzen"
         ]
         return needles.contains(where: { low.contains($0) })
     }

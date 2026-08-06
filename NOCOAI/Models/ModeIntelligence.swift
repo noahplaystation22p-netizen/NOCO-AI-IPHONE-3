@@ -12,9 +12,9 @@ enum ModeWorkPhase: String, Equatable {
     var title: String {
         switch self {
         case .idle: return "Bereit"
-        case .understanding: return "Analysieren"
-        case .analyzing: return "Planen"
-        case .executing: return "Arbeiten"
+        case .understanding: return "Versteht…"
+        case .analyzing: return "Denkt…"
+        case .executing: return "Antwortet…"
         case .done: return "Fertig"
         }
     }
@@ -38,14 +38,18 @@ enum ModeIntelligence {
     /// Depth-only recommendation for Auto (never Vision / Agent / specialty modes).
     static func recommendDepth(text: String) -> (mode: AIMode, reason: String)? {
         let t = text.lowercased()
-        if matches(t, "analysiere|vergleiche|warum|strategie|gründlich|abwägen|pro und contra|komplex|erkläre ausführlich")
-            || t.count > 220 {
+        if matches(t, "analysiere|vergleiche|warum|strategie|gründlich|abwägen|pro und contra|komplex|erkläre ausführlich|wie funktioniert|was bedeutet")
+            || t.count > 160 {
             return (.think, "Think — tiefere Überlegung")
         }
-        if t.count < 70 || matches(t, "kurz|schnell|ja oder nein|eine zeile|tl;dr") {
+        if t.count < 55 || matches(t, "kurz|schnell|ja oder nein|eine zeile|tl;dr|danke|ok|okay") {
             return (.flash, "Flash — schnelle Antwort")
         }
-        return nil
+        // Medium questions: slight bias to Think for clearer spoken logic.
+        if t.count > 90 || matches(t, "erkläre|hilfe|soll ich|was meinst|wie kann|warum nicht") {
+            return (.think, "Think — klarere Logik")
+        }
+        return (.flash, "Flash — kurze Antwort")
     }
 
     /// Soft specialty hint (chips only) — never auto-activates Vision/Agent from Auto.
@@ -68,7 +72,7 @@ enum ModeIntelligence {
             || matches(proc, "code|devenv|cursor|xcode") {
             return (.think, "Think — Code braucht oft mehr Tiefe")
         }
-        if matches(t, "erledige|plane|automat|workflow|installier|öffne|agent|mehrere schritte|computer control|webseite|website|app bauen|poster|generiere bild|bild erstellen") {
+        if matches(t, "erledige|plane|automat|workflow|installier|öffne|agent|mehrere schritte|computer control|webseite|website|app bauen|poster") {
             return (.agent, "Agent empfohlen — mehrstufige Aufgabe")
         }
         return recommendDepth(text: text)
@@ -194,6 +198,7 @@ extension AIMode {
         case .writing: return "Schreiben, kürzen, Ton ändern, zusammenfassen."
         case .study: return "Erklären, Lernpläne, Zusammenfassungen, Quiz."
         case .creative: return "Ideen, Konzepte, Bildimpulse, Designs."
+        case .image: return "Idee beschreiben — NOCO macht daraus ein Bild im Chat."
         case .flash: return "Sehr schnelle, kurze Antworten."
         case .knowledge: return "Fakten ohne langen Chat-Kontext."
         case .think: return "Tiefes Nachdenken und Reasoning."
@@ -209,6 +214,7 @@ extension AIMode {
         case .writing: return Color(red: 0.98, green: 0.72, blue: 0.38)
         case .study: return Color(red: 0.35, green: 0.82, blue: 0.62)
         case .creative: return Color(red: 1.0, green: 0.45, blue: 0.72)
+        case .image: return Color(red: 0.95, green: 0.55, blue: 0.35)
         case .flash: return Color(red: 1.0, green: 0.78, blue: 0.28)
         case .knowledge: return Color(red: 0.4, green: 0.7, blue: 0.95)
         case .think: return Color(red: 0.55, green: 0.5, blue: 0.95)
@@ -218,7 +224,7 @@ extension AIMode {
     /// Companion chat wire value (`nil` = auto-select on server).
     var wireModeValue: String? {
         switch self {
-        case .auto: return nil
+        case .auto, .image: return nil
         case .flash: return "flash"
         case .knowledge: return "knowledge"
         case .think, .agent: return "think"
@@ -239,6 +245,7 @@ extension AIMode {
         case .writing: return "Schreib-Modell"
         case .study: return "Wissens-Modell"
         case .creative: return "Kreativ-Modell"
+        case .image: return "Bild"
         case .flash: return "Schnell-Modell"
         case .knowledge: return "Fakten-Modell"
         case .think: return "Denk-Modell"

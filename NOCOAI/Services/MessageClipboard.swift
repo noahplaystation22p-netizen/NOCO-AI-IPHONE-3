@@ -27,8 +27,8 @@ enum ChatCopyMode: String, CaseIterable, Identifiable {
 
     static var current: ChatCopyMode {
         get {
-            let raw = UserDefaults.standard.string(forKey: "nocoai.chat.copyMode") ?? ChatCopyMode.wholeMessage.rawValue
-            return ChatCopyMode(rawValue: raw) ?? .wholeMessage
+            let raw = UserDefaults.standard.string(forKey: "nocoai.chat.copyMode") ?? ChatCopyMode.textSelection.rawValue
+            return ChatCopyMode(rawValue: raw) ?? .textSelection
         }
         set {
             UserDefaults.standard.set(newValue.rawValue, forKey: "nocoai.chat.copyMode")

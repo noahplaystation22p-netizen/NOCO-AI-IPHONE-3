@@ -17,7 +17,7 @@ enum ImageLiveActivityManager {
             progress: 0.02,
             percentLabel: "2%",
             status: ImageActivityPhase.preparing.title,
-            insight: "PC bereitet Stable Diffusion vor…",
+            insight: "Motiv nimmt Form an…",
             etaLabel: "~4 Min",
             phaseRaw: ImageActivityPhase.preparing.rawValue,
             isDone: false

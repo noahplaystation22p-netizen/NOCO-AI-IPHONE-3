@@ -130,10 +130,15 @@ extension ConnectionStore {
         HapticService.open()
     }
 
-    /// Seed image prompt and open Bilder.
+    /// Seed image compose into Chat (stays in chat like Agent — no Bilder tab jump).
     func handoffToImages(prompt: String) {
-        images.prompt = String(prompt.prefix(400))
-        pendingTab = 1
+        chat.setMode(.image)
+        let trimmed = prompt.trimmingCharacters(in: .whitespacesAndNewlines)
+        if !trimmed.isEmpty {
+            pendingChatDraft = String(trimmed.prefix(400))
+            images.prompt = String(trimmed.prefix(400))
+        }
+        pendingTab = 0
         HapticService.open()
     }
 }

@@ -215,6 +215,9 @@ struct HomeView: View {
 
     private var ramShort: String {
         guard let used = connection.status.ramUsedGB else { return "—" }
+        if let total = connection.status.ramTotalGB, total > 0 {
+            return String(format: "%.0f/%.0fG", used, total)
+        }
         return String(format: "%.0fG", used)
     }
 

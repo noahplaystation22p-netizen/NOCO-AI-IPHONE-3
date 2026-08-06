@@ -1,7 +1,7 @@
 import Foundation
 
 enum AIMode: String, CaseIterable, Identifiable, Codable {
-    case auto, agent, vision, developer, writing, study, creative
+    case auto, agent, vision, developer, writing, study, creative, image
     /// Legacy depth / Speak compat (hidden from premium picker).
     case flash, knowledge, think
 
@@ -21,6 +21,7 @@ enum AIMode: String, CaseIterable, Identifiable, Codable {
         case .writing: return "Writing"
         case .study: return "Study"
         case .creative: return "Creative"
+        case .image: return "Bild"
         case .flash: return "Flash"
         case .knowledge: return "Wissen"
         case .think: return "Think"
@@ -36,6 +37,7 @@ enum AIMode: String, CaseIterable, Identifiable, Codable {
         case .writing: return "Texte & Stil"
         case .study: return "Lernen & Erklären"
         case .creative: return "Ideen & Design"
+        case .image: return "Idee → Bild"
         case .flash: return "Schnelle Antworten"
         case .knowledge: return "Ohne Chat-Kontext"
         case .think: return "Nachdenken"
@@ -51,6 +53,7 @@ enum AIMode: String, CaseIterable, Identifiable, Codable {
         case .writing: return "pencil.line"
         case .study: return "book.fill"
         case .creative: return "paintpalette.fill"
+        case .image: return "photo.on.rectangle.angled"
         case .flash: return "bolt.fill"
         case .knowledge: return "globe"
         case .think: return "brain"
@@ -59,6 +62,9 @@ enum AIMode: String, CaseIterable, Identifiable, Codable {
 
     /// True for the ultra-capable Agent chat mode (task engine).
     var isAgentPower: Bool { self == .agent }
+
+    /// In-chat image compose (like Agent — stays in Chat, not Bilder tab).
+    var isImageCompose: Bool { self == .image }
 
     static func from(_ raw: String?) -> AIMode {
         switch (raw ?? "").lowercased() {
@@ -69,6 +75,7 @@ enum AIMode: String, CaseIterable, Identifiable, Codable {
         case "writing", "write", "schreiben", "text": return .writing
         case "study", "lernen", "learn": return .study
         case "creative", "kreativ": return .creative
+        case "image", "bildidee", "txt2img", "bild-erstellen", "create-image": return .image
         case "flash", "blitz": return .flash
         case "knowledge", "wissen", "normal", "klar": return .knowledge
         case "think", "tiefe", "depth": return .think

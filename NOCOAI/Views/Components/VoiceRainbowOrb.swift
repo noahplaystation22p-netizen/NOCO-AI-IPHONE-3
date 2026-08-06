@@ -27,7 +27,15 @@ struct IntelligenceVoiceStage: View {
     }
 
     var body: some View {
-        TimelineView(.animation(minimumInterval: 1 / 50)) { timeline in
+        let interval: Double = {
+            switch phase {
+            case .listening: return 1.0 / 20.0
+            case .speaking: return 1.0 / 24.0
+            case .processing: return 1.0 / 12.0
+            default: return 1.0 / 8.0
+            }
+        }()
+        TimelineView(.animation(minimumInterval: interval)) { timeline in
             let t = timeline.date.timeIntervalSinceReferenceDate
             ZStack {
                 auroraField
@@ -35,13 +43,23 @@ struct IntelligenceVoiceStage: View {
                 centerWaveform(t: t)
                 statusSpark
             }
-            .scaleEffect(active ? 1 + level * 0.02 : 1)
+            .scaleEffect(active ? 1 + level * 0.05 : 1)
             .animation(.easeOut(duration: 0.08), value: level)
         }
         .frame(height: 250)
         .onAppear {
-            withAnimation(.linear(duration: 10).repeatForever(autoreverses: false)) { spin = true }
-            withAnimation(.easeInOut(duration: 1.8).repeatForever(autoreverses: true)) { breathe = true }
+            guard active else { return }
+            withAnimation(.linear(duration: 14).repeatForever(autoreverses: false)) { spin = true }
+            withAnimation(.easeInOut(duration: 2.4).repeatForever(autoreverses: true)) { breathe = true }
+        }
+        .onChange(of: active) { _, isActive in
+            if isActive {
+                withAnimation(.linear(duration: 14).repeatForever(autoreverses: false)) { spin = true }
+                withAnimation(.easeInOut(duration: 2.4).repeatForever(autoreverses: true)) { breathe = true }
+            } else {
+                spin = false
+                breathe = false
+            }
         }
     }
 
@@ -99,8 +117,8 @@ struct IntelligenceVoiceStage: View {
                     .frame(width: 168 + CGFloat(i) * 36, height: 168 + CGFloat(i) * 36)
                     .rotationEffect(.degrees((i % 2 == 0 ? 1 : -1) * (spin ? 360 : 0)))
                     .opacity(0.35 + intensity * 0.35)
-                    .scaleEffect(1 + level * (phase == .listening ? 0.1 : 0.03))
-                    .animation(.easeOut(duration: 0.08), value: level)
+                    .scaleEffect(1 + level * (phase == .listening ? 0.18 : 0.06))
+                    .animation(.easeOut(duration: 0.05), value: level)
             }
         }
     }
@@ -145,9 +163,9 @@ struct IntelligenceVoiceStage: View {
                 )
                 .shadow(color: Color(red: 0.45, green: 0.7, blue: 1).opacity(0.22 + Double(level) * 0.35), radius: 14 + level * 18)
         )
-        .scaleEffect(1 + level * (phase == .listening ? 0.06 : 0.03))
-        .animation(.easeOut(duration: 0.07), value: level)
-        .animation(.easeOut(duration: 0.07), value: bands)
+        .scaleEffect(1 + level * (phase == .listening ? 0.12 : 0.05))
+        .animation(.easeOut(duration: 0.05), value: level)
+        .animation(.easeOut(duration: 0.05), value: bands)
     }
 
     private var statusSpark: some View {
@@ -175,13 +193,13 @@ struct IntelligenceVoiceStage: View {
         switch phase {
         case .listening:
             // True visualizer: loud = high bars, quiet = low
-            return max(6, 8 + band * 68 * CGFloat(envelope) + level * 8)
+            return max(6, 10 + band * 92 * CGFloat(envelope) + level * 18)
         case .speaking:
             let wave = abs(sin(t * 8.5 + Double(i) * 0.7))
-            return CGFloat(10 + (Double(band) * 0.7 + wave * 0.3) * envelope * 52)
+            return CGFloat(10 + (Double(band) * 0.75 + wave * 0.35) * envelope * 64)
         case .processing:
             let wave = abs(sin(t * 3.2 + Double(i) * 0.35))
-            return CGFloat(8 + wave * envelope * 22)
+            return CGFloat(8 + wave * envelope * 28)
         default:
             return CGFloat(6 + Double(band) * envelope * 12)
         }
@@ -215,7 +233,7 @@ struct IntelligenceMeshBackground: View {
     var body: some View {
         ZStack {
             IntelligenceAtmosphere()
-            FloatingIntelligenceDots(count: 16).opacity(0.22)
+            FloatingIntelligenceDots(count: 6).opacity(0.18)
 
             Circle()
                 .fill(NOCOAITheme.glowPrimary.opacity(scheme == .dark ? 0.2 : 0.12))

@@ -11,6 +11,8 @@ final class ConnectionStore: ObservableObject {
     @Published var status = ServerStatus()
     @Published var isOnline = false
     @Published var isRefreshing = false
+    /// Last successful companion status ping (for Online badge freshness).
+    @Published var lastStatusAt: Date?
     @Published var isPinging = false
     @Published var pingMessage: String?
     @Published var lastError: String?
@@ -35,6 +37,9 @@ final class ConnectionStore: ObservableObject {
     @Published var pendingGalleryImageURL: URL?
     @Published var pendingGalleryImageId: String?
 
+    /// Hide floating tab chrome (e.g. Magischer Radierer full focus).
+    @Published var hideMainTabBar = false
+
     let chat = ChatStore()
     let images = ImageStore()
     let code = CodeStore()
@@ -46,9 +51,9 @@ final class ConnectionStore: ObservableObject {
     private var pollTask: Task<Void, Never>?
     private var api: CompanionAPI?
     private var cancellables = Set<AnyCancellable>()
-    /// Hysteresis: require several consecutive failures before marking offline
+    /// Hysteresis: require consecutive failures before marking offline
     private var consecutiveFailures = 0
-    private let offlineFailureThreshold = 5
+    private let offlineFailureThreshold = 2
 
     private enum Keys {
         static let host = "nocoai.host"
@@ -96,6 +101,16 @@ final class ConnectionStore: ObservableObject {
 
     var baseURLString: String {
         "http://\(serverHost):\(serverPort)/api/v1/"
+    }
+
+    /// Short freshness label for the Online badge (updates as status polls).
+    var onlineBadgeDetail: String? {
+        guard isOnline, let at = lastStatusAt else { return nil }
+        let sec = Int(Date().timeIntervalSince(at))
+        if sec < 3 { return "frisch" }
+        if sec < 60 { return "vor \(sec)s" }
+        let min = sec / 60
+        return "vor \(min) Min"
     }
 
     /// Call when app returns to foreground to keep Local Network permission warm.
@@ -149,6 +164,9 @@ final class ConnectionStore: ObservableObject {
                 )
             }
         }
+        chat.onImageCreated = { [weak self] prompt, url, data in
+            self?.images.ingestFromChat(prompt: prompt, url: url, data: data)
+        }
         code.bind(api: api)
         profile.bind(api: api)
     }
@@ -171,10 +189,9 @@ final class ConnectionStore: ObservableObject {
         url: URL?,
         data: Data?
     ) async {
-        // Stay on Bildideen — PC already focuses the Bild-chat via sync.
+        // Stay wherever the user is — chat-generated images also land in the gallery.
         await chat.loadConversations()
         await images.loadFromConversations(chat.conversations, api: api)
-        openImagesTab()
     }
 
     private func bootstrapAfterPair() async {
@@ -201,9 +218,21 @@ final class ConnectionStore: ObservableObject {
     }
 
     private var voiceRefreshScheduled = false
+    private var chatRefreshScheduled = false
 
     private func forwardStoreChanges() {
-        chat.objectWillChange.sink { [weak self] _ in self?.objectWillChange.send() }.store(in: &cancellables)
+        // Coalesce chat token/stream updates — avoid invalidating every hub on each chunk.
+        chat.objectWillChange.sink { [weak self] _ in
+            guard let self else { return }
+            guard !self.chatRefreshScheduled else { return }
+            self.chatRefreshScheduled = true
+            let delay: UInt64 = self.chat.isSending ? 64_000_000 : 24_000_000
+            Task { @MainActor in
+                try? await Task.sleep(nanoseconds: delay)
+                self.chatRefreshScheduled = false
+                self.objectWillChange.send()
+            }
+        }.store(in: &cancellables)
         images.objectWillChange.sink { [weak self] _ in self?.objectWillChange.send() }.store(in: &cancellables)
         code.objectWillChange.sink { [weak self] _ in self?.objectWillChange.send() }.store(in: &cancellables)
         speak.objectWillChange.sink { [weak self] _ in self?.objectWillChange.send() }.store(in: &cancellables)
@@ -216,7 +245,7 @@ final class ConnectionStore: ObservableObject {
             guard !self.voiceRefreshScheduled else { return }
             self.voiceRefreshScheduled = true
             Task { @MainActor in
-                try? await Task.sleep(nanoseconds: 48_000_000)
+                try? await Task.sleep(nanoseconds: 64_000_000)
                 self.voiceRefreshScheduled = false
                 self.objectWillChange.send()
             }
@@ -436,11 +465,14 @@ final class ConnectionStore: ObservableObject {
         defer { if showLoading { isRefreshing = false } }
 
         do {
+            let started = Date()
             let newStatus = try await api.fetchStatus()
-            status = newStatus
+            let rttMs = Date().timeIntervalSince(started) * 1000
+            status = newStatus.withMeasuredLatency(rttMs)
             // Companion reachable = online (independent of Ollama / AI readiness)
             consecutiveFailures = 0
             isOnline = true
+            lastStatusAt = Date()
             lastError = nil
             await loadFeatures()
         } catch {
@@ -479,7 +511,7 @@ final class ConnectionStore: ObservableObject {
         pollTask = Task { [weak self] in
             while !Task.isCancelled {
                 await self?.refreshStatus()
-                try? await Task.sleep(nanoseconds: 8_000_000_000)
+                try? await Task.sleep(nanoseconds: 4_000_000_000)
             }
         }
     }

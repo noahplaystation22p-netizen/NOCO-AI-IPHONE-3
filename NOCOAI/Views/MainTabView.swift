@@ -5,31 +5,28 @@ struct MainTabView: View {
     @State private var selectedTab = 0
 
     var body: some View {
-        TabView(selection: $selectedTab) {
-            ChatHubView()
-                .tabItem {
-                    Label("Chat", systemImage: selectedTab == 0 ? "sparkles" : "bubble.left.and.bubble.right")
-                }
-                .tag(0)
-
-            ImagesHubView()
-                .tabItem {
-                    Label("Bilder", systemImage: "paintbrush.pointed.fill")
-                }
-                .tag(1)
-
-            MoreView()
-                .tabItem {
-                    Label("Studio", systemImage: selectedTab == 2 ? "square.grid.2x2.fill" : "square.grid.2x2")
-                }
-                .tag(2)
+        Group {
+            switch selectedTab {
+            case 0:
+                ChatHubView()
+            case 1:
+                ImagesHubView()
+            default:
+                MoreView()
+            }
         }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .safeAreaInset(edge: .bottom, spacing: 0) {
+            if !connection.hideMainTabBar {
+                LiquidGlassTabBar(selectedTab: $selectedTab)
+                    .transition(.move(edge: .bottom).combined(with: .opacity))
+            }
+        }
+        .ignoresSafeArea(.keyboard)
         .tint(NOCOAITheme.accent)
         .intelligenceSelectionFeedback(selectedTab)
         .animation(.spring(response: 0.35, dampingFraction: 0.82), value: selectedTab)
-        .onChange(of: selectedTab) { _, _ in
-            HapticService.navigate()
-        }
+        .animation(.spring(response: 0.35, dampingFraction: 0.86), value: connection.hideMainTabBar)
         .onChange(of: connection.pendingTab) { _, tab in
             if let tab {
                 withAnimation(.spring(response: 0.38, dampingFraction: 0.86)) {

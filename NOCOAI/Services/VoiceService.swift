@@ -49,15 +49,19 @@ final class VoiceService: NSObject, ObservableObject {
     private var ttsPendingBuffers = 0
     private let ttsGain: Float = 2.6
 
-    /// Wait for a natural end of speech — avoid cutting mid-thought, but stay responsive.
-    private let silenceToEnd: TimeInterval = 1.45
-    private let transcriptStableToEnd: TimeInterval = 1.15
-    private let minSpeechSeconds: TimeInterval = 0.50
-    private let speechLevelFactor: CGFloat = 2.6
+    /// Wait for a clear end of speech — let the user finish mid-thought pauses.
+    private let silenceToEnd: TimeInterval = 2.15
+    private let transcriptStableToEnd: TimeInterval = 1.45
+    private let minSpeechSeconds: TimeInterval = 0.7
+    private let naturalEndQuiet: TimeInterval = 1.65
+    private let endConfirmGrace: TimeInterval = 0.48
+    private let speechLevelFactor: CGFloat = 2.5
 
     /// Calm, clear TTS — slightly under system default.
     private let speakRate: Float = AVSpeechUtteranceDefaultSpeechRate * 0.89
-    private let preReplyPause: TimeInterval = 0.24
+    private let preReplyPause: TimeInterval = 0.28
+
+    private var pendingEndCandidateAt: Date?
 
     var preferredVoiceIdentifier: String {
         get { UserDefaults.standard.string(forKey: "nocoai.voiceId") ?? "" }
@@ -186,6 +190,7 @@ final class VoiceService: NSObject, ObservableObject {
         speechStartAt = nil
         lastVoiceAt = nil
         lastTranscriptChangeAt = nil
+        pendingEndCandidateAt = nil
         phase = .listening
         HapticService.medium()
         startSilenceWatcher()
@@ -204,23 +209,24 @@ final class VoiceService: NSObject, ObservableObject {
                         }
                     }
                     if result.isFinal, self.autoFinishArmed, !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
-                        self.emitAutoUtteranceIfNeeded(force: true)
+                        // Soft hint only — never cut mid-thought on Apple's isFinal.
+                        self.emitAutoUtteranceIfNeeded(force: false)
                     }
                 }
                 if let error {
                     let ns = error as NSError
                     if ns.domain == "kAFAssistantErrorDomain" || ns.code == 216 || ns.code == 203 {
-                        // Often fires when recognition ends — if we have text, send it
+                        // Soft recognition end — timers decide, don't force-send.
                         if self.autoFinishArmed,
                            !self.liveTranscript.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
-                            self.emitAutoUtteranceIfNeeded(force: true)
+                            self.emitAutoUtteranceIfNeeded(force: false)
                         }
                         return
                     }
                     if case .listening = self.phase {
                         let partial = self.liveTranscript.trimmingCharacters(in: .whitespacesAndNewlines)
                         if !partial.isEmpty, self.autoFinishArmed {
-                            self.emitAutoUtteranceIfNeeded(force: true)
+                            self.emitAutoUtteranceIfNeeded(force: false)
                         }
                         // else: keep listening — don't kill the session on soft errors
                     }
@@ -251,6 +257,7 @@ final class VoiceService: NSObject, ObservableObject {
 
     func finishUtterance() -> String {
         autoFinishArmed = false
+        pendingEndCandidateAt = nil
         stopListening(cancel: false)
         let text = liveTranscript.trimmingCharacters(in: .whitespacesAndNewlines)
         phase = text.isEmpty ? .idle : .processing
@@ -286,6 +293,21 @@ final class VoiceService: NSObject, ObservableObject {
 
         // Amplified path: write PCM → gain → AVAudioEngine (utterance.volume alone is capped at 1.0)
         speakAmplified(chunks: chunks)
+    }
+
+    /// Start reading, or stop if already speaking (second tap).
+    func toggleSpeak(_ text: String) {
+        if case .speaking = phase {
+            stopSpeaking(notifyFinished: true)
+            HapticService.soft()
+            return
+        }
+        speak(text)
+    }
+
+    var isSpeakingNow: Bool {
+        if case .speaking = phase { return true }
+        return false
     }
 
     private func speakAmplified(chunks: [String]) {
@@ -482,13 +504,32 @@ final class VoiceService: NSObject, ObservableObject {
         let transcriptStable = lastTranscriptChangeAt.map { now.timeIntervalSince($0) >= transcriptStableToEnd } ?? false
         let spokenLongEnough = speechStartAt.map { now.timeIntervalSince($0) >= minSpeechSeconds } ?? false
 
-        // Prefer transcript-stable + quiet beat; long silence as fallback.
+        // Prefer clear pause after speech; never rush mid-thought.
         let silenceReady = quietFor >= silenceToEnd
-        let naturalEnd = spokenLongEnough && transcriptStable && quietFor >= 0.75
+        let naturalEnd = spokenLongEnough && transcriptStable && quietFor >= naturalEndQuiet
         let longSilenceFallback = spokenLongEnough && quietFor >= silenceToEnd * 1.15
-        let shouldSend = force || naturalEnd || (transcriptStable && silenceReady) || longSilenceFallback
-        guard shouldSend else { return }
+        // `force` kept for API compat — still requires a real quiet beat.
+        let softForce = force && spokenLongEnough && transcriptStable && quietFor >= 1.2
+        let candidate = softForce || naturalEnd || (transcriptStable && silenceReady) || longSilenceFallback
 
+        guard candidate else {
+            pendingEndCandidateAt = nil
+            return
+        }
+
+        // Confirm the pause sticks (user may still be thinking).
+        if let started = pendingEndCandidateAt {
+            if quietFor < 0.55 {
+                pendingEndCandidateAt = nil
+                return
+            }
+            guard now.timeIntervalSince(started) >= endConfirmGrace else { return }
+        } else {
+            pendingEndCandidateAt = now
+            return
+        }
+
+        pendingEndCandidateAt = nil
         autoFinishArmed = false
         let finished = finishUtterance()
         guard !finished.isEmpty else { return }
@@ -508,13 +549,14 @@ final class VoiceService: NSObject, ObservableObject {
             sum += v * v
         }
         let rms = CGFloat(sqrt(sum / Float(frames)))
-        let boosted = min(rms * 10, 1)
-        level = level * 0.55 + boosted * 0.45
+        // Stronger gain so the Speak stage reacts clearly to speech volume.
+        let boosted = min(rms * 16, 1)
+        level = level * 0.35 + boosted * 0.65
 
         if !speechStarted {
             noiseFloor = noiseFloor * 0.95 + level * 0.05
         }
-        let speechThreshold = max(0.04, noiseFloor * speechLevelFactor)
+        let speechThreshold = max(0.035, noiseFloor * speechLevelFactor)
 
         if level > speechThreshold {
             if !speechStarted {
@@ -537,8 +579,8 @@ final class VoiceService: NSObject, ObservableObject {
                 s += v * v
             }
             let bandRms = CGFloat(sqrt(s / Float(end - start)))
-            let value = min(bandRms * (12 + CGFloat(b) * 0.35), 1)
-            next[b] = next[b] * 0.45 + value * 0.55
+            let value = min(bandRms * (18 + CGFloat(b) * 0.45), 1)
+            next[b] = next[b] * 0.28 + value * 0.72
         }
         bands = next
     }
@@ -626,7 +668,15 @@ final class VoiceService: NSObject, ObservableObject {
     }
 
     static func voiceOnlyPrompt(_ userText: String) -> String {
-        userText.trimmingCharacters(in: .whitespacesAndNewlines)
+        let trimmed = userText.trimmingCharacters(in: .whitespacesAndNewlines)
+        return """
+        [NOCO SPEAK]
+        Der Nutzer hat ausgesprochen. Antworte jetzt als gesprochenes Gespräch auf Deutsch.
+        Regeln: verstehe Absicht und Kontext; antworte direkt mit klarer Logik; kurz und natürlich \
+        (meist 2–5 Sätze, länger nur wenn nötig); keine Meta-Kommentare, keine Tool-/Bild-Hinweise, \
+        keine Aufzählungsnummern zum Vorlesen.
+        Nutzer: \(trimmed)
+        """
     }
 
     static func stripSpeakEcho(_ reply: String) -> String {

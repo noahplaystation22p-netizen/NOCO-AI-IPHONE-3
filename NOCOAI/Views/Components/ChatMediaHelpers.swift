@@ -20,15 +20,27 @@ enum ChatPhotoLoader {
 
     static func jpegData(from data: Data) -> Data {
         guard let img = UIImage(data: data) else { return data }
-        let maxSide: CGFloat = 1600
+        let maxSide: CGFloat = 1280
         let scale = min(1, maxSide / max(img.size.width, img.size.height))
         let target = CGSize(
             width: max(1, floor(img.size.width * scale)),
             height: max(1, floor(img.size.height * scale))
         )
-        let renderer = UIGraphicsImageRenderer(size: target)
-        let resized = renderer.image { _ in img.draw(in: CGRect(origin: .zero, size: target)) }
-        return resized.jpegData(compressionQuality: 0.85) ?? data
+        let format = UIGraphicsImageRendererFormat.default()
+        format.scale = 1
+        format.opaque = true
+        let renderer = UIGraphicsImageRenderer(size: target, format: format)
+        let resized = renderer.image { ctx in
+            UIColor.white.setFill()
+            ctx.fill(CGRect(origin: .zero, size: target))
+            img.draw(in: CGRect(origin: .zero, size: target))
+        }
+        for quality in [0.82, 0.72, 0.62] as [CGFloat] {
+            if let jpeg = resized.jpegData(compressionQuality: quality), jpeg.count <= 1_250_000 {
+                return jpeg
+            }
+        }
+        return resized.jpegData(compressionQuality: 0.5) ?? data
     }
 }
 

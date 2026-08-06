@@ -3,7 +3,6 @@ import SwiftUI
 struct GlassCard<Content: View>: View {
     @Environment(\.colorScheme) private var scheme
     let content: Content
-    @State private var shimmer = false
 
     init(@ViewBuilder content: () -> Content) {
         self.content = content()
@@ -33,23 +32,18 @@ struct GlassCard<Content: View>: View {
                             .stroke(
                                 LinearGradient(
                                     colors: [
-                                        NOCOAITheme.glowPrimary.opacity(scheme == .dark ? (shimmer ? 0.42 : 0.22) : (shimmer ? 0.28 : 0.14)),
-                                        NOCOAITheme.glowAccent.opacity(0.16),
-                                        NOCOAITheme.glowSecondary.opacity(0.14),
+                                        NOCOAITheme.glowPrimary.opacity(scheme == .dark ? 0.28 : 0.18),
+                                        NOCOAITheme.glowAccent.opacity(0.14),
+                                        NOCOAITheme.glowSecondary.opacity(0.12),
                                         NOCOAITheme.cardStroke(for: scheme)
                                     ],
-                                    startPoint: shimmer ? .topLeading : .bottomTrailing,
-                                    endPoint: shimmer ? .bottomTrailing : .topLeading
+                                    startPoint: .topLeading,
+                                    endPoint: .bottomTrailing
                                 ),
                                 lineWidth: 1
                             )
                     )
-                    .shadow(color: NOCOAITheme.glowPrimary.opacity(shimmer ? 0.16 : 0.08), radius: 22, y: 8)
+                    .shadow(color: NOCOAITheme.glowPrimary.opacity(0.1), radius: 18, y: 8)
             )
-            .onAppear {
-                withAnimation(.easeInOut(duration: 3.8).repeatForever(autoreverses: true)) {
-                    shimmer = true
-                }
-            }
     }
 }

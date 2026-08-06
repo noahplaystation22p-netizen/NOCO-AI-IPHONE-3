@@ -26,6 +26,8 @@ final class KeyboardViewModel: ObservableObject {
 
     private var shortenStreak = 0
     private var lastShortenFingerprint = ""
+    private var longerStreak = 0
+    private var lastLongerFingerprint = ""
 
     private weak var controller: KeyboardViewController?
     private var snapshotBefore = ""
@@ -411,10 +413,29 @@ final class KeyboardViewModel: ObservableObject {
                             ? "Kürzer…"
                             : "Kürzer (\(level)/4)…"
                         statusLine = overlayTitle
+                    } else if action == .longer {
+                        let fp = source
+                            .trimmingCharacters(in: .whitespacesAndNewlines)
+                            .lowercased()
+                        if fp == lastLongerFingerprint ||
+                            (!lastLongerFingerprint.isEmpty && lastLongerFingerprint.hasPrefix(String(fp.prefix(min(40, fp.count))))) {
+                            longerStreak = min(longerStreak + 1, 4)
+                        } else {
+                            longerStreak = 1
+                        }
+                        level = longerStreak
+                        overlayTitle = level == 1
+                            ? "Länger…"
+                            : "Länger (\(level)/4)…"
+                        statusLine = overlayTitle
                     }
                     result = try await KeyboardAIClient.rewrite(action: action, text: source, shortenLevel: level)
                     if action == .shorten {
                         lastShortenFingerprint = result
+                            .trimmingCharacters(in: .whitespacesAndNewlines)
+                            .lowercased()
+                    } else if action == .longer {
+                        lastLongerFingerprint = result
                             .trimmingCharacters(in: .whitespacesAndNewlines)
                             .lowercased()
                     }

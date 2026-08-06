@@ -18,6 +18,9 @@ struct ChatInputBar: View {
     @State private var photoItem: PhotosPickerItem?
     @State private var showDocumentPicker = false
     @State private var showFilePicker = false
+    @State private var showQuickPicker = false
+    @State private var plusAnchor: CGPoint = .zero
+    @State private var suppressPlusTap = false
 
     var body: some View {
         VStack(spacing: 8) {
@@ -32,17 +35,7 @@ struct ChatInputBar: View {
             }
 
             HStack(alignment: .bottom, spacing: 10) {
-                Button {
-                    HapticService.open()
-                    showPlus = true
-                } label: {
-                    Image(systemName: "plus.circle.fill")
-                        .font(.system(size: 32))
-                        .foregroundStyle(NOCOAITheme.accent)
-                        .shadow(color: NOCOAITheme.glowPrimary.opacity(0.35), radius: 6)
-                        .symbolEffect(.bounce, value: showPlus)
-                }
-                .accessibilityLabel("Werkzeuge")
+                plusButton
 
                 TextField(placeholder, text: $text, axis: .vertical)
                     .lineLimit(1...8)
@@ -113,8 +106,8 @@ struct ChatInputBar: View {
                 }
             }
         }
-        .padding(.horizontal, 16)
-        .padding(.vertical, 10)
+        .padding(.horizontal, 14)
+        .padding(.vertical, 8)
         .background(.ultraThinMaterial)
         .animation(.spring(response: 0.35, dampingFraction: 0.84), value: connection.chat.workPhase)
         .animation(.spring(response: 0.35, dampingFraction: 0.84), value: connection.chat.pendingAgentIntake != nil)
@@ -165,6 +158,90 @@ struct ChatInputBar: View {
             guard case .success(let urls) = result, let url = urls.first else { return }
             Task { await importDocument(url, preferWriting: false) }
         }
+        .onDisappear {
+            PlusQuickPickerWindow.hide()
+        }
+    }
+
+    private var plusButton: some View {
+        Image(systemName: "plus.circle.fill")
+            .font(.system(size: 32))
+            .foregroundStyle(NOCOAITheme.accent)
+            .shadow(color: NOCOAITheme.glowPrimary.opacity(0.35), radius: 6)
+            .symbolEffect(.bounce, value: showPlus || showQuickPicker)
+            .background(
+                GeometryReader { g in
+                    Color.clear.preference(
+                        key: PlusAnchorKey.self,
+                        value: CGPoint(
+                            x: g.frame(in: .global).midX,
+                            y: g.frame(in: .global).midY
+                        )
+                    )
+                }
+            )
+            .onPreferenceChange(PlusAnchorKey.self) { plusAnchor = $0 }
+            .contentShape(Circle().inset(by: -8))
+            .gesture(plusGesture)
+            .accessibilityLabel("Werkzeuge")
+            .accessibilityHint("Tippen für Menü, gedrückt halten für Schnellauswahl")
+    }
+
+    private var plusGesture: some Gesture {
+        LongPressGesture(minimumDuration: 0.32)
+            .sequenced(before: DragGesture(minimumDistance: 0, coordinateSpace: .global))
+            .onChanged { value in
+                switch value {
+                case .first(true):
+                    if !showQuickPicker {
+                        suppressPlusTap = true
+                        showQuickPicker = true
+                        focused = false
+                        PlusQuickPickerWindow.show(anchor: plusAnchor, highlight: .camera)
+                        HapticService.rigid()
+                    }
+                case .second(true, let drag):
+                    if let drag {
+                        PlusQuickPickerWindow.update(finger: drag.location, highlight: nil)
+                    }
+                default:
+                    break
+                }
+            }
+            .onEnded { _ in
+                let selected = PlusQuickPickerWindow.currentHighlight
+                PlusQuickPickerWindow.hide()
+                showQuickPicker = false
+                if let selected {
+                    HapticService.open()
+                    performQuickAction(selected)
+                }
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.4) {
+                    suppressPlusTap = false
+                }
+            }
+            .exclusively(before: TapGesture().onEnded {
+                guard !suppressPlusTap, !showQuickPicker else { return }
+                HapticService.open()
+                showPlus = true
+            })
+    }
+
+    private func performQuickAction(_ action: PlusQuickAction) {
+        switch action {
+        case .camera:
+            showCamera = true
+        case .vision:
+            onVoice?()
+        case .agent:
+            connection.chat.setMode(.agent)
+        case .createImage:
+            connection.handoffToImages(prompt: "")
+        case .file:
+            showFilePicker = true
+        case .writing:
+            onWritingTools?()
+        }
     }
 
     private var placeholder: String {
@@ -173,6 +250,7 @@ struct ChatInputBar: View {
         }
         switch connection.chat.mode {
         case .agent: return "Ziel für den Agent…"
+        case .image: return "Bild erstellen…"
         case .think: return "Tiefe Frage…"
         case .flash: return "Kurze Frage…"
         default: return "Frag NOCO…"
@@ -207,7 +285,6 @@ struct ChatInputBar: View {
 
     private func sendVision(_ data: Data) async {
         HapticService.imageSnap()
-        // Keep current depth mode — don't force Vision as a chat mode
         await connection.chat.sendImage(data, caption: text.isEmpty ? nil : text)
         text = ""
         focused = false
@@ -238,6 +315,13 @@ struct ChatInputBar: View {
             connection.chat.lastError = "Datei nicht lesbar"
             HapticService.error()
         }
+    }
+}
+
+private struct PlusAnchorKey: PreferenceKey {
+    static var defaultValue: CGPoint = .zero
+    static func reduce(value: inout CGPoint, nextValue: () -> CGPoint) {
+        value = nextValue()
     }
 }
 

@@ -18,7 +18,7 @@ struct ImagesHubView: View {
                     IntelligenceHeroBanner(
                         title: "Bilder",
                         subtitle: connection.isOnline
-                            ? "Beschreiben ? NOCO erzeugt auf dem PC"
+                            ? "Beschreiben — NOCO erzeugt das Bild"
                             : "Companion verbinden, dann erzeugen",
                         online: connection.isOnline
                     )
@@ -29,8 +29,6 @@ struct ImagesHubView: View {
                         .padding(.horizontal, 8)
 
                     createCard
-
-                    engineCard
 
                     Button {
                         HapticService.open()
@@ -183,52 +181,6 @@ struct ImagesHubView: View {
     }
 
     // MARK: - Create
-
-    private var engineCard: some View {
-        let ready = connection.status.stableDiffusion == true
-        return GlassCard {
-            VStack(alignment: .leading, spacing: 10) {
-                HStack {
-                    Text("Bilder-Engine")
-                        .font(.headline)
-                    Spacer()
-                    Circle()
-                        .fill(ready ? Color.green : Color.orange)
-                        .frame(width: 10, height: 10)
-                    Text(ready ? "Bereit" : "Aus / startet")
-                        .font(.caption.weight(.semibold))
-                        .foregroundStyle(.secondary)
-                }
-                Text("Gleiche Stable-Diffusion-Engine fuer Bildideen und Magischen Radierer ? kein anderes Modell. Wenn der Radierer bei 96% haengt: hier starten.")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-                Button {
-                    HapticService.open()
-                    Task {
-                        _ = await connection.images.prepareEngine()
-                        await connection.refreshStatus(showLoading: false)
-                    }
-                } label: {
-                    Label(
-                        connection.images.isPreparingEngine
-                            ? "Startet auf dem PC?"
-                            : (ready ? "Engine nochmal warm halten" : "Bilder-Engine starten"),
-                        systemImage: "bolt.circle.fill"
-                    )
-                    .font(.subheadline.weight(.semibold))
-                    .frame(maxWidth: .infinity)
-                    .padding(.vertical, 12)
-                }
-                .buttonStyle(.borderedProminent)
-                .disabled(!connection.isOnline || connection.images.isPreparingEngine || connection.images.isGenerating)
-                if !connection.images.engineStatusText.isEmpty {
-                    Text(connection.images.engineStatusText)
-                        .font(.caption2)
-                        .foregroundStyle(.secondary)
-                }
-            }
-        }
-    }
 
     private var createCard: some View {
         GlassCard {
@@ -566,6 +518,13 @@ private struct ImageDetailSheet: View {
                     detailImage
                         .clipShape(RoundedRectangle(cornerRadius: 20, style: .continuous))
                         .shadow(color: NOCOAITheme.glowPrimary.opacity(0.25), radius: 16)
+                        .contentShape(RoundedRectangle(cornerRadius: 20, style: .continuous))
+                        .onTapGesture {
+                            if connection.speak.voice.isSpeakingNow {
+                                connection.speak.voice.stopSpeaking(notifyFinished: true)
+                                HapticService.soft()
+                            }
+                        }
 
                     Text(item.prompt)
                         .font(.body)

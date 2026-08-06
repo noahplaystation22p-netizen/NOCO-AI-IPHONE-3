@@ -48,6 +48,8 @@ final class ImageStore: ObservableObject {
     private var insightTask: Task<Void, Never>?
     private var cancelled = false
     private var startedAt: Date?
+    private var lastHapticBucket = -1
+
     private var sawRealProgress = false
 
     private let insights = [
@@ -130,9 +132,11 @@ final class ImageStore: ObservableObject {
         etaSeconds = 240
         startedAt = .now
         sawRealProgress = false
+        lastHapticBucket = -1
         saveMessage = nil
         lastPrompt = trimmed
         HapticService.medium()
+        HapticService.rigid()
 
         _ = await AppNotificationService.requestAuthorizationIfNeeded()
         ImageBackgroundKeeper.shared.begin()
@@ -253,7 +257,12 @@ final class ImageStore: ObservableObject {
         statusText = "Radierer fertig"
     }
 
-    func runInpaint(prompt: String, imageJPEG: Data, maskPNG: Data) async throws -> ImageGenerateResponse {
+    func runInpaint(
+        prompt: String,
+        imageJPEG: Data,
+        maskPNG: Data,
+        denoisingStrength: Double = 0.82
+    ) async throws -> ImageGenerateResponse {
         guard let api else {
             throw CompanionAPIError.unreachable
         }
@@ -261,7 +270,9 @@ final class ImageStore: ObservableObject {
             prompt: prompt,
             imageJPEG: imageJPEG,
             maskPNG: maskPNG,
-            conversationId: nil
+            conversationId: nil,
+            denoisingStrength: denoisingStrength,
+            steps: denoisingStrength >= 0.7 ? 16 : 12
         )
     }
 
@@ -354,6 +365,12 @@ final class ImageStore: ObservableObject {
                 let soft = min(0.7, elapsed / 180.0)
                 progress = max(progress, soft)
                 phase = elapsed < 25 ? .preparing : .rendering
+            }
+
+            let bucket = Int(progress * 4) // 0,1,2,3 at 0/25/50/75%
+            if bucket > lastHapticBucket, bucket >= 1 {
+                lastHapticBucket = bucket
+                HapticService.selection()
             }
 
             if let eta = prog.etaRelative, eta > 0 {

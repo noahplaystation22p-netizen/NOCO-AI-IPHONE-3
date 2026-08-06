@@ -46,12 +46,14 @@ enum ImageAttachIntent {
     static func editPrompt(from userText: String) -> String {
         let lower = userText.lowercased()
         var parts: [String] = [
-            "high quality photo edit, natural result, same composition and framing",
+            "photorealistic inpaint edit, ONLY change the masked region, keep unmasked pixels identical",
+            "seamless edges, same lighting and camera, no global rewrite of the whole image",
             userText
         ]
 
-        if lower.contains("entferne") || lower.contains("remove") || lower.contains("lösch") || lower.contains("erase") {
-            parts.append("remove the described object cleanly, fill background naturally, no leftover artifacts")
+        if lower.contains("entferne") || lower.contains("remove") || lower.contains("lösch")
+            || lower.contains("erase") || lower.contains("füll") || lower.contains("fill") {
+            parts.append("remove the marked object completely, reconstruct background naturally, no leftover fragments, no ghosting")
         }
         if lower.contains("haar") || lower.contains("hair") {
             parts.append("edit hair color/style only, keep face identity")
@@ -73,15 +75,19 @@ enum ImageAttachIntent {
 
     static func denoising(for userText: String) -> Double {
         let lower = userText.lowercased()
-        if lower.contains("entferne") || lower.contains("remove") || lower.contains("lösch") || lower.contains("erase") {
-            return 0.58
+        if lower.contains("entferne") || lower.contains("remove") || lower.contains("lösch")
+            || lower.contains("erase") || lower.contains("füll") {
+            return 0.88
+        }
+        if lower.contains("ersetze") || lower.contains("replace") || lower.contains("mach ") {
+            return 0.78
         }
         if lower.contains("haar") || lower.contains("hair") || lower.contains("farbe") || lower.contains("color") {
-            return 0.45
+            return 0.55
         }
         if lower.contains("heller") || lower.contains("dunkler") || lower.contains("wärmer") {
-            return 0.35
+            return 0.4
         }
-        return 0.48
+        return 0.72
     }
 }

@@ -164,12 +164,14 @@ extension CompanionAPI {
         return try decoder.decode(ImageGenerateResponse.self, from: data)
     }
 
-    /// Magical eraser — paint mask (white = edit) + instruction → SD inpaint.
+    /// Magical eraser — paint mask (white = edit) + instruction → SD inpaint (masked region only).
     func inpaintImage(
         prompt: String,
         imageJPEG: Data,
         maskPNG: Data,
-        conversationId: String?
+        conversationId: String?,
+        denoisingStrength: Double = 0.82,
+        steps: Int = 14
     ) async throws -> ImageGenerateResponse {
         struct Body: Encodable {
             let prompt: String
@@ -192,8 +194,8 @@ extension CompanionAPI {
                 conversationId: conversationId,
                 width: 512,
                 height: 512,
-                steps: 10,
-                denoisingStrength: 0.72
+                steps: steps,
+                denoisingStrength: denoisingStrength
             )
         )
         let (data, response) = try await session.data(for: request)

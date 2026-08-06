@@ -2,16 +2,49 @@ import PhotosUI
 import SwiftUI
 import UIKit
 
-/// Magischer AI-Radierer: Foto wählen, Bereich bemalen, Anweisung tippen → SD Inpaint.
+/// Magischer AI-Radierer: Foto → bemalen → Standard „Entfernen“ oder eigene Anweisung → nur Maske ändert sich.
 struct MagischerRadiererView: View {
+    enum Preset: String, CaseIterable, Identifiable {
+        case erase
+        case replace
+        case custom
+
+        var id: String { rawValue }
+
+        var title: String {
+            switch self {
+            case .erase: return "Entfernen"
+            case .replace: return "Ersetzen"
+            case .custom: return "Eigenes"
+            }
+        }
+
+        var systemImage: String {
+            switch self {
+            case .erase: return "eraser.fill"
+            case .replace: return "arrow.triangle.2.circlepath"
+            case .custom: return "pencil.line"
+            }
+        }
+
+        /// User-facing instruction (also drives SD prompt).
+        var defaultText: String {
+            switch self {
+            case .erase: return "Entferne den markierten Bereich und fülle natürlich mit dem Hintergrund."
+            case .replace: return "Ersetze den markierten Bereich durch: "
+            case .custom: return ""
+            }
+        }
+    }
+
     @EnvironmentObject private var connection: ConnectionStore
     @Environment(\.colorScheme) private var scheme
-    @Environment(\.dismiss) private var dismiss
 
     @State private var photoItem: PhotosPickerItem?
     @State private var sourceImage: UIImage?
     @State private var brushSize: CGFloat = 36
-    @State private var instruction = ""
+    @State private var preset: Preset = .erase
+    @State private var instruction = Preset.erase.defaultText
     @State private var isWorking = false
     @State private var workProgress: Double = 0
     @State private var status = "1 Foto · 2 bemalen · 3 Anweisung · 4 Magisch"
@@ -28,6 +61,7 @@ struct MagischerRadiererView: View {
                 header
                 canvasCard
                 controls
+                presetRow
                 promptCard
                 actionButtons
                 if let resultImage {
@@ -68,9 +102,9 @@ struct MagischerRadiererView: View {
 
     private var header: some View {
         VStack(alignment: .leading, spacing: 8) {
-            Text("Bereich bemalen → KI ändert genau dort")
+            Text("Nur der bemalte Bereich ändert sich")
                 .font(.subheadline.weight(.semibold))
-            Text("Pinsel = Maske. Dann tippen, was passieren soll — z. B. „entferne den Baum“ oder „Himmel dramatischer“.")
+            Text("Standard: Entfernen. Markieren → fertig — oder eigene Anweisung tippen.")
                 .font(.footnote)
                 .foregroundStyle(.secondary)
             Text(status)
@@ -107,18 +141,13 @@ struct MagischerRadiererView: View {
                         Circle()
                             .fill(
                                 AngularGradient(
-                                    colors: [
-                                        Color(red: 0.4, green: 0.7, blue: 1),
-                                        Color(red: 0.75, green: 0.4, blue: 1),
-                                        Color(red: 0.95, green: 0.5, blue: 0.75),
-                                        Color(red: 0.4, green: 0.7, blue: 1)
-                                    ],
+                                    colors: rainbowColors,
                                     center: .center
                                 )
                             )
-                            .frame(width: 72, height: 72)
-                            .blur(radius: 18)
-                            .opacity(0.7)
+                            .frame(width: 78, height: 78)
+                            .blur(radius: 16)
+                            .opacity(0.75)
                         Image(systemName: "paintbrush.pointed.fill")
                             .font(.system(size: 36))
                             .foregroundStyle(NOCOAITheme.accent)
@@ -177,28 +206,86 @@ struct MagischerRadiererView: View {
         }
     }
 
-    private var promptCard: some View {
+    private var presetRow: some View {
         VStack(alignment: .leading, spacing: 8) {
-            Text("Was soll passieren?")
+            Text("Aktion")
                 .font(.caption.weight(.semibold))
                 .foregroundStyle(.secondary)
-            TextField("z. B. entferne das Auto / mach Haare rot…", text: $instruction, axis: .vertical)
-                .lineLimit(2...4)
-                .focused($promptFocused)
-                .padding(14)
-                .background(
-                    RoundedRectangle(cornerRadius: 16, style: .continuous)
-                        .fill(.ultraThinMaterial)
-                        .overlay(
-                            RoundedRectangle(cornerRadius: 16, style: .continuous)
-                                .stroke(
-                                    promptFocused
-                                        ? NOCOAITheme.glowPrimary.opacity(0.55)
-                                        : Color.clear,
-                                    lineWidth: 1.2
-                                )
-                        )
-                )
+            HStack(spacing: 8) {
+                ForEach(Preset.allCases) { p in
+                    Button {
+                        HapticService.selection()
+                        withAnimation(.spring(response: 0.35, dampingFraction: 0.8)) {
+                            preset = p
+                            if p != .custom {
+                                instruction = p.defaultText
+                            } else if instruction == Preset.erase.defaultText || instruction == Preset.replace.defaultText {
+                                instruction = ""
+                            }
+                            if p == .custom || p == .replace {
+                                promptFocused = true
+                            }
+                        }
+                    } label: {
+                        Label(p.title, systemImage: p.systemImage)
+                            .font(.caption.weight(.semibold))
+                            .padding(.horizontal, 12)
+                            .padding(.vertical, 9)
+                            .frame(maxWidth: .infinity)
+                            .background {
+                                if preset == p {
+                                    Capsule(style: .continuous)
+                                        .fill(
+                                            LinearGradient(
+                                                colors: [
+                                                    Color(red: 0.4, green: 0.55, blue: 1),
+                                                    Color(red: 0.75, green: 0.4, blue: 0.95)
+                                                ],
+                                                startPoint: .leading,
+                                                endPoint: .trailing
+                                            )
+                                        )
+                                } else {
+                                    Capsule(style: .continuous)
+                                        .fill(Color.primary.opacity(0.06))
+                                }
+                            }
+                            .foregroundStyle(preset == p ? .white : .primary)
+                    }
+                    .buttonStyle(.plain)
+                }
+            }
+        }
+    }
+
+    private var promptCard: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Text(preset == .erase ? "Anweisung (Standard: Entfernen)" : "Anweisung")
+                .font(.caption.weight(.semibold))
+                .foregroundStyle(.secondary)
+            TextField(
+                preset == .replace
+                    ? "z. B. blauer Himmel / rote Haare…"
+                    : "z. B. entferne das Auto…",
+                text: $instruction,
+                axis: .vertical
+            )
+            .lineLimit(2...4)
+            .focused($promptFocused)
+            .padding(14)
+            .background(
+                RoundedRectangle(cornerRadius: 16, style: .continuous)
+                    .fill(.ultraThinMaterial)
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 16, style: .continuous)
+                            .stroke(
+                                promptFocused
+                                    ? NOCOAITheme.glowPrimary.opacity(0.55)
+                                    : Color.clear,
+                                lineWidth: 1.2
+                            )
+                    )
+            )
         }
     }
 
@@ -209,18 +296,14 @@ struct MagischerRadiererView: View {
             HStack(spacing: 10) {
                 Image(systemName: "wand.and.stars")
                     .symbolEffect(.bounce, value: isWorking)
-                Text(isWorking ? "Magie läuft…" : "Magisch bearbeiten")
+                Text(isWorking ? "Magie läuft…" : (preset == .erase ? "Entfernen" : "Magisch bearbeiten"))
                     .font(.headline)
             }
             .frame(maxWidth: .infinity)
             .padding(.vertical, 16)
             .background(
                 LinearGradient(
-                    colors: [
-                        Color(red: 0.35, green: 0.55, blue: 1),
-                        Color(red: 0.7, green: 0.4, blue: 0.95),
-                        Color(red: 0.95, green: 0.45, blue: 0.7)
-                    ],
+                    colors: rainbowColors.dropLast(),
                     startPoint: .leading,
                     endPoint: .trailing
                 ),
@@ -229,8 +312,22 @@ struct MagischerRadiererView: View {
             .foregroundStyle(.white)
             .shadow(color: Color(red: 0.45, green: 0.4, blue: 1).opacity(0.45), radius: 16, y: 6)
         }
-        .disabled(isWorking || sourceImage == nil || instruction.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+        .disabled(isWorking || sourceImage == nil || effectivePrompt.isEmpty)
         .opacity(sourceImage == nil ? 0.5 : 1)
+    }
+
+    private var effectivePrompt: String {
+        instruction.trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+
+    private var rainbowColors: [Color] {
+        [
+            Color(red: 0.35, green: 0.75, blue: 1),
+            Color(red: 0.45, green: 0.5, blue: 1),
+            Color(red: 0.75, green: 0.4, blue: 0.95),
+            Color(red: 0.95, green: 0.45, blue: 0.7),
+            Color(red: 0.4, green: 0.9, blue: 0.85)
+        ]
     }
 
     private func resultCard(_ image: UIImage) -> some View {
@@ -244,24 +341,6 @@ struct MagischerRadiererView: View {
                 .shadow(color: NOCOAITheme.glowPrimary.opacity(0.35), radius: 18)
                 .scaleEffect(revealResult ? 1 : 0.92)
                 .opacity(revealResult ? 1 : 0)
-                .overlay {
-                    if revealResult {
-                        RoundedRectangle(cornerRadius: 18, style: .continuous)
-                            .stroke(
-                                LinearGradient(
-                                    colors: [
-                                        Color.white.opacity(0.6),
-                                        Color(red: 0.6, green: 0.5, blue: 1).opacity(0.4),
-                                        .clear
-                                    ],
-                                    startPoint: .topLeading,
-                                    endPoint: .bottomTrailing
-                                ),
-                                lineWidth: 1.5
-                            )
-                            .allowsHitTesting(false)
-                    }
-                }
             Button {
                 UIImageWriteToSavedPhotosAlbum(image, nil, nil, nil)
                 HapticService.success()
@@ -280,7 +359,7 @@ struct MagischerRadiererView: View {
             resultImage = nil
             revealResult = false
             canvas.clear()
-            status = "Bereich bemalen, dann Anweisung tippen"
+            status = "Bereich bemalen — Standard: Entfernen"
             HapticService.success()
         } else {
             status = "Fehler: Foto konnte nicht geladen werden"
@@ -298,17 +377,16 @@ struct MagischerRadiererView: View {
             status = "Fehler: Nicht mit PC verbunden"
             return
         }
-        let prompt = instruction.trimmingCharacters(in: .whitespacesAndNewlines)
+        let prompt = effectivePrompt
         guard !prompt.isEmpty else { return }
 
-        guard let maskPNG = canvas.exportMaskPNG(matching: sourceImage),
+        guard canvas.exportMaskPNG(matching: sourceImage) != nil,
               canvas.hasPaint else {
             status = "Fehler: Bitte zuerst einen Bereich bemalen"
             HapticService.warning()
             return
         }
-        _ = maskPNG
-        // Match SD working size (512) for reliable mask alignment
+
         let working = sourceImage.resizedToFit(maxSide: 512)
         guard let jpeg = working.jpegData(compressionQuality: 0.9),
               let maskForSD = canvas.exportMaskPNG(matching: working) else { return }
@@ -316,32 +394,36 @@ struct MagischerRadiererView: View {
         isWorking = true
         workProgress = 0.08
         promptFocused = false
-        status = "Maske wird gelesen…"
+        status = "Nur Maske wird bearbeitet…"
         HapticService.medium()
 
         let progressTask = Task {
             while !Task.isCancelled {
-                try? await Task.sleep(nanoseconds: 280_000_000)
+                try? await Task.sleep(nanoseconds: 260_000_000)
                 await MainActor.run {
                     if workProgress < 0.88 {
                         workProgress = min(0.88, workProgress + Double.random(in: 0.03...0.07))
                         if workProgress < 0.35 {
-                            status = "Pinselspur analysieren…"
+                            status = "Maske lesen…"
                         } else if workProgress < 0.65 {
-                            status = "Magie auf dem PC…"
+                            status = preset == .erase ? "Entfernen auf dem PC…" : "Magie auf dem PC…"
                         } else {
-                            status = "Pixel neu zeichnen…"
+                            status = "Nur Detail neu zeichnen…"
                         }
                     }
                 }
             }
         }
 
+        let sdPrompt = ImageAttachIntent.editPrompt(from: prompt)
+        let denoise = ImageAttachIntent.denoising(for: prompt)
+
         do {
             let result = try await connection.images.runInpaint(
-                prompt: ImageAttachIntent.editPrompt(from: prompt),
+                prompt: sdPrompt,
                 imageJPEG: jpeg,
-                maskPNG: maskForSD
+                maskPNG: maskForSD,
+                denoisingStrength: denoise
             )
             progressTask.cancel()
             workProgress = 1
@@ -352,7 +434,7 @@ struct MagischerRadiererView: View {
                     .replacingOccurrences(of: "data:image/png;base64,", with: "")
                     .replacingOccurrences(of: "data:image/jpeg;base64,", with: "")
                 if let data = Data(base64Encoded: cleaned), let ui = UIImage(data: data) {
-                    try? await Task.sleep(nanoseconds: 350_000_000)
+                    try? await Task.sleep(nanoseconds: 320_000_000)
                     withAnimation(.spring(response: 0.55, dampingFraction: 0.82)) {
                         isWorking = false
                         resultImage = ui
@@ -390,7 +472,7 @@ struct MagischerRadiererView: View {
     }
 }
 
-// MARK: - Apple Intelligence–style eraser theater
+// MARK: - Rainbow Intelligence eraser theater
 
 private struct MagicEraserTheater: View {
     var progress: Double
@@ -400,86 +482,77 @@ private struct MagicEraserTheater: View {
     @State private var pulse = false
     @State private var spark = false
     @State private var ripple = false
+    @State private var hue = false
 
     private var pct: Int { Int((min(max(progress, 0), 1) * 100).rounded()) }
 
+    private let rainbow: [Color] = [
+        Color(red: 0.35, green: 0.8, blue: 1),
+        Color(red: 0.45, green: 0.45, blue: 1),
+        Color(red: 0.85, green: 0.4, blue: 1),
+        Color(red: 0.95, green: 0.45, blue: 0.7),
+        Color(red: 1.0, green: 0.7, blue: 0.35),
+        Color(red: 0.4, green: 0.95, blue: 0.7),
+        Color(red: 0.35, green: 0.8, blue: 1)
+    ]
+
     var body: some View {
         ZStack {
-            Color.black.opacity(0.42)
+            Color.black.opacity(0.45)
                 .ignoresSafeArea()
                 .background(.ultraThinMaterial)
 
             VStack(spacing: 22) {
                 ZStack {
-                    // Aurora blobs
+                    AngularGradient(colors: rainbow, center: .center)
+                        .frame(width: 240, height: 240)
+                        .blur(radius: 42)
+                        .opacity(pulse ? 0.65 : 0.35)
+                        .scaleEffect(pulse ? 1.12 : 0.9)
+                        .rotationEffect(.degrees(spin ? 360 : 0))
+                        .blendMode(.plusLighter)
+
                     ForEach(0..<3, id: \.self) { i in
                         Circle()
-                            .fill(blob(i).opacity(0.5))
-                            .frame(width: 160 + CGFloat(i * 28), height: 160 + CGFloat(i * 28))
-                            .blur(radius: 34)
-                            .offset(
-                                x: pulse ? CGFloat(20 - i * 10) : CGFloat(-18 + i * 8),
-                                y: pulse ? CGFloat(-14 + i * 5) : CGFloat(12 - i * 4)
-                            )
-                            .blendMode(.plusLighter)
+                            .stroke(rainbow[i * 2].opacity(ripple ? 0.0 : 0.4 - Double(i) * 0.1), lineWidth: 2)
+                            .frame(width: 95 + CGFloat(i * 40), height: 95 + CGFloat(i * 40))
+                            .scaleEffect(ripple ? 1.4 : 0.88)
                     }
 
-                    // Ripple rings
-                    ForEach(0..<3, id: \.self) { i in
-                        Circle()
-                            .stroke(Color.white.opacity(ripple ? 0.0 : 0.35 - Double(i) * 0.1), lineWidth: 1.5)
-                            .frame(width: 90 + CGFloat(i * 36), height: 90 + CGFloat(i * 36))
-                            .scaleEffect(ripple ? 1.35 : 0.85)
-                    }
-
-                    // Rotating angular ring
                     Circle()
                         .stroke(
-                            AngularGradient(
-                                colors: [
-                                    Color(red: 0.4, green: 0.8, blue: 1),
-                                    Color(red: 0.85, green: 0.4, blue: 1),
-                                    Color(red: 0.95, green: 0.55, blue: 0.75),
-                                    Color(red: 0.4, green: 0.9, blue: 0.85),
-                                    Color(red: 0.4, green: 0.8, blue: 1)
-                                ],
-                                center: .center
-                            ),
-                            lineWidth: 4
+                            AngularGradient(colors: rainbow, center: .center),
+                            lineWidth: 5
                         )
-                        .frame(width: 108, height: 108)
+                        .frame(width: 112, height: 112)
                         .rotationEffect(.degrees(spin ? 360 : 0))
-                        .shadow(color: Color(red: 0.55, green: 0.4, blue: 1).opacity(0.7), radius: 14)
+                        .shadow(color: Color(red: 0.7, green: 0.4, blue: 1).opacity(0.8), radius: 16)
 
-                    // Progress arc
                     Circle()
                         .trim(from: 0, to: max(0.04, min(progress, 1)))
-                        .stroke(
-                            Color.white.opacity(0.85),
-                            style: StrokeStyle(lineWidth: 3, lineCap: .round)
-                        )
-                        .frame(width: 88, height: 88)
+                        .stroke(Color.white.opacity(0.9), style: StrokeStyle(lineWidth: 3.5, lineCap: .round))
+                        .frame(width: 92, height: 92)
                         .rotationEffect(.degrees(-90))
-                        .animation(.easeOut(duration: 0.35), value: progress)
+                        .animation(.easeOut(duration: 0.3), value: progress)
 
                     Image(systemName: "wand.and.stars")
-                        .font(.system(size: 28, weight: .semibold))
+                        .font(.system(size: 30, weight: .semibold))
                         .foregroundStyle(.white)
                         .symbolEffect(.pulse, options: .repeating)
-                        .scaleEffect(pulse ? 1.08 : 0.94)
+                        .scaleEffect(pulse ? 1.1 : 0.92)
 
-                    // Sparkles
-                    ForEach(0..<8, id: \.self) { i in
+                    ForEach(0..<10, id: \.self) { i in
                         Image(systemName: "sparkle")
-                            .font(.system(size: CGFloat(7 + i % 3 * 2), weight: .bold))
-                            .foregroundStyle(.white.opacity(spark ? 0.95 : 0.2))
+                            .font(.system(size: CGFloat(6 + i % 4 * 2), weight: .bold))
+                            .foregroundStyle(rainbow[i % (rainbow.count - 1)].opacity(spark ? 1 : 0.2))
                             .offset(
-                                x: cos(Double(i) / 8 * .pi * 2) * (spark ? 78 : 64),
-                                y: sin(Double(i) / 8 * .pi * 2) * (spark ? 78 : 64)
+                                x: cos(Double(i) / 10 * .pi * 2) * (spark ? 82 : 66),
+                                y: sin(Double(i) / 10 * .pi * 2) * (spark ? 82 : 66)
                             )
                     }
                 }
-                .frame(height: 220)
+                .frame(height: 240)
+                .hueRotation(.degrees(hue ? 28 : -12))
 
                 VStack(spacing: 8) {
                     Text("\(pct)%")
@@ -488,9 +561,9 @@ private struct MagicEraserTheater: View {
                         .contentTransition(.numericText())
                     Text(status)
                         .font(.subheadline.weight(.semibold))
-                        .foregroundStyle(.white.opacity(0.9))
+                        .foregroundStyle(.white.opacity(0.92))
                         .multilineTextAlignment(.center)
-                    Text("Magischer Radierer")
+                    Text("Nur markierter Bereich")
                         .font(.caption.weight(.medium))
                         .foregroundStyle(.white.opacity(0.55))
                 }
@@ -498,10 +571,13 @@ private struct MagicEraserTheater: View {
                 .padding(.vertical, 16)
                 .background(
                     Capsule(style: .continuous)
-                        .fill(.ultraThinMaterial.opacity(0.85))
+                        .fill(.ultraThinMaterial.opacity(0.88))
                         .overlay(
                             Capsule(style: .continuous)
-                                .stroke(Color.white.opacity(0.25), lineWidth: 1)
+                                .stroke(
+                                    AngularGradient(colors: rainbow, center: .center),
+                                    lineWidth: 1.4
+                                )
                         )
                 )
             }
@@ -509,18 +585,12 @@ private struct MagicEraserTheater: View {
         }
         .allowsHitTesting(true)
         .onAppear {
-            withAnimation(.linear(duration: 2.8).repeatForever(autoreverses: false)) { spin = true }
-            withAnimation(.easeInOut(duration: 1.2).repeatForever(autoreverses: true)) { pulse = true }
-            withAnimation(.easeInOut(duration: 0.9).repeatForever(autoreverses: true)) { spark = true }
-            withAnimation(.easeOut(duration: 1.8).repeatForever(autoreverses: false)) { ripple = true }
-        }
-    }
-
-    private func blob(_ i: Int) -> Color {
-        switch i {
-        case 0: return Color(red: 0.35, green: 0.7, blue: 1)
-        case 1: return Color(red: 0.7, green: 0.4, blue: 1)
-        default: return Color(red: 0.95, green: 0.5, blue: 0.75)
+            withAnimation(.linear(duration: 2.6).repeatForever(autoreverses: false)) { spin = true }
+            withAnimation(.easeInOut(duration: 1.15).repeatForever(autoreverses: true)) { pulse = true }
+            withAnimation(.easeInOut(duration: 0.85).repeatForever(autoreverses: true)) { spark = true }
+            withAnimation(.easeOut(duration: 1.7).repeatForever(autoreverses: false)) { ripple = true }
+            withAnimation(.easeInOut(duration: 3.2).repeatForever(autoreverses: true)) { hue = true }
+            HapticService.medium()
         }
     }
 }

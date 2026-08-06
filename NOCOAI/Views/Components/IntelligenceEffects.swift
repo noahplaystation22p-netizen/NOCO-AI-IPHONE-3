@@ -550,6 +550,7 @@ struct ImageCreationTheater: View {
     @State private var breathe = false
     @State private var sweep = false
     @State private var particlePhase = false
+    @State private var hueShift = false
 
     private var pct: Int { Int((min(max(progress, 0), 1) * 100).rounded()) }
 
@@ -559,9 +560,28 @@ struct ImageCreationTheater: View {
         return "~\(eta)s"
     }
 
+    private let rainbow: [Color] = [
+        Color(red: 0.3, green: 0.85, blue: 1),
+        Color(red: 0.45, green: 0.5, blue: 1),
+        Color(red: 0.8, green: 0.4, blue: 1),
+        Color(red: 0.95, green: 0.45, blue: 0.7),
+        Color(red: 1.0, green: 0.7, blue: 0.35),
+        Color(red: 0.4, green: 0.95, blue: 0.7),
+        Color(red: 0.3, green: 0.85, blue: 1)
+    ]
+
     var body: some View {
         VStack(spacing: 18) {
             ZStack {
+                AngularGradient(colors: rainbow, center: .center)
+                    .frame(width: 230, height: 230)
+                    .blur(radius: 40)
+                    .opacity(breathe ? 0.55 : 0.28)
+                    .scaleEffect(breathe ? 1.1 : 0.92)
+                    .rotationEffect(.degrees(spin ? 360 : 0))
+                    .hueRotation(.degrees(hueShift ? 20 : -14))
+                    .blendMode(.plusLighter)
+
                 // Soft aurora
                 Circle()
                     .fill(NOCOAITheme.glowPrimary.opacity(breathe ? 0.28 : 0.12))
@@ -587,12 +607,7 @@ struct ImageCreationTheater: View {
                     .trim(from: 0, to: max(0.04, min(progress, 1)))
                     .stroke(
                         AngularGradient(
-                            colors: [
-                                NOCOAITheme.glowPrimary,
-                                NOCOAITheme.glowSecondary,
-                                NOCOAITheme.glowAccent,
-                                NOCOAITheme.glowPrimary
-                            ],
+                            colors: rainbow,
                             center: .center,
                             angle: .degrees(spin ? 360 : 0)
                         ),
@@ -616,13 +631,13 @@ struct ImageCreationTheater: View {
                 }
 
                 // Floating particles
-                ForEach(0..<4, id: \.self) { i in
+                ForEach(0..<6, id: \.self) { i in
                     Circle()
                         .fill(dotColor(i))
                         .frame(width: 4, height: 4)
                         .offset(
-                            x: cos(Double(i) / 4 * .pi * 2) * (particlePhase ? 68 : 56),
-                            y: sin(Double(i) / 4 * .pi * 2) * (particlePhase ? 68 : 56)
+                            x: cos(Double(i) / 6 * .pi * 2) * (particlePhase ? 72 : 56),
+                            y: sin(Double(i) / 6 * .pi * 2) * (particlePhase ? 72 : 56)
                         )
                         .opacity(particlePhase ? 0.95 : 0.35)
                         .blur(radius: 0.4)
@@ -640,11 +655,7 @@ struct ImageCreationTheater: View {
                     Capsule()
                         .fill(
                             LinearGradient(
-                                colors: [
-                                    NOCOAITheme.glowPrimary,
-                                    NOCOAITheme.glowSecondary,
-                                    NOCOAITheme.glowAccent
-                                ],
+                                colors: Array(rainbow.prefix(5)),
                                 startPoint: .leading,
                                 endPoint: .trailing
                             )
@@ -694,19 +705,17 @@ struct ImageCreationTheater: View {
                 .shadow(color: NOCOAITheme.glowPrimary.opacity(0.2), radius: 20, y: 8)
         )
         .onAppear {
-            withAnimation(.linear(duration: 12).repeatForever(autoreverses: false)) { spin = true }
-            withAnimation(.easeInOut(duration: 3.6).repeatForever(autoreverses: true)) { breathe = true }
-            withAnimation(.easeInOut(duration: 2.4).repeatForever(autoreverses: true)) { particlePhase = true }
-            withAnimation(.easeInOut(duration: 2.6).repeatForever(autoreverses: true)) { sweep = true }
+            withAnimation(.linear(duration: 10).repeatForever(autoreverses: false)) { spin = true }
+            withAnimation(.easeInOut(duration: 3.2).repeatForever(autoreverses: true)) { breathe = true }
+            withAnimation(.easeInOut(duration: 2.2).repeatForever(autoreverses: true)) { particlePhase = true }
+            withAnimation(.easeInOut(duration: 2.4).repeatForever(autoreverses: true)) { sweep = true }
+            withAnimation(.easeInOut(duration: 4.5).repeatForever(autoreverses: true)) { hueShift = true }
+            HapticService.medium()
         }
     }
 
     private func dotColor(_ i: Int) -> Color {
-        switch i % 3 {
-        case 0: return NOCOAITheme.glowPrimary
-        case 1: return NOCOAITheme.glowSecondary
-        default: return NOCOAITheme.glowAccent
-        }
+        rainbow[i % (rainbow.count - 1)]
     }
 }
 

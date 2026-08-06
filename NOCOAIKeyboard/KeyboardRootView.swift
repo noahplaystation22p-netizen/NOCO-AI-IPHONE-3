@@ -146,7 +146,7 @@ struct KeyboardRootView: View {
     }
 }
 
-/// Rich Apple Intelligence–style aurora while rewriting into the field.
+/// Rich Apple Intelligence–style rainbow aurora while rewriting into the field.
 private struct IntelligenceRewriteOverlay: View {
     var phase: KeyboardViewModel.AnimationPhase
     var title: String
@@ -155,135 +155,114 @@ private struct IntelligenceRewriteOverlay: View {
     @State private var pulse = false
     @State private var orbit = false
     @State private var sparkle = false
+    @State private var hue = false
+    @State private var ribbon = false
+
+    private let rainbow: [Color] = [
+        Color(red: 0.3, green: 0.85, blue: 1),
+        Color(red: 0.4, green: 0.55, blue: 1),
+        Color(red: 0.75, green: 0.4, blue: 1),
+        Color(red: 0.95, green: 0.4, blue: 0.75),
+        Color(red: 1.0, green: 0.65, blue: 0.35),
+        Color(red: 0.45, green: 0.95, blue: 0.7),
+        Color(red: 0.3, green: 0.85, blue: 1)
+    ]
 
     var body: some View {
         ZStack {
-            // Dim glass
-            RoundedRectangle(cornerRadius: 20, style: .continuous)
-                .fill(.black.opacity(0.12))
+            RoundedRectangle(cornerRadius: 22, style: .continuous)
+                .fill(.black.opacity(0.18))
 
-            // Multi-layer aurora
-            ForEach(0..<3, id: \.self) { i in
+            // Full rainbow mesh
+            AngularGradient(colors: rainbow, center: .center)
+                .blur(radius: 38)
+                .opacity(pulse ? 0.7 : 0.38)
+                .scaleEffect(pulse ? 1.2 : 0.92)
+                .rotationEffect(.degrees(spin ? 360 : 0))
+                .hueRotation(.degrees(hue ? 24 : -16))
+                .blendMode(.plusLighter)
+
+            ForEach(0..<4, id: \.self) { i in
                 Circle()
-                    .fill(blobColor(i).opacity(0.55))
-                    .frame(width: 140 + CGFloat(i * 30), height: 140 + CGFloat(i * 30))
-                    .blur(radius: 36)
+                    .fill(rainbow[i].opacity(0.5))
+                    .frame(width: 120 + CGFloat(i * 28), height: 120 + CGFloat(i * 28))
+                    .blur(radius: 30)
                     .offset(
-                        x: orbit ? CGFloat(28 - i * 12) : CGFloat(-24 + i * 10),
-                        y: pulse ? CGFloat(-18 + i * 6) : CGFloat(16 - i * 5)
+                        x: orbit ? CGFloat(30 - i * 10) : CGFloat(-26 + i * 9),
+                        y: pulse ? CGFloat(-20 + i * 5) : CGFloat(18 - i * 4)
                     )
                     .blendMode(.plusLighter)
             }
 
-            AngularGradient(
-                colors: [
-                    Color(red: 0.35, green: 0.75, blue: 1),
-                    Color(red: 0.55, green: 0.4, blue: 1),
-                    Color(red: 0.95, green: 0.45, blue: 0.75),
-                    Color(red: 0.4, green: 0.9, blue: 0.85),
-                    Color(red: 0.35, green: 0.75, blue: 1)
-                ],
-                center: .center
-            )
-            .blur(radius: 40)
-            .opacity(pulse ? 0.55 : 0.28)
-            .scaleEffect(pulse ? 1.15 : 0.88)
-            .rotationEffect(.degrees(spin ? 360 : 0))
-
-            // Light sweep
+            // Sweeping ribbon
             Capsule()
                 .fill(
                     LinearGradient(
-                        colors: [.clear, .white.opacity(0.55), .clear],
+                        colors: [.clear, .white.opacity(0.7), rainbow[2].opacity(0.5), .clear],
                         startPoint: .leading,
                         endPoint: .trailing
                     )
                 )
-                .frame(width: 220, height: 70)
-                .rotationEffect(.degrees(-22))
-                .offset(x: spin ? 130 : -130)
-                .blur(radius: 10)
-                .opacity(0.7)
+                .frame(width: 260, height: 64)
+                .rotationEffect(.degrees(-18))
+                .offset(x: ribbon ? 140 : -140)
+                .blur(radius: 8)
+                .opacity(0.85)
 
-            // Floating sparkles
-            ForEach(0..<6, id: \.self) { i in
+            ForEach(0..<8, id: \.self) { i in
                 Image(systemName: "sparkle")
-                    .font(.system(size: CGFloat(8 + i % 3 * 3), weight: .bold))
-                    .foregroundStyle(.white.opacity(sparkle ? 0.95 : 0.25))
+                    .font(.system(size: CGFloat(7 + i % 4 * 2), weight: .bold))
+                    .foregroundStyle(rainbow[i % 6].opacity(sparkle ? 1 : 0.2))
                     .offset(
-                        x: CGFloat([-70, -40, 10, 50, 75, -15][i]),
-                        y: CGFloat([-50, 35, -65, 20, -30, 55][i]) * (sparkle ? 1.05 : 0.9)
+                        x: CGFloat([-78, -48, -10, 28, 58, 82, 12, -30][i]),
+                        y: CGFloat([-55, 38, -70, 22, -28, 48, 62, -12][i]) * (sparkle ? 1.08 : 0.88)
                     )
-                    .scaleEffect(sparkle ? 1.15 : 0.7)
+                    .scaleEffect(sparkle ? 1.2 : 0.65)
             }
 
             VStack(spacing: 10) {
                 ZStack {
-                    // Soft bloom behind glyph
                     Circle()
                         .fill(
                             RadialGradient(
-                                colors: [
-                                    Color.white.opacity(0.35),
-                                    Color(red: 0.55, green: 0.45, blue: 1).opacity(0.18),
-                                    .clear
-                                ],
+                                colors: [.white.opacity(0.4), rainbow[2].opacity(0.25), .clear],
                                 center: .center,
                                 startRadius: 2,
-                                endRadius: 36
+                                endRadius: 40
                             )
                         )
-                        .frame(width: 72, height: 72)
-                        .scaleEffect(pulse ? 1.12 : 0.9)
+                        .frame(width: 78, height: 78)
+                        .scaleEffect(pulse ? 1.14 : 0.88)
 
-                    // Outer ring
                     Circle()
-                        .stroke(
-                            AngularGradient(
-                                colors: [
-                                    Color(red: 0.4, green: 0.8, blue: 1),
-                                    Color(red: 0.85, green: 0.45, blue: 1),
-                                    Color(red: 0.95, green: 0.6, blue: 0.8),
-                                    Color(red: 0.4, green: 0.9, blue: 0.85),
-                                    Color(red: 0.4, green: 0.8, blue: 1)
-                                ],
-                                center: .center
-                            ),
-                            lineWidth: 3.5
-                        )
-                        .frame(width: 48, height: 48)
+                        .stroke(AngularGradient(colors: rainbow, center: .center), lineWidth: 4)
+                        .frame(width: 52, height: 52)
                         .rotationEffect(.degrees(spin ? 360 : 0))
-                        .shadow(color: Color(red: 0.55, green: 0.45, blue: 1).opacity(0.8), radius: 12)
+                        .shadow(color: rainbow[2].opacity(0.85), radius: 14)
 
-                    // Inner glow
                     Circle()
                         .fill(
                             RadialGradient(
-                                colors: [
-                                    Color.white.opacity(0.55),
-                                    Color(red: 0.5, green: 0.45, blue: 1).opacity(0.2),
-                                    .clear
-                                ],
+                                colors: [.white.opacity(0.6), rainbow[1].opacity(0.2), .clear],
                                 center: .center,
-                                startRadius: 2,
-                                endRadius: 22
+                                startRadius: 1,
+                                endRadius: 20
                             )
                         )
                         .frame(width: 40, height: 40)
                         .scaleEffect(pulse ? 1.08 : 0.92)
 
                     Image(systemName: phase == .success ? "checkmark" : (phase == .writing ? "wand.and.stars" : "sparkles"))
-                        .font(.system(size: 16, weight: .bold))
+                        .font(.system(size: 17, weight: .bold))
                         .foregroundStyle(.white)
                         .symbolEffect(.bounce, value: phase)
                         .symbolEffect(.pulse, options: .repeating, value: phase == .thinking || phase == .writing)
                 }
 
-                // Minimal label only while thinking — writing/success stay visual-only
                 if phase == .thinking, !title.isEmpty {
                     Text(title)
                         .font(.caption.weight(.semibold))
-                        .foregroundStyle(.white.opacity(0.92))
+                        .foregroundStyle(.white.opacity(0.95))
                         .shadow(color: .black.opacity(0.35), radius: 6)
                         .transition(.opacity.combined(with: .scale(scale: 0.96)))
                 }
@@ -292,40 +271,23 @@ private struct IntelligenceRewriteOverlay: View {
             .padding(.vertical, 14)
             .background(
                 Capsule(style: .continuous)
-                    .fill(.ultraThinMaterial.opacity(0.88))
+                    .fill(.ultraThinMaterial.opacity(0.9))
                     .overlay(
                         Capsule(style: .continuous)
-                            .stroke(
-                                LinearGradient(
-                                    colors: [
-                                        Color.white.opacity(0.6),
-                                        Color(red: 0.6, green: 0.5, blue: 1).opacity(0.4),
-                                        Color.white.opacity(0.18)
-                                    ],
-                                    startPoint: .topLeading,
-                                    endPoint: .bottomTrailing
-                                ),
-                                lineWidth: 1.2
-                            )
+                            .stroke(AngularGradient(colors: rainbow, center: .center), lineWidth: 1.5)
                     )
-                    .shadow(color: Color(red: 0.45, green: 0.4, blue: 1).opacity(0.55), radius: 24, y: 6)
+                    .shadow(color: rainbow[2].opacity(0.55), radius: 22, y: 6)
             )
             .animation(.spring(response: 0.4, dampingFraction: 0.82), value: phase)
         }
         .allowsHitTesting(false)
         .onAppear {
-            withAnimation(.linear(duration: 3.2).repeatForever(autoreverses: false)) { spin = true }
-            withAnimation(.easeInOut(duration: 1.35).repeatForever(autoreverses: true)) { pulse = true }
-            withAnimation(.easeInOut(duration: 2.1).repeatForever(autoreverses: true)) { orbit = true }
-            withAnimation(.easeInOut(duration: 0.85).repeatForever(autoreverses: true)) { sparkle = true }
-        }
-    }
-
-    private func blobColor(_ i: Int) -> Color {
-        switch i {
-        case 0: return Color(red: 0.35, green: 0.7, blue: 1)
-        case 1: return Color(red: 0.7, green: 0.4, blue: 1)
-        default: return Color(red: 0.95, green: 0.5, blue: 0.75)
+            withAnimation(.linear(duration: 2.8).repeatForever(autoreverses: false)) { spin = true }
+            withAnimation(.easeInOut(duration: 1.2).repeatForever(autoreverses: true)) { pulse = true }
+            withAnimation(.easeInOut(duration: 1.9).repeatForever(autoreverses: true)) { orbit = true }
+            withAnimation(.easeInOut(duration: 0.75).repeatForever(autoreverses: true)) { sparkle = true }
+            withAnimation(.easeInOut(duration: 2.8).repeatForever(autoreverses: true)) { hue = true }
+            withAnimation(.easeInOut(duration: 1.6).repeatForever(autoreverses: true)) { ribbon = true }
         }
     }
 }

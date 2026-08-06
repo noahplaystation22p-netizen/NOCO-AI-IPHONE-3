@@ -10,6 +10,8 @@ struct SettingsView: View {
     @State private var voices: [AVSpeechSynthesisVoice] = []
     @State private var previewSynth = AVSpeechSynthesizer()
     @State private var nameDraft = ""
+    /// Skip auto-preview when Settings first loads / binds the saved voice.
+    @State private var voicePreviewArmed = false
 
     var body: some View {
         NavigationStack {
@@ -46,12 +48,19 @@ struct SettingsView: View {
                     }
                     .onChange(of: voiceId) { _, newValue in
                         UserDefaults.standard.set(newValue, forKey: "nocoai.voiceId")
+                        guard voicePreviewArmed else { return }
                         previewVoice(identifier: newValue)
+                    }
+
+                    Button {
+                        previewVoice(identifier: voiceId)
+                    } label: {
+                        Label("Stimme anhören", systemImage: "speaker.wave.2.fill")
                     }
                 } header: {
                     Text("Speak")
                 } footer: {
-                    Text("Antworten sollen schneller kommen — Sprechtempo bleibt normal.")
+                    Text("Antworten sollen schneller kommen — Sprechtempo bleibt normal. Vorschau nur bei Stimmenwechsel oder „Anhören“.")
                 }
 
                 Section {
@@ -213,14 +222,15 @@ struct SettingsView: View {
                 }
 
                 Section("Info") {
-                    Text("NOCO AI Companion v5.7")
-                    Text("Vision · Radierer · Speak")
+                    Text("NOCO AI Companion v5.8")
+                    Text("Eraser · Rainbow · Voice fix")
                         .font(.footnote)
                         .foregroundStyle(NOCOAITheme.secondaryText(for: scheme))
                 }
             }
             .navigationTitle("Einstellungen")
             .onAppear {
+                voicePreviewArmed = false
                 voiceMode = VoiceSettings.defaultMode
                 if UserDefaults.standard.object(forKey: "nocoai.autoSpeak") == nil {
                     autoSpeak = true
@@ -235,9 +245,13 @@ struct SettingsView: View {
                 Task {
                     await connection.profile.pullRemote()
                     nameDraft = connection.profile.profile.userName
+                    // Arm after bind so opening Settings never speaks
+                    try? await Task.sleep(nanoseconds: 400_000_000)
+                    await MainActor.run { voicePreviewArmed = true }
                 }
             }
             .onDisappear {
+                previewSynth.stopSpeaking(at: .immediate)
                 connection.profile.setName(nameDraft)
             }
         }

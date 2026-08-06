@@ -130,9 +130,14 @@ struct ImagesHubView: View {
             }
             .onChange(of: connection.images.phase) { _, phase in
                 if phase == .done {
+                    HapticService.success()
                     withAnimation(.spring(response: 0.55, dampingFraction: 0.8)) {
                         reveal = true
                     }
+                } else if phase == .rendering {
+                    HapticService.selection()
+                } else if phase == .error {
+                    HapticService.error()
                 }
             }
             .alert(
@@ -252,11 +257,13 @@ struct ImagesHubView: View {
                         promptFocused = false
                         connection.images.prompt = draftPrompt
                         reveal = false
+                        HapticService.rigid()
                         HapticService.send()
                         connection.images.startGenerate()
                     } label: {
                         HStack {
                             Image(systemName: "sparkles")
+                                .symbolEffect(.bounce, value: connection.images.isGenerating)
                             Text("Auf dem PC erstellen")
                                 .fontWeight(.semibold)
                         }
@@ -266,14 +273,18 @@ struct ImagesHubView: View {
                             RoundedRectangle(cornerRadius: 16, style: .continuous)
                                 .fill(
                                     LinearGradient(
-                                        colors: [NOCOAITheme.accent, NOCOAITheme.accentSecondary],
+                                        colors: [
+                                            Color(red: 0.35, green: 0.7, blue: 1),
+                                            NOCOAITheme.accent,
+                                            Color(red: 0.85, green: 0.4, blue: 0.95)
+                                        ],
                                         startPoint: .leading,
                                         endPoint: .trailing
                                     )
                                 )
                         )
                         .foregroundStyle(.white)
-                        .shadow(color: NOCOAITheme.glowPrimary.opacity(0.4), radius: 12)
+                        .shadow(color: NOCOAITheme.glowPrimary.opacity(0.45), radius: 14)
                     }
                     .disabled(draftPrompt.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || !connection.isOnline)
                     .opacity(draftPrompt.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || !connection.isOnline ? 0.5 : 1)

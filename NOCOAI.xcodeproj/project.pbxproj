@@ -15,7 +15,7 @@
 		KBD0000010000000000000005 /* CompanionCredentials.swift in Sources */ = {isa = PBXBuildFile; fileRef = KBD0000020000000000000010 /* CompanionCredentials.swift */; };
 		KBD0000010000000000000006 /* KeyboardAIAction.swift in Sources */ = {isa = PBXBuildFile; fileRef = KBD0000020000000000000011 /* KeyboardAIAction.swift */; };
 		KBD0000010000000000000007 /* KeyboardAIClient.swift in Sources */ = {isa = PBXBuildFile; fileRef = KBD0000020000000000000012 /* KeyboardAIClient.swift */; };
-		KBD0000010000000000000008 /* KeyboardChipPreferences.swift in Sources */ = {isa = PBXBuildFile; fileRef = KBD0000020000000000000013 /* KeyboardChipPreferences.swift */; };
+		KBD000001000000000000000A /* KeyboardChipPreferences.swift in Sources */ = {isa = PBXBuildFile; fileRef = KBD0000020000000000000013 /* KeyboardChipPreferences.swift */; };
 		NA0000010000000000000062 /* KeyboardChipPreferences.swift in Sources */ = {isa = PBXBuildFile; fileRef = KBD0000020000000000000013 /* KeyboardChipPreferences.swift */; };
 		NA0000010000000000000063 /* KeyboardCustomizationView.swift in Sources */ = {isa = PBXBuildFile; fileRef = NA0000020000000000000090 /* KeyboardCustomizationView.swift */; };
 		KBD0000010000000000000008 /* KeychainService.swift in Sources */ = {isa = PBXBuildFile; fileRef = NA0000020000000000000004 /* KeychainService.swift */; };
@@ -558,7 +558,7 @@
 				KBD0000010000000000000005 /* CompanionCredentials.swift in Sources */,
 				KBD0000010000000000000006 /* KeyboardAIAction.swift in Sources */,
 				KBD0000010000000000000007 /* KeyboardAIClient.swift in Sources */,
-				KBD0000010000000000000008 /* KeyboardChipPreferences.swift in Sources */,
+				KBD000001000000000000000A /* KeyboardChipPreferences.swift in Sources */,
 				KBD0000010000000000000008 /* KeychainService.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;

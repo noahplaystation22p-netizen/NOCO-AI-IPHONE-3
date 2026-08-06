@@ -143,10 +143,13 @@ struct ServerStatus: Decodable, Equatable {
         requestCount = try c.decodeIfPresent(Int.self, forKey: .requestCount)
         tokenCount = try c.decodeIfPresent(Int.self, forKey: .tokenCount)
 
-        stableDiffusion =
-            (try c.decodeIfPresent(Bool.self, forKey: .stableDiffusion))
-            ?? (try c.decodeIfPresent(Bool.self, forKey: .imageEngine))
-            ?? (try c.decodeIfPresent(Bool.self, forKey: .bilderEngine))
+        if let v = try c.decodeIfPresent(Bool.self, forKey: .stableDiffusion) {
+            stableDiffusion = v
+        } else if let v = try c.decodeIfPresent(Bool.self, forKey: .imageEngine) {
+            stableDiffusion = v
+        } else {
+            stableDiffusion = try c.decodeIfPresent(Bool.self, forKey: .bilderEngine)
+        }
 
         var decodedGPU: Double?
         if let gpu = try? c.decode(Double.self, forKey: .gpuPercent) {

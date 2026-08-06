@@ -49,10 +49,10 @@ final class VoiceService: NSObject, ObservableObject {
     private var ttsPendingBuffers = 0
     private let ttsGain: Float = 2.6
 
-    /// Quiet after speech / transcript pause before auto-send (fast).
-    private let silenceToEnd: TimeInterval = 0.26
-    private let transcriptStableToEnd: TimeInterval = 0.20
-    private let minSpeechSeconds: TimeInterval = 0.16
+    /// Wait a little longer before auto-send so dictation doesn't cut off mid-thought.
+    private let silenceToEnd: TimeInterval = 1.15
+    private let transcriptStableToEnd: TimeInterval = 0.95
+    private let minSpeechSeconds: TimeInterval = 0.30
     private let speechLevelFactor: CGFloat = 2.6
 
     var preferredVoiceIdentifier: String {
@@ -478,8 +478,8 @@ final class VoiceService: NSObject, ObservableObject {
         let transcriptStable = lastTranscriptChangeAt.map { now.timeIntervalSince($0) >= transcriptStableToEnd } ?? false
         let spokenLongEnough = speechStartAt.map { now.timeIntervalSince($0) >= minSpeechSeconds } ?? false
 
-        // Primary: transcript stopped changing (user paused) → send immediately
-        // Secondary: audio went quiet
+        // Primary: transcript stopped changing for a noticeable beat
+        // Secondary: audio went quiet long enough to feel intentional
         let silenceReady = quietFor >= silenceToEnd
         let shouldSend = force || (spokenLongEnough && (transcriptStable || silenceReady))
         guard shouldSend else { return }

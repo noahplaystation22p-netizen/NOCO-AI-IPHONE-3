@@ -59,7 +59,7 @@ final class SpeakSessionController: ObservableObject {
             try voice.startListening(autoEnd: true)
             HapticService.speakCue()
             statusLine = liveOk
-                ? "Live Activity an · Pause sendet sofort"
+                ? "Live Activity an · kurze Pause sendet"
                 : "Zuhören aktiv · Live Activity prüfen (Einstellungen → NOCO AI)"
             pushLiveActivity(force: true)
             // Second ensure — some devices need a follow-up update
@@ -111,7 +111,7 @@ final class SpeakSessionController: ObservableObject {
             pushLiveActivity(force: true)
             HapticService.soft()
         } else if isRunning {
-            statusLine = "Mic an — sprich, Pause sendet"
+            statusLine = "Mic an — sprich, kurze Pause sendet"
             scheduleResumeListening(after: 0.2)
             HapticService.medium()
         }

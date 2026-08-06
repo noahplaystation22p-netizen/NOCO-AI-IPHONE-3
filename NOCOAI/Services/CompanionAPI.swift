@@ -159,7 +159,7 @@ struct CompanionAPI {
             if http.statusCode == 403, isPairRequest {
                 throw CompanionAPIError.invalidPIN
             }
-            let message = parseErrorMessage(data: data) ?? "HTTP \(http.statusCode)"
+            var message = parseErrorMessage(data: data) ?? "HTTP \(http.statusCode)"
             if http.statusCode == 404 || message.lowercased().contains("unbekannte route") {
                 message = "Unbekannte Route — NOCO AI X am PC neu starten (Companion-Update)."
             }

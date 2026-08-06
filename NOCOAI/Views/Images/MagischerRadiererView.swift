@@ -138,9 +138,9 @@ struct MagischerRadiererView: View {
                             RoundedRectangle(cornerRadius: 20, style: .continuous)
                                 .stroke(
                                     AngularGradient(
-                                        colors: rainbowColors,
+                                        colors: rainbowColors.map { $0.opacity(maskPulse ? 0.85 : 0.45) },
                                         center: .center
-                                    ).opacity(maskPulse ? 0.7 : 0.35),
+                                    ),
                                     lineWidth: 2.5
                                 )
                                 .padding(8)

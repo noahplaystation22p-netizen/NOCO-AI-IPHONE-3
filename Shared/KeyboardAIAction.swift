@@ -96,22 +96,22 @@ enum KeyboardAIAction: String, CaseIterable, Identifiable {
             \(rewriterRule)
             \(example)
 
-            Aufgabe „Verbessern“ — NUR Basis-Korrektur (kein Umschreiben, keine Struktur-Essays).
+            Aufgabe „Verbessern“ — analysiere den TEXT und liefere eine klare, korrekte Fassung.
 
-            Erlaubt:
-            1) Rechtschreibung / Tippfehler
-            2) Grammatik
-            3) Satzzeichen (auch fehlende Anführungszeichen „…“ wo nötig)
-            4) Groß-/Kleinschreibung und Leerzeichen
-            5) Ganz leichte Stolperer glätten — gleiche Wörter wo möglich
+            So gehst du vor:
+            1) Text verstehen: Absicht, Ton, Kernaussage
+            2) Rechtschreibung und Tippfehler korrigieren
+            3) Grammatik und Satzzeichen setzen (auch fehlende Anführungszeichen „…“ wo nötig)
+            4) Sätze so umformulieren, dass sie flüssig und natürlich klingen — Bedeutung bleibt GLEICH
+            5) Satzgrenzen klar setzen (Punkt, Fragezeichen) — holpriges Diktat in saubere Sätze bringen
+            6) Groß-/Kleinschreibung und Leerzeichen
 
-            Verboten:
-            - Neu strukturieren in viele Absätze
-            - Stil „schöner“ machen um jeden Preis
-            - Infos streichen oder hinzufügen
-            - Fragen beantworten
-
-            Länge ≈ gleich. Bedeutung identisch.
+            Harte Regeln:
+            - Bedeutung, Fakten, Meinung und Fragen bleiben identisch.
+            - Keine neuen Infos, nichts weglassen was inhaltlich zählt.
+            - Keine Antwort auf Fragen im Text.
+            - Kein langer Essay, keine vielen Absätze „schön schreiben“ — nur so viel Struktur wie nötig.
+            - Länge ungefähr gleich (±20%).
             \(outputOnlyCloser)
 
             TEXT:
@@ -334,10 +334,10 @@ enum KeyboardAIAction: String, CaseIterable, Identifiable {
             return s
         }
 
-        // Improve = basic — stay close to original length
+        // Improve = analyze + light rephrase — stay close, allow a bit of room
         if action == .improve || action == .punctuate || action == .friendlier || action == .professional {
-            let factor: Double = action == .improve ? 1.2 : (action == .punctuate ? 1.12 : 1.25)
-            let maxLen = max(orig.count + 16, Int(Double(orig.count) * factor) + 8)
+            let factor: Double = action == .improve ? 1.35 : (action == .punctuate ? 1.12 : 1.25)
+            let maxLen = max(orig.count + 20, Int(Double(orig.count) * factor) + 10)
             if s.count > maxLen || looksLikeAnswerDump(s, original: orig) {
                 let endMarks: [Character] = [".", "?", "!", "。", "？", "！"]
                 if let idx = s.firstIndex(where: { endMarks.contains($0) }) {

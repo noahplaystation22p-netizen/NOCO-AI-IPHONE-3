@@ -45,12 +45,64 @@ struct KeyboardCustomizationView: View {
                 Text("So erscheinen deine Chips auf der Tastatur. Tippe „Bearbeiten“ zum Sortieren.")
             }
 
-            Section("Reihenfolge") {
+            Section {
                 ForEach(order, id: \.self) { token in
                     chipRow(for: token)
                 }
                 .onMove(perform: move)
                 .onDelete(perform: deleteFromOrder)
+            } header: {
+                Text("Auf der Tastatur")
+            } footer: {
+                Text("Wischen zum Entfernen · Bearbeiten zum Sortieren. Entfernte Chips bleiben unten verfügbar.")
+            }
+
+            if !availableBuiltinTokens.isEmpty || !availableCustomItems.isEmpty {
+                Section {
+                    ForEach(availableBuiltinTokens, id: \.self) { token in
+                        if let action = KeyboardAIAction(rawValue: token) {
+                            Button {
+                                addToken(token)
+                            } label: {
+                                Label {
+                                    HStack {
+                                        Text(action.title)
+                                        Spacer()
+                                        Image(systemName: "plus.circle.fill")
+                                            .foregroundStyle(NOCOAITheme.accent)
+                                    }
+                                } icon: {
+                                    Image(systemName: action.systemImage)
+                                }
+                            }
+                        }
+                    }
+                    ForEach(availableCustomItems) { item in
+                        Button {
+                            addToken("custom:\(item.id)")
+                        } label: {
+                            Label {
+                                HStack {
+                                    VStack(alignment: .leading, spacing: 2) {
+                                        Text(item.name)
+                                        Text("Eigener Shortcut")
+                                            .font(.caption2)
+                                            .foregroundStyle(.secondary)
+                                    }
+                                    Spacer()
+                                    Image(systemName: "plus.circle.fill")
+                                        .foregroundStyle(NOCOAITheme.accent)
+                                }
+                            } icon: {
+                                Image(systemName: item.systemImage)
+                            }
+                        }
+                    }
+                } header: {
+                    Text("Verfügbar — tippen zum Hinzufügen")
+                } footer: {
+                    Text("Hier landen entfernte Chips. Tippen fügt sie wieder auf die Tastatur.")
+                }
             }
 
             Section {
@@ -69,11 +121,11 @@ struct KeyboardCustomizationView: View {
             } header: {
                 Text("Eigene KI-Shortcuts")
             } footer: {
-                Text("Name + Prompt. Tippen auf der Tastatur führt die Anweisung am markierten Text aus — z. B. Großbuchstaben, Tabelle, Liste, Kommas weg.")
+                Text("Name + Prompt. Tippen auf der Tastatur führt die Anweisung am markierten Text aus.")
             }
 
             if !customs.isEmpty {
-                Section("Deine Shortcuts") {
+                Section("Deine Shortcuts verwalten") {
                     ForEach(customs) { item in
                         Button {
                             editing = item
@@ -104,12 +156,14 @@ struct KeyboardCustomizationView: View {
                         }
                         .swipeActions {
                             Button(role: .destructive) {
-                                deleteCustom(id: item.id)
+                                deleteCustomPermanently(id: item.id)
                             } label: {
-                                Label("Löschen", systemImage: "trash")
+                                Label("Endgültig löschen", systemImage: "trash")
                             }
                         }
                     }
+                } footer: {
+                    Text("„Endgültig löschen“ entfernt den Shortcut komplett. Zum nur Ausblenden: in „Auf der Tastatur“ wischen.")
                 }
             }
 
@@ -130,7 +184,7 @@ struct KeyboardCustomizationView: View {
                 .disabled(savedFlash)
                 .tint(savedFlash ? NOCOAITheme.success : NOCOAITheme.accent)
             } footer: {
-                Text("Danach kurz Globus tippen, damit die Chips neu laden. Vollzugriff muss an sein.")
+                Text("Speichern schreibt in die App-Group — bleibt auch, wenn du die Tastatur entfernst und neu hinzufügst. Danach Tastatur einmal wechseln (Globus), damit Chips neu laden.")
             }
         }
         .navigationTitle("Tastatur anpassen")
@@ -161,8 +215,16 @@ struct KeyboardCustomizationView: View {
         .onAppear {
             order = KeyboardChipPreferences.chipOrder
             customs = KeyboardChipPreferences.customShortcuts
-            ensureBuiltinsInOrder()
+            sanitizeOrder()
         }
+    }
+
+    private var availableBuiltinTokens: [String] {
+        KeyboardChipPreferences.availableBuiltinTokens(order: order)
+    }
+
+    private var availableCustomItems: [KeyboardCustomShortcut] {
+        KeyboardChipPreferences.availableCustoms(order: order, customs: customs)
     }
 
     private var previewStrip: some View {
@@ -266,19 +328,20 @@ struct KeyboardCustomizationView: View {
     }
 
     private func deleteFromOrder(at offsets: IndexSet) {
-        for index in offsets {
-            let token = order[index]
-            if token.hasPrefix("custom:") {
-                let id = String(token.dropFirst("custom:".count))
-                customs.removeAll { $0.id == id }
-            }
-        }
+        // Only remove from toolbar — builtins stay available; customs stay until permanently deleted
         order.remove(atOffsets: offsets)
         savedFlash = false
         HapticService.soft()
     }
 
-    private func deleteCustom(id: String) {
+    private func addToken(_ token: String) {
+        guard !order.contains(token) else { return }
+        order.append(token)
+        savedFlash = false
+        HapticService.selection()
+    }
+
+    private func deleteCustomPermanently(id: String) {
         customs.removeAll { $0.id == id }
         order.removeAll { $0 == "custom:\(id)" }
         savedFlash = false
@@ -298,25 +361,23 @@ struct KeyboardCustomizationView: View {
         savedFlash = false
     }
 
-    private func ensureBuiltinsInOrder() {
-        var next = order
-        for id in KeyboardChipPreferences.defaultOrder where !next.contains(id) {
-            next.append(id)
-        }
+    /// Drop invalid tokens only — never force-readd removed chips.
+    private func sanitizeOrder() {
         let customIds = Set(customs.map(\.id))
-        next = next.filter { token in
+        order = order.filter { token in
             if token.hasPrefix("custom:") {
                 return customIds.contains(String(token.dropFirst("custom:".count)))
             }
             return KeyboardAIAction(rawValue: token) != nil
         }
-        order = next
+        if order.isEmpty {
+            order = KeyboardChipPreferences.defaultOrder
+        }
     }
 
     private func save() {
-        ensureBuiltinsInOrder()
+        sanitizeOrder()
         KeyboardChipPreferences.save(order: order, customs: customs)
-        KeyboardChipPreferences.pushToKeyboard()
         CompanionCredentials.refreshFromDisk()
         HapticService.success()
         withAnimation {

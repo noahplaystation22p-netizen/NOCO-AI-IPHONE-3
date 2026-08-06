@@ -139,7 +139,20 @@ enum KeyboardChipPreferences {
 
     // MARK: - Defaults
 
+    /// Lean default toolbar — rest can be added in „Tastatur anpassen“.
     static var defaultOrder: [String] {
+        [
+            KeyboardAIAction.improve.rawValue,
+            KeyboardAIAction.cleanup.rawValue,
+            KeyboardAIAction.complete.rawValue,
+            KeyboardAIAction.shorten.rawValue,
+            KeyboardAIAction.longer.rawValue,
+            KeyboardAIAction.list.rawValue,
+            KeyboardAIAction.answer.rawValue
+        ]
+    }
+
+    static var allBuiltinTokens: [String] {
         KeyboardAIAction.allCases.map(\.rawValue)
     }
 
@@ -187,7 +200,7 @@ enum KeyboardChipPreferences {
         }
     }
 
-    /// Chips shown on the keyboard toolbar (enabled order).
+    /// Chips shown on the keyboard toolbar — exactly the saved order (no force-readd).
     static func resolvedChips() -> [KeyboardToolbarChip] {
         refreshFromDisk()
         let customs = Dictionary(uniqueKeysWithValues: customShortcuts.map { ($0.id, $0) })
@@ -210,40 +223,30 @@ enum KeyboardChipPreferences {
             }
         }
 
-        // Append new built-ins missing from older saved orders (e.g. Satz / Liste)
-        for action in KeyboardAIAction.allCases {
-            let key = "builtin:\(action.rawValue)"
-            if !seen.contains(key) {
-                let insertAfter: KeyboardAIAction? = {
-                    switch action {
-                    case .cleanup: return .improve
-                    case .complete: return .cleanup
-                    case .list: return .complete
-                    default: return nil
-                    }
-                }()
-                if let after = insertAfter,
-                   let idx = out.firstIndex(where: {
-                       if case .builtin(let a) = $0 { return a == after } else { return false }
-                   }) {
-                    out.insert(.builtin(action), at: idx + 1)
-                } else {
-                    out.append(.builtin(action))
-                }
-                seen.insert(key)
+        // Empty/broken → lean defaults (user can add more in Einstellungen)
+        if out.isEmpty {
+            out = defaultOrder.compactMap { token in
+                guard let action = KeyboardAIAction(rawValue: token) else { return nil }
+                return .builtin(action)
             }
         }
-
-        // If order empty/broken, fall back to all built-ins
-        if out.isEmpty {
-            out = KeyboardAIAction.allCases.map { .builtin($0) }
-        }
         return out
+    }
+
+    /// Built-ins not currently on the toolbar (can be added again).
+    static func availableBuiltinTokens(order: [String]) -> [String] {
+        allBuiltinTokens.filter { !order.contains($0) }
+    }
+
+    /// Custom shortcuts not currently on the toolbar.
+    static func availableCustoms(order: [String], customs: [KeyboardCustomShortcut]) -> [KeyboardCustomShortcut] {
+        customs.filter { !order.contains("custom:\($0.id)") }
     }
 
     static func save(order: [String], customs: [KeyboardCustomShortcut]) {
         chipOrder = order
         customShortcuts = customs
+        pushToKeyboard()
     }
 
     static func addCustom(_ shortcut: KeyboardCustomShortcut) {

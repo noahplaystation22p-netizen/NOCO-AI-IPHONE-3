@@ -69,22 +69,23 @@ struct KeyboardLayoutView: View {
     }
 
     private func bottomRow(leftTitle: String) -> some View {
-        HStack(spacing: 6) {
-            ModifierKey(title: leftTitle, width: 44) {
+        HStack(spacing: 5) {
+            ModifierKey(title: leftTitle, width: 40) {
                 model.toggleNumbers()
             }
-            // Period key — hold & scrub for comma and other punctuation (replaces language globe)
-            PunctuationKey { inserted in
+            // Period key — hold & scrub for comma and other punctuation
+            PunctuationKey(width: 34) { inserted in
                 model.insert(inserted)
             }
             SpaceKey(
                 onTap: { model.space() },
                 onCursorMove: { model.moveCursor(by: $0) }
             )
-            ModifierKey(symbol: "bubble.left.fill", width: 44) {
+            // Fragen stays on the bottom row, but narrower so space can grow
+            ModifierKey(symbol: "bubble.left.fill", width: 36) {
                 model.toggleAskPanel()
             }
-            ModifierKey(title: "return", width: 70, prominent: true) {
+            ModifierKey(title: "return", width: 62, prominent: true) {
                 model.returnKey()
             }
         }
@@ -340,6 +341,7 @@ private struct LetterKey: View {
 
 /// Fixed-width `.` key with long-press scrub for `, ; : ! ? …` etc.
 private struct PunctuationKey: View {
+    var width: CGFloat = 40
     var onInsert: (String) -> Void
 
     private let marks = [".", ",", ";", ":", "!", "?", "…", "·", "—", "'", "\"", "„", "“", "(", ")", "@"]
@@ -353,7 +355,7 @@ private struct PunctuationKey: View {
     var body: some View {
         Text(".")
             .font(.system(size: 22, weight: .semibold, design: .rounded))
-            .frame(width: 40, height: 46)
+            .frame(width: width, height: 46)
             .foregroundStyle(.white.opacity(0.95))
             .background(
                 RoundedRectangle(cornerRadius: 9, style: .continuous)

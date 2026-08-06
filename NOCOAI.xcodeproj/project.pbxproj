@@ -16,8 +16,8 @@
 		KBD0000010000000000000006 /* KeyboardAIAction.swift in Sources */ = {isa = PBXBuildFile; fileRef = KBD0000020000000000000011 /* KeyboardAIAction.swift */; };
 		KBD0000010000000000000007 /* KeyboardAIClient.swift in Sources */ = {isa = PBXBuildFile; fileRef = KBD0000020000000000000012 /* KeyboardAIClient.swift */; };
 		KBD000001000000000000000A /* KeyboardChipPreferences.swift in Sources */ = {isa = PBXBuildFile; fileRef = KBD0000020000000000000013 /* KeyboardChipPreferences.swift */; };
-		NA0000010000000000000062 /* KeyboardChipPreferences.swift in Sources */ = {isa = PBXBuildFile; fileRef = KBD0000020000000000000013 /* KeyboardChipPreferences.swift */; };
-		NA0000010000000000000063 /* KeyboardCustomizationView.swift in Sources */ = {isa = PBXBuildFile; fileRef = NA0000020000000000000090 /* KeyboardCustomizationView.swift */; };
+		NA0000010000000000000071 /* KeyboardChipPreferences.swift in Sources */ = {isa = PBXBuildFile; fileRef = KBD0000020000000000000013 /* KeyboardChipPreferences.swift */; };
+		NA0000010000000000000072 /* KeyboardCustomizationView.swift in Sources */ = {isa = PBXBuildFile; fileRef = NA0000020000000000000090 /* KeyboardCustomizationView.swift */; };
 		KBD0000010000000000000008 /* KeychainService.swift in Sources */ = {isa = PBXBuildFile; fileRef = NA0000020000000000000004 /* KeychainService.swift */; };
 		KBD0000010000000000000009 /* NOCOAIKeyboard.appex in Embed Foundation Extensions */ = {isa = PBXBuildFile; fileRef = KBD0000030000000000000001 /* NOCOAIKeyboard.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
 		NA0000010000000000000060 /* CompanionCredentials.swift in Sources */ = {isa = PBXBuildFile; fileRef = KBD0000020000000000000010 /* CompanionCredentials.swift */; };

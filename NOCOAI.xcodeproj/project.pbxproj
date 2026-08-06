@@ -59,7 +59,6 @@
 		CC0000000000000000000006 /* ComputerControlController.swift in Sources */ = {isa = PBXBuildFile; fileRef = CC0000000000000000000005 /* ComputerControlController.swift */; };
 		CC0000000000000000000004 /* ComputerControlView.swift in Sources */ = {isa = PBXBuildFile; fileRef = CC0000000000000000000003 /* ComputerControlView.swift */; };
 		NA00000100000000000000A4 /* NOCOIntelligenceVisuals.swift in Sources */ = {isa = PBXBuildFile; fileRef = NA00000200000000000000A4 /* NOCOIntelligenceVisuals.swift */; };
-		LG0000010000000000000001 /* LiquidGlassTabBar.swift in Sources */ = {isa = PBXBuildFile; fileRef = LG0000020000000000000001 /* LiquidGlassTabBar.swift */; };
 		NA00000100000000000000Q1 /* IntelligenceQuickBar.swift in Sources */ = {isa = PBXBuildFile; fileRef = NA00000200000000000000Q1 /* IntelligenceQuickBar.swift */; };
 		CM0000010000000000000001 /* ChatMediaHelpers.swift in Sources */ = {isa = PBXBuildFile; fileRef = CM0000020000000000000001 /* ChatMediaHelpers.swift */; };
 		PT0000010000000000000001 /* PlusToolsPanel.swift in Sources */ = {isa = PBXBuildFile; fileRef = PT0000020000000000000001 /* PlusToolsPanel.swift */; };
@@ -194,7 +193,6 @@
 		CC0000000000000000000005 /* ComputerControlController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ComputerControlController.swift; sourceTree = "<group>"; };
 		CC0000000000000000000003 /* ComputerControlView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ComputerControlView.swift; sourceTree = "<group>"; };
 		NA00000200000000000000A4 /* NOCOIntelligenceVisuals.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NOCOIntelligenceVisuals.swift; sourceTree = "<group>"; };
-		LG0000020000000000000001 /* LiquidGlassTabBar.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LiquidGlassTabBar.swift; sourceTree = "<group>"; };
 		NA00000200000000000000Q1 /* IntelligenceQuickBar.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = IntelligenceQuickBar.swift; sourceTree = "<group>"; };
 		CM0000020000000000000001 /* ChatMediaHelpers.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ChatMediaHelpers.swift; sourceTree = "<group>"; };
 		PT0000020000000000000001 /* PlusToolsPanel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PlusToolsPanel.swift; sourceTree = "<group>"; };
@@ -411,7 +409,6 @@
 				NA0000020000000000000026 /* SyncBadge.swift */,
 				NA000002000000000000002D /* IntelligenceEffects.swift */,
 				NA00000200000000000000A4 /* NOCOIntelligenceVisuals.swift */,
-				LG0000020000000000000001 /* LiquidGlassTabBar.swift */,
 				NA00000200000000000000Q1 /* IntelligenceQuickBar.swift */,
 				CM0000020000000000000001 /* ChatMediaHelpers.swift */,
 				ST0000020000000000000001 /* SelectableMessageText.swift */,
@@ -786,7 +783,6 @@
 				CC0000000000000000000006 /* ComputerControlController.swift in Sources */,
 				CC0000000000000000000004 /* ComputerControlView.swift in Sources */,
 				NA00000100000000000000A4 /* NOCOIntelligenceVisuals.swift in Sources */,
-				LG0000010000000000000001 /* LiquidGlassTabBar.swift in Sources */,
 				NA00000100000000000000Q1 /* IntelligenceQuickBar.swift in Sources */,
 				CM0000010000000000000001 /* ChatMediaHelpers.swift in Sources */,
 				PT0000010000000000000001 /* PlusToolsPanel.swift in Sources */,

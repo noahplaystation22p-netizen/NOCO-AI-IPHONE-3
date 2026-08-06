@@ -2,40 +2,6 @@ import Foundation
 import UIKit
 import UniformTypeIdentifiers
 
-/// How tapping a chat bubble copies text.
-enum ChatCopyMode: String, CaseIterable, Identifiable {
-    /// Tap = copy entire message as plain text.
-    case wholeMessage = "whole"
-    /// Tap does nothing special — use the blue text-selection handles.
-    case textSelection = "select"
-
-    var id: String { rawValue }
-
-    var title: String {
-        switch self {
-        case .wholeMessage: return "Tippen kopiert alles"
-        case .textSelection: return "Langer Druck markiert den Text"
-        }
-    }
-
-    var subtitle: String {
-        switch self {
-        case .wholeMessage: return "Ein Tipp auf die Blase kopiert den Klartext"
-        case .textSelection: return "Gedrückthalten markiert Wörter — wie in iOS-Nachrichten"
-        }
-    }
-
-    static var current: ChatCopyMode {
-        get {
-            let raw = UserDefaults.standard.string(forKey: "nocoai.chat.copyMode") ?? ChatCopyMode.textSelection.rawValue
-            return ChatCopyMode(rawValue: raw) ?? .textSelection
-        }
-        set {
-            UserDefaults.standard.set(newValue.rawValue, forKey: "nocoai.chat.copyMode")
-        }
-    }
-}
-
 enum MessageClipboard {
     /// Strip markdown links, bare media URLs and UUID junk — paste as real readable text.
     static func plainText(from raw: String) -> String {

@@ -12,7 +12,6 @@ struct SettingsView: View {
     @State private var nameDraft = ""
     /// Skip auto-preview when Settings first loads / binds the saved voice.
     @State private var voicePreviewArmed = false
-    @State private var copyMode: ChatCopyMode = ChatCopyMode.current
 
     var body: some View {
             List {
@@ -21,25 +20,6 @@ struct SettingsView: View {
                     LabeledContent("Port", value: String(connection.serverPort))
                     LabeledContent("API", value: connection.baseURLString)
                     LabeledContent("Status", value: connection.isOnline ? "Online" : "Offline")
-                }
-
-                Section {
-                    Picker("Beim Tippen", selection: $copyMode) {
-                        ForEach(ChatCopyMode.allCases) { mode in
-                            Text(mode.title).tag(mode)
-                        }
-                    }
-                    .onChange(of: copyMode) { _, newValue in
-                        ChatCopyMode.current = newValue
-                        HapticService.modeChange()
-                    }
-                    Text(copyMode.subtitle)
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                } header: {
-                    Text("Chat kopieren")
-                } footer: {
-                    Text("„Langer Druck markiert den Text“ lässt dich Wörter in der Blase auswählen. Der Kopieren-Button übernimmt weiterhin die ganze Nachricht als Klartext.")
                 }
 
                 Section {
@@ -276,7 +256,6 @@ struct SettingsView: View {
                     autoSpeak = UserDefaults.standard.bool(forKey: "nocoai.autoSpeak")
                 }
                 voiceId = UserDefaults.standard.string(forKey: "nocoai.voiceId") ?? ""
-                copyMode = ChatCopyMode.current
                 voices = AVSpeechSynthesisVoice.speechVoices()
                     .filter { $0.language.hasPrefix("de") }
                     .sorted { qualityRank($0) > qualityRank($1) }

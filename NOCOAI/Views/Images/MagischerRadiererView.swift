@@ -106,6 +106,7 @@ struct MagischerRadiererView: View {
         .animation(.spring(response: 0.45, dampingFraction: 0.82), value: isWorking)
         .navigationTitle("Magischer Radierer")
         .navigationBarTitleDisplayMode(.inline)
+        .toolbar(.hidden, for: .tabBar)
         .onAppear { connection.hideMainTabBar = true }
         .onDisappear { connection.hideMainTabBar = false }
         .photosPicker(isPresented: $showLibrary, selection: $photoItem, matching: .images)

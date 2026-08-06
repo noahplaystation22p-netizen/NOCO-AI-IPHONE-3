@@ -107,10 +107,16 @@ struct ChatInputBar: View {
             }
         }
         .padding(.horizontal, 14)
-        .padding(.vertical, 8)
-        .background(.ultraThinMaterial)
-        .animation(.spring(response: 0.35, dampingFraction: 0.84), value: connection.chat.workPhase)
-        .animation(.spring(response: 0.35, dampingFraction: 0.84), value: connection.chat.pendingAgentIntake != nil)
+        .padding(.top, 12)
+        .padding(.bottom, 6)
+        .background {
+            ZStack {
+                Rectangle().fill(.ultraThinMaterial)
+                IntelligenceBreathingAura()
+                    .opacity(0.35)
+                    .allowsHitTesting(false)
+            }
+        }
         .sheet(isPresented: $showPlus) {
             PlusToolsPanel(
                 onCamera: { showCamera = true },
@@ -121,6 +127,8 @@ struct ChatInputBar: View {
             )
             .environmentObject(connection)
         }
+        .animation(.spring(response: 0.35, dampingFraction: 0.84), value: connection.chat.workPhase)
+        .animation(.spring(response: 0.35, dampingFraction: 0.84), value: connection.chat.pendingAgentIntake != nil)
         .photosPicker(isPresented: $showLibrary, selection: $photoItem, matching: .images)
         .onChange(of: photoItem) { _, item in
             guard let item else { return }
@@ -164,31 +172,39 @@ struct ChatInputBar: View {
     }
 
     private var plusButton: some View {
-        Image(systemName: "plus.circle.fill")
-            .font(.system(size: 32))
-            .foregroundStyle(NOCOAITheme.accent)
-            .shadow(color: NOCOAITheme.glowPrimary.opacity(0.35), radius: 6)
-            .symbolEffect(.bounce, value: showPlus || showQuickPicker)
-            .background(
-                GeometryReader { g in
-                    Color.clear.preference(
-                        key: PlusAnchorKey.self,
-                        value: CGPoint(
-                            x: g.frame(in: .global).midX,
-                            y: g.frame(in: .global).midY
-                        )
+        Button {
+            guard !suppressPlusTap, !showQuickPicker else { return }
+            HapticService.open()
+            showPlus = true
+        } label: {
+            Image(systemName: "plus.circle.fill")
+                .font(.system(size: 32))
+                .foregroundStyle(NOCOAITheme.accent)
+                .shadow(color: NOCOAITheme.glowPrimary.opacity(0.35), radius: 6)
+                .symbolEffect(.bounce, value: showPlus || showQuickPicker)
+        }
+        .buttonStyle(.plain)
+        .background(
+            GeometryReader { g in
+                Color.clear.preference(
+                    key: PlusAnchorKey.self,
+                    value: CGPoint(
+                        x: g.frame(in: .global).midX,
+                        y: g.frame(in: .global).midY
                     )
-                }
-            )
-            .onPreferenceChange(PlusAnchorKey.self) { plusAnchor = $0 }
-            .contentShape(Circle().inset(by: -8))
-            .gesture(plusGesture)
-            .accessibilityLabel("Werkzeuge")
-            .accessibilityHint("Tippen für Menü, gedrückt halten für Schnellauswahl")
+                )
+            }
+        )
+        .onPreferenceChange(PlusAnchorKey.self) { plusAnchor = $0 }
+        .contentShape(Circle().inset(by: -8))
+        .simultaneousGesture(plusGesture)
+        .accessibilityLabel("Werkzeuge")
+        .accessibilityHint("Tippen für detailliertes Menü, gedrückt halten für Schnellauswahl")
     }
 
+    /// Long-press only — tap opens the detailed Werkzeuge sheet.
     private var plusGesture: some Gesture {
-        LongPressGesture(minimumDuration: 0.32)
+        LongPressGesture(minimumDuration: 0.34)
             .sequenced(before: DragGesture(minimumDistance: 0, coordinateSpace: .global))
             .onChanged { value in
                 switch value {
@@ -210,21 +226,16 @@ struct ChatInputBar: View {
             }
             .onEnded { _ in
                 let selected = PlusQuickPickerWindow.currentHighlight
-                PlusQuickPickerWindow.hide()
+                PlusQuickPickerWindow.hide(animated: true)
                 showQuickPicker = false
                 if let selected {
                     HapticService.open()
                     performQuickAction(selected)
                 }
-                DispatchQueue.main.asyncAfter(deadline: .now() + 0.4) {
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.45) {
                     suppressPlusTap = false
                 }
             }
-            .exclusively(before: TapGesture().onEnded {
-                guard !suppressPlusTap, !showQuickPicker else { return }
-                HapticService.open()
-                showPlus = true
-            })
     }
 
     private func performQuickAction(_ action: PlusQuickAction) {
@@ -269,12 +280,17 @@ struct ChatInputBar: View {
                                 center: .center
                             )
                             : AngularGradient(
-                                colors: [Color.primary.opacity(0.08), Color.primary.opacity(0.08)],
+                                colors: [
+                                    NOCOAITheme.glowPrimary.opacity(0.22),
+                                    Color.primary.opacity(0.08),
+                                    NOCOAITheme.glowSecondary.opacity(0.18)
+                                ],
                                 center: .center
                             ),
-                        lineWidth: focused || connection.chat.isSending ? 1.3 : 1
+                        lineWidth: focused || connection.chat.isSending ? 1.4 : 1
                     )
             )
+            .shadow(color: NOCOAITheme.glowPrimary.opacity(focused ? 0.28 : 0.08), radius: focused ? 14 : 6, y: 2)
     }
 
     private func send() {

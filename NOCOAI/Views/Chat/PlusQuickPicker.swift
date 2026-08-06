@@ -52,10 +52,14 @@ enum PlusQuickPickerWindow {
     private static var host: UIWindow?
     private static var model = PlusQuickPickerModel()
 
+    /// Vertical lift above the + button (higher = sits further up).
+    static let liftAboveAnchor: CGFloat = 248
+
     static func show(anchor: CGPoint, highlight: PlusQuickAction = .camera) {
         model.highlighted = highlight
         model.anchor = anchor
         model.finger = anchor
+        model.visible = true
         guard host == nil else { return }
         guard let scene = UIApplication.shared.connectedScenes
             .compactMap({ $0 as? UIWindowScene })
@@ -86,9 +90,29 @@ enum PlusQuickPickerWindow {
 
     static var currentHighlight: PlusQuickAction? { model.highlighted }
 
-    static func hide() {
+    static func hide(animated: Bool = true) {
+        guard host != nil else {
+            model.visible = false
+            model.highlighted = .camera
+            model.finger = nil
+            return
+        }
+        if animated {
+            withAnimation(.spring(response: 0.32, dampingFraction: 0.88)) {
+                model.visible = false
+            }
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.28) {
+                tearDown()
+            }
+        } else {
+            tearDown()
+        }
+    }
+
+    private static func tearDown() {
         host?.isHidden = true
         host = nil
+        model.visible = false
         model.highlighted = .camera
         model.finger = nil
     }
@@ -99,16 +123,24 @@ final class PlusQuickPickerModel: ObservableObject {
     @Published var highlighted: PlusQuickAction? = .camera
     @Published var anchor: CGPoint = .zero
     @Published var finger: CGPoint?
+    @Published var visible = false
 
     private let rowHeight: CGFloat = 52
     private let actions = PlusQuickAction.allCases
+
+    func menuCenterY(in height: CGFloat) -> CGFloat {
+        let ideal = anchor.y - PlusQuickPickerWindow.liftAboveAnchor
+        let half = (CGFloat(actions.count) * rowHeight + 48) / 2
+        return min(max(half + 24, ideal), height - half - 24)
+    }
 
     func recomputeHighlight() {
         guard let finger else {
             if highlighted == nil { highlighted = actions.first }
             return
         }
-        let menuCenterY = max(180, anchor.y - 210)
+        // Approximate using same lift as overlay (screen coords).
+        let menuCenterY = max(160, anchor.y - PlusQuickPickerWindow.liftAboveAnchor)
         let menuTop = menuCenterY - (CGFloat(actions.count) * rowHeight + 28) / 2
         let relative = finger.y - menuTop - 14
         let index = Int(relative / (rowHeight + 4))
@@ -130,8 +162,9 @@ struct PlusQuickPickerOverlay: View {
     var body: some View {
         GeometryReader { geo in
             ZStack {
-                Color.black.opacity(0.28)
+                Color.black.opacity(model.visible ? 0.28 : 0)
                     .ignoresSafeArea()
+                    .animation(.easeOut(duration: 0.22), value: model.visible)
 
                 VStack(spacing: 4) {
                     ForEach(actions) { action in
@@ -140,6 +173,7 @@ struct PlusQuickPickerOverlay: View {
                                 .font(.system(size: 18, weight: .semibold))
                                 .foregroundStyle(model.highlighted == action ? .white : action.tint)
                                 .frame(width: 28)
+                                .symbolEffect(.bounce, value: model.highlighted == action)
                             Text(action.title)
                                 .font(.subheadline.weight(.semibold))
                                 .foregroundStyle(model.highlighted == action ? .white : .primary)
@@ -161,14 +195,29 @@ struct PlusQuickPickerOverlay: View {
                 .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 22, style: .continuous))
                 .overlay(
                     RoundedRectangle(cornerRadius: 22, style: .continuous)
-                        .stroke(Color.white.opacity(0.18), lineWidth: 1)
+                        .stroke(
+                            AngularGradient(
+                                colors: [
+                                    NOCOAITheme.glowPrimary.opacity(0.55),
+                                    NOCOAITheme.glowSecondary.opacity(0.25),
+                                    NOCOAITheme.glowAccent.opacity(0.4),
+                                    NOCOAITheme.glowPrimary.opacity(0.55)
+                                ],
+                                center: .center
+                            ),
+                            lineWidth: 1.2
+                        )
                 )
-                .shadow(color: .black.opacity(0.28), radius: 24, y: 10)
+                .shadow(color: NOCOAITheme.glowPrimary.opacity(0.22), radius: 20, y: 8)
                 .frame(width: 240)
+                .scaleEffect(model.visible ? 1 : 0.86)
+                .opacity(model.visible ? 1 : 0)
+                .offset(y: model.visible ? 0 : 28)
                 .position(
                     x: min(max(model.anchor.x, 140), max(140, geo.size.width - 140)),
-                    y: max(180, model.anchor.y - 210)
+                    y: model.menuCenterY(in: geo.size.height)
                 )
+                .animation(.spring(response: 0.34, dampingFraction: 0.82), value: model.visible)
             }
             .onChange(of: model.finger?.y) { _, _ in
                 model.recomputeHighlight()

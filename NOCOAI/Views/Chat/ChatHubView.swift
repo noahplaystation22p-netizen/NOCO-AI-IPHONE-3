@@ -247,20 +247,34 @@ struct ChatHubView: View {
     }
 
     private var emptyState: some View {
-        VStack(spacing: 14) {
-            Image(systemName: "sparkles")
-                .font(.system(size: 34, weight: .light))
-                .foregroundStyle(NOCOAITheme.accent)
+        ZStack {
+            FloatingIntelligenceDots(count: 10)
+                .opacity(0.2)
+                .frame(height: 280)
+            VStack(spacing: 14) {
+                ZStack {
+                    IntelligenceOrbitRings(size: 96)
+                        .opacity(0.55)
+                    Image(systemName: "sparkles")
+                        .font(.system(size: 34, weight: .light))
+                        .foregroundStyle(NOCOAITheme.accent)
+                        .symbolEffect(.variableColor.iterative, options: .repeating)
+                }
                 .padding(.top, 48)
-            Text("Frag NOCO")
-                .font(.title3.weight(.semibold))
-            Text(connection.isOnline
-                ? "Tippe unten — oder öffne + für Kamera, Agent und mehr."
-                : "Zuerst Companion verbinden.")
-                .font(.subheadline)
-                .multilineTextAlignment(.center)
-                .foregroundStyle(NOCOAITheme.secondaryText(for: scheme))
-                .padding(.horizontal, 32)
+                Text("Frag NOCO")
+                    .font(.title3.weight(.semibold))
+                Text(connection.isOnline
+                    ? "Tippe unten — oder öffne + für Kamera, Agent und mehr."
+                    : "Zuerst Companion verbinden.")
+                    .font(.subheadline)
+                    .multilineTextAlignment(.center)
+                    .foregroundStyle(NOCOAITheme.secondaryText(for: scheme))
+                    .padding(.horizontal, 32)
+                IntelligenceWaveRibbon()
+                    .frame(height: 22)
+                    .padding(.horizontal, 40)
+                    .opacity(0.7)
+            }
         }
         .frame(maxWidth: .infinity)
     }

@@ -2,6 +2,7 @@ import SwiftUI
 import UIKit
 
 /// Native selectable text — long-press marks words; system Copy uses the selection only.
+/// Whole-message copy is only via the copy icon in the action row.
 struct SelectableMessageText: UIViewRepresentable {
     let text: String
     var textColor: UIColor
@@ -22,7 +23,6 @@ struct SelectableMessageText: UIViewRepresentable {
         tv.font = font
         tv.textColor = textColor
         tv.text = text
-        // Keep native edit menu so Copy uses the selected range, not the whole string.
         tv.delegate = context.coordinator
         return tv
     }
@@ -48,18 +48,20 @@ struct SelectableMessageText: UIViewRepresentable {
     final class Coordinator: NSObject, UITextViewDelegate {}
 }
 
-/// Avoids selecting the entire message on the first long-press.
+/// Long-press selects the word under the finger — never auto-selects the whole bubble.
 private final class MessageSelectTextView: UITextView {
     override func point(inside point: CGPoint, with event: UIEvent?) -> Bool {
-        // Let long-press selection start on the word under the finger.
         bounds.contains(point)
     }
 
     override func canPerformAction(_ action: Selector, withSender sender: Any?) -> Bool {
-        // Prefer copy of selection; hide "Select All" spam that leads to whole-message copy.
         if action == #selector(selectAll(_:)) {
-            return selectedRange.length == 0
+            return false
         }
         return super.canPerformAction(action, withSender: sender)
+    }
+
+    override func selectAll(_ sender: Any?) {
+        // Disabled — whole message is only via the copy icon.
     }
 }

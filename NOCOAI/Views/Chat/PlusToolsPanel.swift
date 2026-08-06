@@ -63,24 +63,47 @@ struct PlusToolsPanel: View {
                 }
                 .padding(18)
                 .opacity(appear ? 1 : 0)
-                .offset(y: appear ? 0 : 10)
+                .offset(y: appear ? 0 : 36)
+                .scaleEffect(appear ? 1 : 0.96)
             }
             .nocoBackground()
+            .overlay {
+                FloatingIntelligenceDots(count: 8)
+                    .opacity(0.16)
+                    .allowsHitTesting(false)
+            }
             .navigationTitle("Werkzeuge")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
-                    Button("Fertig") { dismiss() }
+                    Button("Fertig") {
+                        withAnimation(.spring(response: 0.32, dampingFraction: 0.9)) {
+                            appear = false
+                        }
+                        DispatchQueue.main.asyncAfter(deadline: .now() + 0.12) {
+                            dismiss()
+                        }
+                    }
                 }
             }
         }
         .presentationDetents([.height(560), .medium])
         .presentationDragIndicator(.visible)
         .presentationCornerRadius(28)
+        .presentationBackground {
+            ZStack {
+                Color.black.opacity(0.25)
+                IntelligenceAtmosphere()
+                    .opacity(0.45)
+            }
+        }
         .onAppear {
-            withAnimation(reduceMotion ? .easeOut(duration: 0.18) : .spring(response: 0.42, dampingFraction: 0.88)) {
+            withAnimation(reduceMotion ? .easeOut(duration: 0.18) : .spring(response: 0.42, dampingFraction: 0.86)) {
                 appear = true
             }
+        }
+        .onDisappear {
+            appear = false
         }
     }
 

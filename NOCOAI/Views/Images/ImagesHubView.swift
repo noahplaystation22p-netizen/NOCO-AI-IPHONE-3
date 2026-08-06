@@ -35,15 +35,6 @@ struct ImagesHubView: View {
 
                     createCard
 
-                    NavigationLink(isActive: $openEraser) {
-                        MagischerRadiererView()
-                            .environmentObject(connection)
-                    } label: {
-                        EmptyView()
-                    }
-                    .frame(width: 0, height: 0)
-                    .hidden()
-
                     Button {
                         HapticService.open()
                         openEraser = true
@@ -86,6 +77,10 @@ struct ImagesHubView: View {
                         )
                     }
                     .buttonStyle(IntelligencePressStyle(haptic: { HapticService.open() }))
+                    .navigationDestination(isPresented: $openEraser) {
+                        MagischerRadiererView()
+                            .environmentObject(connection)
+                    }
 
                     resultCard
                     galleryCard

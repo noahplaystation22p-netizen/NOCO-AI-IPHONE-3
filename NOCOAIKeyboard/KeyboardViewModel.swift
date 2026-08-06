@@ -14,6 +14,7 @@ final class KeyboardViewModel: ObservableObject {
     @Published var showIntelligenceBurst = false
     @Published var animationPhase: AnimationPhase = .idle
     @Published var overlayTitle = "…"
+    @Published var toolbarChips: [KeyboardToolbarChip] = KeyboardChipPreferences.resolvedChips()
 
     enum AnimationPhase: Equatable {
         case idle, thinking, writing, success
@@ -38,6 +39,8 @@ final class KeyboardViewModel: ObservableObject {
 
     func refreshAccess() {
         CompanionCredentials.refreshFromDisk()
+        KeyboardChipPreferences.refreshFromDisk()
+        toolbarChips = KeyboardChipPreferences.resolvedChips()
         hasFullAccess = controller?.hasFullAccess == true
         isConfigured = CompanionCredentials.isConfigured
         if !hasFullAccess {
@@ -127,6 +130,10 @@ final class KeyboardViewModel: ObservableObject {
     }
 
     func run(_ action: KeyboardAIAction) {
+        runChip(.builtin(action))
+    }
+
+    func runChip(_ chip: KeyboardToolbarChip) {
         syncDocumentSnapshot()
         let source = workingText
         guard !source.isEmpty else {
@@ -147,9 +154,9 @@ final class KeyboardViewModel: ObservableObject {
         isProcessing = true
         showIntelligenceBurst = true
         animationPhase = .thinking
-        overlayTitle = "\(action.title)…"
+        overlayTitle = "\(chip.title)…"
         lastError = nil
-        statusLine = "\(action.title)…"
+        statusLine = "\(chip.title)…"
         heavyHaptic.impactOccurred(intensity: 1.0)
         heavyHaptic.prepare()
         UIImpactFeedbackGenerator(style: .rigid).impactOccurred(intensity: 0.9)
@@ -165,12 +172,17 @@ final class KeyboardViewModel: ObservableObject {
                 isProcessing = false
             }
             do {
-                let result = try await KeyboardAIClient.rewrite(action: action, text: source)
+                let result: String
+                switch chip {
+                case .builtin(let action):
+                    result = try await KeyboardAIClient.rewrite(action: action, text: source)
+                case .custom(let shortcut):
+                    result = try await KeyboardAIClient.rewriteCustom(shortcut: shortcut, text: source)
+                }
                 if Task.isCancelled { return }
                 animationPhase = .writing
-                // No meta copy — result streams straight into the field
                 overlayTitle = ""
-                statusLine = action.title
+                statusLine = chip.title
                 clearCharacters(deleteCount)
                 await typewriterInsert(result)
                 if Task.isCancelled { return }

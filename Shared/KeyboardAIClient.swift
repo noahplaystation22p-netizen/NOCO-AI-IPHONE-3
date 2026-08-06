@@ -44,7 +44,31 @@ enum KeyboardAIClient {
 
     /// Preferred path: single flash response, sanitized — logs into ⌨️ Tastatur channel.
     static func rewrite(action: KeyboardAIAction, text: String) async throws -> String {
+        let reply = try await post(
+            message: action.prompt(for: text),
+            display: action.displayLabel(for: text),
+            timeout: action.isAnswer ? 40 : 28
+        )
+        let clean = KeyboardAIAction.sanitize(reply, action: action, original: text)
+        guard !clean.isEmpty else { throw ClientError.empty }
+        return clean
+    }
+
+    /// Custom user shortcut from the NOCO AI app.
+    static func rewriteCustom(shortcut: KeyboardCustomShortcut, text: String) async throws -> String {
+        let reply = try await post(
+            message: shortcut.fullPrompt(for: text),
+            display: shortcut.displayLabel(for: text),
+            timeout: 36
+        )
+        let clean = sanitizeCustom(reply)
+        guard !clean.isEmpty else { throw ClientError.empty }
+        return clean
+    }
+
+    private static func post(message: String, display: String, timeout: TimeInterval) async throws -> String {
         CompanionCredentials.refreshFromDisk()
+        KeyboardChipPreferences.refreshFromDisk()
         guard CompanionCredentials.isConfigured,
               let base = CompanionCredentials.baseURL,
               let token = CompanionCredentials.token else {
@@ -53,17 +77,17 @@ enum KeyboardAIClient {
         let url = base.appendingPathComponent("chat")
         var request = URLRequest(url: url)
         request.httpMethod = "POST"
-        request.timeoutInterval = action.isAnswer ? 40 : 28
+        request.timeoutInterval = timeout
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
         request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
         request.httpBody = try JSONEncoder().encode(
             ChatBody(
-                message: action.prompt(for: text),
+                message: message,
                 stream: false,
-                mode: action.isAnswer ? "flash" : "flash",
+                mode: "flash",
                 source: "keyboard",
                 channel: "keyboard",
-                display: action.displayLabel(for: text),
+                display: display,
                 keyboard: true
             )
         )
@@ -71,13 +95,26 @@ enum KeyboardAIClient {
         let (data, response) = try await session.data(for: request)
         let code = (response as? HTTPURLResponse)?.statusCode ?? 0
         guard (200..<300).contains(code) else { throw ClientError.http(code) }
+        guard let reply = extractReply(from: data) else { throw ClientError.decode }
+        return reply
+    }
 
-        if let reply = extractReply(from: data) {
-            let clean = KeyboardAIAction.sanitize(reply, action: action, original: text)
-            guard !clean.isEmpty else { throw ClientError.empty }
-            return clean
+    private static func sanitizeCustom(_ raw: String) -> String {
+        var s = raw.trimmingCharacters(in: .whitespacesAndNewlines)
+        let banned = ["gerne", "hier ist", "hier sind", "sure", "of course", "certainly"]
+        let lines = s.components(separatedBy: .newlines)
+        if let first = lines.first?.trimmingCharacters(in: .whitespacesAndNewlines).lowercased(),
+           banned.contains(where: { first.hasPrefix($0) }),
+           lines.count > 1 {
+            s = lines.dropFirst().joined(separator: "\n").trimmingCharacters(in: .whitespacesAndNewlines)
         }
-        throw ClientError.decode
+        if (s.hasPrefix("\"") && s.hasSuffix("\"")) || (s.hasPrefix("„") && s.hasSuffix("“")) {
+            s = String(s.dropFirst().dropLast()).trimmingCharacters(in: .whitespacesAndNewlines)
+        }
+        if s.hasPrefix("```") {
+            s = s.replacingOccurrences(of: "```", with: "").trimmingCharacters(in: .whitespacesAndNewlines)
+        }
+        return s
     }
 
     private static func extractReply(from data: Data) -> String? {

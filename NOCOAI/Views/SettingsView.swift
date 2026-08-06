@@ -166,15 +166,31 @@ struct SettingsView: View {
                             token: KeychainService.load(account: "nocoai.token"),
                             deviceName: connection.deviceName
                         )
+                        KeyboardChipPreferences.pushToKeyboard()
                         HapticService.success()
                     } label: {
                         Label("Zugangsdaten für Tastatur aktualisieren", systemImage: "arrow.triangle.2.circlepath")
                     }
                     .disabled(!connection.isPaired)
+
+                    NavigationLink {
+                        KeyboardCustomizationView()
+                    } label: {
+                        Label {
+                            VStack(alignment: .leading, spacing: 2) {
+                                Text("Tastatur anpassen")
+                                Text("Reihenfolge · eigene KI-Shortcuts")
+                                    .font(.caption)
+                                    .foregroundStyle(.secondary)
+                            }
+                        } icon: {
+                            Image(systemName: "slider.horizontal.3")
+                        }
+                    }
                 } header: {
                     Text("KI-Tastatur")
                 } footer: {
-                    Text("Ohne Vollzugriff kein Netzwerk. Nach jedem Neu-Installieren von SideStore: App koppeln → Zugangsdaten aktualisieren → Vollzugriff erneut erlauben.")
+                    Text("Ohne Vollzugriff kein Netzwerk. Eigene Shortcuts: Name + Prompt — dann auf der Tastatur tippen.")
                 }
 
                 Section("Erweitert") {
@@ -222,8 +238,8 @@ struct SettingsView: View {
                 }
 
                 Section("Info") {
-                    Text("NOCO AI Companion v6.0")
-                    Text("Vision fix · Radierer rainbow")
+                    Text("NOCO AI Companion v6.1")
+                    Text("Custom keyboard shortcuts")
                         .font(.footnote)
                         .foregroundStyle(NOCOAITheme.secondaryText(for: scheme))
                 }

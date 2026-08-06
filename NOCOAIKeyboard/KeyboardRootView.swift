@@ -34,33 +34,33 @@ struct KeyboardRootView: View {
     private var aiToolbar: some View {
         ScrollView(.horizontal, showsIndicators: false) {
             HStack(spacing: 8) {
-                ForEach(KeyboardAIAction.allCases) { action in
+                ForEach(model.toolbarChips) { chip in
                     Button {
-                        model.run(action)
+                        model.runChip(chip)
                     } label: {
                         HStack(spacing: 5) {
-                            Image(systemName: action.systemImage)
+                            Image(systemName: chip.systemImage)
                                 .font(.caption.weight(.semibold))
-                            Text(action.title)
+                            Text(chip.title)
                                 .font(.caption.weight(.semibold))
                         }
                         .padding(.horizontal, 12)
                         .padding(.vertical, 8)
                         .background(
                             Capsule(style: .continuous)
-                                .fill(chipFill(for: action))
+                                .fill(chipFill(for: chip))
                                 .overlay(
                                     Capsule(style: .continuous)
                                         .stroke(chipStroke, lineWidth: 1)
                                 )
                                 .shadow(
-                                    color: action.isPrimary
+                                    color: chip.isPrimary || chip.isCustom
                                         ? Color(red: 0.35, green: 0.45, blue: 1).opacity(0.4)
                                         : .clear,
                                     radius: 8, y: 2
                                 )
                         )
-                        .foregroundStyle(chipForeground(for: action))
+                        .foregroundStyle(chipForeground(for: chip))
                     }
                     .buttonStyle(SoftPressStyle())
                     .disabled(model.isProcessing)
@@ -121,8 +121,8 @@ struct KeyboardRootView: View {
         return Color(red: 0.25, green: 0.82, blue: 0.5)
     }
 
-    private func chipFill(for action: KeyboardAIAction) -> some ShapeStyle {
-        if action.isPrimary {
+    private func chipFill(for chip: KeyboardToolbarChip) -> some ShapeStyle {
+        if chip.isPrimary {
             return AnyShapeStyle(
                 LinearGradient(
                     colors: [
@@ -134,7 +134,7 @@ struct KeyboardRootView: View {
                 )
             )
         }
-        if action.isAnswer {
+        if chip.isAnswer {
             return AnyShapeStyle(
                 LinearGradient(
                     colors: [
@@ -146,11 +146,23 @@ struct KeyboardRootView: View {
                 )
             )
         }
+        if chip.isCustom {
+            return AnyShapeStyle(
+                LinearGradient(
+                    colors: [
+                        Color(red: 0.95, green: 0.45, blue: 0.7),
+                        Color(red: 0.55, green: 0.4, blue: 1)
+                    ],
+                    startPoint: .leading,
+                    endPoint: .trailing
+                )
+            )
+        }
         return AnyShapeStyle(.ultraThinMaterial)
     }
 
-    private func chipForeground(for action: KeyboardAIAction) -> Color {
-        (action.isPrimary || action.isAnswer) ? .white : .primary
+    private func chipForeground(for chip: KeyboardToolbarChip) -> Color {
+        (chip.isPrimary || chip.isAnswer || chip.isCustom) ? .white : .primary
     }
 
     private var chipStroke: Color {

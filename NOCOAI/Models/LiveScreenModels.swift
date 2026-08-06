@@ -46,7 +46,6 @@ enum LiveScreenMode: String, CaseIterable, Identifiable, Codable {
         }
     }
 
-    /// Mode-specific instruction prepended to the vision request.
     var systemDirective: String {
         switch self {
         case .explain:
@@ -93,20 +92,30 @@ enum LiveScreenPhase: String, Equatable {
     var title: String {
         switch self {
         case .idle: return "Bereit"
-        case .recognizing: return "Erkennen"
-        case .understanding: return "Verstehen"
-        case .answering: return "Antwort"
+        case .recognizing: return "Erfasse Bildschirm"
+        case .understanding: return "Analysiere"
+        case .answering: return "Antwort wird vorbereitet"
         case .done: return "Fertig"
+        }
+    }
+
+    var emoji: String {
+        switch self {
+        case .idle: return "✨"
+        case .recognizing: return "👁"
+        case .understanding: return "🧠"
+        case .answering: return "🎙"
+        case .done: return "✅"
         }
     }
 
     var color: Color {
         switch self {
         case .idle: return Color(red: 0.55, green: 0.62, blue: 0.75)
-        case .recognizing: return Color(red: 0.35, green: 0.62, blue: 1.0) // blue
-        case .understanding: return Color(red: 0.72, green: 0.48, blue: 1.0) // violet
+        case .recognizing: return Color(red: 0.35, green: 0.62, blue: 1.0)
+        case .understanding: return Color(red: 0.72, green: 0.48, blue: 1.0)
         case .answering: return Color(red: 0.95, green: 0.55, blue: 0.75)
-        case .done: return Color(red: 0.28, green: 0.85, blue: 0.58) // green
+        case .done: return Color(red: 0.28, green: 0.85, blue: 0.58)
         }
     }
 }
@@ -130,6 +139,21 @@ enum LiveScreenQuality: String, CaseIterable, Identifiable, Codable {
         case .developer: return "Entwickler"
         case .offline: return "Offline"
         }
+    }
+
+    /// Pick a vision quality profile from OCR / prompt complexity.
+    static func recommend(ocr: String, userPrompt: String?) -> LiveScreenQuality {
+        let text = (ocr + " " + (userPrompt ?? "")).lowercased()
+        let technical = ["error", "fehler", "exception", "stack", "traceback", "code", "debug",
+                         "compiler", "nullpointer", "syntax", "api", "json", "powershell", "cmd"]
+        if technical.contains(where: { text.contains($0) }) { return .developer }
+        if ocr.count > 900 || text.contains("vergleiche") || text.contains("detailliert") {
+            return .accurate
+        }
+        if ocr.count < 80 && (userPrompt?.count ?? 0) < 40 {
+            return .fast
+        }
+        return .auto
     }
 }
 
@@ -157,7 +181,6 @@ struct LiveScreenSuggestedAction: Identifiable, Equatable {
     }
 }
 
-/// Extensible capture kinds — Broadcast / Camera / AR can plug in later.
 enum LiveScreenCaptureKind: String, Codable {
     case photoLibrary
     case clipboard
@@ -165,6 +188,7 @@ enum LiveScreenCaptureKind: String, Codable {
     case cameraLiveVision
     case broadcastExtension
     case documentScan
+    case windowsDesktop
 }
 
 struct LiveScreenTurn: Identifiable, Equatable {
@@ -202,9 +226,39 @@ struct LiveScreenFrame: Equatable {
     let source: LiveScreenCaptureKind
     let width: Int
     let height: Int
+    let perceptualHash: UInt64
 }
 
-/// Future feature hooks — architecture placeholders, not UI spam.
+/// Rolling session memory — text only, no raw frames on disk by default.
+struct LiveScreenContextNote: Identifiable, Equatable, Codable {
+    let id: UUID
+    let at: Date
+    let kind: Kind
+    let text: String
+
+    enum Kind: String, Codable {
+        case summary
+        case ocr
+        case appHint
+        case insight
+        case userQ
+    }
+
+    init(id: UUID = UUID(), at: Date = Date(), kind: Kind, text: String) {
+        self.id = id
+        self.at = at
+        self.kind = kind
+        self.text = text
+    }
+}
+
+struct LiveScreenPersistedContext: Codable {
+    var savedAt: Date
+    var summary: String
+    var notes: [LiveScreenContextNote]
+    var conversationId: String?
+}
+
 enum LiveScreenFutureCapability: String, CaseIterable {
     case cameraLiveVision
     case arAssist

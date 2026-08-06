@@ -16,6 +16,8 @@ struct ChatMessage: Identifiable, Equatable {
     var isStreaming: Bool
     var imageURL: URL?
     var localImageData: Data?
+    /// Soft label for “Verwendetes Modell” (may be a mode hint).
+    var modelLabel: String?
 
     init(
         id: UUID = UUID(),
@@ -25,7 +27,8 @@ struct ChatMessage: Identifiable, Equatable {
         createdAt: Date = .now,
         isStreaming: Bool = false,
         imageURL: URL? = nil,
-        localImageData: Data? = nil
+        localImageData: Data? = nil,
+        modelLabel: String? = nil
     ) {
         self.id = id
         self.serverId = serverId
@@ -35,5 +38,6 @@ struct ChatMessage: Identifiable, Equatable {
         self.isStreaming = isStreaming
         self.imageURL = imageURL
         self.localImageData = localImageData
+        self.modelLabel = modelLabel
     }
 }

@@ -60,6 +60,10 @@
 		CC0000000000000000000004 /* ComputerControlView.swift in Sources */ = {isa = PBXBuildFile; fileRef = CC0000000000000000000003 /* ComputerControlView.swift */; };
 		NA00000100000000000000A4 /* NOCOIntelligenceVisuals.swift in Sources */ = {isa = PBXBuildFile; fileRef = NA00000200000000000000A4 /* NOCOIntelligenceVisuals.swift */; };
 		NA00000100000000000000Q1 /* IntelligenceQuickBar.swift in Sources */ = {isa = PBXBuildFile; fileRef = NA00000200000000000000Q1 /* IntelligenceQuickBar.swift */; };
+		CM0000010000000000000001 /* ChatMediaHelpers.swift in Sources */ = {isa = PBXBuildFile; fileRef = CM0000020000000000000001 /* ChatMediaHelpers.swift */; };
+		PT0000010000000000000001 /* PlusToolsPanel.swift in Sources */ = {isa = PBXBuildFile; fileRef = PT0000020000000000000001 /* PlusToolsPanel.swift */; };
+		ST0000010000000000000001 /* SelectableMessageText.swift in Sources */ = {isa = PBXBuildFile; fileRef = ST0000020000000000000001 /* SelectableMessageText.swift */; };
+		AI0000010000000000000001 /* AgentIntake.swift in Sources */ = {isa = PBXBuildFile; fileRef = AI0000020000000000000001 /* AgentIntake.swift */; };
 		NA00000100000000000000V1 /* VisionLiveModels.swift in Sources */ = {isa = PBXBuildFile; fileRef = NA00000200000000000000V1 /* VisionLiveModels.swift */; };
 		NA00000100000000000000V2 /* VisionLiveCamera.swift in Sources */ = {isa = PBXBuildFile; fileRef = NA00000200000000000000V2 /* VisionLiveCamera.swift */; };
 		NA00000100000000000000V3 /* VisionLiveSessionController.swift in Sources */ = {isa = PBXBuildFile; fileRef = NA00000200000000000000V3 /* VisionLiveSessionController.swift */; };
@@ -189,6 +193,10 @@
 		CC0000000000000000000003 /* ComputerControlView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ComputerControlView.swift; sourceTree = "<group>"; };
 		NA00000200000000000000A4 /* NOCOIntelligenceVisuals.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NOCOIntelligenceVisuals.swift; sourceTree = "<group>"; };
 		NA00000200000000000000Q1 /* IntelligenceQuickBar.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = IntelligenceQuickBar.swift; sourceTree = "<group>"; };
+		CM0000020000000000000001 /* ChatMediaHelpers.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ChatMediaHelpers.swift; sourceTree = "<group>"; };
+		PT0000020000000000000001 /* PlusToolsPanel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PlusToolsPanel.swift; sourceTree = "<group>"; };
+		ST0000020000000000000001 /* SelectableMessageText.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SelectableMessageText.swift; sourceTree = "<group>"; };
+		AI0000020000000000000001 /* AgentIntake.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AgentIntake.swift; sourceTree = "<group>"; };
 		NA00000200000000000000V1 /* VisionLiveModels.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VisionLiveModels.swift; sourceTree = "<group>"; };
 		NA00000200000000000000V2 /* VisionLiveCamera.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VisionLiveCamera.swift; sourceTree = "<group>"; };
 		NA00000200000000000000V3 /* VisionLiveSessionController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VisionLiveSessionController.swift; sourceTree = "<group>"; };
@@ -309,6 +317,7 @@
 				NA00000200000000000000A1 /* AgentModels.swift */,
 				CC0000000000000000000001 /* ComputerControlModels.swift */,
 				MI0000000000000000000001 /* ModeIntelligence.swift */,
+				AI0000020000000000000001 /* AgentIntake.swift */,
 				NA00000200000000000000V1 /* VisionLiveModels.swift */,
 			);
 			path = Models;
@@ -399,6 +408,8 @@
 				NA000002000000000000002D /* IntelligenceEffects.swift */,
 				NA00000200000000000000A4 /* NOCOIntelligenceVisuals.swift */,
 				NA00000200000000000000Q1 /* IntelligenceQuickBar.swift */,
+				CM0000020000000000000001 /* ChatMediaHelpers.swift */,
+				ST0000020000000000000001 /* SelectableMessageText.swift */,
 				NA000002000000000000002F /* VoiceRainbowOrb.swift */,
 				NA0000020000000000000032 /* WritingToolsView.swift */,
 			);
@@ -410,6 +421,7 @@
 			children = (
 				NA0000020000000000000027 /* ChatHubView.swift */,
 				NA0000020000000000000028 /* ChatInputBar.swift */,
+				PT0000020000000000000001 /* PlusToolsPanel.swift */,
 				NA0000020000000000000030 /* VoiceModeView.swift */,
 			);
 			path = Chat;
@@ -769,6 +781,10 @@
 				CC0000000000000000000004 /* ComputerControlView.swift in Sources */,
 				NA00000100000000000000A4 /* NOCOIntelligenceVisuals.swift in Sources */,
 				NA00000100000000000000Q1 /* IntelligenceQuickBar.swift in Sources */,
+				CM0000010000000000000001 /* ChatMediaHelpers.swift in Sources */,
+				PT0000010000000000000001 /* PlusToolsPanel.swift in Sources */,
+				ST0000010000000000000001 /* SelectableMessageText.swift in Sources */,
+				AI0000010000000000000001 /* AgentIntake.swift in Sources */,
 				NA00000100000000000000V1 /* VisionLiveModels.swift in Sources */,
 				NA00000100000000000000V2 /* VisionLiveCamera.swift in Sources */,
 				NA00000100000000000000V3 /* VisionLiveSessionController.swift in Sources */,
@@ -846,7 +862,7 @@
 				CODE_SIGNING_REQUIRED = NO;
 				CODE_SIGN_IDENTITY = "";
 				CODE_SIGNING_STYLE = Manual;
-				CURRENT_PROJECT_VERSION = 63;
+				CURRENT_PROJECT_VERSION = 69;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = NOCOAIKeyboard/Info.plist;
 				INFOPLIST_KEY_CFBundleDisplayName = "NOCO AI";
@@ -856,7 +872,7 @@
 					"@executable_path/Frameworks",
 					"@executable_path/../../Frameworks",
 				);
-				MARKETING_VERSION = 8.3;
+				MARKETING_VERSION = 8.9;
 				PRODUCT_BUNDLE_IDENTIFIER = de.noco.nocoai.keyboard;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SKIP_INSTALL = YES;
@@ -875,7 +891,7 @@
 				CODE_SIGNING_REQUIRED = NO;
 				CODE_SIGN_IDENTITY = "";
 				CODE_SIGNING_STYLE = Manual;
-				CURRENT_PROJECT_VERSION = 63;
+				CURRENT_PROJECT_VERSION = 69;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = NOCOAIKeyboard/Info.plist;
 				INFOPLIST_KEY_CFBundleDisplayName = "NOCO AI";
@@ -885,7 +901,7 @@
 					"@executable_path/Frameworks",
 					"@executable_path/../../Frameworks",
 				);
-				MARKETING_VERSION = 8.3;
+				MARKETING_VERSION = 8.9;
 				PRODUCT_BUNDLE_IDENTIFIER = de.noco.nocoai.keyboard;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SKIP_INSTALL = YES;
@@ -940,7 +956,7 @@
 				CODE_SIGN_ENTITLEMENTS = NOCOAI/NOCOAI.entitlements;
 				CODE_SIGNING_ALLOWED = NO;
 				CODE_SIGNING_REQUIRED = NO;
-				CURRENT_PROJECT_VERSION = 63;
+				CURRENT_PROJECT_VERSION = 69;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = NOCOAI/Info.plist;
@@ -955,7 +971,7 @@
 					"$(inherited)",
 					"@executable_path/Frameworks",
 				);
-				MARKETING_VERSION = 8.3;
+				MARKETING_VERSION = 8.9;
 				PRODUCT_BUNDLE_IDENTIFIER = de.noco.nocoai;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator";
@@ -974,7 +990,7 @@
 				CODE_SIGN_ENTITLEMENTS = NOCOAI/NOCOAI.entitlements;
 				CODE_SIGNING_ALLOWED = NO;
 				CODE_SIGNING_REQUIRED = NO;
-				CURRENT_PROJECT_VERSION = 63;
+				CURRENT_PROJECT_VERSION = 69;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = NOCOAI/Info.plist;
@@ -989,7 +1005,7 @@
 					"$(inherited)",
 					"@executable_path/Frameworks",
 				);
-				MARKETING_VERSION = 8.3;
+				MARKETING_VERSION = 8.9;
 				PRODUCT_BUNDLE_IDENTIFIER = de.noco.nocoai;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator";
@@ -1007,7 +1023,7 @@
 				CODE_SIGN_ENTITLEMENTS = NOCOAISpeakWidget/NOCOAISpeakWidget.entitlements;
 				CODE_SIGNING_ALLOWED = NO;
 				CODE_SIGNING_REQUIRED = NO;
-				CURRENT_PROJECT_VERSION = 63;
+				CURRENT_PROJECT_VERSION = 69;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = NOCOAISpeakWidget/Info.plist;
 				INFOPLIST_KEY_CFBundleDisplayName = "NOCO Speak";
@@ -1018,7 +1034,7 @@
 					"@executable_path/Frameworks",
 					"@executable_path/../../Frameworks",
 				);
-				MARKETING_VERSION = 8.3;
+				MARKETING_VERSION = 8.9;
 				PRODUCT_BUNDLE_IDENTIFIER = de.noco.nocoai.SpeakWidget;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SKIP_INSTALL = YES;
@@ -1035,7 +1051,7 @@
 				CODE_SIGN_ENTITLEMENTS = NOCOAISpeakWidget/NOCOAISpeakWidget.entitlements;
 				CODE_SIGNING_ALLOWED = NO;
 				CODE_SIGNING_REQUIRED = NO;
-				CURRENT_PROJECT_VERSION = 63;
+				CURRENT_PROJECT_VERSION = 69;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = NOCOAISpeakWidget/Info.plist;
 				INFOPLIST_KEY_CFBundleDisplayName = "NOCO Speak";
@@ -1046,7 +1062,7 @@
 					"@executable_path/Frameworks",
 					"@executable_path/../../Frameworks",
 				);
-				MARKETING_VERSION = 8.3;
+				MARKETING_VERSION = 8.9;
 				PRODUCT_BUNDLE_IDENTIFIER = de.noco.nocoai.SpeakWidget;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SKIP_INSTALL = YES;
@@ -1067,7 +1083,7 @@
 				CODE_SIGNING_REQUIRED = NO;
 				CODE_SIGN_IDENTITY = "";
 				CODE_SIGNING_STYLE = Manual;
-				CURRENT_PROJECT_VERSION = 63;
+				CURRENT_PROJECT_VERSION = 69;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = NOCOAIBroadcast/Info.plist;
 				INFOPLIST_KEY_CFBundleDisplayName = "NOCO Live Screen";
@@ -1077,7 +1093,7 @@
 					"@executable_path/Frameworks",
 					"@executable_path/../../Frameworks",
 				);
-				MARKETING_VERSION = 8.3;
+				MARKETING_VERSION = 8.9;
 				PRODUCT_BUNDLE_IDENTIFIER = de.noco.nocoai.broadcast;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SKIP_INSTALL = YES;
@@ -1096,7 +1112,7 @@
 				CODE_SIGNING_REQUIRED = NO;
 				CODE_SIGN_IDENTITY = "";
 				CODE_SIGNING_STYLE = Manual;
-				CURRENT_PROJECT_VERSION = 63;
+				CURRENT_PROJECT_VERSION = 69;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = NOCOAIBroadcast/Info.plist;
 				INFOPLIST_KEY_CFBundleDisplayName = "NOCO Live Screen";
@@ -1106,7 +1122,7 @@
 					"@executable_path/Frameworks",
 					"@executable_path/../../Frameworks",
 				);
-				MARKETING_VERSION = 8.3;
+				MARKETING_VERSION = 8.9;
 				PRODUCT_BUNDLE_IDENTIFIER = de.noco.nocoai.broadcast;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SKIP_INSTALL = YES;

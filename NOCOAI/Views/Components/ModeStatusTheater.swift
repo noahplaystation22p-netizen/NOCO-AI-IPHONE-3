@@ -246,7 +246,7 @@ struct ModeStatusTheater: View {
     private var phaseEmoji: String {
         switch phase {
         case .understanding: return "🧠"
-        case .analyzing: return "🔎"
+        case .analyzing: return "📋"
         case .executing: return "⚙️"
         case .done: return "✅"
         case .idle: return ""

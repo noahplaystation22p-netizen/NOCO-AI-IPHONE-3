@@ -11,13 +11,6 @@ struct ImagesHubView: View {
     @State private var draftPrompt = ""
     @State private var openEraser = false
 
-    private let ideaPrompts = [
-        "Neon-Stadt bei Regen, cinematic",
-        "Soft portrait, studio light",
-        "Fantasy forest, golden hour",
-        "Minimal product shot, white"
-    ]
-
     var body: some View {
         NavigationStack {
             ScrollView {
@@ -25,7 +18,7 @@ struct ImagesHubView: View {
                     IntelligenceHeroBanner(
                         title: "Bilder",
                         subtitle: connection.isOnline
-                            ? "Beschreiben — NOCO erzeugt auf dem PC"
+                            ? "Beschreiben ? NOCO erzeugt auf dem PC"
                             : "Companion verbinden, dann erzeugen",
                         online: connection.isOnline
                     )
@@ -64,7 +57,7 @@ struct ImagesHubView: View {
                                 Text("Magischer Radierer")
                                     .font(.headline)
                                     .foregroundStyle(.primary)
-                                Text("Bemalen → Anweisung tippen → fertig")
+                                Text("Bemalen ? Anweisung tippen ? fertig")
                                     .font(.caption)
                                     .foregroundStyle(.secondary)
                             }
@@ -93,7 +86,7 @@ struct ImagesHubView: View {
             }
             .nocoBackground()
             .overlay {
-                // Skip heavy overlays while generating — big lag win on older iPhones
+                // Skip heavy overlays while generating ? big lag win on older iPhones
                 if !connection.images.isGenerating {
                     FloatingIntelligenceDots(count: 2)
                         .opacity(0.18)
@@ -206,7 +199,7 @@ struct ImagesHubView: View {
                         .font(.caption.weight(.semibold))
                         .foregroundStyle(.secondary)
                 }
-                Text("Gleiche Stable-Diffusion-Engine für Bildideen und Magischen Radierer — kein anderes Modell. Wenn der Radierer bei 96 % hängt: hier starten.")
+                Text("Gleiche Stable-Diffusion-Engine f?r Bildideen und Magischen Radierer ? kein anderes Modell. Wenn der Radierer bei 96?% h?ngt: hier starten.")
                     .font(.caption)
                     .foregroundStyle(.secondary)
                 Button {
@@ -218,7 +211,7 @@ struct ImagesHubView: View {
                 } label: {
                     Label(
                         connection.images.isPreparingEngine
-                            ? "Startet auf dem PC…"
+                            ? "Startet auf dem PC?"
                             : (ready ? "Engine nochmal warm halten" : "Bilder-Engine starten"),
                         systemImage: "bolt.circle.fill"
                     )
@@ -248,7 +241,7 @@ struct ImagesHubView: View {
                         .symbolEffect(.pulse, options: .repeating.speed(0.4))
                 }
 
-                TextField("Beschreibe dein Bild…", text: $draftPrompt, axis: .vertical)
+                TextField("Beschreibe dein Bild?", text: $draftPrompt, axis: .vertical)
                 .lineLimit(3...6)
                 .focused($promptFocused)
                 .submitLabel(.done)
@@ -265,29 +258,15 @@ struct ImagesHubView: View {
                 )
 
                 if !connection.images.isGenerating {
-                    ScrollView(.horizontal, showsIndicators: false) {
-                        HStack(spacing: 8) {
-                            ForEach(ideaPrompts, id: \.self) { tip in
-                                Button {
-                                    draftPrompt = tip
-                                    connection.images.prompt = tip
-                                    HapticService.selection()
-                                } label: {
-                                    Text(tip)
-                                        .font(.caption2.weight(.semibold))
-                                        .padding(.horizontal, 10)
-                                        .padding(.vertical, 7)
-                                        .background(
-                                            Capsule()
-                                                .fill(NOCOAITheme.accent.opacity(0.12))
-                                                .overlay(Capsule().stroke(NOCOAITheme.glowPrimary.opacity(0.28), lineWidth: 1))
-                                        )
-                                        .foregroundStyle(NOCOAITheme.accent)
-                                }
-                                .buttonStyle(.plain)
-                            }
-                        }
+                    ImageInspirationStrip { tip in
+                        draftPrompt = tip
+                        connection.images.prompt = tip
+                        HapticService.selection()
                     }
+                }
+
+                if !connection.images.isGenerating {
+                    imageModePicker
                 }
 
                 if connection.images.isGenerating {
@@ -344,7 +323,7 @@ struct ImagesHubView: View {
                     .disabled(draftPrompt.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || !connection.isOnline)
                     .opacity(draftPrompt.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || !connection.isOnline ? 0.5 : 1)
 
-                    Text("Du kannst die App verlassen — du bekommst eine Mitteilung, wenn das Bild fertig ist.")
+                    Text("Du kannst die App verlassen ? du bekommst eine Mitteilung, wenn das Bild fertig ist.")
                         .font(.caption2)
                         .foregroundStyle(.secondary)
                         .fixedSize(horizontal: false, vertical: true)
@@ -358,6 +337,45 @@ struct ImagesHubView: View {
             }
         }
         .animation(.spring(response: 0.45, dampingFraction: 0.84), value: connection.images.isGenerating)
+    }
+
+    private var imageModePicker: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Text("Modell")
+                .font(.caption.weight(.semibold))
+                .foregroundStyle(.secondary)
+            HStack(spacing: 8) {
+                ForEach(ImageGenMode.allCases) { mode in
+                    Button {
+                        HapticService.selection()
+                        connection.images.genMode = mode
+                    } label: {
+                        VStack(spacing: 2) {
+                            Text("\(mode.emoji) \(mode.title)")
+                                .font(.caption.weight(.bold))
+                            Text(mode == .flash ? "Tempo" : (mode == .think ? "Qualit�t" : "Auto"))
+                                .font(.caption2)
+                                .opacity(0.75)
+                        }
+                        .foregroundStyle(connection.images.genMode == mode ? Color.white : Color.primary)
+                        .padding(.horizontal, 12)
+                        .padding(.vertical, 9)
+                        .frame(maxWidth: .infinity)
+                        .background {
+                            if connection.images.genMode == mode {
+                                Capsule().fill(NOCOAITheme.accent.gradient)
+                            } else {
+                                Capsule().fill(.ultraThinMaterial)
+                            }
+                        }
+                    }
+                    .buttonStyle(.plain)
+                }
+            }
+            Text("Gleiche Stable-Diffusion-Engine ? Flash/Think steuern Schritte & Aufl�sung.")
+                .font(.caption2)
+                .foregroundStyle(.secondary)
+        }
     }
 
     // MARK: - Result
@@ -610,5 +628,130 @@ private struct ImageDetailSheet: View {
                 }
             }
         }
+    }
+}
+
+// MARK: - Inspiration (SF Symbol placeholders ? no generated assets)
+
+private struct ImageInspirationItem: Identifiable {
+    let id: String
+    let title: String
+    let prompt: String
+    let symbol: String
+    let colors: [Color]
+}
+
+private struct ImageInspirationStrip: View {
+    var onPick: (String) -> Void
+    @State private var glow = false
+
+    private let items: [ImageInspirationItem] = [
+        .init(
+            id: "cine",
+            title: "Cinematic",
+            prompt: "Neon-Stadt bei Regen, cinematic lighting, wide shot",
+            symbol: "film",
+            colors: [Color(red: 0.12, green: 0.18, blue: 0.42), Color(red: 0.55, green: 0.25, blue: 0.75)]
+        ),
+        .init(
+            id: "portrait",
+            title: "Portrait",
+            prompt: "Soft portrait, studio light, shallow depth of field",
+            symbol: "person.crop.rectangle",
+            colors: [Color(red: 0.45, green: 0.32, blue: 0.28), Color(red: 0.85, green: 0.65, blue: 0.5)]
+        ),
+        .init(
+            id: "nature",
+            title: "Nature",
+            prompt: "Fantasy forest, golden hour, volumetric light",
+            symbol: "leaf.fill",
+            colors: [Color(red: 0.12, green: 0.38, blue: 0.28), Color(red: 0.55, green: 0.75, blue: 0.35)]
+        ),
+        .init(
+            id: "product",
+            title: "Product",
+            prompt: "Minimal product shot on white, soft shadows",
+            symbol: "cube.transparent",
+            colors: [Color(red: 0.22, green: 0.24, blue: 0.28), Color(red: 0.55, green: 0.58, blue: 0.65)]
+        ),
+        .init(
+            id: "abstract",
+            title: "Abstract",
+            prompt: "Abstract fluid shapes, soft gradients, modern art",
+            symbol: "waveform",
+            colors: [Color(red: 0.2, green: 0.45, blue: 0.7), Color(red: 0.9, green: 0.45, blue: 0.55)]
+        ),
+        .init(
+            id: "arch",
+            title: "Architecture",
+            prompt: "Modern architecture, clean lines, dusk sky",
+            symbol: "building.2.fill",
+            colors: [Color(red: 0.18, green: 0.22, blue: 0.35), Color(red: 0.4, green: 0.55, blue: 0.75)]
+        )
+    ]
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            Text("Inspiration")
+                .font(.subheadline.weight(.semibold))
+                .foregroundStyle(.secondary)
+
+            ScrollView(.horizontal, showsIndicators: false) {
+                HStack(spacing: 12) {
+                    ForEach(Array(items.enumerated()), id: \.element.id) { index, item in
+                        Button {
+                            onPick(item.prompt)
+                        } label: {
+                            ZStack(alignment: .bottomLeading) {
+                                RoundedRectangle(cornerRadius: 16, style: .continuous)
+                                    .fill(
+                                        LinearGradient(
+                                            colors: item.colors,
+                                            startPoint: .topLeading,
+                                            endPoint: .bottomTrailing
+                                        )
+                                    )
+                                    .overlay(
+                                        Image(systemName: item.symbol)
+                                            .font(.system(size: 28, weight: .light))
+                                            .foregroundStyle(.white.opacity(0.55))
+                                            .offset(x: glow ? 4 : -2, y: glow ? -3 : 2)
+                                    )
+                                    .overlay(
+                                        LinearGradient(
+                                            colors: [.clear, .black.opacity(0.45)],
+                                            startPoint: .center,
+                                            endPoint: .bottom
+                                        )
+                                        .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
+                                    )
+
+                                VStack(alignment: .leading, spacing: 2) {
+                                    Text(item.title)
+                                        .font(.caption.weight(.bold))
+                                        .foregroundStyle(.white)
+                                    Text("Tippen zum ?bernehmen")
+                                        .font(.caption2)
+                                        .foregroundStyle(.white.opacity(0.7))
+                                }
+                                .padding(10)
+                            }
+                            .frame(width: 132, height: 96)
+                            .shadow(color: item.colors.last?.opacity(0.35) ?? .clear, radius: glow ? 10 : 4, y: 3)
+                            .scaleEffect(glow ? 1.0 : 0.985)
+                            .animation(
+                                .easeInOut(duration: 2.2)
+                                    .repeatForever(autoreverses: true)
+                                    .delay(Double(index) * 0.12),
+                                value: glow
+                            )
+                        }
+                        .buttonStyle(.plain)
+                    }
+                }
+                .padding(.vertical, 2)
+            }
+        }
+        .onAppear { glow = true }
     }
 }

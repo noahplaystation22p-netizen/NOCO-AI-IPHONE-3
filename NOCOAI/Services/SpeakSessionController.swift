@@ -12,12 +12,27 @@ final class SpeakSessionController: ObservableObject {
     @Published var statusLine = "Speak bereit"
     @Published var showSpeakUI = false
     @Published var isMuted = false
+    /// Camera preview may be on; Vision only runs on explicit snapshot / vision utterance.
+    @Published var visionCameraEnabled = false
+    /// Live Screen frames available for vision questions (no continuous upload).
+    @Published var screenShareEnabled = false
+    /// One-shot JPEG waiting to be analyzed with the next relevant utterance.
+    @Published var pendingVisionJPEG: Data?
+    var visionFrameProvider: (() -> UIImage?)?
 
     private weak var connection: ConnectionStore?
     private var isBusy = false
     private var wired = false
     private var bgTask: UIBackgroundTaskIdentifier = .invalid
     private var resumeTask: Task<Void, Never>?
+
+    /// Live Screen / vision gate — true while Speak is busy or TTS is playing.
+    var isBusyForVision: Bool {
+        if isBusy { return true }
+        if case .speaking = voice.phase { return true }
+        if case .processing = voice.phase { return true }
+        return false
+    }
 
     func bind(connection: ConnectionStore) {
         self.connection = connection
@@ -27,6 +42,8 @@ final class SpeakSessionController: ObservableObject {
             Task { await self?.handleUtterance(text) }
         }
         voice.onSpeakFinished = { [weak self] in
+            self?.connection?.liveScreen.suppressAutoVision = false
+            self?.connection?.liveScreen.resumeQueuedAnalysisIfNeeded()
             self?.scheduleResumeListening(after: 0.05)
         }
     }
@@ -91,11 +108,44 @@ final class SpeakSessionController: ObservableObject {
         voice.stopListening(cancel: true)
         isRunning = false
         isMuted = false
+        visionCameraEnabled = false
+        screenShareEnabled = false
+        visionFrameProvider = nil
+        pendingVisionJPEG = nil
+        connection?.liveScreen.suppressAutoVision = false
         voice.setMuted(false)
         endBackgroundKeepAlive()
         SpeakLiveActivityManager.end()
+        ImageLiveActivityManager.end(immediate: true)
         voice.phase = .idle
         statusLine = "Speak gestoppt"
+    }
+
+    /// Full exit: stop mic/TTS, camera, Live Screen — return to Chat.
+    /// Only for active Speak sessions (voice commands).
+    func exitSpeakToChat() {
+        guard let connection else {
+            stop(playCue: true)
+            showSpeakUI = false
+            return
+        }
+        statusLine = "Sprachmodus beendet"
+        HapticService.speakCue()
+
+        // Stop any in-flight vision / live analysis noise
+        connection.liveScreen.suppressAutoVision = true
+        if connection.liveScreen.isActive || screenShareEnabled {
+            connection.liveScreen.stopSession(offerSave: false, keepContext: true)
+        }
+        screenShareEnabled = false
+        visionCameraEnabled = false
+        visionFrameProvider = nil
+        pendingVisionJPEG = nil
+
+        stop(playCue: false)
+        showSpeakUI = false
+        // Tab 0 = Chat
+        connection.pendingTab = 0
     }
 
     func toggleMute() {
@@ -174,7 +224,11 @@ final class SpeakSessionController: ObservableObject {
             }
             try? await Task.sleep(nanoseconds: 40_000_000)
             guard !Task.isCancelled else { return }
-            await MainActor.run { self?.resumeListening() }
+            await MainActor.run {
+                self?.connection?.liveScreen.suppressAutoVision = false
+                self?.connection?.liveScreen.resumeQueuedAnalysisIfNeeded()
+                self?.resumeListening()
+            }
         }
     }
 
@@ -209,12 +263,9 @@ final class SpeakSessionController: ObservableObject {
         guard isRunning, !isBusy, let connection else { return }
         guard !isMuted else { return }
 
-        // Voice command: end speak without sending to the PC
+        // Voice command: end speak without sending to the PC (only while Speak is active)
         if Self.isEndSpeakCommand(text) {
-            statusLine = "Sprachmodus beendet"
-            HapticService.speakCue()
-            stop(playCue: false)
-            showSpeakUI = false
+            exitSpeakToChat()
             return
         }
 
@@ -226,25 +277,132 @@ final class SpeakSessionController: ObservableObject {
         pushLiveActivity(force: true)
         HapticService.send()
 
-        let prompt = VoiceService.voiceOnlyPrompt(text)
-        let reply = await connection.chat.sendAndReturnReply(
-            prompt,
-            modeOverride: .flash,
-            speak: true
+        // Answer from Live Screen memory without a new frame upload
+        if Self.asksForScreenMemory(text) {
+            let memory = connection.liveScreen.sessionSummary.trimmingCharacters(in: .whitespacesAndNewlines)
+            let briefing = connection.liveScreen.contextBriefing.trimmingCharacters(in: .whitespacesAndNewlines)
+            let recall = !memory.isEmpty ? memory : briefing
+            if !recall.isEmpty {
+                let reply = """
+                Vorhin auf dem Bildschirm (aus dem Live-Screen-Kontext):
+
+                \(recall)
+                """
+                lastReply = reply
+                try? await Task.sleep(nanoseconds: 220_000_000)
+                guard isRunning else { return }
+                if voice.autoSpeakReplies {
+                    connection.liveScreen.suppressAutoVision = true
+                    statusLine = "Spoken Reply…"
+                    isBusy = false
+                    voice.speak(reply)
+                    startSpeakWatchdog()
+                } else {
+                    voice.phase = .idle
+                    scheduleResumeListening(after: 0.05)
+                }
+                return
+            }
+        }
+
+        let reply: String?
+        let wantsVision = (visionCameraEnabled || screenShareEnabled) && (
+            pendingVisionJPEG != nil || Self.asksForVision(text)
         )
+        if wantsVision {
+            // Freeze Live Screen auto-uploads for this whole vision turn (incl. TTS).
+            connection.liveScreen.suppressAutoVision = true
+            statusLine = "Ich schaue mir das kurz an…"
+            pushLiveActivity(force: true)
+            try? await Task.sleep(nanoseconds: 220_000_000)
+
+            var jpeg = pendingVisionJPEG
+            pendingVisionJPEG = nil
+            if jpeg == nil, screenShareEnabled, let screenJPEG = connection.liveScreen.latestJPEG {
+                jpeg = screenJPEG
+            }
+            if jpeg == nil, let image = visionFrameProvider?() {
+                jpeg = image.jpegData(compressionQuality: 0.78)
+            }
+            // Refresh from live screen if share is on (prefer freshest)
+            if jpeg == nil, screenShareEnabled,
+               let preview = connection.liveScreen.latestPreview,
+               let data = preview.jpegData(compressionQuality: 0.78) {
+                jpeg = data
+            }
+
+            if let jpeg {
+                statusLine = screenShareEnabled
+                    ? "Ich analysiere den Bildschirm…"
+                    : "Ich analysiere das Bild…"
+                ImageLiveActivityManager.start(prompt: screenShareEnabled ? "Live Screen · Speak" : "Vision · Speak")
+                ImageLiveActivityManager.update(
+                    progress: 0.35,
+                    status: "Analysiere…",
+                    insight: String(text.prefix(60)),
+                    etaSeconds: 8,
+                    phase: .rendering,
+                    force: true
+                )
+
+                var prompt = text
+                let briefing = connection.liveScreen.contextBriefing
+                if screenShareEnabled, !briefing.isEmpty {
+                    prompt = """
+                    \(text)
+
+                    [Live-Screen-Kontext]
+                    \(briefing)
+                    """
+                }
+                reply = await connection.chat.sendVisionForSpeak(jpeg: jpeg, userText: prompt)
+                ImageLiveActivityManager.complete(prompt: "Vision fertig")
+            } else {
+                statusLine = screenShareEnabled
+                    ? "Kein Bildschirmbild — Übertragung starten"
+                    : "Kein Kamerabild"
+                let prompt = VoiceService.voiceOnlyPrompt(text)
+                reply = await connection.chat.sendAndReturnReply(
+                    prompt,
+                    modeOverride: VoiceSettings.defaultMode == .think ? .think : .flash,
+                    speak: true
+                )
+            }
+        } else {
+            let prompt = VoiceService.voiceOnlyPrompt(text)
+            let depth: AIMode = {
+                switch VoiceSettings.defaultMode {
+                case .think: return .think
+                case .auto:
+                    return ModeIntelligence.recommendDepth(text: text)?.mode ?? .flash
+                default: return .flash
+                }
+            }()
+            reply = await connection.chat.sendAndReturnReply(
+                prompt,
+                modeOverride: depth,
+                speak: true
+            )
+        }
 
         guard isRunning else { return }
 
         if let reply, !reply.isEmpty {
             lastReply = reply
+            // Natural beat before speaking — feels less abrupt
+            try? await Task.sleep(nanoseconds: 280_000_000)
+            guard isRunning else { return }
             if voice.autoSpeakReplies {
                 statusLine = "Spoken Reply…"
                 pushLiveActivity(force: true)
                 resumeTask?.cancel()
                 isBusy = false
+                connection.liveScreen.suppressAutoVision = true
                 voice.speak(reply)
                 startSpeakWatchdog()
             } else {
+                connection.liveScreen.suppressAutoVision = false
+                connection.liveScreen.resumeQueuedAnalysisIfNeeded()
                 voice.phase = .idle
                 scheduleResumeListening(after: 0.05)
             }
@@ -258,29 +416,127 @@ final class SpeakSessionController: ObservableObject {
         }
     }
 
-    /// „Sprachmodus beenden“ / „end language mode“ — fully stop, never send as chat.
+    /// Capture one still for the next vision-aware utterance (no continuous upload).
+    func captureVisionSnapshot() {
+        if screenShareEnabled, let jpeg = connection?.liveScreen.latestJPEG {
+            pendingVisionJPEG = jpeg
+            statusLine = "Bildschirm-Moment bereit — frag z. B. „Was soll ich tippen?“"
+            HapticService.imageSnap()
+            return
+        }
+        guard let image = visionFrameProvider?(),
+              let jpeg = image.jpegData(compressionQuality: 0.8) else {
+            statusLine = "Kein Bild — Kamera oder Bildschirm prüfen"
+            HapticService.error()
+            return
+        }
+        pendingVisionJPEG = jpeg
+        statusLine = "Momentaufnahme bereit — frag z. B. „Was ist das?“"
+        HapticService.imageSnap()
+    }
+
+    /// Enable Live Screen context inside Speak (Broadcast / existing session).
+    func enableScreenShare() async {
+        guard let connection else { return }
+        let live = connection.liveScreen
+        if !live.hasConsent {
+            statusLine = "Live Screen Zustimmung nötig — öffne Studio → Live Screen"
+            HapticService.error()
+            connection.pendingOpenLiveScreen = true
+            connection.pendingTab = 2
+            return
+        }
+        do {
+            if !live.isActive {
+                try live.startSession()
+            }
+            // Speak-driven: don't auto-spam vision; only on questions / snapshots
+            live.autoAssistEnabled = false
+            screenShareEnabled = true
+            statusLine = "🖥 Bildschirm — tippe rot „Übertragen“ falls noch nicht aktiv"
+            HapticService.success()
+        } catch {
+            statusLine = (error as? LocalizedError)?.errorDescription ?? "Live Screen Start fehlgeschlagen"
+            HapticService.error()
+        }
+    }
+
+    func disableScreenShare() {
+        screenShareEnabled = false
+        if let live = connection?.liveScreen, live.isActive {
+            // Keep session if user opened Live Screen UI separately; only clear Speak flag
+            live.autoAssistEnabled = true
+            live.suppressAutoVision = false
+        }
+        statusLine = isRunning ? "Bildschirm aus · nur Sprache" : "Speak bereit"
+        HapticService.soft()
+    }
+
+    private static func asksForVision(_ text: String) -> Bool {
+        let t = text.lowercased()
+        return t.range(
+            of: #"\b(was ist das|was siehst|was soll ich|wo tippe|wo klicke|schau|schau mal|erkenne|beschreib|analysiere.*(bild|foto|das|bildschirm)|sieh dir|sieh mal|kamera|bildschirm|screen|fenster|fehlermeldung)\b"#,
+            options: .regularExpression
+        ) != nil
+    }
+
+    private static func asksForScreenMemory(_ text: String) -> Bool {
+        let t = text.lowercased()
+        return t.range(
+            of: #"\b(was war|nochmal.*(bildschirm|screen)|vorher.*(bildschirm|fenster)|erinnerst du|was stand|was war auf)\b"#,
+            options: .regularExpression
+        ) != nil
+    }
+
+    /// „Sprachmodus beenden“ — only evaluated inside an active Speak session (`handleUtterance`).
     private static func isEndSpeakCommand(_ text: String) -> Bool {
         let n = text
             .lowercased()
             .folding(options: .diacriticInsensitive, locale: Locale(identifier: "de_DE"))
             .trimmingCharacters(in: .whitespacesAndNewlines)
-        let compact = n.replacingOccurrences(of: "  ", with: " ")
+        let compact = n
+            .replacingOccurrences(of: #"\s+"#, with: " ", options: .regularExpression)
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+
+        // Ignore meta questions about the words themselves
+        if compact.contains("bedeutet") || compact.contains("heisst") || compact.contains("heißt")
+            || compact.contains("was ist ein") || compact.contains("erkläre") || compact.contains("erklaere") {
+            return false
+        }
+        // Commands are short — long sentences are normal chat
+        if compact.count > 64 { return false }
+
         let phrases = [
             "sprachmodus beenden",
+            "beende sprachmodus",
+            "beenden sprachmodus",
+            "stoppe sprachmodus",
+            "stopp sprachmodus",
+            "stop sprachmodus",
             "ende sprachmodus",
             "sprachmodus ende",
+            "sprachmodus stoppen",
+            "zurück zum chat",
+            "zurueck zum chat",
+            "zurück in den chat",
+            "zurueck in den chat",
+            "back to chat",
             "end language mode",
             "end speak",
             "stop speak",
+            "stoppe speak",
             "speak beenden",
             "speak stoppen",
-            "stoppe speak",
             "noco speak stoppen",
-            "stopp sprachmodus",
-            "stop sprachmodus"
+            "beende speak",
+            "schließ sprachmodus",
+            "schliess sprachmodus",
+            "exit speak",
+            "quit speak"
         ]
         if phrases.contains(where: { compact.contains($0) }) { return true }
-        // Exact short stops (avoid matching normal sentences)
+
+        // Exact short stops only (avoid matching normal sentences)
         let exact = ["stopp", "stop", "stopp speak", "stop speak"]
         return exact.contains(compact)
     }

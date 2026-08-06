@@ -2,8 +2,8 @@ import PhotosUI
 import SwiftUI
 import UIKit
 import UniformTypeIdentifiers
-import CoreTransferable
 
+/// Minimal chat composer — all extras live in the + panel.
 struct ChatInputBar: View {
     @EnvironmentObject private var connection: ConnectionStore
     @Binding var text: String
@@ -12,110 +12,79 @@ struct ChatInputBar: View {
     var onVoice: (() -> Void)? = nil
     var onWritingTools: (() -> Void)? = nil
 
+    @State private var showPlus = false
     @State private var showLibrary = false
     @State private var showCamera = false
     @State private var photoItem: PhotosPickerItem?
-    @State private var scrubMenuVisible = false
-    @State private var scrubSelection = 0
-
-    private var modeBinding: Binding<AIMode> {
-        Binding(
-            get: { connection.chat.mode },
-            set: {
-                if connection.chat.mode != $0 {
-                    HapticService.selection()
-                }
-                connection.chat.setMode($0)
-            }
-        )
-    }
+    @State private var showDocumentPicker = false
+    @State private var showFilePicker = false
 
     var body: some View {
-        ZStack(alignment: .bottomLeading) {
-            HStack(alignment: .bottom, spacing: 10) {
-                plusButton
+        VStack(spacing: 8) {
+            if connection.chat.workPhase != .idle {
+                ModeStatusTheater(phase: connection.chat.workPhase, mode: connection.chat.mode)
+                    .transition(.opacity.combined(with: .move(edge: .bottom)))
+            }
 
-                TextField("Frag NOCO…", text: $text, axis: .vertical)
-                .lineLimit(1...8)
-                .focused($focused)
-                .submitLabel(.send)
-                .onSubmit { send() }
-                .onChange(of: text) { _, newValue in
-                    connection.chat.publishTyping(newValue)
-                    if newValue.contains(where: { $0 == "\n" || $0 == "\r" }) {
-                        text = newValue
-                            .replacingOccurrences(of: "\r", with: "")
-                            .replacingOccurrences(of: "\n", with: "")
-                        send()
-                    }
+            if let intake = connection.chat.pendingAgentIntake {
+                AgentIntakeHint(questions: intake.questions)
+                    .transition(.opacity.combined(with: .move(edge: .bottom)))
+            }
+
+            HStack(alignment: .bottom, spacing: 10) {
+                Button {
+                    HapticService.open()
+                    showPlus = true
+                } label: {
+                    Image(systemName: "plus.circle.fill")
+                        .font(.system(size: 32))
+                        .foregroundStyle(NOCOAITheme.accent)
+                        .shadow(color: NOCOAITheme.glowPrimary.opacity(0.35), radius: 6)
+                        .symbolEffect(.bounce, value: showPlus)
                 }
-                .onChange(of: focused) { _, isFocused in
-                    if isFocused {
-                        HapticService.focus()
-                    } else {
-                        connection.chat.clearTyping()
+                .accessibilityLabel("Werkzeuge")
+
+                TextField(placeholder, text: $text, axis: .vertical)
+                    .lineLimit(1...8)
+                    .focused($focused)
+                    .submitLabel(.send)
+                    .onSubmit { send() }
+                    .onChange(of: text) { _, newValue in
+                        connection.chat.publishTyping(newValue)
+                        connection.chat.noteDraftChanged(newValue)
+                        if newValue.contains(where: { $0 == "\n" || $0 == "\r" }) {
+                            text = newValue
+                                .replacingOccurrences(of: "\r", with: "")
+                                .replacingOccurrences(of: "\n", with: "")
+                            send()
+                        }
                     }
-                }
-                .padding(14)
-                .background(
-                    RoundedRectangle(cornerRadius: 20, style: .continuous)
-                        .fill(.ultraThinMaterial)
-                        .overlay(
-                            RoundedRectangle(cornerRadius: 20, style: .continuous)
-                                .stroke(
-                                    connection.chat.isSending
-                                        ? AngularGradient(
-                                            colors: [
-                                                NOCOAITheme.glowPrimary,
-                                                NOCOAITheme.glowSecondary,
-                                                NOCOAITheme.glowAccent,
-                                                NOCOAITheme.glowPrimary
-                                            ],
-                                            center: .center
-                                        )
-                                        : AngularGradient(
-                                            colors: [
-                                                focused
-                                                    ? NOCOAITheme.glowPrimary.opacity(0.65)
-                                                    : Color.primary.opacity(0.08),
-                                                focused
-                                                    ? NOCOAITheme.glowSecondary.opacity(0.4)
-                                                    : Color.primary.opacity(0.08)
-                                            ],
-                                            center: .center
-                                        ),
-                                    lineWidth: focused || connection.chat.isSending ? 1.4 : 1
-                                )
-                        )
-                        .shadow(
-                            color: (focused || connection.chat.isSending)
-                                ? NOCOAITheme.glowPrimary.opacity(0.35)
-                                : .clear,
-                            radius: focused || connection.chat.isSending ? 14 : 0
-                        )
-                )
-                .animation(.easeInOut(duration: 0.35), value: connection.chat.isSending)
+                    .onChange(of: focused) { _, isFocused in
+                        if isFocused { HapticService.focus() }
+                        else { connection.chat.clearTyping() }
+                    }
+                    .padding(14)
+                    .background(composerBackground)
 
                 Button {
-                HapticService.medium()
-                focused = false
-                onVoice?()
+                    HapticService.medium()
+                    focused = false
+                    onVoice?()
                 } label: {
-                Image(systemName: "waveform.circle.fill")
-                    .font(.system(size: 34))
-                    .foregroundStyle(
-                        LinearGradient(
-                            colors: [
-                                Color(red: 0.35, green: 0.8, blue: 1),
-                                Color(red: 0.58, green: 0.48, blue: 0.98),
-                                Color(red: 0.95, green: 0.55, blue: 0.78)
-                            ],
-                            startPoint: .topLeading,
-                            endPoint: .bottomTrailing
+                    Image(systemName: "waveform.circle.fill")
+                        .font(.system(size: 34))
+                        .foregroundStyle(
+                            LinearGradient(
+                                colors: [
+                                    Color(red: 0.35, green: 0.8, blue: 1),
+                                    Color(red: 0.58, green: 0.48, blue: 0.98),
+                                    Color(red: 0.95, green: 0.55, blue: 0.78)
+                                ],
+                                startPoint: .topLeading,
+                                endPoint: .bottomTrailing
+                            )
                         )
-                    )
-                    .shadow(color: Color(red: 0.55, green: 0.45, blue: 1).opacity(0.5), radius: 10)
-                    .symbolEffect(.bounce, value: connection.speak.isRunning)
+                        .shadow(color: Color(red: 0.55, green: 0.45, blue: 1).opacity(0.45), radius: 10)
                 }
                 .buttonStyle(IntelligencePressStyle(haptic: { HapticService.soft() }))
                 .disabled(!connection.isOnline || connection.chat.isSending)
@@ -123,49 +92,51 @@ struct ChatInputBar: View {
                 .accessibilityLabel("Speak")
 
                 if connection.chat.isSending {
-                Button {
-                    HapticService.warning()
-                    connection.chat.cancelSend()
-                } label: {
-                    Image(systemName: "stop.circle.fill")
-                        .font(.system(size: 36))
-                        .foregroundStyle(NOCOAITheme.danger)
-                        .shadow(color: NOCOAITheme.danger.opacity(0.45), radius: 10)
-                }
-                .buttonStyle(IntelligencePressStyle(haptic: { HapticService.rigid() }))
-                .accessibilityLabel("Abbrechen")
+                    Button {
+                        HapticService.warning()
+                        connection.chat.cancelSend()
+                    } label: {
+                        Image(systemName: "stop.circle.fill")
+                            .font(.system(size: 36))
+                            .foregroundStyle(NOCOAITheme.danger)
+                    }
+                    .accessibilityLabel("Abbrechen")
                 } else {
-                Button(action: send) {
-                    Image(systemName: "arrow.up.circle.fill")
-                        .font(.system(size: 36))
-                        .shadow(color: NOCOAITheme.glowPrimary.opacity(0.55), radius: 10)
+                    Button(action: send) {
+                        Image(systemName: "arrow.up.circle.fill")
+                            .font(.system(size: 36))
+                            .foregroundStyle(NOCOAITheme.accent)
+                            .shadow(color: NOCOAITheme.glowPrimary.opacity(0.5), radius: 10)
+                    }
+                    .disabled(text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+                    .buttonStyle(IntelligencePressStyle(haptic: { HapticService.soft() }))
                 }
-                .buttonStyle(IntelligencePressStyle(haptic: { HapticService.soft() }))
-                .disabled(text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
-                .foregroundStyle(NOCOAITheme.accent)
-                .symbolEffect(.bounce, value: connection.chat.isSending)
-                }
-            }
-
-            if scrubMenuVisible {
-                scrubMenu
-                    .offset(x: 0, y: -52)
-                    .transition(.opacity.combined(with: .move(edge: .bottom)))
-                    .allowsHitTesting(false)
             }
         }
         .padding(.horizontal, 16)
-        .padding(.vertical, 12)
+        .padding(.vertical, 10)
         .background(.ultraThinMaterial)
+        .animation(.spring(response: 0.35, dampingFraction: 0.84), value: connection.chat.workPhase)
+        .animation(.spring(response: 0.35, dampingFraction: 0.84), value: connection.chat.pendingAgentIntake != nil)
+        .sheet(isPresented: $showPlus) {
+            PlusToolsPanel(
+                onCamera: { showCamera = true },
+                onLibrary: { showLibrary = true },
+                onDocument: { showDocumentPicker = true },
+                onFile: { showFilePicker = true },
+                onWritingTools: { onWritingTools?() }
+            )
+            .environmentObject(connection)
+        }
         .photosPicker(isPresented: $showLibrary, selection: $photoItem, matching: .images)
-        .onChange(of: photoItem) { item in
+        .onChange(of: photoItem) { _, item in
             guard let item else { return }
             Task {
                 if let data = await ChatPhotoLoader.loadJPEG(from: item) {
                     await sendVision(data)
                 } else {
                     HapticService.error()
-                    connection.chat.lastError = "Foto konnte nicht geladen werden — erneut versuchen"
+                    connection.chat.lastError = "Foto konnte nicht geladen werden"
                 }
                 photoItem = nil
             }
@@ -178,176 +149,114 @@ struct ChatInputBar: View {
             }
             .ignoresSafeArea()
         }
-    }
-
-    private var plusButton: some View {
-        Image(systemName: "plus.circle.fill")
-            .font(.title2)
-            .foregroundStyle(NOCOAITheme.accent)
-            .shadow(color: NOCOAITheme.glowPrimary.opacity(0.4), radius: 6)
-            .frame(width: 36, height: 36)
-            .contentShape(Circle())
-            .gesture(
-                DragGesture(minimumDistance: 0)
-                    .onChanged { value in
-                        if !scrubMenuVisible {
-                            scrubSelection = 0
-                            withAnimation(.snappy) { scrubMenuVisible = true }
-                            HapticService.longPress()
-                        }
-                        let next = min(max(Int((-value.translation.height + 22) / 48), 0), scrubItems.count - 1)
-                        if next != scrubSelection {
-                            scrubSelection = next
-                            HapticService.whisper()
-                        }
-                    }
-                    .onEnded { _ in
-                        let selection = scrubSelection
-                        withAnimation(.snappy) { scrubMenuVisible = false }
-                        activateScrubItem(at: selection)
-                    }
-            )
-            .accessibilityLabel("Plus — Foto, Kamera, Modell und Schreibwerkzeuge")
-    }
-
-    private var scrubItems: [ScrubItem] {
-        var items: [ScrubItem] = [
-            .init(title: "Foto", icon: "photo.on.rectangle", action: .library),
-            .init(title: "Kamera", icon: "camera.fill", action: .camera)
-        ]
-        items += AIMode.premiumCases.map { .init(title: $0.label, icon: $0.systemImage, action: .mode($0)) }
-        if onWritingTools != nil {
-            items.append(.init(title: "Schreibwerkzeuge", icon: "pencil.and.outline", action: .writingTools))
+        .fileImporter(
+            isPresented: $showDocumentPicker,
+            allowedContentTypes: [.pdf, .plainText, .utf8PlainText],
+            allowsMultipleSelection: false
+        ) { result in
+            guard case .success(let urls) = result, let url = urls.first else { return }
+            Task { await importDocument(url, preferWriting: true) }
         }
-        return items
+        .fileImporter(
+            isPresented: $showFilePicker,
+            allowedContentTypes: [.item, .data, .image, .pdf, .plainText],
+            allowsMultipleSelection: false
+        ) { result in
+            guard case .success(let urls) = result, let url = urls.first else { return }
+            Task { await importDocument(url, preferWriting: false) }
+        }
     }
 
-    private var scrubMenu: some View {
-        VStack(alignment: .leading, spacing: 4) {
-            ForEach(scrubItems.indices.reversed(), id: \.self) { index in
-                let item = scrubItems[index]
-                Label(item.title, systemImage: item.icon)
-                    .font(.subheadline.weight(.semibold))
-                    .foregroundStyle(index == scrubSelection ? .white : .primary)
-                    .padding(.horizontal, 12)
-                    .frame(height: 44)
-                    .background(
-                        Capsule().fill(index == scrubSelection ? NOCOAITheme.accent : Color.primary.opacity(0.08))
+    private var placeholder: String {
+        if connection.chat.pendingAgentIntake != nil {
+            return "Antworten auf die Agent-Fragen…"
+        }
+        switch connection.chat.mode {
+        case .agent: return "Ziel für den Agent…"
+        case .think: return "Tiefe Frage…"
+        case .flash: return "Kurze Frage…"
+        default: return "Frag NOCO…"
+        }
+    }
+
+    private var composerBackground: some View {
+        RoundedRectangle(cornerRadius: 20, style: .continuous)
+            .fill(.ultraThinMaterial)
+            .overlay(
+                RoundedRectangle(cornerRadius: 20, style: .continuous)
+                    .stroke(
+                        focused || connection.chat.isSending
+                            ? AngularGradient(
+                                colors: [NOCOAITheme.glowPrimary, NOCOAITheme.glowSecondary, NOCOAITheme.glowAccent, NOCOAITheme.glowPrimary],
+                                center: .center
+                            )
+                            : AngularGradient(
+                                colors: [Color.primary.opacity(0.08), Color.primary.opacity(0.08)],
+                                center: .center
+                            ),
+                        lineWidth: focused || connection.chat.isSending ? 1.3 : 1
                     )
-            }
-        }
-        .padding(6)
-        .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 16, style: .continuous))
-        .shadow(color: .black.opacity(0.18), radius: 14, y: 5)
-    }
-
-    private func activateScrubItem(at index: Int) {
-        guard scrubItems.indices.contains(index) else { return }
-        HapticService.success()
-        switch scrubItems[index].action {
-        case .library:
-            showLibrary = true
-        case .camera:
-            showCamera = true
-        case .mode(let mode):
-            modeBinding.wrappedValue = mode
-        case .writingTools:
-            onWritingTools?()
-        }
-    }
-
-    private struct ScrubItem: Identifiable {
-        enum Action {
-            case library, camera, mode(AIMode), writingTools
-        }
-
-        let title: String
-        let icon: String
-        let action: Action
-        var id: String { title }
-    }
-
-    private func sendVision(_ data: Data) async {
-        HapticService.imageSnap()
-        await connection.chat.sendImage(data, caption: text.isEmpty ? nil : text)
-        text = ""
-        focused = false
+            )
     }
 
     private func send() {
         guard !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return }
         connection.chat.clearTyping()
-        focused = false
         onSend()
     }
+
+    private func sendVision(_ data: Data) async {
+        HapticService.imageSnap()
+        // Keep current depth mode — don't force Vision as a chat mode
+        await connection.chat.sendImage(data, caption: text.isEmpty ? nil : text)
+        text = ""
+        focused = false
+    }
+
+    private func importDocument(_ url: URL, preferWriting: Bool) async {
+        let accessed = url.startAccessingSecurityScopedResource()
+        defer { if accessed { url.stopAccessingSecurityScopedResource() } }
+        do {
+            let data = try Data(contentsOf: url)
+            if UTType(filenameExtension: url.pathExtension)?.conforms(to: .image) == true {
+                await sendVision(data)
+                return
+            }
+            let textBody = String(data: data, encoding: .utf8)
+                ?? String(data: data, encoding: .isoLatin1)
+                ?? ""
+            let snippet = textBody.trimmingCharacters(in: .whitespacesAndNewlines)
+            guard !snippet.isEmpty else {
+                connection.chat.lastError = "Datei konnte nicht gelesen werden"
+                return
+            }
+            let name = url.lastPathComponent
+            text = "Dokument „\(name)“:\n\n\(snippet.prefix(6000))\n\nBitte analysieren."
+            if preferWriting { connection.chat.setMode(.writing) }
+            HapticService.success()
+        } catch {
+            connection.chat.lastError = "Datei nicht lesbar"
+            HapticService.error()
+        }
+    }
 }
 
-/// Camera capture for Vision uploads.
-struct CameraPickerView: UIViewControllerRepresentable {
-    var onFinish: (Data?) -> Void
+private struct AgentIntakeHint: View {
+    let questions: [String]
 
-    func makeCoordinator() -> Coordinator { Coordinator(onFinish: onFinish) }
-
-    func makeUIViewController(context: Context) -> UIImagePickerController {
-        let picker = UIImagePickerController()
-        picker.sourceType = UIImagePickerController.isSourceTypeAvailable(.camera) ? .camera : .photoLibrary
-        picker.delegate = context.coordinator
-        picker.allowsEditing = false
-        return picker
-    }
-
-    func updateUIViewController(_ uiViewController: UIImagePickerController, context: Context) {}
-
-    final class Coordinator: NSObject, UIImagePickerControllerDelegate, UINavigationControllerDelegate {
-        let onFinish: (Data?) -> Void
-        init(onFinish: @escaping (Data?) -> Void) { self.onFinish = onFinish }
-
-        func imagePickerControllerDidCancel(_ picker: UIImagePickerController) {
-            onFinish(nil)
-        }
-
-        func imagePickerController(
-            _ picker: UIImagePickerController,
-            didFinishPickingMediaWithInfo info: [UIImagePickerController.InfoKey: Any]
-        ) {
-            let image = (info[.editedImage] ?? info[.originalImage]) as? UIImage
-            onFinish(image?.jpegData(compressionQuality: 0.85))
-        }
-    }
-}
-
-/// Reliable PhotosPicker → JPEG (plain Data transferable often fails on HEIC library assets).
-enum ChatPhotoLoader {
-    struct TransferImage: Transferable {
-        let data: Data
-
-        static var transferRepresentation: some TransferRepresentation {
-            DataRepresentation(importedContentType: .image) { data in
-                TransferImage(data: data)
-            }
-            DataRepresentation(importedContentType: .jpeg) { data in
-                TransferImage(data: data)
-            }
-            DataRepresentation(importedContentType: .png) { data in
-                TransferImage(data: data)
-            }
-            DataRepresentation(importedContentType: .heic) { data in
-                TransferImage(data: data)
+    var body: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            Text("Agent wartet auf deine Antworten")
+                .font(.caption.weight(.bold))
+                .foregroundStyle(Color(red: 0.35, green: 0.78, blue: 0.72))
+            ForEach(questions, id: \.self) { q in
+                Text("• \(q)")
+                    .font(.caption2)
+                    .foregroundStyle(.secondary)
             }
         }
-    }
-
-    static func loadJPEG(from item: PhotosPickerItem) async -> Data? {
-        if let transfer = try? await item.loadTransferable(type: TransferImage.self),
-           let ui = UIImage(data: transfer.data),
-           let jpeg = ui.jpegData(compressionQuality: 0.9) {
-            return jpeg
-        }
-        if let data = try? await item.loadTransferable(type: Data.self),
-           let ui = UIImage(data: data),
-           let jpeg = ui.jpegData(compressionQuality: 0.9) {
-            return jpeg
-        }
-        return nil
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(12)
+        .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
     }
 }

@@ -62,26 +62,28 @@ struct MagischerRadiererView: View {
         VStack(spacing: 0) {
             header
                 .padding(.horizontal, 20)
-                .padding(.top, 12)
-                .padding(.bottom, 8)
+                .padding(.top, 10)
+                .padding(.bottom, 6)
 
             canvasCard
                 .padding(.horizontal, 16)
-                .frame(minHeight: 280, maxHeight: 360)
+                .frame(minHeight: 240, maxHeight: 300)
 
-            ScrollView {
-                VStack(spacing: 16) {
-                    controls
-                    presetRow
+            VStack(spacing: 12) {
+                toolGrid
+                if preset == .custom || preset == .replace {
                     promptCard
-                    actionButtons
-                    if let resultImage {
-                        resultCard(resultImage)
-                    }
                 }
-                .padding(20)
+                actionButtons
+                if let resultImage {
+                    resultCard(resultImage)
+                }
             }
-            .scrollDisabled(isPainting || isWorking)
+            .padding(.horizontal, 16)
+            .padding(.top, 12)
+            .padding(.bottom, 16)
+
+            Spacer(minLength: 0)
         }
         .nocoBackground()
         .overlay {
@@ -229,25 +231,63 @@ struct MagischerRadiererView: View {
         )
     }
 
-    private var controls: some View {
-        VStack(spacing: 10) {
+    private var toolGrid: some View {
+        VStack(alignment: .leading, spacing: 10) {
             HStack {
-                Text("Pinsel")
+                Text("Pinsel \(Int(brushSize))")
                     .font(.caption.weight(.semibold))
                 Slider(value: $brushSize, in: 12...72)
-                Text("\(Int(brushSize))")
-                    .font(.caption.monospacedDigit())
-                    .frame(width: 28, alignment: .trailing)
             }
-            HStack(spacing: 10) {
+
+            LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible())], spacing: 10) {
+                ForEach(Preset.allCases) { p in
+                    Button {
+                        HapticService.selection()
+                        withAnimation(.spring(response: 0.35, dampingFraction: 0.82)) {
+                            preset = p
+                            if p != .custom {
+                                instruction = p.defaultText
+                            } else if instruction == Preset.erase.defaultText || instruction == Preset.replace.defaultText {
+                                instruction = ""
+                            }
+                            if p == .custom || p == .replace { promptFocused = true }
+                        }
+                    } label: {
+                        VStack(alignment: .leading, spacing: 8) {
+                            Image(systemName: p.systemImage)
+                                .font(.title3.weight(.semibold))
+                                .foregroundStyle(preset == p ? .white : NOCOAITheme.accent)
+                            Text(p.title)
+                                .font(.subheadline.weight(.bold))
+                                .foregroundStyle(preset == p ? .white : .primary)
+                            Text(presetBlurb(p))
+                                .font(.caption2)
+                                .foregroundStyle(preset == p ? .white.opacity(0.85) : .secondary)
+                                .lineLimit(2)
+                        }
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .padding(14)
+                        .background {
+                            RoundedRectangle(cornerRadius: 16, style: .continuous)
+                                .fill(preset == p
+                                      ? Color(red: 0.45, green: 0.4, blue: 0.95).opacity(0.95)
+                                      : Color.primary.opacity(0.05))
+                        }
+                        .overlay(
+                            RoundedRectangle(cornerRadius: 16, style: .continuous)
+                                .stroke(NOCOAITheme.glowPrimary.opacity(preset == p ? 0.5 : 0.2), lineWidth: 1)
+                        )
+                    }
+                    .buttonStyle(IntelligencePressStyle(haptic: { HapticService.soft() }))
+                }
+
                 Button {
                     HapticService.light()
                     showLibrary = true
                 } label: {
-                    Label("Anderes Foto", systemImage: "photo")
+                    gridUtility(title: "Foto", subtitle: "Galerie öffnen", icon: "photo.on.rectangle")
                 }
-                .buttonStyle(.bordered)
-                .disabled(isWorking)
+                .buttonStyle(IntelligencePressStyle(haptic: { HapticService.soft() }))
 
                 Button {
                     HapticService.soft()
@@ -255,65 +295,48 @@ struct MagischerRadiererView: View {
                     maskReady = false
                     status = "Bereich bemalen — Standard: Entfernen"
                 } label: {
-                    Label("Maske löschen", systemImage: "trash")
+                    gridUtility(title: "Maske", subtitle: "Bemalung löschen", icon: "trash")
                 }
-                .buttonStyle(.bordered)
+                .buttonStyle(IntelligencePressStyle(haptic: { HapticService.soft() }))
                 .disabled(sourceImage == nil || isWorking)
             }
         }
     }
 
-    private var presetRow: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            Text("Aktion")
-                .font(.caption.weight(.semibold))
-                .foregroundStyle(.secondary)
-            HStack(spacing: 8) {
-                ForEach(Preset.allCases) { p in
-                    Button {
-                        HapticService.selection()
-                        withAnimation(.spring(response: 0.35, dampingFraction: 0.8)) {
-                            preset = p
-                            if p != .custom {
-                                instruction = p.defaultText
-                            } else if instruction == Preset.erase.defaultText || instruction == Preset.replace.defaultText {
-                                instruction = ""
-                            }
-                            if p == .custom || p == .replace {
-                                promptFocused = true
-                            }
-                        }
-                    } label: {
-                        Label(p.title, systemImage: p.systemImage)
-                            .font(.caption.weight(.semibold))
-                            .padding(.horizontal, 12)
-                            .padding(.vertical, 9)
-                            .frame(maxWidth: .infinity)
-                            .background {
-                                if preset == p {
-                                    Capsule(style: .continuous)
-                                        .fill(
-                                            LinearGradient(
-                                                colors: [
-                                                    Color(red: 0.4, green: 0.55, blue: 1),
-                                                    Color(red: 0.75, green: 0.4, blue: 0.95)
-                                                ],
-                                                startPoint: .leading,
-                                                endPoint: .trailing
-                                            )
-                                        )
-                                } else {
-                                    Capsule(style: .continuous)
-                                        .fill(Color.primary.opacity(0.06))
-                                }
-                            }
-                            .foregroundStyle(preset == p ? .white : .primary)
-                    }
-                    .buttonStyle(.plain)
-                }
-            }
+    private func presetBlurb(_ p: Preset) -> String {
+        switch p {
+        case .erase: return "Objekt entfernen, Hintergrund füllen"
+        case .replace: return "Markiertes durch etwas Neues ersetzen"
+        case .custom: return "Eigene Anweisung schreiben"
         }
     }
+
+    private func gridUtility(title: String, subtitle: String, icon: String) -> some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Image(systemName: icon)
+                .font(.title3.weight(.semibold))
+                .foregroundStyle(NOCOAITheme.accent)
+            Text(title)
+                .font(.subheadline.weight(.bold))
+            Text(subtitle)
+                .font(.caption2)
+                .foregroundStyle(.secondary)
+                .lineLimit(2)
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(14)
+        .background(
+            RoundedRectangle(cornerRadius: 16, style: .continuous)
+                .fill(.ultraThinMaterial)
+                .overlay(
+                    RoundedRectangle(cornerRadius: 16, style: .continuous)
+                        .stroke(NOCOAITheme.glowPrimary.opacity(0.22), lineWidth: 1)
+                )
+        )
+    }
+
+    private var controls: some View { EmptyView() }
+    private var presetRow: some View { EmptyView() }
 
     private var promptCard: some View {
         VStack(alignment: .leading, spacing: 8) {

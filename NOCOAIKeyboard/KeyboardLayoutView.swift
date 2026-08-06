@@ -14,32 +14,33 @@ struct KeyboardLayoutView: View {
     private let num3 = Array(".,?!ß'")
 
     var body: some View {
-        VStack(spacing: 8) {
+        VStack(spacing: 7) {
             if model.showingNumbers {
                 numbersLayout
             } else {
                 lettersLayout
             }
         }
-        .padding(.horizontal, 3)
-        .padding(.top, 4)
+        .padding(.horizontal, 5)
+        .padding(.top, 6)
+        .padding(.bottom, 2)
         .animation(.easeOut(duration: 0.15), value: model.showingNumbers)
     }
 
     private var lettersLayout: some View {
-        VStack(spacing: 8) {
+        VStack(spacing: 7) {
             letterRow(row1)
-            letterRow(row2, sidePad: 4)
+            letterRow(row2, sidePad: 10)
             HStack(spacing: 6) {
                 ModifierKey(
                     symbol: model.capsLock ? "capslock.fill" : "shift.fill",
-                    width: 44,
+                    width: 46,
                     active: model.shiftOn || model.capsLock
                 ) {
                     model.toggleShift()
                 }
                 letterRowContent(row3)
-                DeleteKey(width: 44) {
+                DeleteKey(width: 46) {
                     model.beginDeleteHold()
                 } onEnd: {
                     model.endDeleteHold()
@@ -50,15 +51,15 @@ struct KeyboardLayoutView: View {
     }
 
     private var numbersLayout: some View {
-        VStack(spacing: 8) {
+        VStack(spacing: 7) {
             letterRow(num1)
             letterRow(num2)
             HStack(spacing: 6) {
-                ModifierKey(title: "#+=", width: 44) {
+                ModifierKey(title: "#+=", width: 46) {
                     model.insert("#")
                 }
                 letterRowContent(num3)
-                DeleteKey(width: 44) {
+                DeleteKey(width: 46) {
                     model.beginDeleteHold()
                 } onEnd: {
                     model.endDeleteHold()
@@ -69,26 +70,22 @@ struct KeyboardLayoutView: View {
     }
 
     private func bottomRow(leftTitle: String) -> some View {
-        HStack(spacing: 5) {
-            ModifierKey(title: leftTitle, width: 40) {
+        HStack(spacing: 6.5) {
+            ModifierKey(title: leftTitle, width: 42) {
                 model.toggleNumbers()
             }
-            // Period key — hold & scrub for comma and other punctuation
-            PunctuationKey(width: 34) { inserted in
+            PunctuationKey(width: 36) { inserted in
                 model.insert(inserted)
             }
             SpaceKey(
                 onTap: { model.space() },
                 onCursorMove: { model.moveCursor(by: $0) }
             )
-            // Fragen stays on the bottom row, but narrower so space can grow
-            ModifierKey(symbol: "bubble.left.fill", width: 36) {
-                model.toggleAskPanel()
-            }
-            ModifierKey(title: "return", width: 62, prominent: true) {
+            ModifierKey(title: "return", width: 106, prominent: true) {
                 model.returnKey()
             }
         }
+        .padding(.horizontal, 2)
     }
 
     private func letterRow(_ chars: [Character], sidePad: CGFloat = 0) -> some View {
@@ -520,7 +517,7 @@ private struct ModifierKey: View {
                     .font(.system(size: 13, weight: .semibold, design: .rounded))
             }
         }
-        .frame(width: width, height: 46)
+        .frame(width: width, height: prominent ? 48 : 46)
         .foregroundStyle(prominent ? .white : .white.opacity(0.9))
         .background(
             RoundedRectangle(cornerRadius: 9, style: .continuous)
@@ -588,16 +585,16 @@ private struct SpaceKey: View {
             .font(.system(size: 15, weight: .medium, design: .rounded))
             .foregroundStyle(.white.opacity(0.9))
             .frame(maxWidth: .infinity)
-            .frame(height: 46)
+            .frame(height: 48)
             .background(
-                RoundedRectangle(cornerRadius: 9, style: .continuous)
+                RoundedRectangle(cornerRadius: 10, style: .continuous)
                     .fill(
                         trackpad
                         ? Color(red: 0.18, green: 0.32, blue: 0.55)
                         : Color(red: 0.26, green: 0.27, blue: 0.32).opacity(pressed ? 0.85 : 1)
                     )
                     .overlay(
-                        RoundedRectangle(cornerRadius: 9, style: .continuous)
+                        RoundedRectangle(cornerRadius: 10, style: .continuous)
                             .stroke(Color.white.opacity(trackpad ? 0.28 : 0.1), lineWidth: 0.5)
                     )
                     .shadow(color: .black.opacity(0.25), radius: 0.4, y: 1)

@@ -4,6 +4,11 @@ struct VoiceModeView: View {
     @EnvironmentObject private var connection: ConnectionStore
     @Environment(\.dismiss) private var dismiss
     @Environment(\.scenePhase) private var scenePhase
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
+    @StateObject private var camera = VisionLiveCameraController()
+    @State private var cameraOn = false
+    @State private var micPulse = false
 
     private var speak: SpeakSessionController { connection.speak }
     private var voice: VoiceService { speak.voice }
@@ -16,17 +21,29 @@ struct VoiceModeView: View {
                 topBar
                     .padding(.bottom, 4)
 
+                if cameraOn {
+                    cameraPreview
+                        .padding(.horizontal, 18)
+                        .padding(.top, 8)
+                        .transition(.opacity.combined(with: .move(edge: .top)))
+                }
+
                 Spacer(minLength: 8)
 
-                // Visualizer first — hero of the Speak UI
-                IntelligenceVoiceStage(phase: voice.phase, level: voice.level, bands: voice.bands)
-                    .frame(maxHeight: 260)
-                    .padding(.horizontal, 4)
+                ZStack {
+                    if !cameraOn {
+                        IntelligenceVoiceStage(phase: voice.phase, level: voice.level, bands: voice.bands)
+                            .frame(maxHeight: 260)
+                            .padding(.horizontal, 4)
+                    } else {
+                        compactVoiceMeter
+                    }
+                }
+                .animation(.spring(response: 0.4, dampingFraction: 0.84), value: cameraOn)
 
                 phaseBadge
                     .padding(.top, 6)
 
-                // Transcript / reply under the stage
                 promptPanel
                     .padding(.horizontal, 18)
                     .padding(.top, 14)
@@ -47,12 +64,14 @@ struct VoiceModeView: View {
                     .padding(.bottom, 30)
             }
         }
+        .animation(.spring(response: 0.42, dampingFraction: 0.86), value: cameraOn)
+        .animation(.spring(response: 0.35, dampingFraction: 0.85), value: voice.phase)
         .task {
             _ = await voice.requestPermissions()
             if !connection.isOnline {
                 speak.statusLine = "PC offline — Companion in NOCO AI X starten"
             } else if !speak.isRunning {
-                speak.statusLine = "Starten → Pause sendet. Antwort bleibt hier sichtbar."
+                speak.statusLine = "Starten → Pause sendet. Kamera jederzeit zuschaltbar."
             }
         }
         .onChange(of: scenePhase) { _, phase in
@@ -64,6 +83,122 @@ struct VoiceModeView: View {
                 }
             }
         }
+        .onDisappear {
+            if cameraOn {
+                camera.stop()
+                cameraOn = false
+                speak.visionCameraEnabled = false
+                speak.visionFrameProvider = nil
+            }
+        }
+        .onChange(of: speak.visionCameraEnabled) { _, enabled in
+            if !enabled, cameraOn {
+                camera.stop()
+                cameraOn = false
+            }
+        }
+        .onChange(of: speak.showSpeakUI) { _, show in
+            if !show, cameraOn {
+                camera.stop()
+                cameraOn = false
+                speak.visionFrameProvider = nil
+            }
+        }
+        .onAppear {
+            withAnimation(.easeInOut(duration: 0.9).repeatForever(autoreverses: true)) {
+                micPulse = true
+            }
+        }
+    }
+
+    private var cameraPreview: some View {
+        ZStack(alignment: .topTrailing) {
+            VisionLiveCameraPreview(session: camera.session)
+                .frame(height: 220)
+                .clipShape(RoundedRectangle(cornerRadius: 22, style: .continuous))
+                .overlay(
+                    RoundedRectangle(cornerRadius: 22, style: .continuous)
+                        .stroke(
+                            LinearGradient(
+                                colors: [
+                                    Color(red: 0.45, green: 0.72, blue: 1),
+                                    Color(red: 0.95, green: 0.55, blue: 0.78),
+                                    Color(red: 0.45, green: 0.85, blue: 0.9)
+                                ],
+                                startPoint: .topLeading,
+                                endPoint: .bottomTrailing
+                            ),
+                            lineWidth: 1.4
+                        )
+                )
+                .shadow(color: Color(red: 0.45, green: 0.72, blue: 1).opacity(0.35), radius: 16, y: 6)
+
+            HStack(spacing: 8) {
+                Label("Vision aktiv", systemImage: "eye.fill")
+                    .font(.caption2.weight(.bold))
+                    .padding(.horizontal, 10)
+                    .padding(.vertical, 6)
+                    .background(.ultraThinMaterial, in: Capsule())
+                Button {
+                    Task { await camera.flipCamera() }
+                } label: {
+                    Image(systemName: "camera.rotate.fill")
+                        .font(.caption.weight(.bold))
+                        .padding(8)
+                        .background(.ultraThinMaterial, in: Circle())
+                }
+            }
+            .padding(12)
+        }
+    }
+
+    private var compactVoiceMeter: some View {
+        HStack(spacing: 14) {
+            Circle()
+                .fill(
+                    RadialGradient(
+                        colors: [
+                            Color(red: 0.35, green: 0.8, blue: 1).opacity(0.9),
+                            Color(red: 0.55, green: 0.45, blue: 1).opacity(0.35),
+                            .clear
+                        ],
+                        center: .center,
+                        startRadius: 2,
+                        endRadius: 28
+                    )
+                )
+                .frame(width: 52, height: 52)
+                .scaleEffect(micPulse && voice.phase == .listening ? 1.12 : 1)
+                .overlay(
+                    Image(systemName: speak.isMuted ? "mic.slash.fill" : "mic.fill")
+                        .foregroundStyle(.white)
+                )
+            VStack(alignment: .leading, spacing: 4) {
+                Text(phaseLabel)
+                    .font(.subheadline.weight(.semibold))
+                GeometryReader { geo in
+                    Capsule()
+                        .fill(Color.primary.opacity(0.08))
+                        .overlay(alignment: .leading) {
+                            Capsule()
+                                .fill(
+                                    LinearGradient(
+                                        colors: [
+                                            Color(red: 0.35, green: 0.8, blue: 1),
+                                            Color(red: 0.55, green: 0.45, blue: 1)
+                                        ],
+                                        startPoint: .leading,
+                                        endPoint: .trailing
+                                    )
+                                )
+                                .frame(width: max(8, geo.size.width * CGFloat(max(0.08, voice.level))))
+                        }
+                }
+                .frame(height: 6)
+            }
+        }
+        .padding(.horizontal, 22)
+        .padding(.vertical, 10)
     }
 
     private var phaseBadge: some View {
@@ -78,7 +213,6 @@ struct VoiceModeView: View {
                 Capsule(style: .continuous)
                     .fill(NOCOAITheme.accent.opacity(0.12))
             )
-            .animation(.spring(response: 0.35, dampingFraction: 0.85), value: voice.phase)
     }
 
     private var promptPanel: some View {
@@ -121,11 +255,18 @@ struct VoiceModeView: View {
                 }
             }
         }
-        .animation(.spring(response: 0.35, dampingFraction: 0.85), value: voice.phase)
-        .animation(.easeOut(duration: 0.1), value: voice.level)
     }
 
     private var phaseLabel: String {
+        if cameraOn {
+            switch voice.phase {
+            case .listening: return "Hören + Sehen"
+            case .processing: return "Verstehe Szene"
+            case .speaking: return "NOCO antwortet"
+            case .error: return "Fehler"
+            case .idle: return speak.isRunning ? "Kamera bereit" : "Speak"
+            }
+        }
         switch voice.phase {
         case .listening: return "Du sprichst"
         case .processing: return "PC denkt"
@@ -164,9 +305,14 @@ struct VoiceModeView: View {
             Text(VoiceSettings.defaultMode.label)
                 .font(.caption2.weight(.bold))
             if speak.isRunning {
-                Text("· Live Activity")
+                Text("· Live")
                     .font(.caption2.weight(.semibold))
                     .foregroundStyle(.secondary)
+            }
+            if cameraOn {
+                Text("· Vision")
+                    .font(.caption2.weight(.bold))
+                    .foregroundStyle(Color(red: 0.45, green: 0.72, blue: 1))
             }
             if speak.isMuted {
                 Text("MUTE")
@@ -187,9 +333,13 @@ struct VoiceModeView: View {
     private var displayText: String {
         switch voice.phase {
         case .listening:
-            return voice.liveTranscript.isEmpty ? "Ich höre zu… sprich einfach." : voice.liveTranscript
+            return voice.liveTranscript.isEmpty
+                ? (cameraOn ? "Ich höre und sehe… frag einfach „Was ist das?“." : "Ich höre zu… sprich einfach.")
+                : voice.liveTranscript
         case .processing:
-            return voice.liveTranscript.isEmpty ? "Sende an den PC…" : voice.liveTranscript
+            return voice.liveTranscript.isEmpty
+                ? (cameraOn ? "Schaue und denke…" : "Sende an den PC…")
+                : voice.liveTranscript
         case .speaking:
             return speak.lastReply.isEmpty ? "Antwort wird gesprochen…" : speak.lastReply
         case .error(let msg):
@@ -204,6 +354,59 @@ struct VoiceModeView: View {
             Text(controlHint)
                 .font(.caption.weight(.semibold))
                 .foregroundStyle(.secondary)
+
+            Button {
+                Task { await toggleCamera() }
+            } label: {
+                HStack(spacing: 8) {
+                    Image(systemName: cameraOn ? "eye.slash.fill" : "camera.fill")
+                    Text(cameraOn ? "Kamera aus" : "📷 Kamera")
+                        .font(.subheadline.weight(.semibold))
+                }
+                .foregroundStyle(cameraOn ? Color(red: 0.45, green: 0.72, blue: 1) : .primary)
+                .frame(width: 240, height: 44)
+                .background(
+                    Capsule()
+                        .fill(cameraOn
+                              ? Color(red: 0.45, green: 0.72, blue: 1).opacity(0.18)
+                              : Color.primary.opacity(0.08))
+                )
+            }
+            .disabled(!connection.isOnline && !cameraOn)
+
+            Button {
+                Task { await toggleScreenShare() }
+            } label: {
+                HStack(spacing: 8) {
+                    Image(systemName: speak.screenShareEnabled ? "rectangle.slash" : "rectangle.inset.filled.and.person.filled")
+                    Text(speak.screenShareEnabled ? "Bildschirm aus" : "🖥 Bildschirm teilen")
+                        .font(.subheadline.weight(.semibold))
+                }
+                .foregroundStyle(speak.screenShareEnabled ? Color(red: 0.98, green: 0.45, blue: 0.4) : .primary)
+                .frame(width: 240, height: 44)
+                .background(
+                    Capsule()
+                        .fill(speak.screenShareEnabled
+                              ? Color.red.opacity(0.14)
+                              : Color.primary.opacity(0.08))
+                )
+            }
+            .disabled(!connection.isOnline && !speak.screenShareEnabled)
+
+            if cameraOn || speak.screenShareEnabled {
+                Button {
+                    speak.captureVisionSnapshot()
+                } label: {
+                    HStack(spacing: 8) {
+                        Image(systemName: "viewfinder")
+                        Text(speak.pendingVisionJPEG == nil ? "Momentaufnahme" : "Aufnahme bereit ✓")
+                            .font(.subheadline.weight(.semibold))
+                    }
+                    .foregroundStyle(.primary)
+                    .frame(width: 240, height: 44)
+                    .background(Capsule().fill(Color.primary.opacity(0.08)))
+                }
+            }
 
             if speak.isRunning {
                 Button {
@@ -242,6 +445,7 @@ struct VoiceModeView: View {
                 HStack(spacing: 10) {
                     Image(systemName: speak.isRunning ? "stop.fill" : "waveform")
                         .font(.title3.weight(.semibold))
+                        .symbolEffect(.variableColor.iterative, isActive: speak.isRunning && !reduceMotion)
                     Text(speak.isRunning ? "Stoppen" : "Speak starten")
                         .font(.subheadline.weight(.semibold))
                 }
@@ -263,6 +467,7 @@ struct VoiceModeView: View {
                         )
                 )
                 .shadow(color: Color(red: 0.4, green: 0.7, blue: 1).opacity(0.4), radius: 14)
+                .scaleEffect(speak.isRunning && voice.phase == .listening && micPulse ? 1.02 : 1)
             }
             .disabled(!connection.isOnline && !speak.isRunning)
             .opacity(connection.isOnline || speak.isRunning ? 1 : 0.45)
@@ -271,6 +476,8 @@ struct VoiceModeView: View {
 
     private var controlHint: String {
         if !connection.isOnline { return "PC offline" }
+        if speak.screenShareEnabled { return "Bildschirm an — frag „Was soll ich tippen?“" }
+        if cameraOn { return "Kamera an — Aufnahme oder „Was ist das?“ analysiert" }
         if speak.isMuted { return "Mute an — Antworten hörst du trotzdem" }
         if speak.isRunning {
             switch voice.phase {
@@ -280,7 +487,50 @@ struct VoiceModeView: View {
             default: return "Live"
             }
         }
-        return "Starten für Live-Gespräch"
+        return "Starten · optional Kamera oder Bildschirm"
+    }
+
+    private func toggleCamera() async {
+        if cameraOn {
+            camera.stop()
+            cameraOn = false
+            speak.visionCameraEnabled = false
+            speak.visionFrameProvider = nil
+            speak.pendingVisionJPEG = nil
+            speak.statusLine = speak.isRunning ? "Kamera aus · nur Sprache" : "Speak bereit"
+            HapticService.soft()
+            return
+        }
+        // Prefer one visual source at a time
+        if speak.screenShareEnabled {
+            speak.disableScreenShare()
+        }
+        await camera.requestAccessAndStart()
+        guard !camera.permissionDenied else {
+            speak.statusLine = "Kamera-Berechtigung fehlt — in Einstellungen erlauben"
+            HapticService.error()
+            return
+        }
+        cameraOn = true
+        speak.visionCameraEnabled = true
+        speak.visionFrameProvider = { camera.latestFrame }
+        speak.pendingVisionJPEG = nil
+        speak.statusLine = "Kamera bereit — Momentaufnahme oder frag „Was ist das?“"
+        HapticService.success()
+    }
+
+    private func toggleScreenShare() async {
+        if speak.screenShareEnabled {
+            speak.disableScreenShare()
+            return
+        }
+        if cameraOn {
+            camera.stop()
+            cameraOn = false
+            speak.visionCameraEnabled = false
+            speak.visionFrameProvider = nil
+        }
+        await speak.enableScreenShare()
     }
 }
 

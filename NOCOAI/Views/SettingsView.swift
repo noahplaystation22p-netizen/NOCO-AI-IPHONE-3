@@ -39,12 +39,12 @@ struct SettingsView: View {
                 } header: {
                     Text("Chat kopieren")
                 } footer: {
-                    Text("Immer nur Klartext — keine seltsamen Links oder IDs. „Kopieren“-Button und Menü kopieren die ganze Nachricht.")
+                    Text("„Langer Druck markiert den Text“ lässt dich Wörter in der Blase auswählen. Der Kopieren-Button übernimmt weiterhin die ganze Nachricht als Klartext.")
                 }
 
                 Section {
-                    Picker("Speak-Modell", selection: $voiceMode) {
-                        ForEach(AIMode.premiumCases + [.flash, .think, .knowledge]) { mode in
+                    Picker("Denkmodus", selection: $voiceMode) {
+                        ForEach([AIMode.auto, .think, .flash]) { mode in
                             Text("\(mode.label) — \(mode.subtitle)").tag(mode)
                         }
                     }
@@ -53,7 +53,7 @@ struct SettingsView: View {
                         HapticService.modeChange()
                     }
 
-                    Toggle("Spoken Reply", isOn: $autoSpeak)
+                    Toggle("Antworten vorlesen", isOn: $autoSpeak)
                         .onChange(of: autoSpeak) { _, newValue in
                             UserDefaults.standard.set(newValue, forKey: "nocoai.autoSpeak")
                             HapticService.toggle()
@@ -79,7 +79,7 @@ struct SettingsView: View {
                 } header: {
                     Text("Speak")
                 } footer: {
-                    Text("Antworten sollen schneller kommen — Sprechtempo bleibt normal. Vorschau nur bei Stimmenwechsel oder „Anhören“.")
+                    Text("Kamera/Vision nur im Sprachmodus — auf Wunsch oder bei „Was ist das?“. Denkmodus steuert nur Tempo und Tiefe.")
                 }
 
                 Section {
@@ -261,7 +261,7 @@ struct SettingsView: View {
 
                 Section("Info") {
                     Text(appVersionLabel)
-                    Text("Chat · Speak · Vision · Agent · Live Screen")
+                    Text("Chat · Speak · Agent · Live Screen · Bilder")
                         .font(.footnote)
                         .foregroundStyle(NOCOAITheme.secondaryText(for: scheme))
                 }

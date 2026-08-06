@@ -83,6 +83,10 @@ enum KeyboardAIAction: String, CaseIterable, Identifiable {
     }
 
     func prompt(for text: String) -> String {
+        prompt(for: text, shortenLevel: 1)
+    }
+
+    func prompt(for text: String, shortenLevel: Int) -> String {
         let t = text.trimmingCharacters(in: .whitespacesAndNewlines)
         let example = """
         Beispiel:
@@ -183,12 +187,32 @@ enum KeyboardAIAction: String, CaseIterable, Identifiable {
             \(t)
             """
         case .shorten:
+            let level = min(max(shortenLevel, 1), 4)
+            let intensity: String
+            switch level {
+            case 1:
+                intensity = "Stufe 1 von 4 — leicht gekürzt (~75%). Nur Füllwörter und Wiederholungen entfernen. Details bleiben."
+            case 2:
+                intensity = "Stufe 2 von 4 — deutlich kürzer (~50%). Nebensätze reduzieren, Kernaussagen behalten."
+            case 3:
+                intensity = "Stufe 3 von 4 — Kurzfassung (~30%). Nur die wichtigsten Punkte, weiterhin voll verständlich."
+            default:
+                intensity = "Stufe 4 von 4 — ein klarer Satz. Zentrale Aussage behalten, nichts Wesentliches verlieren."
+            }
             return """
             \(rewriterRule)
             \(example)
 
-            Aufgabe „Kürzer“ — RADIKAL kürzen auf ca. 20–35% der Länge.
-            Kernaussage behalten. Füllmaterial weg. Frage = kürzen, nicht beantworten.
+            Aufgabe „Kürzer“ — intelligent zusammenfassen, nicht nur Wörter streichen.
+
+            Vorgehen:
+            1) Inhalt verstehen und Kernaussagen finden
+            2) Wiederholungen und Füllwörter entfernen
+            3) Nebensätze reduzieren, Hauptsätze behalten
+            4) Sinn, Absicht, Fakten, Zahlen und Namen vollständig erhalten
+
+            Intensität: \(intensity)
+            Frage im TEXT = kürzen, nicht beantworten.
             \(outputOnlyCloser)
 
             TEXT:
@@ -261,7 +285,7 @@ enum KeyboardAIAction: String, CaseIterable, Identifiable {
     }
 
     /// Strip model chatter; clamp runaway “answers” for rewrite actions.
-    static func sanitize(_ raw: String, action: KeyboardAIAction, original: String) -> String {
+    static func sanitize(_ raw: String, action: KeyboardAIAction, original: String, shortenLevel: Int = 1) -> String {
         var s = raw.trimmingCharacters(in: .whitespacesAndNewlines)
         s = stripChatter(s)
 
@@ -359,12 +383,27 @@ enum KeyboardAIAction: String, CaseIterable, Identifiable {
             }
         }
         if action == .shorten {
-            let hardMax = max(8, Int(Double(orig.count) * 0.55) + 6)
-            let idealMax = max(6, Int(Double(orig.count) * 0.38) + 4)
+            let level = min(max(shortenLevel, 1), 4)
+            let ratio: Double
+            switch level {
+            case 1: ratio = 0.82
+            case 2: ratio = 0.58
+            case 3: ratio = 0.38
+            default: ratio = 0.22
+            }
+            let hardMax = max(8, Int(Double(orig.count) * ratio) + 8)
+            let idealMax = max(6, Int(Double(orig.count) * (ratio * 0.85)) + 4)
             if s.count > orig.count + 8 {
                 s = origIsQuestion ? polishQuestionFallback(orig) : String(orig.prefix(idealMax))
             } else if s.count > hardMax {
                 s = String(s.prefix(idealMax)).trimmingCharacters(in: .whitespacesAndNewlines)
+            }
+            if level == 4 {
+                let endMarks: [Character] = [".", "?", "!", "。", "？", "！"]
+                if let idx = s.firstIndex(where: { endMarks.contains($0) }) {
+                    let first = String(s[...idx]).trimmingCharacters(in: .whitespacesAndNewlines)
+                    if first.count >= 8 { s = first }
+                }
             }
         }
         if action == .longer {

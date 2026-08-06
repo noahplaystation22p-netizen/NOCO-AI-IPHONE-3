@@ -39,6 +39,7 @@ final class ConnectionStore: ObservableObject {
     let images = ImageStore()
     let code = CodeStore()
     let speak = SpeakSessionController()
+    let liveScreen = LiveScreenSessionController()
     let profile = UserProfileStore()
 
     private var token: String?
@@ -67,6 +68,16 @@ final class ConnectionStore: ObservableObject {
         isPaired = token != nil && !serverHost.isEmpty
         rebuildAPI()
         speak.bind(connection: self)
+        liveScreen.bind(
+            apiProvider: { [weak self] in self?.companionAPI() },
+            speakBusy: { [weak self] in
+                guard let self else { return false }
+                if self.speak.isBusyForVision { return true }
+                if case .speaking = self.speak.voice.phase { return true }
+                if case .processing = self.speak.voice.phase { return true }
+                return false
+            }
+        )
         // Keep keyboard extension credentials in sync
         CompanionCredentials.sync(
             host: serverHost,
@@ -196,6 +207,7 @@ final class ConnectionStore: ObservableObject {
         images.objectWillChange.sink { [weak self] _ in self?.objectWillChange.send() }.store(in: &cancellables)
         code.objectWillChange.sink { [weak self] _ in self?.objectWillChange.send() }.store(in: &cancellables)
         speak.objectWillChange.sink { [weak self] _ in self?.objectWillChange.send() }.store(in: &cancellables)
+        liveScreen.objectWillChange.sink { [weak self] _ in self?.objectWillChange.send() }.store(in: &cancellables)
         profile.objectWillChange.sink { [weak self] _ in self?.objectWillChange.send() }.store(in: &cancellables)
         // Voice level meters fire very often — coalesce to keep tabs smooth.
         speak.voice.objectWillChange.sink { [weak self] _ in
@@ -340,8 +352,7 @@ final class ConnectionStore: ObservableObject {
             return
         }
         if host == "visionlive" || host == "vision-live" || host == "vision" || path.contains("visionlive") || path.contains("vision-live") {
-            pendingTab = 2
-            pendingOpenVisionLive = true
+            speak.openUI()
             return
         }
         if host == "images" || host == "bildideen" || path.contains("images") || path.contains("bild") {

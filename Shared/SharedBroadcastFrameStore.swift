@@ -34,7 +34,7 @@ enum SharedBroadcastFrameStore {
     }
 
     @discardableResult
-    static func writeJPEG(_ data: Data, width: Int, height: Int) -> Bool {
+    static func writeJPEG(_ data: Data, width: Int, height: Int, hash: UInt64 = 0) -> Bool {
         guard let jpegURL, let metaURL else { return false }
         do {
             try data.write(to: jpegURL, options: .atomic)
@@ -43,7 +43,8 @@ enum SharedBroadcastFrameStore {
                 "updatedAt": Date().timeIntervalSince1970,
                 "width": width,
                 "height": height,
-                "bytes": data.count
+                "bytes": data.count,
+                "hash": hash
             ]
             let json = try JSONSerialization.data(withJSONObject: meta, options: [])
             try json.write(to: metaURL, options: .atomic)
@@ -53,12 +54,39 @@ enum SharedBroadcastFrameStore {
         }
     }
 
+    /// Fast 64-bit fingerprint for Broadcast extension (no Vision framework there).
+    static func quickHash(data: Data, width: Int, height: Int) -> UInt64 {
+        var h: UInt64 = 14695981039346656037
+        let step = max(1, data.count / 64)
+        var i = 0
+        while i < data.count {
+            h ^= UInt64(data[i])
+            h &*= 1099511628211
+            i += step
+        }
+        h ^= UInt64(width) &<< 32
+        h ^= UInt64(height)
+        return h
+    }
+
+    static func hamming64(_ a: UInt64, _ b: UInt64) -> Int {
+        (a ^ b).nonzeroBitCount
+    }
+
     static func readImage() -> UIImage? {
+        readLatest()?.image
+    }
+
+    /// Latest frame + timestamp for change detection (Broadcast → Live Screen).
+    static func readLatest() -> (image: UIImage, updatedAt: TimeInterval, bytes: Int)? {
         guard let jpegURL,
               FileManager.default.fileExists(atPath: jpegURL.path),
               let data = try? Data(contentsOf: jpegURL),
               let image = UIImage(data: data) else { return nil }
-        return image
+        let meta = loadMeta()
+        let updated = (meta["updatedAt"] as? Double) ?? Date().timeIntervalSince1970
+        let bytes = (meta["bytes"] as? Int) ?? data.count
+        return (image, updated, bytes)
     }
 
     static func clear() {

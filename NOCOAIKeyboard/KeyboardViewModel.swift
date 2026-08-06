@@ -24,6 +24,9 @@ final class KeyboardViewModel: ObservableObject {
         case idle, thinking, writing, success
     }
 
+    private var shortenStreak = 0
+    private var lastShortenFingerprint = ""
+
     private weak var controller: KeyboardViewController?
     private var snapshotBefore = ""
     private var snapshotSelected = ""
@@ -392,7 +395,29 @@ final class KeyboardViewModel: ObservableObject {
                 let result: String
                 switch chip {
                 case .builtin(let action):
-                    result = try await KeyboardAIClient.rewrite(action: action, text: source)
+                    var level = 1
+                    if action == .shorten {
+                        let fp = source
+                            .trimmingCharacters(in: .whitespacesAndNewlines)
+                            .lowercased()
+                        if fp == lastShortenFingerprint ||
+                            (!lastShortenFingerprint.isEmpty && fp.hasPrefix(String(lastShortenFingerprint.prefix(min(40, lastShortenFingerprint.count))))) {
+                            shortenStreak = min(shortenStreak + 1, 4)
+                        } else {
+                            shortenStreak = 1
+                        }
+                        level = shortenStreak
+                        overlayTitle = level == 1
+                            ? "Kürzer…"
+                            : "Kürzer (\(level)/4)…"
+                        statusLine = overlayTitle
+                    }
+                    result = try await KeyboardAIClient.rewrite(action: action, text: source, shortenLevel: level)
+                    if action == .shorten {
+                        lastShortenFingerprint = result
+                            .trimmingCharacters(in: .whitespacesAndNewlines)
+                            .lowercased()
+                    }
                 case .custom(let shortcut):
                     result = try await KeyboardAIClient.rewriteCustom(shortcut: shortcut, text: source)
                 }

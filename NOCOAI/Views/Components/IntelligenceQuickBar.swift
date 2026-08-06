@@ -97,11 +97,15 @@ enum StudioFeature {
 extension ConnectionStore {
     /// Jump to Studio and open a premium sense feature.
     func openStudioFeature(_ feature: StudioFeature) {
-        pendingTab = 2
         switch feature {
-        case .visionLive: pendingOpenVisionLive = true
-        case .agent: pendingOpenAgent = true
-        case .liveScreen: pendingOpenLiveScreen = true
+        case .visionLive:
+            speak.openUI()
+        case .agent:
+            pendingTab = 2
+            pendingOpenAgent = true
+        case .liveScreen:
+            pendingTab = 2
+            pendingOpenLiveScreen = true
         }
         HapticService.open()
     }
@@ -118,10 +122,12 @@ extension ConnectionStore {
         HapticService.open()
     }
 
-    /// Seed Agent goal and open Agent.
+    /// Seed Agent goal into Chat (Agent works in-chat, not a separate surface).
     func handoffToAgent(goal: String) {
-        pendingAgentDraft = String(goal.prefix(500))
-        openStudioFeature(.agent)
+        chat.setMode(.agent)
+        pendingChatDraft = String(goal.prefix(500))
+        pendingTab = 0
+        HapticService.open()
     }
 
     /// Seed image prompt and open Bilder.
@@ -151,16 +157,18 @@ struct IntelligenceSuggestionChips: View {
                 Chip(id: "next", title: "Nächste Schritte") {
                     Task { await connection.chat.send("Was wäre jetzt die sinnvollste nächste Aktion?") }
                 },
-                Chip(id: "vision", title: "Vision öffnen") {
-                    connection.openStudioFeature(.visionLive)
+                Chip(id: "speak", title: "Speak") {
+                    connection.speak.openUI()
                 },
                 Chip(id: "agent", title: "Agent starten") {
-                    connection.openStudioFeature(.agent)
+                    connection.chat.setMode(.agent)
+                    HapticService.selection()
                 },
                 Chip(id: "screen", title: "Live Screen") {
                     connection.openStudioFeature(.liveScreen)
                 },
                 Chip(id: "plan", title: "Planen") {
+                    connection.chat.setMode(.agent)
                     Task { await connection.chat.send("Erstelle einen kurzen, konkreten Plan für mein Ziel.") }
                 }
             ]
@@ -173,7 +181,7 @@ struct IntelligenceSuggestionChips: View {
             Chip(id: "what", title: "Was kann NOCO?") {
                 Task {
                     await connection.chat.send(
-                        "Erkläre kurz Speak, Vision Live, Agent, Live Screen, Chat und Bilder."
+                        "Erkläre kurz Speak (mit optionaler Kamera), Agent, Live Screen, Chat und Bilder."
                     )
                 }
             }

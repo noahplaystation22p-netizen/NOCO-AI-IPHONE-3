@@ -12,9 +12,9 @@ enum ModeWorkPhase: String, Equatable {
     var title: String {
         switch self {
         case .idle: return "Bereit"
-        case .understanding: return "Verstehen"
-        case .analyzing: return "Analysieren"
-        case .executing: return "Ausführen"
+        case .understanding: return "Analysieren"
+        case .analyzing: return "Planen"
+        case .executing: return "Arbeiten"
         case .done: return "Fertig"
         }
     }
@@ -35,6 +35,20 @@ enum ModeIntelligence {
     private static let recentKey = "nocoai.modes.recent"
     private static let favoriteKey = "nocoai.modes.favorites"
 
+    /// Depth-only recommendation for Auto (never Vision / Agent / specialty modes).
+    static func recommendDepth(text: String) -> (mode: AIMode, reason: String)? {
+        let t = text.lowercased()
+        if matches(t, "analysiere|vergleiche|warum|strategie|gründlich|abwägen|pro und contra|komplex|erkläre ausführlich")
+            || t.count > 220 {
+            return (.think, "Think — tiefere Überlegung")
+        }
+        if t.count < 70 || matches(t, "kurz|schnell|ja oder nein|eine zeile|tl;dr") {
+            return (.flash, "Flash — schnelle Antwort")
+        }
+        return nil
+    }
+
+    /// Soft specialty hint (chips only) — never auto-activates Vision/Agent from Auto.
     static func recommend(
         text: String,
         hasImage: Bool = false,
@@ -43,27 +57,21 @@ enum ModeIntelligence {
         let t = text.lowercased()
         let proc = (desktopProcess ?? "").lowercased()
 
-        if hasImage || matches(t, "bild|foto|screenshot|kamera|erkenne|was siehst|ocr|scanne") {
-            return (.vision, "Vision empfohlen — Bild oder Bildschirm")
+        // Images: suggest Agent or Speak camera — not a chat Vision mode switch
+        if hasImage {
+            return (.agent, "Agent kann Bilder und Tools kombinieren")
+        }
+        if matches(t, "kamera|was siehst|schau mal|erkenne das") {
+            return nil // Vision gehört in Speak
         }
         if matches(t, "code|bug|fehler|swift|python|typescript|refactor|debug|kompil")
             || matches(proc, "code|devenv|cursor|xcode") {
-            return (.developer, "Developer empfohlen — Programmierung")
+            return (.think, "Think — Code braucht oft mehr Tiefe")
         }
-        if matches(t, "lern|erklär|klausur|schule|studium|quiz") {
-            return (.study, "Study empfohlen — Lernen")
-        }
-        if matches(t, "schreib|umformulier|kürz|länger|bewerbung|e-mail|email|text verbessern")
-            || matches(proc, "winword|word") {
-            return (.writing, "Writing empfohlen — Textarbeit")
-        }
-        if matches(t, "idee|konzept|kreativ|design|slogan|brain.?storm|bildidee|logo") {
-            return (.creative, "Creative empfohlen — Ideen")
-        }
-        if matches(t, "erledige|plane|automat|workflow|installier|öffne|agent|mehrere schritte|computer control|webseite|website|app bauen") {
+        if matches(t, "erledige|plane|automat|workflow|installier|öffne|agent|mehrere schritte|computer control|webseite|website|app bauen|poster|generiere bild|bild erstellen") {
             return (.agent, "Agent empfohlen — mehrstufige Aufgabe")
         }
-        return nil
+        return recommendDepth(text: text)
     }
 
     /// After a reply: suggest the next intelligent area (cross-mode bridge).
@@ -109,20 +117,23 @@ enum ModeIntelligence {
         return nil
     }
 
-    /// Built-in workflows: ordered mode chains the Agent can follow.
+    /// Built-in workflows: ordered tool hints the Agent can follow (not chat mode switches).
     static func workflow(for goal: String) -> [AIMode]? {
         let g = goal.lowercased()
         if matches(g, "webseite|website|landing|homepage") {
-            return [.creative, .developer, .vision]
+            return [.creative, .developer]
         }
         if matches(g, "bewerbung|anschreiben") {
-            return [.writing, .creative, .writing]
+            return [.writing, .creative]
         }
         if matches(g, "lernplan|klausur|prüfung") {
-            return [.study, .writing, .study]
+            return [.study, .writing]
+        }
+        if matches(g, "poster|bild gener|bild erstellen|logo|visual") {
+            return [.creative, .writing]
         }
         if matches(g, "bug|fehler|crash") {
-            return [.developer, .vision, .developer]
+            return [.developer]
         }
         return nil
     }
@@ -278,9 +289,11 @@ extension AIMode {
             """
         case .vision:
             return """
-            [NOCO VISION]
-            Du bist NOCO Vision. Beschreibe und interpretiere visuelle Inhalte. Wenn kein Bild angehängt ist, \
-            sage klar, dass ein Foto/Screenshot hilft, und gib trotzdem die beste Text-Hilfe.
+            [NOCO VISION — BILDANALYSE AKTIV]
+            Du bist NOCO Vision und KANNST Bilder sehen, beschreiben und erklären.
+            Verbote: Sage niemals, dass du keine Bilder anzeigen, sehen oder beschreiben kannst.
+            Wenn in dieser Nachricht kein Bild steckt: bitte höflich um ein Foto (+ Kamera) und gib \
+            trotzdem die beste mögliche Text-Hilfe zur Frage.
             Frage:
             \(userText)
             """

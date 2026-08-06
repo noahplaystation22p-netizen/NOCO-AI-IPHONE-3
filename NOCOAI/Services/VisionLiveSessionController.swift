@@ -191,6 +191,27 @@ final class VisionLiveSessionController: ObservableObject {
                 activeModelLabel = String(reply[range.upperBound...]).trimmingCharacters(in: .whitespacesAndNewlines)
                 reply = String(reply[..<range.lowerBound]).trimmingCharacters(in: .whitespacesAndNewlines)
             }
+            if Self.isVisionRefusal(reply) {
+                let retry = try await companion.uploadVisionImage(
+                    imageData: jpeg,
+                    filename: "visionlive-retry.jpg",
+                    message: """
+                    Kamerabild ist angehängt. Du kannst es sehen. Beschreibe auf Deutsch und beantworte: \(question). \
+                    Sage niemals, dass du keine Bilder beschreiben kannst.
+                    """,
+                    conversationId: conversationId,
+                    qualityProfile: quality.rawValue,
+                    ocrLength: ocr.count
+                )
+                if var retryText = retry.replyText?.trimmingCharacters(in: .whitespacesAndNewlines),
+                   !Self.isVisionRefusal(retryText) {
+                    if let range = retryText.range(of: "\n—\nNOCO nutzt:") {
+                        activeModelLabel = String(retryText[range.upperBound...]).trimmingCharacters(in: .whitespacesAndNewlines)
+                        retryText = String(retryText[..<range.lowerBound]).trimmingCharacters(in: .whitespacesAndNewlines)
+                    }
+                    reply = retryText
+                }
+            }
             // Soft-skip low-value auto replies
             if isAuto, reply.count < 40 { 
                 withPhase(.idle, status: "Vision Live aktiv")
@@ -213,6 +234,15 @@ final class VisionLiveSessionController: ObservableObject {
         }
     }
 
+    private static func isVisionRefusal(_ text: String) -> Bool {
+        let lower = text.lowercased()
+        let hints = [
+            "kann keine bilder", "keine bilder anzeigen", "keine bilder beschreiben",
+            "i cannot see", "i can't see", "unable to view", "als textbasiertes", "sehe keine bilder"
+        ]
+        return hints.contains(where: { lower.contains($0) })
+    }
+
     private func proactiveAutoPrompt(ocr: String) -> String {
         if ocr.count > 100 {
             return "Schau dir die Szene und den sichtbaren Text an. Verstehe die Situation und biete eine kurze, hilfreiche nächste Aktion an."
@@ -226,6 +256,7 @@ final class VisionLiveSessionController: ObservableObject {
             """
             Dies ist NOCO Vision Live (Kamera, Echtzeit). Nicht wie ein Screenshot-Chat wirken: \
             verstehe Absicht, biete Hilfe an, bleib natürlich. Keine Floskeln. Auf Deutsch.
+            Du siehst das Kamerabild. Sage niemals, dass du keine Bilder anzeigen oder beschreiben kannst.
             Integration: Wenn es wie ein Bildschirm/UI aussieht, arbeite wie Live Screen (Schritte erklären).
             """
         )

@@ -80,21 +80,31 @@ final class LiveScreenBroadcastCapture: LiveScreenCaptureProviding {
     let kind: LiveScreenCaptureKind = .broadcastExtension
 
     private var pollTask: Task<Void, Never>?
-    private var lastFingerprint: Int?
+    private var lastUpdatedAt: TimeInterval = 0
+    private var lastBytes: Int = -1
     var onFrame: ((UIImage) -> Void)?
+    var onWaitingStatus: ((String) -> Void)?
 
     func prepare() async throws {
         stop()
+        onWaitingStatus?("Tippe den roten Übertragen-Button und wähle „NOCO Live Screen“")
         pollTask = Task { [weak self] in
+            var ticks = 0
             while !Task.isCancelled {
-                if let image = SharedBroadcastFrameStore.readImage() {
-                    let fp = image.pngData()?.count ?? 0
-                    if fp != self?.lastFingerprint {
-                        self?.lastFingerprint = fp
-                        self?.onFrame?(image)
+                if SharedBroadcastFrameStore.isBroadcastActive == false, ticks % 6 == 0 {
+                    self?.onWaitingStatus?("Warte auf Bildschirmübertragung… (Kontrollzentrum oder roter Button)")
+                }
+                if let latest = SharedBroadcastFrameStore.readLatest() {
+                    let changed = latest.updatedAt != self?.lastUpdatedAt || latest.bytes != self?.lastBytes
+                    if changed {
+                        self?.lastUpdatedAt = latest.updatedAt
+                        self?.lastBytes = latest.bytes
+                        self?.onFrame?(latest.image)
+                        self?.onWaitingStatus?("Live — Frames vom System")
                     }
                 }
-                try? await Task.sleep(nanoseconds: 450_000_000)
+                ticks += 1
+                try? await Task.sleep(nanoseconds: 400_000_000)
             }
         }
     }
@@ -102,6 +112,8 @@ final class LiveScreenBroadcastCapture: LiveScreenCaptureProviding {
     func stop() {
         pollTask?.cancel()
         pollTask = nil
+        lastUpdatedAt = 0
+        lastBytes = -1
     }
 }
 
@@ -134,15 +146,24 @@ enum LiveScreenError: LocalizedError {
     case offline
     case captureUnavailable
     case processing
+    case permissionNeeded
 
     var errorDescription: String? {
         switch self {
-        case .notConsented: return "Live Screen braucht deine Zustimmung zur Bildschirmhilfe."
-        case .notActive: return "Live Screen ist nicht aktiv."
-        case .noFrame: return "Kein Bildschirmbild — Übertragung starten oder Screenshot teilen."
-        case .offline: return "NOCO Companion ist offline."
-        case .captureUnavailable: return "Bildschirmaufnahme ist auf diesem Gerät nicht verfügbar."
-        case .processing: return "Analyse läuft noch."
+        case .notConsented:
+            return "Live Screen braucht deine Zustimmung zur Bildschirmhilfe."
+        case .notActive:
+            return "Live Screen ist nicht aktiv."
+        case .noFrame:
+            return "Kein Bildschirmbild — Übertragung starten oder Screenshot teilen."
+        case .offline:
+            return "NOCO Companion ist offline."
+        case .captureUnavailable:
+            return "Bildschirmaufnahme ist auf diesem Gerät nicht verfügbar."
+        case .processing:
+            return "Analyse läuft noch."
+        case .permissionNeeded:
+            return "Bildschirmübertragung fehlt. Tippe den roten Button und wähle „NOCO Live Screen“, oder erlaube Bildschirmaufnahme in den Einstellungen."
         }
     }
 }

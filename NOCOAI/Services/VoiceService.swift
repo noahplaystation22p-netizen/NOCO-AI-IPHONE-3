@@ -49,11 +49,15 @@ final class VoiceService: NSObject, ObservableObject {
     private var ttsPendingBuffers = 0
     private let ttsGain: Float = 2.6
 
-    /// Wait a little longer before auto-send so dictation doesn't cut off mid-thought.
-    private let silenceToEnd: TimeInterval = 1.15
-    private let transcriptStableToEnd: TimeInterval = 0.95
-    private let minSpeechSeconds: TimeInterval = 0.30
+    /// Wait for a natural end of speech — avoid cutting mid-thought, but stay responsive.
+    private let silenceToEnd: TimeInterval = 1.45
+    private let transcriptStableToEnd: TimeInterval = 1.15
+    private let minSpeechSeconds: TimeInterval = 0.50
     private let speechLevelFactor: CGFloat = 2.6
+
+    /// Calm, clear TTS — slightly under system default.
+    private let speakRate: Float = AVSpeechUtteranceDefaultSpeechRate * 0.89
+    private let preReplyPause: TimeInterval = 0.24
 
     var preferredVoiceIdentifier: String {
         get { UserDefaults.standard.string(forKey: "nocoai.voiceId") ?? "" }
@@ -296,11 +300,11 @@ final class VoiceService: NSObject, ObservableObject {
         for (index, chunk) in chunks.enumerated() {
             let utterance = AVSpeechUtterance(string: chunk)
             utterance.voice = bestGermanVoice()
-            utterance.rate = AVSpeechUtteranceDefaultSpeechRate
-            utterance.pitchMultiplier = 1.0
+            utterance.rate = speakRate
+            utterance.pitchMultiplier = 0.98
             utterance.volume = 1.0
-            utterance.preUtteranceDelay = index == 0 ? 0 : 0.02
-            utterance.postUtteranceDelay = 0
+            utterance.preUtteranceDelay = index == 0 ? preReplyPause : 0.04
+            utterance.postUtteranceDelay = 0.02
 
             synthesizer.write(utterance) { [weak self] buffer in
                 guard let self else { return }
@@ -371,11 +375,11 @@ final class VoiceService: NSObject, ObservableObject {
         for (index, chunk) in chunks.enumerated() {
             let utterance = AVSpeechUtterance(string: chunk)
             utterance.voice = bestGermanVoice()
-            utterance.rate = AVSpeechUtteranceDefaultSpeechRate
-            utterance.pitchMultiplier = 1.0
+            utterance.rate = speakRate
+            utterance.pitchMultiplier = 0.98
             utterance.volume = 1.0
-            utterance.preUtteranceDelay = index == 0 ? 0 : 0.02
-            utterance.postUtteranceDelay = 0
+            utterance.preUtteranceDelay = index == 0 ? preReplyPause : 0.04
+            utterance.postUtteranceDelay = 0.02
             synthesizer.speak(utterance)
         }
     }
@@ -478,10 +482,11 @@ final class VoiceService: NSObject, ObservableObject {
         let transcriptStable = lastTranscriptChangeAt.map { now.timeIntervalSince($0) >= transcriptStableToEnd } ?? false
         let spokenLongEnough = speechStartAt.map { now.timeIntervalSince($0) >= minSpeechSeconds } ?? false
 
-        // Primary: transcript stopped changing for a noticeable beat
-        // Secondary: audio went quiet long enough to feel intentional
+        // Prefer transcript-stable + quiet beat; long silence as fallback.
         let silenceReady = quietFor >= silenceToEnd
-        let shouldSend = force || (spokenLongEnough && (transcriptStable || silenceReady))
+        let naturalEnd = spokenLongEnough && transcriptStable && quietFor >= 0.75
+        let longSilenceFallback = spokenLongEnough && quietFor >= silenceToEnd * 1.15
+        let shouldSend = force || naturalEnd || (transcriptStable && silenceReady) || longSilenceFallback
         guard shouldSend else { return }
 
         autoFinishArmed = false

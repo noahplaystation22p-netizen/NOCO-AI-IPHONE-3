@@ -11,12 +11,11 @@ struct WritingToolsSheet: View {
                 VStack(alignment: .leading, spacing: 18) {
                     Text("Schreibwerkzeuge")
                         .font(.title2.weight(.bold))
-                    Text("Wie Apple Writing Tools — die Arbeit passiert auf deinem PC.")
+                    Text(sourceText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+                          ? "Tippe zuerst Text in den Chat — oder wähle ein Werkzeug für den letzten Text."
+                          : "Sinn bleibt erhalten. Die Arbeit läuft über deinen Companion.")
                         .font(.subheadline)
                         .foregroundStyle(.secondary)
-
-                    IntelligenceShimmerLine()
-                        .padding(.vertical, 4)
 
                     LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible())], spacing: 12) {
                         ForEach(WritingTool.allCases) { tool in
@@ -25,13 +24,17 @@ struct WritingToolsSheet: View {
                                 onPick(tool)
                                 dismiss()
                             } label: {
-                                VStack(alignment: .leading, spacing: 10) {
+                                VStack(alignment: .leading, spacing: 8) {
                                     Image(systemName: tool.systemImage)
                                         .font(.title3)
                                         .foregroundStyle(NOCOAITheme.accent)
                                     Text(tool.title)
                                         .font(.subheadline.weight(.semibold))
                                         .foregroundStyle(.primary)
+                                    Text(tool.subtitle)
+                                        .font(.caption2)
+                                        .foregroundStyle(.secondary)
+                                        .lineLimit(2)
                                 }
                                 .frame(maxWidth: .infinity, alignment: .leading)
                                 .padding(16)
@@ -44,7 +47,7 @@ struct WritingToolsSheet: View {
                                         )
                                 )
                             }
-                            .buttonStyle(.plain)
+                            .buttonStyle(IntelligencePressStyle(haptic: { HapticService.soft() }))
                         }
                     }
                 }
@@ -58,6 +61,7 @@ struct WritingToolsSheet: View {
             }
         }
         .presentationDetents([.medium, .large])
+        .presentationDragIndicator(.visible)
     }
 }
 
@@ -80,33 +84,13 @@ struct IntelligenceIdeaChips: View {
                         } label: {
                             Text(idea.title)
                                 .font(.caption.weight(.semibold))
-                                .padding(.horizontal, 14)
-                                .padding(.vertical, 10)
-                                .background(
-                                    Capsule()
-                                        .fill(.ultraThinMaterial)
-                                        .overlay(
-                                            Capsule()
-                                                .stroke(
-                                                    LinearGradient(
-                                                        colors: [
-                                                            NOCOAITheme.glowPrimary.opacity(0.55),
-                                                            NOCOAITheme.glowSecondary.opacity(0.35)
-                                                        ],
-                                                        startPoint: .leading,
-                                                        endPoint: .trailing
-                                                    ),
-                                                    lineWidth: 1
-                                                )
-                                        )
-                                        .shadow(color: NOCOAITheme.glowPrimary.opacity(0.2), radius: 8)
-                                )
+                                .padding(.horizontal, 12)
+                                .padding(.vertical, 8)
+                                .background(Capsule().fill(Color.primary.opacity(0.06)))
                         }
                         .buttonStyle(.plain)
-                        .foregroundStyle(NOCOAITheme.accent)
                     }
                 }
-                .padding(.horizontal, 2)
             }
         }
     }
@@ -117,23 +101,6 @@ struct ReplyActionBar: View {
     var onAction: (ReplyAction) -> Void
 
     var body: some View {
-        ScrollView(.horizontal, showsIndicators: false) {
-            HStack(spacing: 6) {
-                ForEach(ReplyAction.allCases) { action in
-                    Button {
-                        HapticService.selection()
-                        onAction(action)
-                    } label: {
-                        Label(action.title, systemImage: action.systemImage)
-                            .font(.caption2.weight(.semibold))
-                            .padding(.horizontal, 10)
-                            .padding(.vertical, 7)
-                            .background(Capsule().fill(Color.primary.opacity(0.06)))
-                    }
-                    .buttonStyle(.plain)
-                    .foregroundStyle(.secondary)
-                }
-            }
-        }
+        EmptyView()
     }
 }

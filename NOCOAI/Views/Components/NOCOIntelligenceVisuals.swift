@@ -43,6 +43,95 @@ struct LiveScreenIntelligenceWave: View {
     }
 }
 
+/// Premium Live Screen status — glass + rainbow + phase emoji.
+struct LiveScreenStatusTheater: View {
+    var phase: LiveScreenPhase
+    var status: String
+    @State private var spin = false
+    @State private var pulse = false
+
+    var body: some View {
+        VStack(spacing: 10) {
+            ZStack {
+                Circle()
+                    .fill(
+                        AngularGradient(
+                            colors: [
+                                phase.color,
+                                Color(red: 0.45, green: 0.85, blue: 1.0),
+                                Color(red: 0.85, green: 0.45, blue: 0.95),
+                                Color(red: 1.0, green: 0.75, blue: 0.45),
+                                phase.color
+                            ],
+                            center: .center
+                        )
+                    )
+                    .frame(width: 64, height: 64)
+                    .blur(radius: 10)
+                    .opacity(pulse ? 0.9 : 0.55)
+                    .rotationEffect(.degrees(spin ? 360 : 0))
+
+                Circle()
+                    .fill(.ultraThinMaterial)
+                    .frame(width: 48, height: 48)
+                    .overlay(
+                        Circle()
+                            .stroke(
+                                LinearGradient(
+                                    colors: [.white.opacity(0.55), phase.color.opacity(0.4), .clear],
+                                    startPoint: .topLeading,
+                                    endPoint: .bottomTrailing
+                                ),
+                                lineWidth: 1.2
+                            )
+                    )
+
+                Text(phase.emoji)
+                    .font(.system(size: 22))
+                    .scaleEffect(pulse ? 1.06 : 0.94)
+            }
+
+            Text("\(phase.emoji) \(phase.title)")
+                .font(.subheadline.weight(.bold))
+            Text(status)
+                .font(.caption)
+                .foregroundStyle(.secondary)
+                .multilineTextAlignment(.center)
+                .lineLimit(2)
+
+            LiveScreenIntelligenceWave(phase: phase)
+                .padding(.horizontal, 8)
+        }
+        .padding(.vertical, 12)
+        .padding(.horizontal, 16)
+        .frame(maxWidth: .infinity)
+        .background {
+            RoundedRectangle(cornerRadius: 22, style: .continuous)
+                .fill(.ultraThinMaterial)
+                .overlay(
+                    RoundedRectangle(cornerRadius: 22, style: .continuous)
+                        .stroke(
+                            LinearGradient(
+                                colors: [
+                                    phase.color.opacity(0.55),
+                                    Color.white.opacity(0.25),
+                                    phase.color.opacity(0.2)
+                                ],
+                                startPoint: .topLeading,
+                                endPoint: .bottomTrailing
+                            ),
+                            lineWidth: 1
+                        )
+                )
+        }
+        .onAppear {
+            withAnimation(.linear(duration: 5.5).repeatForever(autoreverses: false)) { spin = true }
+            withAnimation(.easeInOut(duration: 1.15).repeatForever(autoreverses: true)) { pulse = true }
+        }
+        .animation(.easeInOut(duration: 0.4), value: phase)
+    }
+}
+
 /// Living agent core — rainbow/glass identity orb with phase colors.
 struct AgentCoreOrb: View {
     var isActive: Bool

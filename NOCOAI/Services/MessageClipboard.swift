@@ -13,15 +13,15 @@ enum ChatCopyMode: String, CaseIterable, Identifiable {
 
     var title: String {
         switch self {
-        case .wholeMessage: return "Ganze Nachricht kopieren"
-        case .textSelection: return "Text markieren (blau)"
+        case .wholeMessage: return "Tippen kopiert alles"
+        case .textSelection: return "Langer Druck markiert den Text"
         }
     }
 
     var subtitle: String {
         switch self {
-        case .wholeMessage: return "Tippen kopiert nur den Klartext — keine Links oder IDs"
-        case .textSelection: return "Wie iOS: Text markieren und selbst kopieren"
+        case .wholeMessage: return "Ein Tipp auf die Blase kopiert den Klartext"
+        case .textSelection: return "Gedrückthalten markiert Wörter — wie in iOS-Nachrichten"
         }
     }
 

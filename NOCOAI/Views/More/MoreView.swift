@@ -8,7 +8,6 @@ struct MoreView: View {
     @State private var appear = false
     @State private var openLiveScreen = false
     @State private var openAgent = false
-    @State private var openVisionLive = false
 
     var body: some View {
         NavigationStack {
@@ -29,27 +28,32 @@ struct MoreView: View {
                         .padding(.horizontal, 8)
                         .opacity(0.85)
 
-                    sectionHeader("Intelligenz", subtitle: "Sehen, Handeln, Sprechen")
+                    sectionHeader("Intelligenz", subtitle: "Sprechen, Handeln, Bildschirm")
                     LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible())], spacing: 14) {
-                        NavigationLink {
-                            VisionLiveView().environmentObject(connection)
+                        Button {
+                            HapticService.open()
+                            connection.speak.openUI()
                         } label: {
                             IntelligenceFeatureTile(
-                                title: "Vision Live",
-                                subtitle: "Kamera verstehen",
-                                systemImage: "eye.circle.fill",
-                                accent: Color(red: 0.45, green: 0.72, blue: 1.0)
+                                title: "Speak",
+                                subtitle: connection.speak.isRunning
+                                    ? (connection.speak.visionCameraEnabled ? "Live · Kamera" : "Live aktiv")
+                                    : "Sprache · optional Kamera",
+                                systemImage: "waveform",
+                                accent: Color(red: 0.55, green: 0.45, blue: 1)
                             )
                         }
-                        .buttonStyle(IntelligencePressStyle(haptic: { HapticService.open() }))
+                        .buttonStyle(IntelligencePressStyle(haptic: { HapticService.soft() }))
+                        .disabled(!connection.isOnline && !connection.speak.isRunning)
+                        .opacity(connection.isOnline || connection.speak.isRunning ? 1 : 0.55)
 
                         NavigationLink {
                             AgentDashboardView().environmentObject(connection)
                         } label: {
                             IntelligenceFeatureTile(
                                 title: "Agent",
-                                subtitle: connection.isOnline ? "Aufgaben · Computer" : "Offline",
-                                systemImage: "brain.head.profile",
+                                subtitle: connection.isOnline ? "Dashboard · Computer" : "Offline",
+                                systemImage: "cpu.fill",
                                 accent: Color(red: 0.35, green: 0.78, blue: 0.72)
                             )
                         }
@@ -67,20 +71,17 @@ struct MoreView: View {
                         }
                         .buttonStyle(IntelligencePressStyle(haptic: { HapticService.open() }))
 
-                        Button {
-                            HapticService.open()
-                            connection.speak.openUI()
+                        NavigationLink {
+                            ImagesHubView().environmentObject(connection)
                         } label: {
                             IntelligenceFeatureTile(
-                                title: "Speak",
-                                subtitle: connection.speak.isRunning ? "Live aktiv" : "Sprachmodus",
-                                systemImage: "waveform",
-                                accent: Color(red: 0.55, green: 0.45, blue: 1)
+                                title: "Bilder",
+                                subtitle: "Generieren & Radierer",
+                                systemImage: "paintbrush.pointed.fill",
+                                accent: Color(red: 0.95, green: 0.55, blue: 0.78)
                             )
                         }
-                        .buttonStyle(IntelligencePressStyle(haptic: { HapticService.soft() }))
-                        .disabled(!connection.isOnline && !connection.speak.isRunning)
-                        .opacity(connection.isOnline || connection.speak.isRunning ? 1 : 0.55)
+                        .buttonStyle(IntelligencePressStyle(haptic: { HapticService.open() }))
                     }
                     .opacity(appear ? 1 : 0)
                     .offset(y: appear ? 0 : 14)
@@ -139,9 +140,6 @@ struct MoreView: View {
             .navigationDestination(isPresented: $openAgent) {
                 AgentDashboardView().environmentObject(connection)
             }
-            .navigationDestination(isPresented: $openVisionLive) {
-                VisionLiveView().environmentObject(connection)
-            }
             .onChange(of: connection.pendingOpenLiveScreen) { _, open in
                 if open { openLiveScreen = true; connection.pendingOpenLiveScreen = false }
             }
@@ -149,7 +147,11 @@ struct MoreView: View {
                 if open { openAgent = true; connection.pendingOpenAgent = false }
             }
             .onChange(of: connection.pendingOpenVisionLive) { _, open in
-                if open { openVisionLive = true; connection.pendingOpenVisionLive = false }
+                // Vision gehört in Speak — kein eigener Screen mehr
+                if open {
+                    connection.pendingOpenVisionLive = false
+                    connection.speak.openUI()
+                }
             }
             .onAppear {
                 withAnimation(reduceMotion ? .easeOut(duration: 0.2) : .spring(response: 0.55, dampingFraction: 0.84)) {
@@ -166,7 +168,7 @@ struct MoreView: View {
     }
 
     private var appVersionLabel: String {
-        let short = Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "7.9"
+        let short = Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "8.4"
         return "NOCO AI · v\(short)"
     }
 
@@ -192,8 +194,8 @@ struct MoreView: View {
             connection.pendingOpenAgent = false
         }
         if connection.pendingOpenVisionLive {
-            openVisionLive = true
             connection.pendingOpenVisionLive = false
+            connection.speak.openUI()
         }
     }
 

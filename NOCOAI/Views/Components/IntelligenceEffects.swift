@@ -285,28 +285,91 @@ struct StreamingGlowCursor: View {
 }
 
 struct IntelligenceThinkingDots: View {
-    @State private var phase = 0
+    var body: some View {
+        IntelligenceThinkingStatus()
+    }
+}
+
+/// Premium thinking indicator — calm motion, elapsed time, soft progress.
+struct IntelligenceThinkingStatus: View {
+    @State private var startedAt = Date()
+    @State private var elapsed: TimeInterval = 0
+    @State private var pulse = false
+    @State private var phraseIndex = 0
+    @State private var progress: CGFloat = 0.12
+
+    private let phrases = [
+        "Thinking about your request…",
+        "Denkt über deine Anfrage nach…",
+        "Formuliert eine Antwort…"
+    ]
 
     var body: some View {
-        HStack(spacing: 6) {
-            ForEach(0..<3, id: \.self) { i in
-                Circle()
-                    .fill(NOCOAITheme.glowPrimary)
-                    .frame(width: 7, height: 7)
-                    .scaleEffect(phase == i ? 1.35 : 0.85)
-                    .opacity(phase == i ? 1 : 0.35)
-                    .shadow(color: NOCOAITheme.glowPrimary.opacity(phase == i ? 0.8 : 0), radius: 6)
+        VStack(alignment: .leading, spacing: 10) {
+            HStack(spacing: 10) {
+                Text("🧠")
+                    .font(.system(size: 20))
+                    .scaleEffect(pulse ? 1.08 : 0.94)
+                    .opacity(pulse ? 1 : 0.75)
+                    .animation(.easeInOut(duration: 1.1).repeatForever(autoreverses: true), value: pulse)
+
+                Text(phrases[phraseIndex % phrases.count])
+                    .font(.subheadline.weight(.semibold))
+                    .foregroundStyle(.primary.opacity(0.88))
+                    .contentTransition(.opacity)
+                    .animation(.easeInOut(duration: 0.35), value: phraseIndex)
             }
+
+            GeometryReader { geo in
+                ZStack(alignment: .leading) {
+                    Capsule()
+                        .fill(Color.primary.opacity(0.08))
+                    Capsule()
+                        .fill(
+                            LinearGradient(
+                                colors: [
+                                    NOCOAITheme.glowPrimary.opacity(0.85),
+                                    NOCOAITheme.glowSecondary.opacity(0.7)
+                                ],
+                                startPoint: .leading,
+                                endPoint: .trailing
+                            )
+                        )
+                        .frame(width: max(18, geo.size.width * progress))
+                }
+            }
+            .frame(height: 3)
+
+            Text(elapsedLabel)
+                .font(.caption2.weight(.medium).monospacedDigit())
+                .foregroundStyle(.secondary)
         }
-        .padding(.horizontal, 14)
-        .padding(.vertical, 12)
+        .padding(.horizontal, 16)
+        .padding(.vertical, 14)
+        .frame(minWidth: 200, alignment: .leading)
         .background(GlowBubbleBackground(isUser: false))
+        .onAppear { pulse = true }
         .task {
             while !Task.isCancelled {
-                try? await Task.sleep(nanoseconds: 320_000_000)
-                phase = (phase + 1) % 3
+                try? await Task.sleep(nanoseconds: 200_000_000)
+                elapsed = Date().timeIntervalSince(startedAt)
+                // Soft indeterminate progress that eases toward ~0.92
+                let t = min(elapsed / 18, 1)
+                progress = 0.12 + CGFloat(1 - pow(1 - t, 1.6)) * 0.8
             }
         }
+        .task {
+            while !Task.isCancelled {
+                try? await Task.sleep(nanoseconds: 2_800_000_000)
+                phraseIndex = (phraseIndex + 1) % phrases.count
+            }
+        }
+    }
+
+    private var elapsedLabel: String {
+        let s = Int(elapsed)
+        if s < 60 { return "\(s)s" }
+        return String(format: "%d:%02d", s / 60, s % 60)
     }
 }
 

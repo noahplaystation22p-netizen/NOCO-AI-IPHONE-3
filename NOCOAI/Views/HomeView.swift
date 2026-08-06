@@ -145,10 +145,16 @@ struct HomeView: View {
                     ScrollView(.horizontal, showsIndicators: false) {
                         HStack(spacing: 8) {
                             systemChip("Speak", "waveform") { connection.speak.openUI() }
-                            systemChip("Vision", "eye.circle.fill") { connection.openStudioFeature(.visionLive) }
-                            systemChip("Agent", "brain.head.profile") { connection.openStudioFeature(.agent) }
+                            systemChip("Agent", "cpu.fill") {
+                                connection.chat.setMode(.agent)
+                                connection.pendingTab = 0
+                                HapticService.open()
+                            }
                             systemChip("Screen", "rectangle.inset.filled.and.person.filled") {
                                 connection.openStudioFeature(.liveScreen)
+                            }
+                            systemChip("Bilder", "paintbrush.pointed.fill") {
+                                connection.handoffToImages(prompt: "")
                             }
                         }
                     }

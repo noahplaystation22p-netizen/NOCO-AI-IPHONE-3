@@ -6,6 +6,18 @@ struct ModeRecommendation: Equatable {
     let reason: String
 }
 
+struct PendingAgentConfirm: Equatable {
+    let taskId: String
+    let stepId: String
+    let title: String
+    let detail: String
+}
+
+struct PendingAgentIntake: Equatable {
+    let originalGoal: String
+    let questions: [String]
+}
+
 @MainActor
 final class ChatStore: ObservableObject {
     @Published var conversations: [ConversationSummary] = []
@@ -14,10 +26,13 @@ final class ChatStore: ObservableObject {
     @Published var mode: AIMode = .auto
     @Published var workPhase: ModeWorkPhase = .idle
     @Published var modeRecommendation: ModeRecommendation?
+    @Published var pendingAgentConfirm: PendingAgentConfirm?
+    @Published var pendingAgentIntake: PendingAgentIntake?
     /// When set, suppress typing-based recommendation re-spam until draft clears or mode changes.
     private var suppressRecommendationUntilEmpty = false
     @Published var isSending = false
     private var sendTask: Task<Void, Never>?
+    private var agentConfirmPollTask: Task<Void, Never>?
     @Published var isSyncActive = false
     @Published var lastSyncAt: Date?
     @Published var searchText = ""
@@ -45,7 +60,9 @@ final class ChatStore: ObservableObject {
     private var applyingRemoteMode = false
 
     private var syncIntervalNs: UInt64 {
-        peerTyping ? 450_000_000 : 900_000_000
+        if isSending { return 2_500_000_000 }
+        if peerTyping { return 700_000_000 }
+        return 2_000_000_000
     }
 
     var filteredConversations: [ConversationSummary] {
@@ -109,6 +126,8 @@ final class ChatStore: ObservableObject {
             activeConversationId = id
             persistActiveConversation()
             messages = []
+            pendingAgentIntake = nil
+            pendingAgentConfirm = nil
             await loadConversations()
             HapticService.medium()
             return id
@@ -135,14 +154,23 @@ final class ChatStore: ObservableObject {
         }
     }
 
-    func send(_ text: String) async {
+    func send(_ text: String, modeOverride: AIMode? = nil) async {
         sendTask?.cancel()
         let task = Task { @MainActor in
-            _ = await sendAndReturnReply(text, modeOverride: nil)
+            _ = await sendAndReturnReply(text, modeOverride: modeOverride)
         }
         sendTask = task
         await task.value
         if sendTask == task { sendTask = nil }
+    }
+
+    /// Progressive “Kürzer” steps per message (1…4).
+    private var shortenLevels: [UUID: Int] = [:]
+
+    func nextShortenLevel(for messageId: UUID) -> Int {
+        let next = min((shortenLevels[messageId] ?? 0) + 1, 4)
+        shortenLevels[messageId] = next
+        return next
     }
 
     /// Sends a chat message and returns the final assistant text (for voice TTS).
@@ -172,21 +200,39 @@ final class ChatStore: ObservableObject {
         let uiMode = speak ? .flash : (modeOverride ?? mode)
         var effectiveMode = uiMode
 
-        // Soft intelligence: recommend + route models/prompts without yanking the picker (except Agent engine).
-        if !speak, let rec = ModeIntelligence.recommend(text: trimmed), rec.mode != uiMode {
-            if !suppressRecommendationUntilEmpty {
+        // Soft intelligence: Auto only picks depth (Think/Flash). Never auto-activates Vision/Agent/tools.
+        if !speak, uiMode == .auto {
+            if let depth = ModeIntelligence.recommendDepth(text: trimmed) {
+                effectiveMode = depth.mode
+            }
+            if !suppressRecommendationUntilEmpty,
+               let rec = ModeIntelligence.recommend(text: trimmed),
+               rec.mode == .agent {
                 modeRecommendation = ModeRecommendation(mode: rec.mode, reason: rec.reason)
             }
-            if uiMode == .auto {
-                effectiveMode = rec.mode
+        } else if !speak, let rec = ModeIntelligence.recommend(text: trimmed), rec.mode != uiMode {
+            if !suppressRecommendationUntilEmpty, rec.mode == .agent {
+                modeRecommendation = ModeRecommendation(mode: rec.mode, reason: rec.reason)
             }
         }
 
         ModeIntelligence.recordUse(speak ? mode : uiMode)
 
+        // Agent clarifying answers → continue previous goal
+        var agentGoal = trimmed
+        if effectiveMode.isAgentPower, !speak, let intake = pendingAgentIntake {
+            agentGoal = """
+            Ursprüngliches Ziel: \(intake.originalGoal)
+
+            Nutzerantworten auf Rückfragen:
+            \(trimmed)
+            """
+            pendingAgentIntake = nil
+        }
+
         let userMessage = ChatMessage(role: .user, text: trimmed)
         messages.append(userMessage)
-        let assistant = ChatMessage(role: .assistant, text: "", isStreaming: true)
+        let assistant = ChatMessage(role: .assistant, text: "", isStreaming: true, modelLabel: effectiveMode.modelHint)
         messages.append(assistant)
         let assistantID = assistant.id
 
@@ -196,16 +242,19 @@ final class ChatStore: ObservableObject {
 
         // Agent mode: real task engine (plan → tools → quality), with chat progress.
         if effectiveMode.isAgentPower, !speak {
-            workPhase = .executing
+            workPhase = .understanding
             let agentReply = await runAgentGoalInChat(
-                trimmed,
+                agentGoal,
                 assistantID: assistantID,
                 conversationId: conversationId,
-                isStartingNewChat: isStartingNewChat
+                isStartingNewChat: isStartingNewChat,
+                displayGoal: trimmed
             )
-            workPhase = .done
-            try? await Task.sleep(nanoseconds: 450_000_000)
-            workPhase = .idle
+            if pendingAgentConfirm == nil, pendingAgentIntake == nil {
+                workPhase = .done
+                try? await Task.sleep(nanoseconds: 450_000_000)
+                workPhase = .idle
+            }
             isSending = false
             return agentReply
         }
@@ -315,7 +364,31 @@ final class ChatStore: ObservableObject {
         }
         workPhase = .idle
         isSending = false
+        pendingAgentConfirm = nil
+        pendingAgentIntake = nil
+        agentConfirmPollTask?.cancel()
+        ImageLiveActivityManager.end(immediate: true)
         HapticService.soft()
+    }
+
+    func respondAgentConfirm(allow: Bool) async {
+        guard let pending = pendingAgentConfirm, let api else { return }
+        pendingAgentConfirm = nil
+        workPhase = .executing
+        do {
+            var task = try await api.confirmAgentStep(taskId: pending.taskId, stepId: pending.stepId, allow: allow)
+            if let idx = messages.lastIndex(where: { $0.role == .assistant }) {
+                setAssistantText(messages[idx].id, Self.formatAgentChatProgress(task), streaming: true)
+                await pollAgentTaskUntilDone(taskId: task.id, assistantID: messages[idx].id)
+            }
+            workPhase = .done
+            try? await Task.sleep(nanoseconds: 400_000_000)
+            workPhase = .idle
+        } catch {
+            lastError = (error as? LocalizedError)?.errorDescription ?? error.localizedDescription
+            workPhase = .idle
+            HapticService.error()
+        }
     }
 
     func dismissModeRecommendation() {
@@ -353,7 +426,14 @@ final class ChatStore: ObservableObject {
             return
         }
 
-        let userText = trimmed.isEmpty ? "Was siehst du auf dem Bild?" : trimmed
+        let userText = trimmed.isEmpty
+            ? "Was siehst du auf dem Bild? Beschreibe klar auf Deutsch. Du kannst das Bild sehen."
+            : """
+              \(trimmed)
+
+              [NOCO] Ein Bild ist angehängt. Du kannst es sehen und beschreiben. \
+              Behaupte nie, du könntest keine Bilder anzeigen oder beschreiben.
+              """
         await sendImageVision(jpeg: jpeg, userText: userText, isStartingNewChat: isStartingNewChat)
     }
 
@@ -405,9 +485,30 @@ final class ChatStore: ObservableObject {
             try? await Task.sleep(nanoseconds: 350_000_000)
 
             if let kept = keptAssistant {
-                // Guard against moondream-style "NO" if PC isn't updated yet
+                // Guard against moondream junk / text-model vision refusals
                 if Self.isUselessVisionReply(kept.text) {
-                    if let idx = messages.firstIndex(where: { $0.id == kept.id }) {
+                    let retryPrompt = """
+                    [NOCO VISION RETRY] Das Bild ist angehängt. Du kannst es sehen. \
+                    Beschreibe auf Deutsch, was sichtbar ist, und beantworte: \(userText). \
+                    Sage niemals, dass du keine Bilder beschreiben kannst.
+                    """
+                    if let retry = try? await api.uploadVisionImage(
+                        imageData: jpeg,
+                        filename: "upload-retry.jpg",
+                        message: retryPrompt,
+                        conversationId: activeConversationId
+                    ),
+                       var retryText = retry.replyText?.trimmingCharacters(in: .whitespacesAndNewlines),
+                       !Self.isUselessVisionReply(retryText) {
+                        if let range = retryText.range(of: "\n—\nNOCO nutzt:") {
+                            retryText = String(retryText[..<range.lowerBound]).trimmingCharacters(in: .whitespacesAndNewlines)
+                        }
+                        if let idx = messages.firstIndex(where: { $0.id == kept.id }) {
+                            messages[idx].text = retryText
+                        }
+                        stickyVisionAssistant = messages.first(where: { $0.id == kept.id })
+                        stickyVisionUntil = Date().addingTimeInterval(90)
+                    } else if let idx = messages.firstIndex(where: { $0.id == kept.id }) {
                         messages[idx].text = "Bildanalyse unklar — bitte Companion (NOCO AI X) neu starten und nochmal senden."
                     }
                 } else {
@@ -585,7 +686,8 @@ final class ChatStore: ObservableObject {
         _ goal: String,
         assistantID: UUID,
         conversationId: String?,
-        isStartingNewChat: Bool
+        isStartingNewChat: Bool,
+        displayGoal: String? = nil
     ) async -> String? {
         guard let api else {
             return await streamAgentPowerFallback(
@@ -596,13 +698,38 @@ final class ChatStore: ObservableObject {
             )
         }
 
+        let shown = displayGoal ?? goal
+
+        // Clarifying questions for complex / incomplete goals (skip if already enriched)
+        if !goal.contains("Nutzerantworten auf Rückfragen:"),
+           let questions = AgentIntake.clarifyingQuestions(for: shown) {
+            pendingAgentIntake = PendingAgentIntake(originalGoal: shown, questions: questions)
+            let body = """
+            Ich helfe dir gerne.
+
+            Damit der Plan stimmt, brauche ich noch kurz:
+            \(questions.enumerated().map { "\($0.offset + 1). \($0.element)" }.joined(separator: "\n"))
+
+            Antworte einfach im Chat — danach plane und arbeite ich Schritt für Schritt.
+            """
+            setAssistantText(assistantID, body, streaming: false)
+            if let idx = messages.firstIndex(where: { $0.id == assistantID }) {
+                messages[idx].modelLabel = "Agent · Rückfragen"
+            }
+            workPhase = .idle
+            HapticService.soft()
+            return body
+        }
+
+        workPhase = .understanding
         setAssistantText(
             assistantID,
             """
-            NOCO Agent · Analysiert
-            Ziel: \(goal)
+            🧠 Analyse
+            Ich habe verstanden, dass du Folgendes möchtest:
+            \(shown)
 
-            Plane Schritte und wähle Werkzeuge…
+            Als Nächstes erstelle ich einen kurzen Plan…
             """,
             streaming: true
         )
@@ -613,6 +740,19 @@ final class ChatStore: ObservableObject {
                 let labels = chain.map(\.label).joined(separator: " → ")
                 goalText = "\(goal)\n\n[NOCO Multi-Mode Workflow: \(labels)]"
             }
+            goalText += """
+
+
+            [NOCO AGENT AUTONOMIE]
+            Du darfst selbst entscheiden, was die Aufgabe braucht:
+            - welches Modell / Reasoning-Tiefe
+            - ob Bildgenerierung sinnvoll ist
+            - ob Vision/Screenshot-Analyse hilft
+            - Schreibwerkzeuge, Recherche, Computer-Control
+            Nutze nur relevante Werkzeuge. Keine unnötigen Schritte. Präsentiere das Ergebnis klar auf Deutsch.
+            """
+            workPhase = .analyzing
+            ImageLiveActivityManager.start(prompt: "Agent · \(String(shown.prefix(48)))")
             var task = try await api.createAgentTask(
                 goal: goalText,
                 mode: .work,
@@ -621,44 +761,68 @@ final class ChatStore: ObservableObject {
                 qualityProfile: .auto,
                 source: "chat"
             )
+            applyAgentWorkPhase(task)
             var lastSnapshot = ""
             let terminal: Set<String> = ["completed", "failed", "cancelled"]
 
             while !terminal.contains(task.status) {
                 try Task.checkCancellation()
-                let snapshot = Self.formatAgentChatProgress(task)
+                applyAgentWorkPhase(task)
+                let snapshot = Self.formatAgentChatProgress(task, goal: goal)
                 if snapshot != lastSnapshot {
                     setAssistantText(assistantID, snapshot, streaming: true)
                     lastSnapshot = snapshot
                     HapticService.streamTick()
+                    ImageLiveActivityManager.update(
+                        progress: Double(task.progress) / 100.0,
+                        status: task.phaseTitle,
+                        insight: String(task.planSummary.prefix(80)),
+                        etaSeconds: nil,
+                        phase: task.progress >= 95 ? .finishing : .rendering,
+                        force: false
+                    )
                 }
 
-                // Don't block Chat on confirmations — hand off to Agent dashboard.
-                if task.status == "awaiting_confirmation" {
-                    let handoff = snapshot + "\n\nChat bleibt frei — bestätige im Agent-Dashboard."
-                    setAssistantText(assistantID, handoff, streaming: false)
+                if task.status == "awaiting_confirmation", let pending = task.pendingConfirm {
+                    pendingAgentConfirm = PendingAgentConfirm(
+                        taskId: task.id,
+                        stepId: pending.stepId,
+                        title: pending.title,
+                        detail: pending.detail
+                    )
+                    let waiting = snapshot + "\n\nBitte bestätige unten — der Agent wartet hier im Chat."
+                    setAssistantText(assistantID, waiting, streaming: false)
                     HapticService.rigid()
-                    Task { [weak self] in
-                        await self?.pollAgentTaskUntilDone(taskId: task.id, assistantID: assistantID)
-                    }
-                    return handoff
+                    workPhase = .analyzing
+                    ImageLiveActivityManager.update(
+                        progress: Double(task.progress) / 100.0,
+                        status: "Bestätigung nötig",
+                        insight: pending.title,
+                        etaSeconds: nil,
+                        phase: .rendering,
+                        force: true
+                    )
+                    return waiting
                 }
 
-                try await Task.sleep(nanoseconds: 1_100_000_000)
+                try await Task.sleep(nanoseconds: 1_400_000_000)
                 task = try await api.getAgentTask(id: task.id)
             }
 
-            let finalText = Self.formatAgentChatFinal(task)
+            let finalText = Self.formatAgentChatFinal(task, goal: goal)
             setAssistantText(assistantID, finalText, streaming: false)
             await resolveConversationId(conversationId, preferLatest: isStartingNewChat)
             evaluateChatLimit()
             if task.status == "completed" {
                 HapticService.success()
+                ImageLiveActivityManager.complete(prompt: "Agent fertig")
             } else {
                 HapticService.error()
+                ImageLiveActivityManager.end(immediate: true)
             }
             return finalText
         } catch is CancellationError {
+            ImageLiveActivityManager.end(immediate: true)
             if let idx = messages.firstIndex(where: { $0.id == assistantID }) {
                 messages[idx].isStreaming = false
                 if messages[idx].text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
@@ -667,6 +831,7 @@ final class ChatStore: ObservableObject {
             }
             return nil
         } catch {
+            ImageLiveActivityManager.end(immediate: true)
             return await streamAgentPowerFallback(
                 goal: goal,
                 assistantID: assistantID,
@@ -676,21 +841,70 @@ final class ChatStore: ObservableObject {
         }
     }
 
+    private func applyAgentWorkPhase(_ task: AgentTask) {
+        switch (task.phase ?? task.status).lowercased() {
+        case "analyzing", "draft", "queued":
+            workPhase = .understanding
+        case "planning":
+            workPhase = .analyzing
+        case "executing", "running", "reviewing", "awaiting", "awaiting_confirmation":
+            workPhase = .executing
+        case "done", "completed":
+            workPhase = .done
+        case "failed", "cancelled":
+            workPhase = .done
+        default:
+            if task.progress < 20 { workPhase = .understanding }
+            else if task.progress < 45 { workPhase = .analyzing }
+            else { workPhase = .executing }
+        }
+    }
+
     private func pollAgentTaskUntilDone(taskId: String, assistantID: UUID) async {
         guard let api else { return }
         let terminal: Set<String> = ["completed", "failed", "cancelled"]
         do {
             var task = try await api.getAgentTask(id: taskId)
+            var confirmIdleRounds = 0
             while !terminal.contains(task.status) {
-                try await Task.sleep(nanoseconds: 2_000_000_000)
+                try await Task.sleep(nanoseconds: 1_500_000_000)
                 task = try await api.getAgentTask(id: taskId)
-                if task.status == "awaiting_confirmation" { continue }
+                applyAgentWorkPhase(task)
+                if task.status == "awaiting_confirmation", let pending = task.pendingConfirm {
+                    pendingAgentConfirm = PendingAgentConfirm(
+                        taskId: task.id,
+                        stepId: pending.stepId,
+                        title: pending.title,
+                        detail: pending.detail
+                    )
+                    setAssistantText(assistantID, Self.formatAgentChatProgress(task), streaming: false)
+                    confirmIdleRounds += 1
+                    // Don't spin forever — wait for in-chat confirm UI
+                    if confirmIdleRounds > 120 { break }
+                    continue
+                }
+                confirmIdleRounds = 0
                 setAssistantText(assistantID, Self.formatAgentChatProgress(task), streaming: true)
+                ImageLiveActivityManager.update(
+                    progress: Double(task.progress) / 100.0,
+                    status: task.phaseTitle,
+                    insight: String((task.planSummary).prefix(80)),
+                    etaSeconds: nil,
+                    phase: .rendering,
+                    force: false
+                )
             }
+            pendingAgentConfirm = nil
             setAssistantText(assistantID, Self.formatAgentChatFinal(task), streaming: false)
-            if task.status == "completed" { HapticService.success() }
+            if task.status == "completed" {
+                HapticService.success()
+                ImageLiveActivityManager.complete(prompt: "Agent fertig")
+            } else {
+                ImageLiveActivityManager.end(immediate: true)
+            }
+            workPhase = .done
         } catch {
-            /* keep last chat text */
+            ImageLiveActivityManager.end(immediate: true)
         }
     }
 
@@ -708,6 +922,27 @@ final class ChatStore: ObservableObject {
         }
         var cid = conversationId
         var reply: String?
+        workPhase = .understanding
+        setAssistantText(
+            assistantID,
+            """
+            🧠 Analyse
+            Ich habe verstanden, dass du Folgendes möchtest:
+            \(goal)
+
+            📋 Plan
+            1) Auftrag schärfen
+            2) Antwort strukturieren
+            3) Konkrete nächste Schritte liefern
+
+            ⚙️ Arbeiten…
+            """,
+            streaming: true
+        )
+        try? await Task.sleep(nanoseconds: 350_000_000)
+        workPhase = .analyzing
+        try? await Task.sleep(nanoseconds: 250_000_000)
+        workPhase = .executing
         setAssistantText(assistantID, "", streaming: true)
         do {
             for try await chunk in api.streamChatV2(
@@ -733,8 +968,16 @@ final class ChatStore: ObservableObject {
             }
             if let idx = messages.firstIndex(where: { $0.id == assistantID }) {
                 messages[idx].isStreaming = false
-                let final = messages[idx].text.trimmingCharacters(in: .whitespacesAndNewlines)
-                reply = final.isEmpty ? nil : final
+                let body = messages[idx].text.trimmingCharacters(in: .whitespacesAndNewlines)
+                let wrapped = """
+                ✅ Fertig
+
+                \(body.isEmpty ? "Keine Antwort vom Companion." : body)
+
+                Empfehlung: Bei komplexeren Aufgaben Agent mit Companion-Task-Engine nutzen (PC online).
+                """
+                messages[idx].text = wrapped
+                reply = wrapped
             }
             await resolveConversationId(cid, preferLatest: isStartingNewChat)
             await syncFromServer()
@@ -767,34 +1010,59 @@ final class ChatStore: ObservableObject {
         messages[idx].isStreaming = streaming
     }
 
-    private static func formatAgentChatProgress(_ task: AgentTask) -> String {
+    private static func formatAgentChatProgress(_ task: AgentTask, goal: String? = nil) -> String {
         var lines: [String] = []
-        let model = (task.activeModelLabel ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
-        lines.append("NOCO Agent · \(task.phaseTitle)")
-        if !model.isEmpty {
-            lines.append("NOCO nutzt: \(model)")
-        }
-        lines.append("Fortschritt: \(task.progress)%")
-        if !task.planSummary.isEmpty {
-            lines.append("Plan: \(task.planSummary)")
-        }
-        lines.append("")
-        for step in task.steps.prefix(8) {
-            let mark: String
-            switch step.status {
-            case "completed": mark = "✓"
-            case "running": mark = "→"
-            case "failed": mark = "✗"
-            case "awaiting_confirmation": mark = "!"
-            default: mark = "·"
+        let phase = (task.phase ?? "").lowercased()
+        switch phase {
+        case "analyzing", "draft", "queued":
+            lines.append("🧠 Analyse")
+            if let goal, !goal.isEmpty {
+                lines.append("Ich habe verstanden, dass du \(goal) möchtest.")
+            } else {
+                lines.append("Ich analysiere dein Ziel…")
             }
-            lines.append("\(mark) \(step.title)")
+        case "planning":
+            lines.append("📋 Plan")
+            if !task.planSummary.isEmpty {
+                lines.append(task.planSummary)
+            }
+        case "executing", "running", "reviewing":
+            lines.append("⚙️ Arbeiten · \(task.progress)%")
+        case "awaiting", "awaiting_confirmation":
+            lines.append("⚙️ Arbeiten · Bestätigung nötig")
+        default:
+            lines.append("NOCO Agent · \(task.phaseTitle) · \(task.progress)%")
+        }
+
+        if let model = task.activeModelLabel?.trimmingCharacters(in: .whitespacesAndNewlines), !model.isEmpty {
+            lines.append("Modell: \(model)")
+        }
+
+        if phase != "planning", !task.planSummary.isEmpty {
+            lines.append("")
+            lines.append("Plan:")
+            lines.append(task.planSummary)
+        }
+
+        if !task.steps.isEmpty {
+            lines.append("")
+            lines.append("Schritte:")
+            for step in task.steps.prefix(5) {
+                let mark: String
+                switch step.status {
+                case "completed": mark = "✅"
+                case "running": mark = "→"
+                case "failed": mark = "✗"
+                case "awaiting_confirmation": mark = "!"
+                default: mark = "·"
+                }
+                lines.append("\(mark) \(step.title)")
+            }
         }
         if let pending = task.pendingConfirm {
             lines.append("")
-            lines.append("Bestätigung nötig: \(pending.title)")
-            lines.append(pending.detail)
-            lines.append("Öffne Studio → Agent, um zu erlauben oder abzubrechen.")
+            lines.append("Bestätigung: \(pending.title)")
+            if !pending.detail.isEmpty { lines.append(pending.detail) }
         }
         if let notes = task.qualityNotes, !notes.isEmpty {
             lines.append("")
@@ -803,36 +1071,44 @@ final class ChatStore: ObservableObject {
         return lines.joined(separator: "\n")
     }
 
-    private static func formatAgentChatFinal(_ task: AgentTask) -> String {
+    private static func formatAgentChatFinal(_ task: AgentTask, goal: String? = nil) -> String {
         var lines: [String] = []
-        lines.append("NOCO Agent · \(task.phaseTitle)")
-        if let model = task.activeModelLabel, !model.isEmpty {
-            lines.append("NOCO nutzte: \(model)")
+        lines.append("✅ Fertig")
+        lines.append("")
+        lines.append("Erledigt:")
+        if let goal, !goal.isEmpty {
+            lines.append("• Ziel: \(goal)")
+        }
+        let doneSteps = task.steps.filter { $0.status == "completed" }.prefix(5)
+        if doneSteps.isEmpty {
+            lines.append("• Agent-Lauf \(task.statusEnum.label.lowercased())")
+        } else {
+            for step in doneSteps {
+                lines.append("• \(step.title)")
+            }
         }
         lines.append("")
+        lines.append("Ergebnis:")
         if let summary = task.resultSummary?.trimmingCharacters(in: .whitespacesAndNewlines), !summary.isEmpty {
             lines.append(summary)
         } else if task.status == "failed" {
-            lines.append("Die Aufgabe ist fehlgeschlagen. Details findest du im Agent-Dashboard.")
+            lines.append("Die Aufgabe ist fehlgeschlagen. Du kannst den Auftrag im Chat erneut senden.")
         } else {
-            lines.append("Aufgabe \(task.statusEnum.label.lowercased()).")
+            lines.append(task.planSummary.isEmpty ? "Aufgabe abgeschlossen." : task.planSummary)
         }
         if !task.artifacts.isEmpty {
             lines.append("")
-            lines.append("Ergebnisse:")
+            lines.append("Artefakte:")
             for art in task.artifacts.prefix(6) {
                 lines.append("• \(art.name)")
             }
         }
         if let notes = task.qualityNotes, !notes.isEmpty {
             lines.append("")
-            lines.append("Qualität: \(notes)")
-        }
-        lines.append("")
-        lines.append("Schritte:")
-        for step in task.steps.prefix(10) {
-            let mark = step.status == "completed" ? "✓" : (step.status == "failed" ? "✗" : "·")
-            lines.append("\(mark) \(step.title)")
+            lines.append("Empfehlung: \(notes)")
+        } else {
+            lines.append("")
+            lines.append("Empfehlung: Sag einfach weiter, was als Nächstes dran ist — Agent bleibt im Chat.")
         }
         return lines.joined(separator: "\n")
     }
@@ -1180,7 +1456,82 @@ final class ChatStore: ObservableObject {
         if words.count <= 8, words.allSatisfy({ ["no", "nein", "yes", "ja"].contains($0) }) {
             return true
         }
+        let refusalHints = [
+            "kann keine bilder",
+            "keine bilder anzeigen",
+            "keine bilder beschreiben",
+            "bilder nicht anzeigen",
+            "bilder nicht beschreiben",
+            "i cannot see",
+            "i can't see",
+            "i cannot describe images",
+            "i can't describe images",
+            "unable to view images",
+            "as a text",
+            "als textbasiertes",
+            "keine visuelle",
+            "sehe keine bilder"
+        ]
+        if refusalHints.contains(where: { lower.contains($0) }) { return true }
         return false
+    }
+
+    /// Quiet vision path for Speak — same chat, returns spoken reply text.
+    func sendVisionForSpeak(jpeg: Data, userText: String) async -> String? {
+        guard let api else {
+            lastError = "Companion offline"
+            return nil
+        }
+        let prompt = """
+        [NOCO SPEAK + VISION]
+        Der Nutzer spricht. Ein aktuelles Bild (Kamera oder Bildschirm) ist angehängt.
+        Du kannst das Bild sehen. Antworte kurz und natürlich auf Deutsch — geeignet zum Vorlesen.
+        Niemals behaupten, du könntest keine Bilder sehen oder beschreiben.
+        Nutzerfrage: \(userText)
+        """
+        isSending = true
+        defer { isSending = false }
+        do {
+            let result = try await api.uploadVisionImage(
+                imageData: Self.jpegData(from: jpeg),
+                filename: "speak-vision.jpg",
+                message: prompt,
+                conversationId: activeConversationId,
+                qualityProfile: LiveScreenQuality.recommend(ocr: "", userPrompt: userText).rawValue,
+                source: "speak_vision"
+            )
+            if let cid = result.conversationId, !cid.isEmpty {
+                activeConversationId = cid
+                persistActiveConversation()
+            }
+            var reply = (result.replyText ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
+            if let range = reply.range(of: "\n—\nNOCO nutzt:") {
+                reply = String(reply[..<range.lowerBound]).trimmingCharacters(in: .whitespacesAndNewlines)
+            }
+            if Self.isUselessVisionReply(reply) {
+                let retry = try await api.uploadVisionImage(
+                    imageData: Self.jpegData(from: jpeg),
+                    filename: "speak-vision-retry.jpg",
+                    message: """
+                    Bild ist angehängt. Beschreibe kurz und klar auf Deutsch, was du siehst, und beantworte: \(userText). \
+                    Du kannst Bilder sehen.
+                    """,
+                    conversationId: activeConversationId,
+                    qualityProfile: LiveScreenQuality.accurate.rawValue,
+                    source: "speak_vision"
+                )
+                reply = (retry.replyText ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
+            }
+            reply = VoiceService.stripSpeakEcho(reply)
+            if !reply.isEmpty {
+                messages.append(ChatMessage(role: .user, text: userText, localImageData: jpeg))
+                messages.append(ChatMessage(role: .assistant, text: reply))
+            }
+            return reply.isEmpty ? nil : reply
+        } catch {
+            lastError = (error as? LocalizedError)?.errorDescription ?? error.localizedDescription
+            return nil
+        }
     }
 
     private func softSyncPreservingVision(localAssistant: ChatMessage?) async {

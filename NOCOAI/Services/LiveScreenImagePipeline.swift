@@ -53,3 +53,66 @@ enum LiveScreenOCR {
         }
     }
 }
+
+/// Lightweight scene-change detector — avoids uploading every Broadcast frame.
+enum LiveScreenSceneDiff {
+    /// 8×8 average-hash style fingerprint (64-bit).
+    static func perceptualHash(of image: UIImage, grid: Int = 8) -> UInt64 {
+        let side = CGFloat(grid)
+        let format = UIGraphicsImageRendererFormat.default()
+        format.scale = 1
+        format.opaque = true
+        let renderer = UIGraphicsImageRenderer(size: CGSize(width: side, height: side), format: format)
+        let tiny = renderer.image { _ in
+            image.draw(in: CGRect(x: 0, y: 0, width: side, height: side))
+        }
+        guard let cg = tiny.cgImage,
+              let data = cg.dataProvider?.data,
+              let ptr = CFDataGetBytePtr(data) else { return 0 }
+
+        let bpp = max(cg.bitsPerPixel / 8, 1)
+        let bytesPerRow = cg.bytesPerRow
+        var luminances = [Double]()
+        luminances.reserveCapacity(grid * grid)
+        for y in 0..<grid {
+            for x in 0..<grid {
+                let offset = y * bytesPerRow + x * bpp
+                let r = Double(ptr[offset])
+                let g = Double(ptr[min(offset + 1, bytesPerRow - 1)])
+                let b = Double(ptr[min(offset + 2, bytesPerRow - 1)])
+                luminances.append(0.299 * r + 0.587 * g + 0.114 * b)
+            }
+        }
+        let mean = luminances.reduce(0, +) / Double(max(luminances.count, 1))
+        var hash: UInt64 = 0
+        for (i, v) in luminances.enumerated() where i < 64 {
+            if v >= mean {
+                hash |= (1 as UInt64) << UInt64(i)
+            }
+        }
+        return hash
+    }
+
+    static func hamming(_ a: UInt64, _ b: UInt64) -> Int {
+        (a ^ b).nonzeroBitCount
+    }
+
+    /// True when the scene meaningfully changed (or first frame).
+    static func isSignificant(previous: UInt64?, new: UInt64, threshold: Int = 10) -> Bool {
+        guard let previous else { return true }
+        return hamming(previous, new) >= threshold
+    }
+
+    static func ocrChanged(_ a: String, _ b: String, minDelta: Int = 24) -> Bool {
+        let left = a.trimmingCharacters(in: .whitespacesAndNewlines)
+        let right = b.trimmingCharacters(in: .whitespacesAndNewlines)
+        if left.isEmpty, right.isEmpty { return false }
+        if left.isEmpty != right.isEmpty { return true }
+        if left == right { return false }
+        // Cheap length / prefix check — enough for UI text swaps
+        if abs(left.count - right.count) >= minDelta { return true }
+        let n = min(80, min(left.count, right.count))
+        guard n > 0 else { return true }
+        return String(left.prefix(n)) != String(right.prefix(n))
+    }
+}

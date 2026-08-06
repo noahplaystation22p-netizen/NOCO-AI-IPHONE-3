@@ -7,23 +7,23 @@ enum AIMode: String, CaseIterable, Identifiable, Codable {
 
     var id: String { rawValue }
 
-    /// Modes shown in the premium picker.
+    /// Depth modes for Chat / Speak (tools like Agent live in +).
     static var premiumCases: [AIMode] {
-        [.auto, .agent, .vision, .developer, .writing, .study, .creative]
+        [.auto, .think, .flash, .agent]
     }
 
     var label: String {
         switch self {
-        case .auto: return "Intelligent"
+        case .auto: return "Auto"
         case .agent: return "Agent"
         case .vision: return "Vision"
         case .developer: return "Developer"
         case .writing: return "Writing"
         case .study: return "Study"
         case .creative: return "Creative"
-        case .flash: return "Blitz"
+        case .flash: return "Flash"
         case .knowledge: return "Wissen"
-        case .think: return "Tiefe"
+        case .think: return "Think"
         }
     }
 
@@ -259,6 +259,67 @@ struct ImageGenerateRequest: Encodable {
         self.width = width
         self.height = height
         self.steps = steps
+    }
+}
+
+/// Speed/quality presets for the single Stable Diffusion engine on the Companion.
+/// Not separate models — real `steps` + resolution via existing txt2img API.
+enum ImageGenMode: String, CaseIterable, Identifiable, Codable {
+    case auto
+    case flash
+    case think
+
+    var id: String { rawValue }
+
+    var title: String {
+        switch self {
+        case .auto: return "Auto"
+        case .flash: return "Flash"
+        case .think: return "Think"
+        }
+    }
+
+    var emoji: String {
+        switch self {
+        case .auto: return "🤖"
+        case .flash: return "⚡"
+        case .think: return "🧠"
+        }
+    }
+
+    var subtitle: String {
+        switch self {
+        case .auto: return "NOCO wählt Tempo oder Qualität"
+        case .flash: return "Schnell · Ideen & Skizzen"
+        case .think: return "Mehr Details · länger"
+        }
+    }
+
+    /// Resolved engine parameters for the Companion SD pipeline.
+    var engineParams: (width: Int, height: Int, steps: Int) {
+        switch self {
+        case .flash: return (384, 384, 5)
+        case .think: return (512, 512, 18)
+        case .auto: return (448, 448, 8)
+        }
+    }
+
+    static func recommend(for prompt: String) -> ImageGenMode {
+        let t = prompt.lowercased()
+        let wantFast = ["schnell", "lustig", "meme", "skizze", "witzig", "schnell mal", "kurz", "draft", "idea"]
+        let wantQuality = [
+            "logo", "professionell", "detail", "hochwertig", "qualität", "quality",
+            "fotorealist", "präzise", "genau", "album", "cover", "branding"
+        ]
+        if wantQuality.contains(where: { t.contains($0) }) { return .think }
+        if wantFast.contains(where: { t.contains($0) }) { return .flash }
+        // Longer prompts often need more fidelity
+        if prompt.count > 160 { return .think }
+        return .flash
+    }
+
+    func resolved(for prompt: String) -> ImageGenMode {
+        self == .auto ? Self.recommend(for: prompt) : self
     }
 }
 

@@ -122,16 +122,21 @@ extension CompanionAPI {
         message: String?,
         conversationId: String?,
         qualityProfile: String? = nil,
-        ocrLength: Int? = nil
+        ocrLength: Int? = nil,
+        source: String? = nil
     ) async throws -> VisionUploadResult {
         var fields: [String: String] = [:]
         let caption = (message?.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty == false)
             ? message!
-            : "Beschreibe ausführlich auf Deutsch, was auf dem Bild zu sehen ist."
+            : """
+            [NOCO VISION] Ein Bild ist angehängt. Beschreibe ausführlich auf Deutsch, was sichtbar ist. \
+            Du kannst Bilder sehen. Antworte nie, dass du keine Bilder anzeigen oder beschreiben kannst.
+            """
         fields["message"] = caption
         if let conversationId { fields["conversation_id"] = conversationId }
         if let qualityProfile, !qualityProfile.isEmpty { fields["quality_profile"] = qualityProfile }
         if let ocrLength { fields["ocr_length"] = String(ocrLength) }
+        if let source, !source.isEmpty { fields["source"] = source }
 
         // Do NOT fall back to /chat — that duplicates the user-image on the PC.
         return try await uploadMultipart(
@@ -316,13 +321,25 @@ extension CompanionAPI {
         )
     }
 
-    func generateImage(prompt: String, conversationId: String?) async throws -> ImageGenerateResponse {
+    func generateImage(
+        prompt: String,
+        conversationId: String?,
+        width: Int = 384,
+        height: Int = 384,
+        steps: Int = 6
+    ) async throws -> ImageGenerateResponse {
         var request = try authorizedRequest(path: "images/txt2img", method: "POST")
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
         // SD on CPU can take several minutes — must outlive default 20s request timeout
         request.timeoutInterval = 360
         request.httpBody = try encoder.encode(
-            ImageGenerateRequest(prompt: prompt, conversationId: conversationId)
+            ImageGenerateRequest(
+                prompt: prompt,
+                conversationId: conversationId,
+                width: width,
+                height: height,
+                steps: steps
+            )
         )
         let (data, response) = try await session.data(for: request)
         try validate(response: response, data: data, isPairRequest: false)

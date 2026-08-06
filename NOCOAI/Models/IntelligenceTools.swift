@@ -3,43 +3,44 @@ import Foundation
 /// Apple-style Writing Tools — prompt wrappers sent to the PC chat.
 enum WritingTool: String, CaseIterable, Identifiable {
     case rewrite
+    case improve
+    case shorten
+    case expand
+    case tone
     case proofread
-    case summarize
-    case simplify
-    case bullets
-    case translate
-    case keyPoints
-    case friendly
-    case professional
 
     var id: String { rawValue }
 
-    /// Apple-like German product name
     var title: String {
         switch self {
-        case .rewrite: return "Umformulieren"
-        case .proofread: return "Korrekturlesen"
-        case .summarize: return "Zusammenfassen"
-        case .simplify: return "Einfacher"
-        case .bullets: return "Stichpunkte"
-        case .translate: return "Übersetzen"
-        case .keyPoints: return "Kernaussagen"
-        case .friendly: return "Freundlicher"
-        case .professional: return "Formeller"
+        case .rewrite: return "Umschreiben"
+        case .improve: return "Verbessern"
+        case .shorten: return "Kürzen"
+        case .expand: return "Verlängern"
+        case .tone: return "Ton ändern"
+        case .proofread: return "Grammatik"
+        }
+    }
+
+    var subtitle: String {
+        switch self {
+        case .rewrite: return "Klarer und natürlicher"
+        case .improve: return "Stil und Lesbarkeit"
+        case .shorten: return "Sinn behalten, kürzen"
+        case .expand: return "Mehr Detail, gleicher Sinn"
+        case .tone: return "Freundlich oder formell"
+        case .proofread: return "Rechtschreibung & Grammatik"
         }
     }
 
     var systemImage: String {
         switch self {
         case .rewrite: return "arrow.triangle.2.circlepath"
+        case .improve: return "wand.and.stars"
+        case .shorten: return "arrow.down.right.and.arrow.up.left"
+        case .expand: return "arrow.up.left.and.arrow.down.right"
+        case .tone: return "theatermasks"
         case .proofread: return "checkmark.seal"
-        case .summarize: return "text.justify.left"
-        case .simplify: return "textformat.size"
-        case .bullets: return "list.bullet"
-        case .translate: return "globe"
-        case .keyPoints: return "lightbulb"
-        case .friendly: return "face.smiling"
-        case .professional: return "briefcase"
         }
     }
 
@@ -47,23 +48,37 @@ enum WritingTool: String, CaseIterable, Identifiable {
         let t = text.trimmingCharacters(in: .whitespacesAndNewlines)
         switch self {
         case .rewrite:
-            return "Formuliere den folgenden Text klarer und natürlicher um, behalte die Bedeutung:\n\n\(t)"
+            return """
+            Schreibe den Text klarer und natürlicher um. Bedeutung und Absicht bleiben identisch. \
+            Nur den fertigen Text zurückgeben.\n\n\(t)
+            """
+        case .improve:
+            return """
+            Verbessere Stil, Lesbarkeit und Fluss. Keine neuen Fakten. Nur den fertigen Text.\n\n\(t)
+            """
+        case .shorten:
+            return """
+            Kürze den Text auf ca. 45–60%. Entferne Wiederholungen und Füllwörter. \
+            Behalte die wichtigsten Informationen. Sinn hat Vorrang vor maximaler Kürze. \
+            Nur den fertigen Text.\n\n\(t)
+            """
+        case .expand:
+            return """
+            Verlängere den Text sinnvoll (ca. +40–70%). Mehr Klarheit und ein bis zwei Details, \
+            die schon angelegt sind — nichts erfinden. Nur den fertigen Text.\n\n\(t)
+            """
+        case .tone:
+            return """
+            Liefere ZWEI Varianten des Textes (gleicher Sinn):
+            1) Freundlich und warm
+            2) Formell und professionell
+            Kurze Überschriften, sonst nur die Texte.\n\n\(t)
+            """
         case .proofread:
-            return "Korrigiere Rechtschreibung, Grammatik und Zeichensetzung. Gib nur den korrigierten Text zurück:\n\n\(t)"
-        case .summarize:
-            return "Fasse den folgenden Text kurz und präzise zusammen:\n\n\(t)"
-        case .simplify:
-            return "Erkläre den folgenden Text einfacher und verständlicher:\n\n\(t)"
-        case .bullets:
-            return "Wandle den folgenden Text in klare Stichpunkte um:\n\n\(t)"
-        case .translate:
-            return "Übersetze den folgenden Text ins Englische. Wenn er schon Englisch ist, übersetze ins Deutsche:\n\n\(t)"
-        case .keyPoints:
-            return "Extrahiere die wichtigsten Kernaussagen als kurze Liste:\n\n\(t)"
-        case .friendly:
-            return "Schreibe den folgenden Text freundlicher und wärmer um:\n\n\(t)"
-        case .professional:
-            return "Schreibe den folgenden Text formeller und professioneller um:\n\n\(t)"
+            return """
+            Korrigiere Rechtschreibung, Grammatik und Zeichensetzung. Inhalt unverändert. \
+            Nur den korrigierten Text zurückgeben.\n\n\(t)
+            """
         }
     }
 }
@@ -99,11 +114,31 @@ enum ReplyAction: String, CaseIterable, Identifiable {
     }
 
     func prompt(for reply: String) -> String {
+        prompt(for: reply, shortenLevel: 1)
+    }
+
+    func prompt(for reply: String, shortenLevel: Int) -> String {
         switch self {
         case .shorter:
-            return "Mache deine letzte Antwort deutlich kürzer und knapper."
+            let level = min(max(shortenLevel, 1), 4)
+            let guidance: String
+            switch level {
+            case 1:
+                guidance = "Stufe 1 — leicht gekürzt (~75%): nur Füllwörter und Wiederholungen weg. Sinn und Details bleiben."
+            case 2:
+                guidance = "Stufe 2 — deutlich kürzer (~50%): Nebensätze reduzieren, Kernaussagen behalten."
+            case 3:
+                guidance = "Stufe 3 — Kurzfassung (~30%): nur die wichtigsten Punkte, weiterhin voll verständlich."
+            default:
+                guidance = "Stufe 4 — ein klarer Satz: die zentrale Aussage, nichts Wesentliches verlieren."
+            }
+            return """
+            Kürze deine letzte Antwort intelligent (nicht nur Wörter löschen).
+            \(guidance)
+            Verstehe den Inhalt, behalte Sinn und Fakten. Kein Meta-Kommentar — nur die gekürzte Antwort.
+            """
         case .longer:
-            return "Erweitere deine letzte Antwort mit mehr Details und Beispielen."
+            return "Erweitere deine letzte Antwort mit mehr Details und Beispielen — gleiche Kernaussage."
         case .asList:
             return "Strukturiere deine letzte Antwort als klare, gut lesbare Liste."
         case .continueThinking:

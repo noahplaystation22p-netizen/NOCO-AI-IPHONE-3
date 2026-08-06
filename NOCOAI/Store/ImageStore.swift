@@ -34,6 +34,9 @@ final class ImageStore: ObservableObject {
     @Published var phase: Phase = .idle
     @Published var isPreparingEngine = false
     @Published var engineStatusText = ""
+    /// Flash / Think / Auto — maps to SD steps+size (same engine).
+    @Published var genMode: ImageGenMode = .auto
+    @Published private(set) var lastResolvedMode: ImageGenMode?
 
     enum Phase: Equatable {
         case idle
@@ -129,9 +132,14 @@ final class ImageStore: ObservableObject {
         isGenerating = true
         phase = .preparing
         progress = 0.02
-        statusText = "Sende an PC…"
+        let resolved = genMode.resolved(for: trimmed)
+        lastResolvedMode = resolved
+        let params = resolved.engineParams
+        statusText = resolved == .think
+            ? "Think-Qualität · PC rechnet gründlicher…"
+            : (resolved == .flash ? "Flash · schnelle Generierung…" : "Sende an PC…")
         insightText = insights[0]
-        etaSeconds = 240
+        etaSeconds = resolved == .think ? 420 : 200
         startedAt = .now
         sawRealProgress = false
         lastHapticBucket = -1
@@ -142,7 +150,7 @@ final class ImageStore: ObservableObject {
 
         _ = await AppNotificationService.requestAuthorizationIfNeeded()
         ImageBackgroundKeeper.shared.begin()
-        ImageLiveActivityManager.start(prompt: trimmed)
+        ImageLiveActivityManager.start(prompt: "\(resolved.emoji) \(trimmed)")
         startInsightLoop()
         startProgressPolling()
 
@@ -156,7 +164,13 @@ final class ImageStore: ObservableObject {
         }
 
         do {
-            let res = try await api.generateImage(prompt: trimmed, conversationId: conversationId)
+            let res = try await api.generateImage(
+                prompt: trimmed,
+                conversationId: conversationId,
+                width: params.width,
+                height: params.height,
+                steps: params.steps
+            )
             guard !cancelled else {
                 phase = .idle
                 statusText = "Abgebrochen"

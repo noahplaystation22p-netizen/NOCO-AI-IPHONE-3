@@ -23,16 +23,6 @@ struct ChatHubView: View {
                         .background(NOCOAITheme.danger.opacity(0.9))
                 }
 
-                IntelligenceQuickBar()
-                    .environmentObject(connection)
-
-                IntelligenceWaveRibbon()
-                    .frame(height: 16)
-                    .padding(.horizontal, 20)
-                    .opacity(0.55)
-                    .allowsHitTesting(false)
-                    .animation(.easeInOut(duration: 0.35), value: connection.chat.mode)
-
                 ScrollViewReader { proxy in
                     ScrollView {
                         if connection.chat.messages.isEmpty {
@@ -42,9 +32,15 @@ struct ChatHubView: View {
                                 ForEach(Array(connection.chat.messages.enumerated()), id: \.element.id) { index, message in
                                     ChatBubble(message: message) { action in
                                         Task {
-                                            await connection.chat.send(action.prompt(for: message.text))
+                                            if action == .shorter {
+                                                let level = connection.chat.nextShortenLevel(for: message.id)
+                                                await connection.chat.send(
+                                                    action.prompt(for: message.text, shortenLevel: level)
+                                                )
+                                            } else {
+                                                await connection.chat.send(action.prompt(for: message.text))
+                                            }
                                             if action == .asImagePrompt {
-                                                // After the model drafts a prompt, jump to Bilder with a seed.
                                                 connection.handoffToImages(prompt: message.text)
                                             }
                                         }
@@ -89,25 +85,21 @@ struct ChatHubView: View {
                     .transition(.opacity.combined(with: .move(edge: .bottom)))
                 }
 
-                ModePicker(
-                        mode: Binding(
-                            get: { connection.chat.mode },
-                            set: { connection.chat.setMode($0) }
-                        ),
-                        recommendation: connection.chat.modeRecommendation.map { ($0.mode, $0.reason) },
-                        onSelect: { _ in
-                            connection.chat.modeRecommendation = nil
+                if let pending = connection.chat.pendingAgentConfirm {
+                    AgentInlineConfirmBar(
+                        title: pending.title,
+                        detail: pending.detail,
+                        onAllow: {
+                            Task { await connection.chat.respondAgentConfirm(allow: true) }
                         },
-                        onDismissRecommendation: {
-                            connection.chat.dismissModeRecommendation()
+                        onDeny: {
+                            Task { await connection.chat.respondAgentConfirm(allow: false) }
                         }
                     )
                     .padding(.horizontal, 16)
-                    .padding(.vertical, 6)
-
-                ModeStatusTheater(phase: connection.chat.workPhase, mode: connection.chat.mode)
-                    .padding(.horizontal, 16)
-                    .padding(.bottom, connection.chat.workPhase == .idle ? 0 : 6)
+                    .padding(.bottom, 4)
+                    .transition(.opacity.combined(with: .move(edge: .bottom)))
+                }
 
                 ChatInputBar(
                     text: $input,
@@ -141,15 +133,6 @@ struct ChatHubView: View {
                 }
                 ToolbarItem(placement: .topBarTrailing) {
                     HStack(spacing: 10) {
-                        Button {
-                            HapticService.open()
-                            connection.speak.openUI()
-                        } label: {
-                            Image(systemName: connection.speak.isRunning ? "waveform.circle.fill" : "waveform")
-                                .symbolEffect(.variableColor.iterative, isActive: connection.speak.isRunning)
-                        }
-                        .accessibilityLabel("Speak")
-
                         SyncBadge(active: connection.chat.isSyncActive)
                         StatusBadge(
                             online: connection.isOnline,
@@ -268,7 +251,7 @@ struct ChatHubView: View {
             Text("NOCO denkt mit")
                 .font(.title3.weight(.semibold))
             Text(connection.isOnline
-                ? "Frag etwas — oder öffne Speak, Vision und Agent über die Leiste oben."
+                ? "Alles Wichtige steckt im + neben dem Feld. Speak über die Welle."
                 : "Companion offline. Verbinde den PC, dann hilft NOCO systemweit.")
                 .font(.subheadline)
                 .multilineTextAlignment(.center)
@@ -278,16 +261,6 @@ struct ChatHubView: View {
             IntelligenceSuggestionChips()
                 .environmentObject(connection)
                 .padding(.horizontal, 12)
-
-            IntelligenceWaveRibbon()
-                .frame(height: 32)
-                .padding(.horizontal, 40)
-
-            IntelligenceIdeaChips { idea in
-                Task { await connection.chat.send(idea.prompt) }
-            }
-            .padding(.horizontal, 16)
-            .padding(.top, 4)
         }
         .frame(maxWidth: .infinity)
         .padding(.top, 40)
@@ -404,59 +377,30 @@ private struct ChatBubble: View {
                 }
                 if !message.text.isEmpty || message.isStreaming {
                     if message.isStreaming && message.text.isEmpty {
-                        IntelligenceThinkingDots()
+                        IntelligenceThinkingStatus()
+                    } else if allowTextSelection || message.isStreaming {
+                        bubbleText
                     } else {
                         bubbleText
+                            .contentShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
+                            .onTapGesture { copyWholeMessage() }
                     }
                 }
 
                 if !message.isStreaming, !message.text.isEmpty {
-                    VStack(alignment: message.role == .user ? .trailing : .leading, spacing: 6) {
-                        HStack(spacing: 8) {
-                            Button {
-                                copyWholeMessage()
-                            } label: {
-                                Label(copiedFlash ? "Kopiert" : "Kopieren", systemImage: copiedFlash ? "checkmark" : "doc.on.doc")
-                                    .font(.caption2.weight(.semibold))
-                                    .padding(.horizontal, 10)
-                                    .padding(.vertical, 7)
-                                    .background(Capsule().fill(Color.primary.opacity(0.06)))
-                            }
-                            .buttonStyle(.plain)
-                            .foregroundStyle(.secondary)
-
-                            if message.role == .assistant {
-                                Button {
-                                    HapticService.speakCue()
-                                    connection.speak.voice.speak(message.text)
-                                } label: {
-                                    Label("Vorlesen", systemImage: "speaker.wave.2.fill")
-                                        .font(.caption2.weight(.semibold))
-                                        .padding(.horizontal, 10)
-                                        .padding(.vertical, 7)
-                                        .background(Capsule().fill(Color(red: 0.55, green: 0.45, blue: 1).opacity(0.12)))
-                                }
-                                .buttonStyle(.plain)
-                                .foregroundStyle(.secondary)
-
-                                Button {
-                                    connection.handoffToAgent(goal: message.text)
-                                } label: {
-                                    Label("Agent", systemImage: "brain.head.profile")
-                                        .font(.caption2.weight(.semibold))
-                                        .padding(.horizontal, 10)
-                                        .padding(.vertical, 7)
-                                        .background(Capsule().fill(Color(red: 0.35, green: 0.78, blue: 0.72).opacity(0.12)))
-                                }
-                                .buttonStyle(.plain)
-                                .foregroundStyle(.secondary)
-                            }
+                    MessageActionRow(
+                        message: message,
+                        copiedFlash: copiedFlash,
+                        onCopy: { copyWholeMessage() },
+                        onSpeak: {
+                            HapticService.speakCue()
+                            connection.speak.voice.speak(message.text)
+                        },
+                        onShare: { shareMessage(message.text) },
+                        onMore: { action in
+                            handleMore(action, message: message, onReplyAction: onReplyAction)
                         }
-
-                        if message.role == .assistant, let onReplyAction {
-                            ReplyActionBar(replyText: message.text, onAction: onReplyAction)
-                        }
-                    }
+                    )
                 }
             }
             if message.role == .assistant { Spacer(minLength: 48) }
@@ -465,17 +409,24 @@ private struct ChatBubble: View {
 
     @ViewBuilder
     private var bubbleText: some View {
-        let styled = Text(message.text)
-            .font(.body)
-            .foregroundStyle(message.role == .user ? .white : NOCOAITheme.primaryText(for: scheme))
-        let content = HStack(alignment: .bottom, spacing: 6) {
-            if allowTextSelection {
-                styled.textSelection(.enabled)
+        Group {
+            if allowTextSelection, !message.isStreaming {
+                SelectableMessageText(
+                    text: message.text,
+                    textColor: message.role == .user
+                        ? .white
+                        : UIColor(NOCOAITheme.primaryText(for: scheme))
+                )
+                .frame(maxWidth: UIScreen.main.bounds.width * 0.72, alignment: message.role == .user ? .trailing : .leading)
             } else {
-                styled
-            }
-            if message.isStreaming {
-                StreamingGlowCursor()
+                HStack(alignment: .bottom, spacing: 6) {
+                    Text(message.text)
+                        .font(.body)
+                        .foregroundStyle(message.role == .user ? .white : NOCOAITheme.primaryText(for: scheme))
+                    if message.isStreaming {
+                        StreamingGlowCursor()
+                    }
+                }
             }
         }
         .padding(.horizontal, 16)
@@ -490,16 +441,6 @@ private struct ChatBubble: View {
                 Label("Ganze Nachricht kopieren", systemImage: "doc.on.doc")
             }
         }
-
-        if allowTextSelection || message.isStreaming {
-            content
-        } else {
-            content
-                .contentShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
-                .onTapGesture {
-                    copyWholeMessage()
-                }
-        }
     }
 
     private func copyWholeMessage() {
@@ -509,6 +450,120 @@ private struct ChatBubble: View {
         DispatchQueue.main.asyncAfter(deadline: .now() + 1.2) {
             withAnimation { copiedFlash = false }
         }
+    }
+
+    private func shareMessage(_ text: String) {
+        let plain = MessageClipboard.plainText(from: text)
+        guard !plain.isEmpty else { return }
+        let av = UIActivityViewController(activityItems: [plain], applicationActivities: nil)
+        guard let scene = UIApplication.shared.connectedScenes.first as? UIWindowScene,
+              let root = scene.keyWindow?.rootViewController ?? scene.windows.first?.rootViewController else { return }
+        var presenter = root
+        while let presented = presenter.presentedViewController { presenter = presented }
+        presenter.present(av, animated: true)
+        HapticService.soft()
+    }
+
+    private func handleMore(_ action: MessageMoreAction, message: ChatMessage, onReplyAction: ((ReplyAction) -> Void)?) {
+        switch action {
+        case .retryThink:
+            Task {
+                await connection.chat.send(
+                    "Bitte generiere deine letzte Antwort erneut — gründlicher durchdacht, gleiche Absicht. Kein Meta-Kommentar.",
+                    modeOverride: .think
+                )
+            }
+        case .retryFlash:
+            Task {
+                await connection.chat.send(
+                    "Bitte generiere deine letzte Antwort erneut — knapp und klar, gleiche Absicht. Kein Meta-Kommentar.",
+                    modeOverride: .flash
+                )
+            }
+        case .regenerate:
+            Task {
+                await connection.chat.send("Bitte generiere deine letzte Antwort erneut — klarer und besser, gleiche Absicht.")
+            }
+        case .showModel:
+            let label = message.modelLabel ?? connection.chat.mode.modelHint
+            HapticService.selection()
+            connection.speak.statusLine = "Modell: \(label)"
+        case .newChatFromHere:
+            Task {
+                _ = await connection.chat.newConversation()
+                connection.pendingChatDraft = "Weiter zu:\n\n\(message.text.prefix(400))"
+            }
+        case .shorter:
+            onReplyAction?(.shorter)
+        case .longer:
+            onReplyAction?(.longer)
+        case .asList:
+            onReplyAction?(.asList)
+        case .asAgent:
+            connection.handoffToAgent(goal: message.text)
+        case .asImage:
+            onReplyAction?(.asImagePrompt)
+        }
+    }
+}
+
+enum MessageMoreAction {
+    case retryThink, retryFlash, regenerate, showModel, newChatFromHere, shorter, longer, asList, asAgent, asImage
+}
+
+private struct MessageActionRow: View {
+    let message: ChatMessage
+    var copiedFlash: Bool
+    var onCopy: () -> Void
+    var onSpeak: () -> Void
+    var onShare: () -> Void
+    var onMore: (MessageMoreAction) -> Void
+
+    var body: some View {
+        HStack(spacing: 4) {
+            iconButton(copiedFlash ? "checkmark" : "doc.on.doc", label: "Kopieren", action: onCopy)
+            if message.role == .assistant {
+                iconButton("speaker.wave.2.fill", label: "Vorlesen", action: onSpeak)
+            }
+            iconButton("square.and.arrow.up", label: "Teilen", action: onShare)
+            Menu {
+                if message.role == .assistant {
+                    Button { onMore(.retryThink) } label: { Label("Retry (Think)", systemImage: "brain.head.profile") }
+                    Button { onMore(.retryFlash) } label: { Label("Retry (Flash)", systemImage: "bolt.fill") }
+                    Button { onMore(.showModel) } label: { Label("Verwendetes Modell", systemImage: "cpu") }
+                    Button { onMore(.newChatFromHere) } label: { Label("Ab hier neuer Chat", systemImage: "plus.bubble") }
+                    Divider()
+                    Button { onMore(.shorter) } label: { Label("Kürzer", systemImage: "arrow.down.right.and.arrow.up.left") }
+                    Button { onMore(.longer) } label: { Label("Ausführlicher", systemImage: "arrow.up.left.and.arrow.down.right") }
+                    Button { onMore(.asList) } label: { Label("Als Liste", systemImage: "list.bullet") }
+                    Divider()
+                    Button { onMore(.asAgent) } label: { Label("An Agent", systemImage: "cpu.fill") }
+                    Button { onMore(.asImage) } label: { Label("Als Bildidee", systemImage: "paintbrush.pointed") }
+                } else {
+                    Button { onMore(.newChatFromHere) } label: { Label("Ab hier neuer Chat", systemImage: "plus.bubble") }
+                    Button { onMore(.asAgent) } label: { Label("An Agent", systemImage: "cpu.fill") }
+                }
+            } label: {
+                Image(systemName: "ellipsis")
+                    .font(.system(size: 14, weight: .semibold))
+                    .foregroundStyle(.secondary)
+                    .frame(width: 34, height: 34)
+                    .background(Circle().fill(Color.primary.opacity(0.06)))
+            }
+            .accessibilityLabel("Mehr")
+        }
+    }
+
+    private func iconButton(_ system: String, label: String, action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            Image(systemName: system)
+                .font(.system(size: 14, weight: .semibold))
+                .foregroundStyle(.secondary)
+                .frame(width: 34, height: 34)
+                .background(Circle().fill(Color.primary.opacity(0.06)))
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel(label)
     }
 }
 
@@ -659,6 +714,54 @@ private struct ChatLimitBanner: View {
         .overlay(
             RoundedRectangle(cornerRadius: 16, style: .continuous)
                 .stroke(NOCOAITheme.glowPrimary.opacity(0.35), lineWidth: 1)
+        )
+    }
+}
+
+private struct AgentInlineConfirmBar: View {
+    let title: String
+    let detail: String
+    var onAllow: () -> Void
+    var onDeny: () -> Void
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            Text("Bestätigung nötig")
+                .font(.caption.weight(.bold))
+                .foregroundStyle(Color(red: 0.98, green: 0.72, blue: 0.28))
+            Text(title)
+                .font(.subheadline.weight(.semibold))
+            if !detail.isEmpty {
+                Text(detail)
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .lineLimit(3)
+            }
+            HStack(spacing: 10) {
+                Button(action: onDeny) {
+                    Text("Ablehnen")
+                        .font(.caption.weight(.semibold))
+                        .frame(maxWidth: .infinity)
+                        .padding(.vertical, 10)
+                        .background(Capsule().fill(Color.primary.opacity(0.08)))
+                }
+                .buttonStyle(.plain)
+                Button(action: onAllow) {
+                    Text("Erlauben")
+                        .font(.caption.weight(.bold))
+                        .foregroundStyle(.white)
+                        .frame(maxWidth: .infinity)
+                        .padding(.vertical, 10)
+                        .background(Capsule().fill(NOCOAITheme.accent))
+                }
+                .buttonStyle(.plain)
+            }
+        }
+        .padding(14)
+        .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 18, style: .continuous))
+        .overlay(
+            RoundedRectangle(cornerRadius: 18, style: .continuous)
+                .stroke(Color(red: 0.98, green: 0.72, blue: 0.28).opacity(0.45), lineWidth: 1)
         )
     }
 }

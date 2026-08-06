@@ -97,9 +97,9 @@ struct KeyboardRootView: View {
                     model.toggleAskPanel()
                 } label: {
                     HStack(spacing: 5) {
-                        Image(systemName: "bubble.left.and.text.bubble.right.fill")
+                        Image(systemName: "sparkles")
                             .font(.system(size: 11, weight: .semibold))
-                        Text("Fragen")
+                        Text("Frag NOCO")
                             .font(.system(size: 12, weight: .semibold, design: .rounded))
                     }
                     .padding(.horizontal, 11)
@@ -119,6 +119,7 @@ struct KeyboardRootView: View {
                     .foregroundStyle(.white)
                 }
                 .buttonStyle(SoftPressStyle())
+                .accessibilityLabel("Frag NOCO AI")
 
                 ForEach(model.toolbarChips) { chip in
                     Button {
@@ -402,6 +403,8 @@ private struct IntelligenceRewriteOverlay: View {
     @State private var spin = false
     @State private var pulse = false
     @State private var drift = false
+    @State private var startedAt = Date()
+    @State private var elapsed: TimeInterval = 0
 
     private let aurora: [Color] = [
         Color(red: 0.45, green: 0.78, blue: 1.0),
@@ -448,7 +451,7 @@ private struct IntelligenceRewriteOverlay: View {
                 .offset(x: drift ? -24 : 20, y: pulse ? 18 : -12)
                 .blendMode(.plusLighter)
 
-            VStack(spacing: 8) {
+            VStack(spacing: 6) {
                 ZStack {
                     Circle()
                         .stroke(
@@ -471,15 +474,23 @@ private struct IntelligenceRewriteOverlay: View {
                         .symbolEffect(.pulse, options: .repeating, value: phase == .thinking || phase == .writing)
                 }
 
-                if phase == .thinking, !title.isEmpty {
-                    Text(title)
+                if phase == .thinking || phase == .writing {
+                    Text(phase == .writing ? "Schreibt…" : (title.isEmpty ? "Denkt…" : title))
                         .font(.system(size: 12, weight: .semibold, design: .rounded))
                         .foregroundStyle(.white.opacity(0.95))
                         .shadow(color: .black.opacity(0.25), radius: 4)
                         .transition(.opacity)
+
+                    Text(elapsedLabel)
+                        .font(.system(size: 10, weight: .medium, design: .rounded).monospacedDigit())
+                        .foregroundStyle(.white.opacity(0.65))
+                } else if phase == .success {
+                    Text("Fertig")
+                        .font(.system(size: 12, weight: .semibold, design: .rounded))
+                        .foregroundStyle(.white.opacity(0.95))
                 }
             }
-            .padding(.horizontal, phase == .thinking ? 20 : 16)
+            .padding(.horizontal, 20)
             .padding(.vertical, 12)
             .background(
                 Capsule(style: .continuous)
@@ -504,10 +515,26 @@ private struct IntelligenceRewriteOverlay: View {
         }
         .allowsHitTesting(false)
         .onAppear {
+            startedAt = Date()
             withAnimation(.linear(duration: 3.2).repeatForever(autoreverses: false)) { spin = true }
             withAnimation(.easeInOut(duration: 1.15).repeatForever(autoreverses: true)) { pulse = true }
             withAnimation(.easeInOut(duration: 1.8).repeatForever(autoreverses: true)) { drift = true }
         }
+        .onChange(of: phase) { _, new in
+            if new == .thinking { startedAt = Date(); elapsed = 0 }
+        }
+        .task(id: phase) {
+            guard phase == .thinking || phase == .writing else { return }
+            while !Task.isCancelled {
+                try? await Task.sleep(nanoseconds: 200_000_000)
+                elapsed = Date().timeIntervalSince(startedAt)
+            }
+        }
+    }
+
+    private var elapsedLabel: String {
+        let s = Int(elapsed)
+        return s < 60 ? "\(s)s" : String(format: "%d:%02d", s / 60, s % 60)
     }
 }
 

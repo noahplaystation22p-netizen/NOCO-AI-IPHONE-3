@@ -7,8 +7,9 @@ struct LiveScreenView: View {
     @EnvironmentObject private var connection: ConnectionStore
     @Environment(\.colorScheme) private var scheme
     @Environment(\.dismiss) private var dismiss
+    @Environment(\.openURL) private var openURL
 
-    @StateObject private var session = LiveScreenSessionController()
+    private var session: LiveScreenSessionController { connection.liveScreen }
     @State private var photoItem: PhotosPickerItem?
     @State private var draft = ""
     @State private var showConsent = false
@@ -36,12 +37,15 @@ struct LiveScreenView: View {
                     ScrollView {
                         VStack(spacing: 16) {
                             if session.isActive || session.isAnalyzing {
-                                LiveScreenIntelligenceWave(phase: session.phase)
-                                    .padding(.horizontal, 4)
+                                LiveScreenStatusTheater(phase: session.phase, status: session.statusLine)
                                     .transition(.opacity.combined(with: .scale(0.98)))
                             }
 
                             floatingPreviewCard
+
+                            if !session.sessionSummary.isEmpty {
+                                summaryCard
+                            }
 
                             if !session.suggestedActions.isEmpty {
                                 suggestedActionsRow
@@ -78,16 +82,32 @@ struct LiveScreenView: View {
         .nocoBackground()
         .navigationBarHidden(true)
         .onAppear {
-            session.bind { connection.companionAPI() }
+            session.bind(
+                apiProvider: { connection.companionAPI() },
+                speakBusy: {
+                    connection.speak.isBusyForVision
+                }
+            )
             withAnimation(.spring(response: 0.55, dampingFraction: 0.84)) { appear = true }
             withAnimation(.easeInOut(duration: 1.2).repeatForever(autoreverses: true)) { pulseLive = true }
             if !session.hasConsent { showConsent = true }
         }
         .onDisappear {
-            if session.isActive { session.stopInAppCapture() }
+            // Keep Broadcast alive if Speak still uses screen share; otherwise soft-stop in-app only.
+            if session.isActive, !connection.speak.screenShareEnabled {
+                session.stopInAppCapture()
+            }
         }
         .sheet(isPresented: $showConsent) {
             consentSheet
+                .presentationDetents([.medium, .large])
+                .presentationDragIndicator(.visible)
+        }
+        .sheet(isPresented: Binding(
+            get: { session.showEndSessionSheet },
+            set: { if !$0 { session.showEndSessionSheet = false } }
+        )) {
+            endSessionSheet
                 .presentationDetents([.medium])
                 .presentationDragIndicator(.visible)
         }
@@ -99,9 +119,28 @@ struct LiveScreenView: View {
             get: { session.lastError != nil },
             set: { if !$0 { session.clearError() } }
         )) {
+            Button("Einstellungen") {
+                if let url = URL(string: UIApplication.openSettingsURLString) {
+                    openURL(url)
+                }
+                session.clearError()
+            }
             Button("OK", role: .cancel) { session.clearError() }
         } message: {
             Text(session.lastError ?? "")
+        }
+    }
+
+    private var summaryCard: some View {
+        GlassCard {
+            VStack(alignment: .leading, spacing: 8) {
+                Label("Sitzungsübersicht", systemImage: "list.bullet.rectangle")
+                    .font(.subheadline.weight(.semibold))
+                Text(session.sessionSummary)
+                    .font(.footnote)
+                    .foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
         }
     }
 
@@ -134,7 +173,9 @@ struct LiveScreenView: View {
         HStack(alignment: .center, spacing: 12) {
             Button {
                 HapticService.soft()
-                session.stopSession()
+                if session.isActive {
+                    session.requestStopSession()
+                }
                 dismiss()
             } label: {
                 Image(systemName: "chevron.left")
@@ -157,7 +198,7 @@ struct LiveScreenView: View {
             if session.isActive {
                 Button {
                     HapticService.rigid()
-                    session.stopSession()
+                    session.requestStopSession()
                 } label: {
                     Text("Stop")
                         .font(.subheadline.weight(.semibold))
@@ -294,7 +335,7 @@ struct LiveScreenView: View {
                     Text("Bildschirmübertragung")
                         .font(.subheadline.weight(.semibold))
                     Text(session.captureKind == .broadcastExtension
-                          ? "Live — Frames kommen vom System"
+                          ? "Live — intelligente Frames (nur bei Änderungen)"
                           : "Wie Kontrollzentrum: App wählen, Übertragung starten")
                         .font(.caption2)
                         .foregroundStyle(.secondary)
@@ -308,6 +349,13 @@ struct LiveScreenView: View {
                 RoundedRectangle(cornerRadius: 16, style: .continuous)
                     .stroke(Color.red.opacity(session.captureKind == .broadcastExtension ? 0.55 : 0.2), lineWidth: 1)
             )
+
+            if session.broadcastWaiting && session.isActive {
+                Text("Tipp: Kontrollzentrum → Bildschirmaufnahme → „NOCO Live Screen“, oder den roten Button tippen. Ohne Übertragung keine Analyse.")
+                    .font(.caption2)
+                    .foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
 
             HStack(spacing: 10) {
                 PhotosPicker(selection: $photoItem, matching: .images) {
@@ -540,13 +588,16 @@ struct LiveScreenView: View {
             }
 
             HStack {
-                Toggle(isOn: $session.autoAssistEnabled) {
+                Toggle(isOn: Binding(
+                    get: { session.autoAssistEnabled },
+                    set: { session.autoAssistEnabled = $0 }
+                )) {
                     Text("Auto-Assistent")
                         .font(.caption)
                 }
                 .toggleStyle(.switch)
                 .labelsHidden()
-                Text("Auto-Assistent")
+                Text(session.autoAssistEnabled ? "Auto bei Änderungen" : "Nur auf Nachfrage")
                     .font(.caption)
                     .foregroundStyle(.secondary)
                 Spacer()
@@ -583,14 +634,15 @@ struct LiveScreenView: View {
                 Text("Bildschirmhilfe mit Zustimmung")
                     .font(.title2.bold())
 
-                Text("NOCO Live Screen analysiert nur Bilder, die du aktiv teilst oder überträgst. Nutze Bildschirmübertragung (wie im Kontrollzentrum), Screenshot oder In-App-Aufnahme. Es gibt keine heimliche Aufnahme. Frames bleiben standardmäßig im Speicher und werden für die Analyse an deinen NOCO Companion gesendet.")
+                Text("NOCO Live Screen analysiert nur Bilder, die du aktiv teilst oder überträgst. Es gibt kein Dauer-Video-Streaming: NOCO erkennt relevante Änderungen und analysiert gezielt. OCR läuft lokal; Analyse geht an deinen Companion. Frames bleiben standardmäßig im Speicher.")
                     .font(.subheadline)
                     .foregroundStyle(.secondary)
 
                 VStack(alignment: .leading, spacing: 8) {
                     consentBullet("Bildschirmübertragung über Kontrollzentrum")
-                    consentBullet("Klare LIVE-Anzeige, solange aktiv")
+                    consentBullet("Analyse nur bei Änderungen oder Fragen")
                     consentBullet("OCR lokal auf dem Gerät")
+                    consentBullet("Kontext speichern oder löschen am Ende")
                     consentBullet("Jederzeit stoppen")
                 }
 
@@ -631,6 +683,56 @@ struct LiveScreenView: View {
         }
     }
 
+    private var endSessionSheet: some View {
+        NavigationStack {
+            VStack(alignment: .leading, spacing: 16) {
+                Text("Live Screen beenden")
+                    .font(.title3.bold())
+                Text("Soll der Sitzungskontext (Übersicht & Notizen) gespeichert bleiben — z. B. für „Was war auf meinem Bildschirm?“ — oder gelöscht werden?")
+                    .font(.subheadline)
+                    .foregroundStyle(.secondary)
+
+                if !session.sessionSummary.isEmpty {
+                    Text(session.sessionSummary)
+                        .font(.footnote)
+                        .padding(12)
+                        .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
+                }
+
+                Spacer()
+
+                Button {
+                    session.saveContextAndStop()
+                    HapticService.success()
+                } label: {
+                    Text("Kontext speichern & beenden")
+                        .font(.headline)
+                        .frame(maxWidth: .infinity)
+                        .padding(.vertical, 14)
+                        .background(session.mode.accent.gradient, in: RoundedRectangle(cornerRadius: 16, style: .continuous))
+                        .foregroundStyle(.white)
+                }
+
+                Button {
+                    session.discardContextAndStop()
+                } label: {
+                    Text("Kontext löschen & beenden")
+                        .font(.subheadline.weight(.semibold))
+                        .frame(maxWidth: .infinity)
+                        .padding(.vertical, 12)
+                        .foregroundStyle(.red)
+                }
+
+                Button("Abbrechen") {
+                    session.showEndSessionSheet = false
+                }
+                .frame(maxWidth: .infinity)
+                .foregroundStyle(.secondary)
+            }
+            .padding(24)
+        }
+    }
+
     // MARK: - Actions
 
     private func send() {
@@ -648,7 +750,7 @@ struct LiveScreenView: View {
         do {
             if let data = try await item.loadTransferable(type: Data.self),
                let image = UIImage(data: data) {
-                await session.ingest(image: image, source: .photoLibrary, autoAnalyze: true)
+                await session.ingest(image: image, source: .photoLibrary, autoAnalyze: true, force: true)
             }
         } catch {
             // ignore
@@ -664,6 +766,7 @@ struct LiveScreenView: View {
         case .cameraLiveVision: return "Kamera"
         case .broadcastExtension: return "Broadcast"
         case .documentScan: return "Dokument"
+        case .windowsDesktop: return "Windows"
         }
     }
 }

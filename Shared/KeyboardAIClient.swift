@@ -51,14 +51,14 @@ enum KeyboardAIClient {
     }
 
     /// Preferred path: single flash response, sanitized — logs into ⌨️ Tastatur channel.
-    static func rewrite(action: KeyboardAIAction, text: String) async throws -> String {
+    static func rewrite(action: KeyboardAIAction, text: String, shortenLevel: Int = 1) async throws -> String {
         let base: TimeInterval = action.isAnswer ? 45 : (action.isPrimary ? 40 : 32)
         let reply = try await post(
-            message: action.prompt(for: text),
+            message: action.prompt(for: text, shortenLevel: shortenLevel),
             display: action.displayLabel(for: text),
             timeout: timeout(for: text, base: base)
         )
-        let clean = KeyboardAIAction.sanitize(reply, action: action, original: text)
+        let clean = KeyboardAIAction.sanitize(reply, action: action, original: text, shortenLevel: shortenLevel)
         guard !clean.isEmpty else { throw ClientError.empty }
         return clean
     }

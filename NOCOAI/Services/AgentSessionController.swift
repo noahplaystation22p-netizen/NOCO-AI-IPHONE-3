@@ -96,12 +96,20 @@ final class AgentSessionController: ObservableObject {
         HapticService.open()
         defer { isWorking = false }
         do {
+            // Auto: pick speed vs quality from the goal (esp. image-related tasks)
+            let profile: AgentQualityProfile = {
+                if qualityProfile != .auto { return qualityProfile }
+                return Self.recommendQuality(for: goal)
+            }()
+            if qualityProfile == .auto {
+                qualityProfile = profile
+            }
             let task = try await api.createAgentTask(
                 goal: goal,
                 mode: mode,
                 kind: kind,
                 autoRun: true,
-                qualityProfile: qualityProfile
+                qualityProfile: profile
             )
             draftGoal = ""
             activeTask = task
@@ -159,12 +167,32 @@ final class AgentSessionController: ObservableObject {
         guard let task = activeTask else { return }
         guard let api = apiProvider?() else { return }
         isWorking = true
+        statusLine = "Setzt fort…"
         defer { isWorking = false }
         do {
             activeTask = try await api.runAgentTask(id: task.id)
             await refresh()
+            HapticService.messageReceived()
         } catch {
             lastError = (error as? LocalizedError)?.errorDescription ?? error.localizedDescription
+            HapticService.error()
         }
+    }
+
+    /// Maps goal wording to Companion quality — Flash-like = fast, Think-like = accurate.
+    static func recommendQuality(for goal: String) -> AgentQualityProfile {
+        let t = goal.lowercased()
+        let imageish = t.contains("bild") || t.contains("logo") || t.contains("image")
+            || t.contains("generier") || t.contains("zeichne") || t.contains("erstelle")
+        let wantFast = ["schnell", "lustig", "meme", "skizze", "witzig", "kurz", "draft"]
+        let wantQuality = [
+            "logo", "professionell", "detail", "hochwertig", "qualität", "fotorealist",
+            "präzise", "genau", "branding", "album"
+        ]
+        if wantQuality.contains(where: { t.contains($0) }) { return .accurate }
+        if wantFast.contains(where: { t.contains($0) }) { return .fast }
+        if imageish && t.count > 80 { return .accurate }
+        if imageish { return .creative }
+        return .auto
     }
 }

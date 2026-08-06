@@ -14,35 +14,37 @@ struct VoiceModeView: View {
 
             VStack(spacing: 0) {
                 topBar
-                    .padding(.bottom, 8)
+                    .padding(.bottom, 4)
 
-                titleBlock
-                    .padding(.bottom, 10)
+                Spacer(minLength: 8)
 
-                // Visualizer — reactive, larger presence
+                // Visualizer first — hero of the Speak UI
                 IntelligenceVoiceStage(phase: voice.phase, level: voice.level, bands: voice.bands)
-                    .frame(maxHeight: 220)
-                    .padding(.horizontal, 8)
+                    .frame(maxHeight: 260)
+                    .padding(.horizontal, 4)
 
-                // Full prompt / reply always visible
+                phaseBadge
+                    .padding(.top, 6)
+
+                // Transcript / reply under the stage
                 promptPanel
-                    .padding(.horizontal, 16)
-                    .padding(.top, 8)
+                    .padding(.horizontal, 18)
+                    .padding(.top, 14)
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
 
                 Text(speak.statusLine)
                     .font(.caption)
                     .foregroundStyle(.secondary)
                     .multilineTextAlignment(.center)
-                    .padding(.horizontal, 20)
-                    .padding(.top, 6)
-
-                modeChip
+                    .padding(.horizontal, 24)
                     .padding(.top, 8)
 
+                modeChip
+                    .padding(.top, 10)
+
                 controls
-                    .padding(.top, 14)
-                    .padding(.bottom, 28)
+                    .padding(.top, 16)
+                    .padding(.bottom, 30)
             }
         }
         .task {
@@ -64,44 +66,54 @@ struct VoiceModeView: View {
         }
     }
 
+    private var phaseBadge: some View {
+        Text(phaseLabel)
+            .font(.caption.weight(.bold))
+            .tracking(0.8)
+            .textCase(.uppercase)
+            .foregroundStyle(NOCOAITheme.accent)
+            .padding(.horizontal, 12)
+            .padding(.vertical, 5)
+            .background(
+                Capsule(style: .continuous)
+                    .fill(NOCOAITheme.accent.opacity(0.12))
+            )
+            .animation(.spring(response: 0.35, dampingFraction: 0.85), value: voice.phase)
+    }
+
     private var promptPanel: some View {
         ScrollViewReader { proxy in
             ScrollView {
-                VStack(alignment: .leading, spacing: 10) {
-                    Text(phaseLabel)
-                        .font(.caption2.weight(.bold))
-                        .foregroundStyle(NOCOAITheme.accent)
-                        .textCase(.uppercase)
-
+                VStack(alignment: .leading, spacing: 8) {
                     Text(displayText)
                         .font(.title3.weight(.semibold))
                         .foregroundStyle(.primary)
                         .frame(maxWidth: .infinity, alignment: .leading)
                         .textSelection(.enabled)
                         .id("promptBottom")
+                        .contentTransition(.opacity)
                 }
-                .padding(16)
+                .padding(18)
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity)
             .background(
-                RoundedRectangle(cornerRadius: 22, style: .continuous)
+                RoundedRectangle(cornerRadius: 24, style: .continuous)
                     .fill(.ultraThinMaterial)
                     .overlay(
-                        RoundedRectangle(cornerRadius: 22, style: .continuous)
+                        RoundedRectangle(cornerRadius: 24, style: .continuous)
                             .stroke(
-                                AngularGradient(
+                                LinearGradient(
                                     colors: [
-                                        Color(red: 0.4, green: 0.85, blue: 1).opacity(0.55),
-                                        Color(red: 0.7, green: 0.4, blue: 1).opacity(0.35),
-                                        Color(red: 1.0, green: 0.45, blue: 0.7).opacity(0.4),
-                                        Color(red: 0.4, green: 0.85, blue: 1).opacity(0.55)
+                                        Color(red: 0.4, green: 0.85, blue: 1).opacity(0.5),
+                                        Color(red: 0.55, green: 0.9, blue: 0.85).opacity(0.35),
+                                        Color(red: 0.4, green: 0.85, blue: 1).opacity(0.45)
                                     ],
-                                    center: .center
+                                    startPoint: .topLeading,
+                                    endPoint: .bottomTrailing
                                 ),
-                                lineWidth: 1.2
+                                lineWidth: 1
                             )
                     )
-                    .shadow(color: Color(red: 0.45, green: 0.65, blue: 1).opacity(0.22), radius: 18)
             )
             .onChange(of: displayText) { _, _ in
                 withAnimation(.easeOut(duration: 0.15)) {
@@ -147,16 +159,6 @@ struct VoiceModeView: View {
         .padding(.top, 12)
     }
 
-    private var titleBlock: some View {
-        VStack(spacing: 4) {
-            Text("Speak")
-                .font(.system(size: 34, weight: .bold, design: .rounded))
-            Text(speak.isRunning ? "Live · Stimme · Visualizer" : "Sprich. Dein PC denkt.")
-                .font(.subheadline)
-                .foregroundStyle(.secondary)
-        }
-    }
-
     private var modeChip: some View {
         HStack(spacing: 8) {
             Text(VoiceSettings.defaultMode.label)
@@ -177,7 +179,7 @@ struct VoiceModeView: View {
         .background(
             Capsule()
                 .fill(NOCOAITheme.accent.opacity(0.15))
-                .overlay(Capsule().stroke(NOCOAITheme.glowPrimary.opacity(0.4), lineWidth: 1))
+                .overlay(Capsule().stroke(NOCOAITheme.glowPrimary.opacity(0.35), lineWidth: 1))
         )
         .foregroundStyle(NOCOAITheme.accent)
     }
@@ -204,10 +206,10 @@ struct VoiceModeView: View {
                 .foregroundStyle(.secondary)
 
             if speak.isRunning {
-            Button {
-                HapticService.toggle()
-                speak.toggleMute()
-            } label: {
+                Button {
+                    HapticService.toggle()
+                    speak.toggleMute()
+                } label: {
                     HStack(spacing: 8) {
                         Image(systemName: speak.isMuted ? "mic.slash.fill" : "mic.fill")
                         Text(speak.isMuted ? "Mute aus · wieder sprechen" : "Mute · nur zuhören")
@@ -244,7 +246,7 @@ struct VoiceModeView: View {
                         .font(.subheadline.weight(.semibold))
                 }
                 .foregroundStyle(.white)
-                .frame(width: 220, height: 58)
+                .frame(width: 228, height: 58)
                 .background(
                     Capsule()
                         .fill(
@@ -252,16 +254,15 @@ struct VoiceModeView: View {
                                 colors: speak.isRunning
                                     ? [Color.red.opacity(0.85), Color.orange.opacity(0.75)]
                                     : [
-                                        Color(red: 0.35, green: 0.75, blue: 1),
-                                        Color(red: 0.55, green: 0.4, blue: 1),
-                                        Color(red: 0.95, green: 0.4, blue: 0.75)
+                                        Color(red: 0.35, green: 0.72, blue: 1),
+                                        Color(red: 0.45, green: 0.85, blue: 0.9)
                                     ],
                                 startPoint: .leading,
                                 endPoint: .trailing
                             )
                         )
                 )
-                .shadow(color: Color(red: 0.5, green: 0.45, blue: 1).opacity(0.45), radius: 16)
+                .shadow(color: Color(red: 0.4, green: 0.7, blue: 1).opacity(0.4), radius: 14)
             }
             .disabled(!connection.isOnline && !speak.isRunning)
             .opacity(connection.isOnline || speak.isRunning ? 1 : 0.45)
@@ -288,7 +289,6 @@ enum VoiceSettings {
         get {
             if let raw = UserDefaults.standard.string(forKey: "nocoai.voiceMode") {
                 let mode = AIMode.from(raw)
-                // Legacy Klar → keep Flash as Speak default
                 if raw == "normal" { return .flash }
                 return mode
             }

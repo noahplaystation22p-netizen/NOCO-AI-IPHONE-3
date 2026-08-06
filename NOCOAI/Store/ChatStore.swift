@@ -78,6 +78,7 @@ final class ChatStore: ObservableObject {
         do {
             let remote = try await api.fetchConversations()
             conversations = remote.filter { !deletedIds.contains($0.id) }
+            ensureActiveIsNotKeyboard()
             lastError = nil
         } catch {
             lastError = (error as? LocalizedError)?.errorDescription
@@ -493,21 +494,43 @@ final class ChatStore: ObservableObject {
 
     private func resolveConversationId(_ known: String?, preferLatest: Bool = false) async {
         if let known, !known.isEmpty {
-            activeConversationId = known
-            persistActiveConversation()
-            return
+            // Never latch onto the shared keyboard log from normal chat sends
+            if let match = conversations.first(where: { $0.id == known }), match.isKeyboard {
+                // fall through to non-keyboard selection
+            } else {
+                activeConversationId = known
+                persistActiveConversation()
+                return
+            }
         }
         await loadConversations()
-        if preferLatest, let latest = conversations.sorted(by: {
+        let normal = conversations.filter { !$0.isKeyboard }
+        if preferLatest, let latest = normal.sorted(by: {
             ($0.updatedAt ?? "") > ($1.updatedAt ?? "")
         }).first {
             activeConversationId = latest.id
             persistActiveConversation()
             return
         }
-        if activeConversationId == nil, let latest = conversations.first {
+        if activeConversationId == nil, let latest = normal.first {
             activeConversationId = latest.id
             persistActiveConversation()
+        } else if let id = activeConversationId,
+                  conversations.first(where: { $0.id == id })?.isKeyboard == true {
+            activeConversationId = normal.first?.id
+            persistActiveConversation()
+        }
+    }
+
+    /// After loading chats: leave keyboard logs in the sidebar only — never as the open chat.
+    func ensureActiveIsNotKeyboard() {
+        guard let id = activeConversationId else { return }
+        if conversations.first(where: { $0.id == id })?.isKeyboard == true {
+            activeConversationId = filteredConversations.first?.id
+            persistActiveConversation()
+            if activeConversationId == nil {
+                messages = []
+            }
         }
     }
 

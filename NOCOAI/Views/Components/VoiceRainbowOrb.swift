@@ -27,7 +27,7 @@ struct IntelligenceVoiceStage: View {
     }
 
     var body: some View {
-        TimelineView(.animation(minimumInterval: 1 / 45)) { timeline in
+        TimelineView(.animation(minimumInterval: 1 / 50)) { timeline in
             let t = timeline.date.timeIntervalSinceReferenceDate
             ZStack {
                 auroraField
@@ -35,11 +35,13 @@ struct IntelligenceVoiceStage: View {
                 centerWaveform(t: t)
                 statusSpark
             }
+            .scaleEffect(active ? 1 + level * 0.02 : 1)
+            .animation(.easeOut(duration: 0.08), value: level)
         }
-        .frame(height: 240)
+        .frame(height: 250)
         .onAppear {
-            withAnimation(.linear(duration: 9).repeatForever(autoreverses: false)) { spin = true }
-            withAnimation(.easeInOut(duration: 1.6).repeatForever(autoreverses: true)) { breathe = true }
+            withAnimation(.linear(duration: 10).repeatForever(autoreverses: false)) { spin = true }
+            withAnimation(.easeInOut(duration: 1.8).repeatForever(autoreverses: true)) { breathe = true }
         }
     }
 
@@ -49,30 +51,30 @@ struct IntelligenceVoiceStage: View {
                 .fill(
                     RadialGradient(
                         colors: [
-                            Color(red: 0.45, green: 0.78, blue: 1).opacity(0.34 * intensity),
-                            Color(red: 0.65, green: 0.45, blue: 1).opacity(0.18 * intensity),
+                            Color(red: 0.45, green: 0.78, blue: 1).opacity(0.38 * intensity),
+                            Color(red: 0.5, green: 0.9, blue: 0.85).opacity(0.16 * intensity),
                             .clear
                         ],
                         center: .center,
-                        startRadius: 10,
-                        endRadius: 160
+                        startRadius: 8,
+                        endRadius: 170
                     )
                 )
-                .frame(width: 340, height: 220)
-                .blur(radius: 28)
-                .scaleEffect(breathe ? 1.06 : 0.94)
-
-            Ellipse()
-                .fill(Color(red: 0.35, green: 0.92, blue: 0.75).opacity(0.14 * intensity))
-                .frame(width: 260, height: 140)
-                .blur(radius: 36)
-                .offset(x: breathe ? 20 : -18, y: breathe ? -10 : 14)
-
-            Ellipse()
-                .fill(Color(red: 1.0, green: 0.55, blue: 0.7).opacity(0.1 * intensity))
-                .frame(width: 200, height: 120)
+                .frame(width: 350, height: 230)
                 .blur(radius: 30)
-                .offset(x: breathe ? -24 : 16, y: 20)
+                .scaleEffect(breathe ? 1.07 : 0.93)
+
+            Ellipse()
+                .fill(Color(red: 0.35, green: 0.92, blue: 0.75).opacity(0.16 * intensity))
+                .frame(width: 270, height: 150)
+                .blur(radius: 36)
+                .offset(x: breathe ? 22 : -20, y: breathe ? -12 : 16)
+
+            Ellipse()
+                .fill(Color(red: 0.55, green: 0.7, blue: 1).opacity(0.1 * intensity))
+                .frame(width: 200, height: 120)
+                .blur(radius: 28)
+                .offset(x: breathe ? -20 : 18, y: 18)
         }
     }
 

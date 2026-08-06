@@ -54,6 +54,8 @@ struct MagischerRadiererView: View {
     @State private var revealResult = false
     @State private var maskPulse = false
     @State private var isPainting = false
+    @State private var maskReady = false
+    @State private var errorAlert: String?
     @FocusState private var promptFocused: Bool
 
     var body: some View {
@@ -88,12 +90,21 @@ struct MagischerRadiererView: View {
             Task { await loadPhoto(item) }
         }
         .alert("Hinweis", isPresented: Binding(
-            get: { status.hasPrefix("Fehler:") },
-            set: { _ in }
+            get: { errorAlert != nil },
+            set: { presented in
+                if !presented {
+                    errorAlert = nil
+                    if status.hasPrefix("Fehler:") {
+                        status = maskReady
+                            ? "Bereit — Entfernen tippen"
+                            : "Bereich bemalen — Standard: Entfernen"
+                    }
+                }
+            }
         )) {
             Button("OK", role: .cancel) {}
         } message: {
-            Text(status)
+            Text(errorAlert ?? "")
         }
         .onAppear {
             withAnimation(.easeInOut(duration: 1.2).repeatForever(autoreverses: true)) {
@@ -129,12 +140,15 @@ struct MagischerRadiererView: View {
                     brushSize: brushSize,
                     onPaintingChange: { painting in
                         isPainting = painting
+                    },
+                    onMaskChanged: { painted in
+                        maskReady = painted
                     }
                 )
                     .clipShape(RoundedRectangle(cornerRadius: 20, style: .continuous))
                     .padding(8)
                     .overlay {
-                        if canvas.hasPaint {
+                        if maskReady {
                             RoundedRectangle(cornerRadius: 20, style: .continuous)
                                 .stroke(
                                     AngularGradient(
@@ -209,6 +223,8 @@ struct MagischerRadiererView: View {
                 Button {
                     HapticService.soft()
                     canvas.clear()
+                    maskReady = false
+                    status = "Bereich bemalen — Standard: Entfernen"
                 } label: {
                     Label("Maske löschen", systemImage: "trash")
                 }
@@ -324,8 +340,8 @@ struct MagischerRadiererView: View {
             .foregroundStyle(.white)
             .shadow(color: Color(red: 0.45, green: 0.4, blue: 1).opacity(0.45), radius: 16, y: 6)
         }
-        .disabled(isWorking || sourceImage == nil || effectivePrompt.isEmpty)
-        .opacity(sourceImage == nil ? 0.5 : 1)
+        .disabled(isWorking || sourceImage == nil || effectivePrompt.isEmpty || !maskReady)
+        .opacity(sourceImage == nil || !maskReady ? 0.5 : 1)
     }
 
     private var effectivePrompt: String {
@@ -370,38 +386,64 @@ struct MagischerRadiererView: View {
             sourceImage = ui
             resultImage = nil
             revealResult = false
+            maskReady = false
             canvas.clear()
             status = "Bereich bemalen — Standard: Entfernen"
             HapticService.success()
         } else {
-            status = "Fehler: Foto konnte nicht geladen werden"
+            presentError("Foto konnte nicht geladen werden")
             HapticService.error()
         }
         photoItem = nil
     }
 
+    private func presentError(_ message: String) {
+        let cleaned = friendlyEraserError(message)
+        status = "Fehler: \(cleaned)"
+        errorAlert = cleaned
+    }
+
+    private func friendlyEraserError(_ raw: String) -> String {
+        let lower = raw.lowercased()
+        if lower.contains("error 64") || lower.contains("host is down") || lower.contains("nicht erreichbar") {
+            return "PC nicht erreichbar (Netzwerk). Companion starten, gleiches WLAN, Port 4747."
+        }
+        if lower.contains("stable diffusion") || lower.contains("nicht bereit") {
+            return "Stable Diffusion auf dem PC ist nicht bereit — SD WebUI starten."
+        }
+        if lower.contains("unbekannte") || lower.contains("route") || lower.contains("404") {
+            return "Inpaint-Route fehlt — NOCO AI X Companion neu starten."
+        }
+        return raw
+            .replacingOccurrences(of: "Fehler: ", with: "")
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+
     private func runEraser() async {
         guard let sourceImage else {
-            status = "Fehler: Kein Foto"
+            presentError("Kein Foto")
             return
         }
         guard connection.isOnline else {
-            status = "Fehler: Nicht mit PC verbunden"
+            presentError("Nicht mit PC verbunden")
             return
         }
         let prompt = effectivePrompt
         guard !prompt.isEmpty else { return }
 
-        guard canvas.exportMaskPNG(matching: sourceImage) != nil,
-              canvas.hasPaint else {
-            status = "Fehler: Bitte zuerst einen Bereich bemalen"
+        guard maskReady, canvas.hasPaint,
+              canvas.exportMaskPNG(matching: sourceImage) != nil else {
+            presentError("Bitte zuerst einen Bereich bemalen")
             HapticService.warning()
             return
         }
 
         let working = sourceImage.resizedToFit(maxSide: 512)
         guard let jpeg = working.jpegData(compressionQuality: 0.9),
-              let maskForSD = canvas.exportMaskPNG(matching: working) else { return }
+              let maskForSD = canvas.exportMaskPNG(matching: working) else {
+            presentError("Maske konnte nicht exportiert werden — nochmal bemalen")
+            return
+        }
 
         isWorking = true
         workProgress = 0.08
@@ -463,7 +505,7 @@ struct MagischerRadiererView: View {
                     )
                 } else {
                     isWorking = false
-                    status = "Fehler: Bild konnte nicht gelesen werden"
+                    presentError("Bild konnte nicht gelesen werden")
                     HapticService.error()
                 }
             } else if result.resolvedPath != nil {
@@ -472,13 +514,14 @@ struct MagischerRadiererView: View {
                 HapticService.success()
             } else {
                 isWorking = false
-                status = "Fehler: Keine Bilddaten vom PC"
+                presentError("Keine Bilddaten vom PC")
                 HapticService.error()
             }
         } catch {
             progressTask.cancel()
             isWorking = false
-            status = "Fehler: \((error as? LocalizedError)?.errorDescription ?? error.localizedDescription)"
+            let msg = (error as? LocalizedError)?.errorDescription ?? error.localizedDescription
+            presentError(msg)
             HapticService.error()
         }
     }
@@ -613,10 +656,17 @@ final class MaskCanvasController: ObservableObject {
     weak var drawView: MaskDrawView?
     var hasPaint: Bool { drawView?.hasPaint == true }
 
-    func clear() { drawView?.clear() }
+    func clear() {
+        drawView?.clear()
+        objectWillChange.send()
+    }
 
     func exportMaskPNG(matching image: UIImage) -> Data? {
         drawView?.exportMaskPNG(targetSize: image.size)
+    }
+
+    func notifyPaintChanged() {
+        objectWillChange.send()
     }
 }
 
@@ -625,11 +675,16 @@ struct MaskPaintCanvas: UIViewRepresentable {
     @ObservedObject var controller: MaskCanvasController
     var brushSize: CGFloat
     var onPaintingChange: ((Bool) -> Void)?
+    var onMaskChanged: ((Bool) -> Void)?
 
     func makeUIView(context: Context) -> MaskDrawView {
         let v = MaskDrawView(image: image)
         v.brushSize = brushSize
         v.onPaintingChange = onPaintingChange
+        v.onMaskChanged = { painted in
+            controller.notifyPaintChanged()
+            onMaskChanged?(painted)
+        }
         controller.drawView = v
         return v
     }
@@ -637,6 +692,10 @@ struct MaskPaintCanvas: UIViewRepresentable {
     func updateUIView(_ uiView: MaskDrawView, context: Context) {
         uiView.brushSize = brushSize
         uiView.onPaintingChange = onPaintingChange
+        uiView.onMaskChanged = { painted in
+            controller.notifyPaintChanged()
+            onMaskChanged?(painted)
+        }
         if uiView.baseImage.size != image.size {
             uiView.setBaseImage(image)
         }
@@ -651,7 +710,10 @@ final class MaskDrawView: UIView {
     private(set) var hasPaint = false
     var brushSize: CGFloat = 36
     var onPaintingChange: ((Bool) -> Void)?
+    var onMaskChanged: ((Bool) -> Void)?
     private var strokeHue: CGFloat = 0.55
+    private var strokeSamples = 0
+    private var lastTouch: CGPoint = .zero
 
     init(image: UIImage) {
         self.baseImage = image
@@ -679,6 +741,8 @@ final class MaskDrawView: UIView {
         path = UIBezierPath()
         maskLayer.path = nil
         hasPaint = false
+        strokeSamples = 0
+        onMaskChanged?(false)
     }
 
     override func draw(_ rect: CGRect) {
@@ -709,26 +773,51 @@ final class MaskDrawView: UIView {
         maskLayer.strokeColor = UIColor(hue: strokeHue, saturation: 0.92, brightness: 1, alpha: 0.75).cgColor
     }
 
+    private func markPainted() {
+        guard !hasPaint else { return }
+        hasPaint = true
+        onMaskChanged?(true)
+    }
+
     override func touchesBegan(_ touches: Set<UITouch>, with event: UIEvent?) {
         guard let p = touches.first?.location(in: self) else { return }
         setParentScrollEnabled(false)
+        lastTouch = p
+        strokeSamples = 0
         path.move(to: p)
         path.lineWidth = brushSize
-        hasPaint = true
         advanceRainbowStroke()
         HapticService.whisper()
     }
 
     override func touchesMoved(_ touches: Set<UITouch>, with event: UIEvent?) {
         guard let p = touches.first?.location(in: self) else { return }
+        lastTouch = p
+        strokeSamples += 1
         path.addLine(to: p)
         path.lineWidth = brushSize
         maskLayer.path = path.cgPath
         maskLayer.lineWidth = brushSize
         advanceRainbowStroke()
+        markPainted()
     }
 
     override func touchesEnded(_ touches: Set<UITouch>, with event: UIEvent?) {
+        // Short tap still paints a dab so tiny marks count
+        if strokeSamples == 0 {
+            let dab = UIBezierPath(
+                ovalIn: CGRect(
+                    x: lastTouch.x - brushSize * 0.35,
+                    y: lastTouch.y - brushSize * 0.35,
+                    width: brushSize * 0.7,
+                    height: brushSize * 0.7
+                )
+            )
+            path.append(dab)
+            maskLayer.path = path.cgPath
+            maskLayer.lineWidth = brushSize
+            markPainted()
+        }
         setParentScrollEnabled(true)
     }
 

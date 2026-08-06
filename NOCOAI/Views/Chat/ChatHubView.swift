@@ -127,6 +127,7 @@ struct ChatHubView: View {
             .task {
                 connection.chat.restoreSession()
                 await connection.chat.loadConversations()
+                connection.chat.ensureActiveIsNotKeyboard()
                 if let id = connection.chat.activeConversationId {
                     await connection.chat.loadMessages(for: id)
                 } else if let first = connection.chat.filteredConversations.first {

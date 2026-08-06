@@ -97,6 +97,11 @@ enum KeyboardToolbarChip: Identifiable, Equatable {
         return false
     }
 
+    var isComplete: Bool {
+        if case .builtin(let a) = self { return a.isComplete }
+        return false
+    }
+
     var isCustom: Bool {
         if case .custom = self { return true }
         return false
@@ -202,6 +207,22 @@ enum KeyboardChipPreferences {
                     out.append(.builtin(action))
                     seen.insert(key)
                 }
+            }
+        }
+
+        // Append new built-ins missing from older saved orders (e.g. Satzergänzung)
+        for action in KeyboardAIAction.allCases {
+            let key = "builtin:\(action.rawValue)"
+            if !seen.contains(key) {
+                // Prefer after improve
+                if action == .complete, let idx = out.firstIndex(where: {
+                    if case .builtin(let a) = $0 { return a == .improve } else { return false }
+                }) {
+                    out.insert(.builtin(action), at: idx + 1)
+                } else {
+                    out.append(.builtin(action))
+                }
+                seen.insert(key)
             }
         }
 

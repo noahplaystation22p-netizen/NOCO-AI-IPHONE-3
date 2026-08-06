@@ -3,6 +3,7 @@
 /// AI rewrite / answer actions for the keyboard.
 enum KeyboardAIAction: String, CaseIterable, Identifiable {
     case improve
+    case complete
     case punctuate
     case shorten
     case longer
@@ -17,6 +18,7 @@ enum KeyboardAIAction: String, CaseIterable, Identifiable {
     var title: String {
         switch self {
         case .improve: return "Verbessern"
+        case .complete: return "Satz"
         case .punctuate: return "Satzzeichen"
         case .shorten: return "Kürzer"
         case .longer: return "Länger"
@@ -31,6 +33,7 @@ enum KeyboardAIAction: String, CaseIterable, Identifiable {
     var systemImage: String {
         switch self {
         case .improve: return "checkmark.circle"
+        case .complete: return "text.append"
         case .punctuate: return "textformat.abc"
         case .shorten: return "arrow.down.right.and.arrow.up.left"
         case .longer: return "arrow.up.left.and.arrow.down.right"
@@ -44,6 +47,7 @@ enum KeyboardAIAction: String, CaseIterable, Identifiable {
 
     var isPrimary: Bool { self == .improve }
     var isAnswer: Bool { self == .answer }
+    var isComplete: Bool { self == .complete }
 
     /// Short label stored in the Tastatur chat log (not the full system prompt).
     func displayLabel(for text: String) -> String {
@@ -52,7 +56,7 @@ enum KeyboardAIAction: String, CaseIterable, Identifiable {
         return "\(title): \(clip)"
     }
 
-    /// Absolute rule for rewrite actions — never Q&A (except `.answer`).
+    /// Absolute rule for rewrite actions — never Q&A (except `.answer` / `.complete`).
     private var rewriterRule: String {
         """
         Du bist ein Text-Korrektor / Umformulierer — KEIN Chatbot und KEIN Wissensassistent.
@@ -76,11 +80,41 @@ enum KeyboardAIAction: String, CaseIterable, Identifiable {
             return """
             \(rewriterRule)
             \(example)
-            Aufgabe: Korrigiere Rechtschreibung, Grammatik und Zeichensetzung.
-            Formuliere höchstens leicht klarer — Inhalt und Aussage bleiben GLEICH.
-            Ändere den Inhalt NUR wenn der Text sonst sinnlos/unverständlich ist.
-            Gleiche Länge (±15%). Keine längere Fassung, keine neuen Fakten.
-            Wenn der Text eine Frage ist, bleibt es eine Frage — beantworte sie NICHT.
+
+            Aufgabe „Verbessern“ — du bist ein sorgfältiger Lektor, kein Autor neuer Inhalte.
+            Schau dir den TEXT genau an und aktualisiere NUR das, was wirklich verbessert werden muss:
+
+            1) Rechtschreibung und Tippfehler
+            2) Grammatik und Zeichensetzung
+            3) Stolpernde / unklare Formulierungen leicht klarer machen — gleiche Aussage
+            4) Groß-/Kleinschreibung und Leerzeichen
+
+            Regeln:
+            - Was schon gut ist: unverändert lassen.
+            - Meinung, Fakten, Fragen und Kernaussage bleiben GLEICH.
+            - Keine neuen Infos, kein Umschreiben „schöner um jeden Preis“.
+            - Länge etwa gleich (±15%). Keine längere Fassung.
+            - Wenn der Text eine Frage ist, bleibt es eine Frage — beantworte sie NICHT.
+            - Antworte nur mit dem verbesserten Text.
+
+            TEXT:
+            \(t)
+            """
+        case .complete:
+            return """
+            Du bist ein Satz-Ergänzer für die Tastatur — kein Chatbot.
+            Der TEXT ist ein unvollständiges Fragment / Stichworte. Formuliere daraus einen natürlichen, fertigen Satz.
+            Sprache des Fragments behalten (Deutsch oder Englisch).
+            Ergänze sinnvolle, wahrscheinliche Details (wer/was/wann), aber keine lange Geschichte.
+            Maximal 1–2 kurze Sätze. Kein Intro, kein Markdown, keine Anführungszeichen um den ganzen Satz.
+
+            Beispiele:
+            TEXT: Treffen morgen
+            RICHTIG: Wir treffen uns morgen.
+            TEXT: Meet tomorrow
+            RICHTIG: I'll meet you tomorrow.
+            TEXT: muss noch einkaufen
+            RICHTIG: Ich muss noch einkaufen gehen.
 
             TEXT:
             \(t)
@@ -207,17 +241,37 @@ enum KeyboardAIAction: String, CaseIterable, Identifiable {
             || orig.lowercased().hasPrefix("who ") || orig.lowercased().hasPrefix("where ")
 
         if action == .answer {
-            // Ensure question stays on top if model dropped it
             if !s.lowercased().contains(orig.lowercased().prefix(min(24, orig.count))) {
                 s = "\(orig)\n\n\(s)"
             }
             return s
         }
 
+        if action == .complete {
+            // Keep short completions; drop chatter after first 2 sentences if runaway
+            let maxLen = max(48, orig.count * 6 + 40)
+            if s.count > maxLen {
+                let endMarks: Set<Character> = [".", "!", "?", "。", "！", "？"]
+                var cuts = 0
+                var end = s.endIndex
+                for (i, ch) in s.enumerated() {
+                    if endMarks.contains(ch) {
+                        cuts += 1
+                        if cuts >= 2 {
+                            end = s.index(s.startIndex, offsetBy: i + 1)
+                            break
+                        }
+                    }
+                }
+                s = String(s[..<end]).trimmingCharacters(in: .whitespacesAndNewlines)
+            }
+            return s
+        }
+
         // Improve / punctuate / tone: reject inflated “answers” — stay close to original
         if action == .improve || action == .punctuate || action == .friendlier || action == .professional {
-            let factor = action == .punctuate ? 1.12 : 1.2
-            let maxLen = max(orig.count + 10, Int(Double(orig.count) * factor) + 4)
+            let factor = action == .punctuate ? 1.12 : 1.25
+            let maxLen = max(orig.count + 12, Int(Double(orig.count) * factor) + 6)
             if s.count > maxLen {
                 let endMarks: [Character] = [".", "?", "!", "。", "？", "！"]
                 if let idx = s.firstIndex(where: { endMarks.contains($0) }) {
@@ -256,7 +310,6 @@ enum KeyboardAIAction: String, CaseIterable, Identifiable {
             }
         }
         if action == .longer {
-            // If model answered instead of expanding, fall back
             if origIsQuestion {
                 let outIsQuestion = s.contains("?") || s.contains("？")
                 if !outIsQuestion, s.count > orig.count + 30 {

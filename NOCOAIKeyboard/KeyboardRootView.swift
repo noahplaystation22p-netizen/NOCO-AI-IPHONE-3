@@ -219,6 +219,17 @@ struct KeyboardRootView: View {
                         endPoint: .bottomTrailing
                     )
                 )
+            } else if chip.isComplete {
+                shape.fill(
+                    LinearGradient(
+                        colors: [
+                            Color(red: 0.3, green: 0.7, blue: 0.95),
+                            Color(red: 0.45, green: 0.85, blue: 0.8)
+                        ],
+                        startPoint: .topLeading,
+                        endPoint: .bottomTrailing
+                    )
+                )
             } else if chip.isCustom {
                 shape.fill(.ultraThinMaterial)
                 shape.fill(
@@ -256,7 +267,7 @@ struct KeyboardRootView: View {
     }
 
     private func chipForeground(for chip: KeyboardToolbarChip) -> Color {
-        if chip.isPrimary || chip.isAnswer { return .white }
+        if chip.isPrimary || chip.isAnswer || chip.isComplete { return .white }
         if chip.isCustom {
             return scheme == .dark ? Color(red: 0.75, green: 0.9, blue: 1.0) : Color(red: 0.2, green: 0.38, blue: 0.72)
         }

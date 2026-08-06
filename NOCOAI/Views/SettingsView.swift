@@ -259,7 +259,7 @@ struct SettingsView: View {
                 }
 
                 Section("Info") {
-                    Text("NOCO AI Companion v6.2")
+                    Text("NOCO AI Companion v6.3")
                     Text("Premium keyboard · custom AI shortcuts")
                         .font(.footnote)
                         .foregroundStyle(NOCOAITheme.secondaryText(for: scheme))

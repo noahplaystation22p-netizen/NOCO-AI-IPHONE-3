@@ -191,6 +191,14 @@ struct CompanionAPI {
         if let urlError = error as? URLError, urlError.code == .cannotFindHost {
             return CompanionAPIError.badHost
         }
+        let ns = error as NSError
+        // Darwin / CFNetwork: POSIX EHOSTDOWN = 64 ("Host is down")
+        if (ns.domain == NSPOSIXErrorDomain && ns.code == 64)
+            || ns.code == 64
+            || ns.localizedDescription.lowercased().contains("error 64")
+            || ns.localizedDescription.lowercased().contains("host is down") {
+            return CompanionAPIError.unreachable
+        }
         return CompanionAPIError.network(error)
     }
 }

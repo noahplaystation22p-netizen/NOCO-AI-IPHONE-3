@@ -7,6 +7,7 @@ struct ChatHubView: View {
     @State private var input = ""
     @State private var showConversations = false
     @State private var showWritingTools = false
+    @State private var edgeHint: CGFloat = 0
     @FocusState private var inputFocused: Bool
 
     var body: some View {
@@ -93,9 +94,12 @@ struct ChatHubView: View {
                 ToolbarItem(placement: .topBarLeading) {
                     Button {
                         HapticService.open()
-                        showConversations = true
+                        withAnimation(.spring(response: 0.38, dampingFraction: 0.86)) {
+                            showConversations = true
+                        }
                     } label: {
                         Image(systemName: "line.3.horizontal")
+                            .symbolEffect(.bounce, value: showConversations)
                     }
                 }
                 ToolbarItem(placement: .topBarTrailing) {
@@ -108,9 +112,56 @@ struct ChatHubView: View {
                     }
                 }
             }
+            .overlay(alignment: .leading) {
+                // Left-edge swipe → conversation list
+                Color.clear
+                    .frame(width: 22)
+                    .frame(maxHeight: .infinity)
+                    .contentShape(Rectangle())
+                    .gesture(
+                        DragGesture(minimumDistance: 16, coordinateSpace: .local)
+                            .onChanged { value in
+                                if value.translation.width > 28, edgeHint < 1 {
+                                    edgeHint = min(1, value.translation.width / 120)
+                                }
+                            }
+                            .onEnded { value in
+                                let shouldOpen = value.translation.width > 70
+                                    && abs(value.translation.height) < 80
+                                edgeHint = 0
+                                if shouldOpen {
+                                    HapticService.open()
+                                    withAnimation(.spring(response: 0.4, dampingFraction: 0.86)) {
+                                        showConversations = true
+                                    }
+                                }
+                            }
+                    )
+                    .allowsHitTesting(true)
+            }
+            .overlay(alignment: .leading) {
+                if edgeHint > 0.05 {
+                    RoundedRectangle(cornerRadius: 14, style: .continuous)
+                        .fill(
+                            LinearGradient(
+                                colors: [
+                                    NOCOAITheme.glowPrimary.opacity(0.35 * edgeHint),
+                                    .clear
+                                ],
+                                startPoint: .leading,
+                                endPoint: .trailing
+                            )
+                        )
+                        .frame(width: 56 * edgeHint)
+                        .allowsHitTesting(false)
+                        .transition(.opacity)
+                }
+            }
             .sheet(isPresented: $showConversations) {
                 ConversationListView()
                     .environmentObject(connection)
+                    .presentationDetents([.large])
+                    .presentationDragIndicator(.visible)
             }
             .sheet(isPresented: $showWritingTools) {
                 WritingToolsSheet(sourceText: input.isEmpty ? (connection.chat.messages.last(where: { $0.role == .assistant })?.text ?? "") : input) { tool in
@@ -305,7 +356,8 @@ private struct ChatBubble: View {
                         }
                         .padding(.horizontal, 16)
                         .padding(.vertical, 12)
-                        .background(GlowBubbleBackground(isUser: message.role == .user))
+                        .background(GlowBubbleBackground(isUser: message.role == .user, streaming: message.isStreaming))
+                        .intelligenceStreaming(message.isStreaming && message.role == .assistant)
                         .animation(.easeOut(duration: 0.12), value: message.text)
                         .contextMenu {
                             Button {
@@ -347,6 +399,7 @@ private struct ChatBubble: View {
 struct ConversationListView: View {
     @EnvironmentObject private var connection: ConnectionStore
     @Environment(\.dismiss) private var dismiss
+    @State private var appeared = false
 
     var body: some View {
         NavigationStack {
@@ -360,61 +413,84 @@ struct ConversationListView: View {
                         }
                     } label: {
                         Label("Neuer Chat", systemImage: "plus.bubble.fill")
+                            .font(.body.weight(.semibold))
+                            .foregroundStyle(NOCOAITheme.accent)
                     }
                 }
+
+                Section {
+                    HStack(spacing: 10) {
+                        Image(systemName: "sparkles")
+                            .foregroundStyle(NOCOAITheme.accent)
+                            .symbolEffect(.variableColor.iterative, options: .repeating)
+                        Text("Wische von links oder tippe ☰")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                    }
+                    .listRowBackground(Color.clear)
+                }
+
                 Section("Unterhaltungen") {
-                    ForEach(connection.chat.filteredConversations) { convo in
+                    ForEach(Array(connection.chat.filteredConversations.enumerated()), id: \.element.id) { index, convo in
                         Button {
+                            HapticService.selection()
                             Task {
                                 await connection.chat.selectConversation(convo.id)
                                 dismiss()
                             }
                         } label: {
-                            VStack(alignment: .leading, spacing: 4) {
-                                Text(convo.title).font(.headline)
-                                if let updated = convo.updatedAt {
-                                    Text(updated).font(.caption).foregroundStyle(.secondary)
+                            HStack(spacing: 12) {
+                                ZStack {
+                                    Circle()
+                                        .fill(NOCOAITheme.accent.opacity(0.14))
+                                        .frame(width: 36, height: 36)
+                                    Image(systemName: "bubble.left.fill")
+                                        .font(.caption.weight(.semibold))
+                                        .foregroundStyle(NOCOAITheme.accent)
+                                }
+                                VStack(alignment: .leading, spacing: 4) {
+                                    Text(convo.title).font(.headline)
+                                    if let updated = convo.updatedAt {
+                                        Text(updated).font(.caption).foregroundStyle(.secondary)
+                                    }
+                                }
+                                Spacer(minLength: 0)
+                                if convo.id == connection.chat.activeConversationId {
+                                    Circle()
+                                        .fill(NOCOAITheme.success)
+                                        .frame(width: 8, height: 8)
+                                        .shadow(color: NOCOAITheme.success.opacity(0.6), radius: 4)
                                 }
                             }
+                            .opacity(appeared ? 1 : 0)
+                            .offset(y: appeared ? 0 : 8)
+                            .animation(
+                                .spring(response: 0.4, dampingFraction: 0.82).delay(Double(min(index, 8)) * 0.03),
+                                value: appeared
+                            )
                         }
-                        .swipeActions {
-                            Button(role: .destructive) {
-                                Task { await connection.chat.deleteConversation(convo.id) }
-                            } label: { Label("Löschen", systemImage: "trash") }
+                    }
+                    .onDelete { indexSet in
+                        for index in indexSet {
+                            let id = connection.chat.filteredConversations[index].id
+                            Task { await connection.chat.deleteConversation(id) }
                         }
                     }
                 }
+
                 if !connection.chat.keyboardConversations.isEmpty {
-                    Section {
+                    Section("Tastatur") {
                         ForEach(connection.chat.keyboardConversations) { convo in
                             Button {
+                                HapticService.selection()
                                 Task {
                                     await connection.chat.selectConversation(convo.id)
                                     dismiss()
                                 }
                             } label: {
-                                HStack(spacing: 10) {
-                                    Image(systemName: "keyboard")
-                                        .foregroundStyle(NOCOAITheme.accent)
-                                    VStack(alignment: .leading, spacing: 4) {
-                                        Text(convo.title.isEmpty ? "Tastatur" : convo.title)
-                                            .font(.headline)
-                                        Text("Verbessern · Kürzer · Antwort …")
-                                            .font(.caption)
-                                            .foregroundStyle(.secondary)
-                                    }
-                                }
-                            }
-                            .swipeActions {
-                                Button(role: .destructive) {
-                                    Task { await connection.chat.deleteConversation(convo.id) }
-                                } label: { Label("Löschen", systemImage: "trash") }
+                                Label(convo.title, systemImage: "keyboard")
                             }
                         }
-                    } header: {
-                        Label("Tastatur", systemImage: "keyboard")
-                    } footer: {
-                        Text("Keyboard-Aktionen landen hier — nicht in normalen Chats.")
                     }
                 }
             }
@@ -422,16 +498,18 @@ struct ConversationListView: View {
                 get: { connection.chat.searchText },
                 set: { connection.chat.searchText = $0 }
             ), prompt: "Chats suchen")
-            .navigationTitle("Unterhaltungen")
+            .navigationTitle("Chats")
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
                     Button("Fertig") { dismiss() }
                 }
             }
+            .onAppear {
+                withAnimation { appeared = true }
+            }
         }
     }
 }
-
 
 private struct ChatLimitBanner: View {
     var isCompacting: Bool

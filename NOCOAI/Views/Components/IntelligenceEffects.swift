@@ -155,7 +155,9 @@ struct PairingPulseSteps: View {
 
 struct GlowBubbleBackground: View {
     let isUser: Bool
+    var streaming: Bool = false
     @Environment(\.colorScheme) private var scheme
+    @State private var shimmer = false
 
     var body: some View {
         RoundedRectangle(cornerRadius: 24, style: .continuous)
@@ -192,24 +194,64 @@ struct GlowBubbleBackground: View {
                 } else {
                     RoundedRectangle(cornerRadius: 24, style: .continuous)
                         .stroke(
-                            LinearGradient(
-                                colors: [
+                            AngularGradient(
+                                colors: streaming
+                                ? [
+                                    NOCOAITheme.glowPrimary.opacity(shimmer ? 0.85 : 0.35),
+                                    NOCOAITheme.glowSecondary.opacity(0.55),
+                                    NOCOAITheme.glowAccent.opacity(0.45),
+                                    NOCOAITheme.glowPrimary.opacity(shimmer ? 0.35 : 0.85)
+                                ]
+                                : [
                                     NOCOAITheme.glowPrimary.opacity(scheme == .dark ? 0.38 : 0.22),
                                     NOCOAITheme.glowAccent.opacity(0.18),
                                     NOCOAITheme.glowSecondary.opacity(0.14)
                                 ],
-                                startPoint: .topLeading,
-                                endPoint: .bottomTrailing
+                                center: .center
                             ),
-                            lineWidth: 1
+                            lineWidth: streaming ? 1.4 : 1
                         )
                 }
             }
+            .overlay {
+                if streaming && !isUser {
+                    RoundedRectangle(cornerRadius: 24, style: .continuous)
+                        .fill(
+                            LinearGradient(
+                                colors: [
+                                    NOCOAITheme.glowPrimary.opacity(shimmer ? 0.12 : 0.04),
+                                    .clear,
+                                    NOCOAITheme.glowSecondary.opacity(shimmer ? 0.1 : 0.03)
+                                ],
+                                startPoint: shimmer ? .topLeading : .bottomTrailing,
+                                endPoint: shimmer ? .bottomTrailing : .topLeading
+                            )
+                        )
+                        .allowsHitTesting(false)
+                }
+            }
             .shadow(
-                color: isUser ? NOCOAITheme.glowPrimary.opacity(0.42) : NOCOAITheme.glowSecondary.opacity(0.16),
-                radius: isUser ? 18 : 14,
+                color: isUser
+                    ? NOCOAITheme.glowPrimary.opacity(0.42)
+                    : (streaming ? NOCOAITheme.glowPrimary.opacity(0.35) : NOCOAITheme.glowSecondary.opacity(0.16)),
+                radius: streaming ? 20 : (isUser ? 18 : 14),
                 y: 5
             )
+            .onAppear {
+                guard streaming else { return }
+                withAnimation(.easeInOut(duration: 1.4).repeatForever(autoreverses: true)) {
+                    shimmer = true
+                }
+            }
+            .onChange(of: streaming) { _, on in
+                if on {
+                    withAnimation(.easeInOut(duration: 1.4).repeatForever(autoreverses: true)) {
+                        shimmer = true
+                    }
+                } else {
+                    shimmer = false
+                }
+            }
     }
 }
 
@@ -867,6 +909,55 @@ struct IntelligenceMessageArrive: ViewModifier {
 extension View {
     func intelligenceMessageArrive() -> some View {
         modifier(IntelligenceMessageArrive())
+    }
+
+    /// Soft aurora wash while the PC streams a reply.
+    func intelligenceStreaming(_ active: Bool) -> some View {
+        modifier(IntelligenceStreamingModifier(active: active))
+    }
+}
+
+private struct IntelligenceStreamingModifier: ViewModifier {
+    var active: Bool
+    @State private var pulse = false
+
+    func body(content: Content) -> some View {
+        content
+            .overlay(alignment: .leading) {
+                if active {
+                    Capsule()
+                        .fill(
+                            LinearGradient(
+                                colors: [
+                                    NOCOAITheme.glowPrimary.opacity(pulse ? 0.9 : 0.35),
+                                    NOCOAITheme.glowSecondary.opacity(0.6),
+                                    .clear
+                                ],
+                                startPoint: .top,
+                                endPoint: .bottom
+                            )
+                        )
+                        .frame(width: 3)
+                        .padding(.vertical, 10)
+                        .offset(x: -6)
+                        .shadow(color: NOCOAITheme.glowPrimary.opacity(0.6), radius: 6)
+                }
+            }
+            .onAppear {
+                guard active else { return }
+                withAnimation(.easeInOut(duration: 0.9).repeatForever(autoreverses: true)) {
+                    pulse = true
+                }
+            }
+            .onChange(of: active) { _, on in
+                if on {
+                    withAnimation(.easeInOut(duration: 0.9).repeatForever(autoreverses: true)) {
+                        pulse = true
+                    }
+                } else {
+                    pulse = false
+                }
+            }
     }
 }
 

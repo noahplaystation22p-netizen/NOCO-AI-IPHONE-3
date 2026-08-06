@@ -26,6 +26,7 @@ struct MainTabView: View {
         }
         .tint(NOCOAITheme.accent)
         .intelligenceSelectionFeedback(selectedTab)
+        .animation(.spring(response: 0.35, dampingFraction: 0.82), value: selectedTab)
         .onChange(of: selectedTab) { _, _ in
             HapticService.navigate()
         }

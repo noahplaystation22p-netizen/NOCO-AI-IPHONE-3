@@ -63,14 +63,38 @@ struct ChatInputBar: View {
                         .overlay(
                             RoundedRectangle(cornerRadius: 20, style: .continuous)
                                 .stroke(
-                                    focused
-                                        ? NOCOAITheme.glowPrimary.opacity(0.65)
-                                        : Color.primary.opacity(0.08),
-                                    lineWidth: focused ? 1.2 : 1
+                                    connection.chat.isSending
+                                        ? AngularGradient(
+                                            colors: [
+                                                NOCOAITheme.glowPrimary,
+                                                NOCOAITheme.glowSecondary,
+                                                NOCOAITheme.glowAccent,
+                                                NOCOAITheme.glowPrimary
+                                            ],
+                                            center: .center
+                                        )
+                                        : AngularGradient(
+                                            colors: [
+                                                focused
+                                                    ? NOCOAITheme.glowPrimary.opacity(0.65)
+                                                    : Color.primary.opacity(0.08),
+                                                focused
+                                                    ? NOCOAITheme.glowSecondary.opacity(0.4)
+                                                    : Color.primary.opacity(0.08)
+                                            ],
+                                            center: .center
+                                        ),
+                                    lineWidth: focused || connection.chat.isSending ? 1.4 : 1
                                 )
                         )
-                        .shadow(color: focused ? NOCOAITheme.glowPrimary.opacity(0.35) : .clear, radius: focused ? 14 : 0)
+                        .shadow(
+                            color: (focused || connection.chat.isSending)
+                                ? NOCOAITheme.glowPrimary.opacity(0.35)
+                                : .clear,
+                            radius: focused || connection.chat.isSending ? 14 : 0
+                        )
                 )
+                .animation(.easeInOut(duration: 0.35), value: connection.chat.isSending)
 
                 Button {
                 HapticService.medium()

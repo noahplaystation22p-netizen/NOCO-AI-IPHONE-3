@@ -675,11 +675,11 @@ private struct MagicEraserTheater: View {
         }
         .allowsHitTesting(true)
         .onAppear {
-            withAnimation(.linear(duration: 2.2).repeatForever(autoreverses: false)) { spin = true }
-            withAnimation(.easeInOut(duration: 1.0).repeatForever(autoreverses: true)) { pulse = true }
-            withAnimation(.easeInOut(duration: 0.7).repeatForever(autoreverses: true)) { spark = true }
-            withAnimation(.easeOut(duration: 1.4).repeatForever(autoreverses: false)) { ripple = true }
-            withAnimation(.easeInOut(duration: 2.4).repeatForever(autoreverses: true)) { hue = true }
+            withAnimation(.linear(duration: 1.9).repeatForever(autoreverses: false)) { spin = true }
+            withAnimation(.easeInOut(duration: 0.85).repeatForever(autoreverses: true)) { pulse = true }
+            withAnimation(.easeInOut(duration: 0.55).repeatForever(autoreverses: true)) { spark = true }
+            withAnimation(.easeOut(duration: 1.15).repeatForever(autoreverses: false)) { ripple = true }
+            withAnimation(.easeInOut(duration: 1.8).repeatForever(autoreverses: true)) { hue = true }
             HapticService.medium()
         }
     }

@@ -59,21 +59,30 @@ struct MagischerRadiererView: View {
     @FocusState private var promptFocused: Bool
 
     var body: some View {
-        ScrollView {
-            VStack(spacing: 18) {
-                header
-                canvasCard
-                controls
-                presetRow
-                promptCard
-                actionButtons
-                if let resultImage {
-                    resultCard(resultImage)
+        VStack(spacing: 0) {
+            header
+                .padding(.horizontal, 20)
+                .padding(.top, 12)
+                .padding(.bottom, 8)
+
+            canvasCard
+                .padding(.horizontal, 16)
+                .frame(minHeight: 280, maxHeight: 360)
+
+            ScrollView {
+                VStack(spacing: 16) {
+                    controls
+                    presetRow
+                    promptCard
+                    actionButtons
+                    if let resultImage {
+                        resultCard(resultImage)
+                    }
                 }
+                .padding(20)
             }
-            .padding(20)
+            .scrollDisabled(isPainting || isWorking)
         }
-        .scrollDisabled(isPainting || isWorking)
         .nocoBackground()
         .overlay {
             if isWorking {
@@ -553,98 +562,124 @@ private struct MagicEraserTheater: View {
 
     var body: some View {
         ZStack {
-            Color.black.opacity(0.45)
+            Color.black.opacity(0.58)
                 .ignoresSafeArea()
                 .background(.ultraThinMaterial)
+
+            AngularGradient(colors: rainbow, center: .center)
+                .blur(radius: 58)
+                .opacity(pulse ? 0.5 : 0.25)
+                .scaleEffect(pulse ? 1.3 : 0.92)
+                .rotationEffect(.degrees(spin ? 360 : 0))
+                .blendMode(.plusLighter)
+                .ignoresSafeArea()
+
+            Capsule()
+                .fill(LinearGradient(
+                    colors: [.clear, .white.opacity(0.7), rainbow[2].opacity(0.5), .clear],
+                    startPoint: .leading, endPoint: .trailing
+                ))
+                .frame(width: 300, height: 80)
+                .rotationEffect(.degrees(-20))
+                .offset(x: hue ? 150 : -150, y: -50)
+                .blur(radius: 10)
+                .blendMode(.plusLighter)
 
             VStack(spacing: 22) {
                 ZStack {
                     AngularGradient(colors: rainbow, center: .center)
-                        .frame(width: 240, height: 240)
-                        .blur(radius: 42)
-                        .opacity(pulse ? 0.65 : 0.35)
-                        .scaleEffect(pulse ? 1.12 : 0.9)
+                        .frame(width: 260, height: 260)
+                        .blur(radius: 48)
+                        .opacity(pulse ? 0.7 : 0.38)
+                        .scaleEffect(pulse ? 1.16 : 0.88)
                         .rotationEffect(.degrees(spin ? 360 : 0))
                         .blendMode(.plusLighter)
 
-                    ForEach(0..<3, id: \.self) { i in
+                    ForEach(0..<4, id: \.self) { i in
                         Circle()
-                            .stroke(rainbow[i * 2].opacity(ripple ? 0.0 : 0.4 - Double(i) * 0.1), lineWidth: 2)
-                            .frame(width: 95 + CGFloat(i * 40), height: 95 + CGFloat(i * 40))
-                            .scaleEffect(ripple ? 1.4 : 0.88)
+                            .stroke(rainbow[i].opacity(ripple ? 0.05 : 0.42 - Double(i) * 0.08), lineWidth: 2)
+                            .frame(width: 100 + CGFloat(i * 38), height: 100 + CGFloat(i * 38))
+                            .scaleEffect(ripple ? 1.42 : 0.88)
                     }
 
                     Circle()
                         .stroke(
                             AngularGradient(colors: rainbow, center: .center),
-                            lineWidth: 5
+                            lineWidth: 6
                         )
-                        .frame(width: 112, height: 112)
+                        .frame(width: 118, height: 118)
                         .rotationEffect(.degrees(spin ? 360 : 0))
-                        .shadow(color: Color(red: 0.7, green: 0.4, blue: 1).opacity(0.8), radius: 16)
+                        .shadow(color: Color(red: 0.7, green: 0.4, blue: 1).opacity(0.85), radius: 20)
 
                     Circle()
                         .trim(from: 0, to: max(0.04, min(progress, 1)))
-                        .stroke(Color.white.opacity(0.9), style: StrokeStyle(lineWidth: 3.5, lineCap: .round))
-                        .frame(width: 92, height: 92)
+                        .stroke(
+                            AngularGradient(colors: [.white, rainbow[0], rainbow[5]], center: .center),
+                            style: StrokeStyle(lineWidth: 4, lineCap: .round)
+                        )
+                        .frame(width: 96, height: 96)
                         .rotationEffect(.degrees(-90))
                         .animation(.easeOut(duration: 0.3), value: progress)
 
                     Image(systemName: "wand.and.stars")
-                        .font(.system(size: 30, weight: .semibold))
+                        .font(.system(size: 32, weight: .bold))
                         .foregroundStyle(.white)
                         .symbolEffect(.pulse, options: .repeating)
-                        .scaleEffect(pulse ? 1.1 : 0.92)
+                        .symbolEffect(.bounce, value: pct / 5)
+                        .scaleEffect(pulse ? 1.12 : 0.92)
 
-                    ForEach(0..<10, id: \.self) { i in
+                    ForEach(0..<14, id: \.self) { i in
                         Image(systemName: "sparkle")
-                            .font(.system(size: CGFloat(6 + i % 4 * 2), weight: .bold))
-                            .foregroundStyle(rainbow[i % (rainbow.count - 1)].opacity(spark ? 1 : 0.2))
+                            .font(.system(size: CGFloat(5 + i % 5 * 2), weight: .bold))
+                            .foregroundStyle(rainbow[i % (rainbow.count - 1)].opacity(spark ? 1 : 0.15))
                             .offset(
-                                x: cos(Double(i) / 10 * .pi * 2) * (spark ? 82 : 66),
-                                y: sin(Double(i) / 10 * .pi * 2) * (spark ? 82 : 66)
+                                x: cos(Double(i) / 14 * .pi * 2) * (spark ? 94 : 70),
+                                y: sin(Double(i) / 14 * .pi * 2) * (spark ? 94 : 70)
                             )
+                            .scaleEffect(spark ? 1.25 : 0.5)
                     }
                 }
-                .frame(height: 240)
-                .hueRotation(.degrees(hue ? 28 : -12))
+                .frame(height: 260)
+                .hueRotation(.degrees(hue ? 32 : -16))
 
                 VStack(spacing: 8) {
                     Text("\(pct)%")
-                        .font(.title.weight(.bold).monospacedDigit())
+                        .font(.system(size: 36, weight: .bold, design: .rounded).monospacedDigit())
                         .foregroundStyle(.white)
                         .contentTransition(.numericText())
+                        .shadow(color: rainbow[2].opacity(0.55), radius: 12)
                     Text(status)
                         .font(.subheadline.weight(.semibold))
-                        .foregroundStyle(.white.opacity(0.92))
+                        .foregroundStyle(.white.opacity(0.95))
                         .multilineTextAlignment(.center)
-                    Text("Nur markierter Bereich")
+                    Text("Apple Intelligence · nur Maske")
                         .font(.caption.weight(.medium))
                         .foregroundStyle(.white.opacity(0.55))
                 }
-                .padding(.horizontal, 28)
-                .padding(.vertical, 16)
+                .padding(.horizontal, 30)
+                .padding(.vertical, 18)
                 .background(
                     Capsule(style: .continuous)
-                        .fill(.ultraThinMaterial.opacity(0.88))
+                        .fill(.ultraThinMaterial.opacity(0.9))
                         .overlay(
                             Capsule(style: .continuous)
                                 .stroke(
                                     AngularGradient(colors: rainbow, center: .center),
-                                    lineWidth: 1.4
+                                    lineWidth: 1.6
                                 )
                         )
+                        .shadow(color: rainbow[2].opacity(0.4), radius: 22, y: 8)
                 )
             }
             .padding(24)
         }
         .allowsHitTesting(true)
         .onAppear {
-            withAnimation(.linear(duration: 2.6).repeatForever(autoreverses: false)) { spin = true }
-            withAnimation(.easeInOut(duration: 1.15).repeatForever(autoreverses: true)) { pulse = true }
-            withAnimation(.easeInOut(duration: 0.85).repeatForever(autoreverses: true)) { spark = true }
-            withAnimation(.easeOut(duration: 1.7).repeatForever(autoreverses: false)) { ripple = true }
-            withAnimation(.easeInOut(duration: 3.2).repeatForever(autoreverses: true)) { hue = true }
+            withAnimation(.linear(duration: 2.2).repeatForever(autoreverses: false)) { spin = true }
+            withAnimation(.easeInOut(duration: 1.0).repeatForever(autoreverses: true)) { pulse = true }
+            withAnimation(.easeInOut(duration: 0.7).repeatForever(autoreverses: true)) { spark = true }
+            withAnimation(.easeOut(duration: 1.4).repeatForever(autoreverses: false)) { ripple = true }
+            withAnimation(.easeInOut(duration: 2.4).repeatForever(autoreverses: true)) { hue = true }
             HapticService.medium()
         }
     }
@@ -761,6 +796,9 @@ final class MaskDrawView: UIView {
         while let current = view {
             if let scroll = current as? UIScrollView {
                 scroll.isScrollEnabled = enabled
+                scroll.panGestureRecognizer.isEnabled = enabled
+                scroll.delaysContentTouches = enabled
+                scroll.canCancelContentTouches = enabled
             }
             view = current.superview
         }

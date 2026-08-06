@@ -8,6 +8,10 @@ struct KeyboardRootView: View {
         VStack(spacing: 0) {
             aiHeader
             aiToolbar
+            if model.showAskPanel {
+                askPanel
+                    .transition(.move(edge: .top).combined(with: .opacity))
+            }
             statusBar
             KeyboardLayoutView(model: model)
                 .padding(.horizontal, 4)
@@ -16,7 +20,7 @@ struct KeyboardRootView: View {
         .padding(.top, 4)
         .background(keyboardBackground)
         .overlay {
-            if model.isProcessing || model.showIntelligenceBurst {
+            if model.isProcessing || model.showIntelligenceBurst || model.isAsking {
                 IntelligenceRewriteOverlay(
                     phase: model.animationPhase,
                     title: model.overlayTitle
@@ -29,6 +33,7 @@ struct KeyboardRootView: View {
         }
         .animation(.spring(response: 0.42, dampingFraction: 0.82), value: model.isProcessing)
         .animation(.spring(response: 0.45, dampingFraction: 0.8), value: model.showIntelligenceBurst)
+        .animation(.spring(response: 0.38, dampingFraction: 0.86), value: model.showAskPanel)
         .animation(.easeInOut(duration: 0.22), value: model.animationPhase)
     }
 
@@ -58,7 +63,7 @@ struct KeyboardRootView: View {
             Text("NOCO")
                 .font(.system(size: 12, weight: .bold, design: .rounded))
                 .tracking(1.1)
-                .foregroundStyle(scheme == .dark ? .white.opacity(0.92) : Color(red: 0.12, green: 0.14, blue: 0.2))
+                .foregroundStyle(.white.opacity(0.92))
 
             Text("AI")
                 .font(.system(size: 10, weight: .semibold, design: .rounded))
@@ -66,9 +71,9 @@ struct KeyboardRootView: View {
                 .padding(.vertical, 2)
                 .background(
                     Capsule(style: .continuous)
-                        .fill(Color(red: 0.35, green: 0.55, blue: 1.0).opacity(scheme == .dark ? 0.28 : 0.14))
+                        .fill(Color(red: 0.35, green: 0.55, blue: 1.0).opacity(0.28))
                 )
-                .foregroundStyle(Color(red: 0.35, green: 0.55, blue: 1.0))
+                .foregroundStyle(Color(red: 0.55, green: 0.78, blue: 1.0))
 
             Spacer(minLength: 0)
 
@@ -88,6 +93,33 @@ struct KeyboardRootView: View {
     private var aiToolbar: some View {
         ScrollView(.horizontal, showsIndicators: false) {
             HStack(spacing: 7) {
+                Button {
+                    model.toggleAskPanel()
+                } label: {
+                    HStack(spacing: 5) {
+                        Image(systemName: "bubble.left.and.text.bubble.right.fill")
+                            .font(.system(size: 11, weight: .semibold))
+                        Text("Fragen")
+                            .font(.system(size: 12, weight: .semibold, design: .rounded))
+                    }
+                    .padding(.horizontal, 11)
+                    .padding(.vertical, 8)
+                    .background(
+                        RoundedRectangle(cornerRadius: 11, style: .continuous)
+                            .fill(
+                                LinearGradient(
+                                    colors: model.showAskPanel
+                                    ? [Color(red: 0.35, green: 0.75, blue: 1), Color(red: 0.45, green: 0.55, blue: 1)]
+                                    : [Color(red: 0.2, green: 0.45, blue: 0.95), Color(red: 0.35, green: 0.7, blue: 0.9)],
+                                    startPoint: .topLeading,
+                                    endPoint: .bottomTrailing
+                                )
+                            )
+                    )
+                    .foregroundStyle(.white)
+                }
+                .buttonStyle(SoftPressStyle())
+
                 ForEach(model.toolbarChips) { chip in
                     Button {
                         model.runChip(chip)
@@ -104,13 +136,83 @@ struct KeyboardRootView: View {
                         .foregroundStyle(chipForeground(for: chip))
                     }
                     .buttonStyle(SoftPressStyle())
-                    .disabled(model.isProcessing)
-                    .opacity(model.isProcessing ? 0.5 : 1)
+                    .disabled(model.isProcessing || model.isAsking)
+                    .opacity(model.isProcessing || model.isAsking ? 0.5 : 1)
                 }
             }
             .padding(.horizontal, 10)
             .padding(.vertical, 5)
         }
+    }
+
+    private var askPanel: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            HStack(spacing: 8) {
+                TextField("Frag NOCO AI…", text: $model.askDraft)
+                    .textFieldStyle(.plain)
+                    .font(.system(size: 14, weight: .medium, design: .rounded))
+                    .padding(.horizontal, 12)
+                    .padding(.vertical, 10)
+                    .background(
+                        RoundedRectangle(cornerRadius: 12, style: .continuous)
+                            .fill(Color.white.opacity(0.08))
+                            .overlay(
+                                RoundedRectangle(cornerRadius: 12, style: .continuous)
+                                    .stroke(Color(red: 0.4, green: 0.75, blue: 1).opacity(0.35), lineWidth: 1)
+                            )
+                    )
+                    .foregroundStyle(.white)
+                    .disabled(model.isAsking)
+
+                Button {
+                    model.sendAsk()
+                } label: {
+                    Image(systemName: model.isAsking ? "ellipsis" : "arrow.up.circle.fill")
+                        .font(.system(size: 26, weight: .semibold))
+                        .foregroundStyle(
+                            model.askDraft.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+                            ? Color.white.opacity(0.35)
+                            : Color(red: 0.45, green: 0.8, blue: 1)
+                        )
+                }
+                .disabled(
+                    model.isAsking ||
+                    model.askDraft.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+                )
+            }
+
+            if !model.askReply.isEmpty {
+                VStack(alignment: .leading, spacing: 8) {
+                    Text(model.askReply)
+                        .font(.system(size: 13, weight: .medium, design: .rounded))
+                        .foregroundStyle(.white.opacity(0.92))
+                        .fixedSize(horizontal: false, vertical: true)
+                    HStack {
+                        Button("Einfügen") {
+                            model.insertAskReply()
+                        }
+                        .font(.caption.weight(.bold))
+                        .buttonStyle(.borderedProminent)
+                        .tint(Color(red: 0.35, green: 0.6, blue: 1))
+                        .controlSize(.mini)
+
+                        Button("Schließen") {
+                            model.toggleAskPanel()
+                        }
+                        .font(.caption.weight(.semibold))
+                        .foregroundStyle(.secondary)
+                    }
+                }
+                .padding(10)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .background(
+                    RoundedRectangle(cornerRadius: 12, style: .continuous)
+                        .fill(Color.white.opacity(0.07))
+                )
+            }
+        }
+        .padding(.horizontal, 10)
+        .padding(.bottom, 6)
     }
 
     private var statusBar: some View {
@@ -143,14 +245,10 @@ struct KeyboardRootView: View {
         .padding(.vertical, 5)
         .background(
             RoundedRectangle(cornerRadius: 10, style: .continuous)
-                .fill(scheme == .dark
-                      ? Color.white.opacity(0.05)
-                      : Color.white.opacity(0.45))
+                .fill(Color.white.opacity(0.06))
                 .overlay(
                     RoundedRectangle(cornerRadius: 10, style: .continuous)
-                        .stroke(scheme == .dark
-                                ? Color.white.opacity(0.08)
-                                : Color.black.opacity(0.05), lineWidth: 0.5)
+                        .stroke(Color.white.opacity(0.1), lineWidth: 0.5)
                 )
         )
         .padding(.horizontal, 10)
@@ -159,29 +257,31 @@ struct KeyboardRootView: View {
 
     private var keyboardBackground: some View {
         ZStack {
-            (scheme == .dark
-             ? Color(red: 0.09, green: 0.095, blue: 0.12)
-             : Color(red: 0.80, green: 0.82, blue: 0.86))
+            // Always a bit darker / premium AI chrome
+            Color(red: 0.07, green: 0.075, blue: 0.1)
 
-            // Soft AI wash — cool cyan/silver, not purple
             LinearGradient(
                 colors: [
-                    Color(red: 0.45, green: 0.7, blue: 1.0).opacity(scheme == .dark ? 0.12 : 0.18),
-                    Color(red: 0.55, green: 0.9, blue: 0.88).opacity(scheme == .dark ? 0.06 : 0.1),
-                    .clear
+                    Color(red: 0.25, green: 0.45, blue: 0.95).opacity(0.22),
+                    Color(red: 0.2, green: 0.7, blue: 0.85).opacity(0.12),
+                    Color.clear
                 ],
                 startPoint: .topLeading,
                 endPoint: .bottomTrailing
             )
 
-            LinearGradient(
-                colors: [
-                    Color.white.opacity(scheme == .dark ? 0.04 : 0.35),
-                    .clear
-                ],
-                startPoint: .top,
-                endPoint: .center
-            )
+            // Soft moving wash
+            Circle()
+                .fill(Color(red: 0.35, green: 0.7, blue: 1).opacity(0.12))
+                .frame(width: 220, height: 220)
+                .blur(radius: 50)
+                .offset(x: -80, y: -40)
+
+            Circle()
+                .fill(Color(red: 0.4, green: 0.9, blue: 0.85).opacity(0.08))
+                .frame(width: 180, height: 180)
+                .blur(radius: 40)
+                .offset(x: 100, y: 60)
         }
         .ignoresSafeArea()
     }
@@ -254,14 +354,8 @@ struct KeyboardRootView: View {
                     lineWidth: 1
                 )
             } else {
-                shape.fill(.ultraThinMaterial)
-                shape.fill(scheme == .dark
-                           ? Color.white.opacity(0.06)
-                           : Color.white.opacity(0.55))
-                shape.stroke(
-                    scheme == .dark ? Color.white.opacity(0.12) : Color.black.opacity(0.06),
-                    lineWidth: 0.5
-                )
+                shape.fill(Color.white.opacity(0.08))
+                shape.stroke(Color.white.opacity(0.12), lineWidth: 0.5)
             }
         }
     }
@@ -269,9 +363,9 @@ struct KeyboardRootView: View {
     private func chipForeground(for chip: KeyboardToolbarChip) -> Color {
         if chip.isPrimary || chip.isAnswer || chip.isComplete { return .white }
         if chip.isCustom {
-            return scheme == .dark ? Color(red: 0.75, green: 0.9, blue: 1.0) : Color(red: 0.2, green: 0.38, blue: 0.72)
+            return Color(red: 0.75, green: 0.9, blue: 1.0)
         }
-        return .primary
+        return .white.opacity(0.9)
     }
 }
 
@@ -296,25 +390,36 @@ private struct IntelligenceRewriteOverlay: View {
     var body: some View {
         ZStack {
             RoundedRectangle(cornerRadius: 20, style: .continuous)
-                .fill(.black.opacity(0.14))
+                .fill(.black.opacity(0.22))
 
             AngularGradient(colors: aurora, center: .center)
                 .blur(radius: 42)
-                .opacity(pulse ? 0.55 : 0.28)
-                .scaleEffect(pulse ? 1.12 : 0.94)
+                .opacity(pulse ? 0.62 : 0.32)
+                .scaleEffect(pulse ? 1.16 : 0.92)
                 .rotationEffect(.degrees(spin ? 360 : 0))
                 .blendMode(.plusLighter)
 
+            Capsule()
+                .fill(LinearGradient(
+                    colors: [.clear, .white.opacity(0.55), aurora[2].opacity(0.4), .clear],
+                    startPoint: .leading, endPoint: .trailing
+                ))
+                .frame(width: 240, height: 56)
+                .rotationEffect(.degrees(-16))
+                .offset(x: drift ? 110 : -110)
+                .blur(radius: 8)
+                .blendMode(.plusLighter)
+
             Circle()
-                .fill(aurora[0].opacity(0.35))
-                .frame(width: 140, height: 140)
+                .fill(aurora[0].opacity(0.4))
+                .frame(width: 150, height: 150)
                 .blur(radius: 36)
                 .offset(x: drift ? 28 : -22, y: pulse ? -16 : 14)
                 .blendMode(.plusLighter)
 
             Circle()
-                .fill(aurora[3].opacity(0.3))
-                .frame(width: 110, height: 110)
+                .fill(aurora[3].opacity(0.32))
+                .frame(width: 120, height: 120)
                 .blur(radius: 30)
                 .offset(x: drift ? -24 : 20, y: pulse ? 18 : -12)
                 .blendMode(.plusLighter)

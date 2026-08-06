@@ -66,6 +66,26 @@ enum KeyboardAIClient {
         return clean
     }
 
+    /// Free-form question → short answer (shown in keyboard Ask panel).
+    static func ask(question: String) async throws -> String {
+        let q = question.trimmingCharacters(in: .whitespacesAndNewlines)
+        let message = """
+        Du bist NOCO AI auf einer iPhone-Tastatur. Antworte knapp und klar (1–4 Sätze).
+        Kein Intro, kein „Gerne“, kein Markdown außer nötig. Sprache der Frage übernehmen.
+
+        FRAGE:
+        \(q)
+        """
+        let reply = try await post(
+            message: message,
+            display: "Frage: \(q.prefix(72))",
+            timeout: 36
+        )
+        let clean = sanitizeCustom(reply)
+        guard !clean.isEmpty else { throw ClientError.empty }
+        return clean
+    }
+
     private static func post(message: String, display: String, timeout: TimeInterval) async throws -> String {
         CompanionCredentials.refreshFromDisk()
         KeyboardChipPreferences.refreshFromDisk()

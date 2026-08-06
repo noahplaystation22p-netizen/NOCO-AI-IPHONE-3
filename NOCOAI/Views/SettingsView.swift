@@ -153,8 +153,8 @@ struct SettingsView: View {
                             Text("NOCO AI Tastatur")
                                 .font(.body.weight(.semibold))
                             Text(CompanionCredentials.isConfigured
-                                  ? "Bereit — PC-Verbindung freigegeben"
-                                  : "Noch nicht bereit — zuerst PC koppeln")
+                                  ? "Bereit"
+                                  : "Zuerst PC koppeln")
                                 .font(.caption)
                                 .foregroundStyle(.secondary)
                         }
@@ -163,16 +163,6 @@ struct SettingsView: View {
                             .fill(CompanionCredentials.isConfigured ? NOCOAITheme.success : Color.orange)
                             .frame(width: 8, height: 8)
                     }
-                    .padding(.vertical, 2)
-
-                    VStack(alignment: .leading, spacing: 10) {
-                        keyboardSetupStep(1, "App mit dem PC koppeln (online)")
-                        keyboardSetupStep(2, "Zugangsdaten unten aktualisieren")
-                        keyboardSetupStep(3, "iPhone → Tastatur → NOCO AI hinzufügen")
-                        keyboardSetupStep(4, "Vollzugriff erlauben")
-                        keyboardSetupStep(5, "Text markieren → KI-Chip tippen")
-                    }
-                    .padding(.vertical, 4)
 
                     Button {
                         HapticService.open()
@@ -186,32 +176,37 @@ struct SettingsView: View {
                         HapticService.success()
                     } label: {
                         Label("Zugangsdaten aktualisieren", systemImage: "arrow.triangle.2.circlepath")
-                            .frame(maxWidth: .infinity)
                     }
-                    .buttonStyle(.borderedProminent)
-                    .tint(NOCOAITheme.accent)
                     .disabled(!connection.isPaired)
 
                     NavigationLink {
                         KeyboardCustomizationView()
                     } label: {
                         Label {
-                            VStack(alignment: .leading, spacing: 3) {
+                            VStack(alignment: .leading, spacing: 2) {
                                 Text("Tastatur anpassen")
-                                    .font(.body.weight(.semibold))
-                                Text("Chips sortieren · eigene KI-Shortcuts mit Prompt")
+                                Text("Chips · Shortcuts · Fragen")
                                     .font(.caption)
                                     .foregroundStyle(.secondary)
                             }
                         } icon: {
                             Image(systemName: "slider.horizontal.3")
-                                .foregroundStyle(NOCOAITheme.accent)
                         }
+                    }
+
+                    DisclosureGroup("Setup-Hilfe") {
+                        VStack(alignment: .leading, spacing: 8) {
+                            keyboardSetupStep(1, "App mit PC koppeln")
+                            keyboardSetupStep(2, "Zugangsdaten aktualisieren")
+                            keyboardSetupStep(3, "iPhone → Tastatur → NOCO AI")
+                            keyboardSetupStep(4, "Vollzugriff erlauben")
+                        }
+                        .padding(.vertical, 4)
                     }
                 } header: {
                     Text("KI-Tastatur")
                 } footer: {
-                    Text("App Group group.de.noco.nocoai in SideStore aktiv lassen. Ohne Vollzugriff kein Netzwerk. Nach Anpassen kurz Globus tippen, damit Chips neu laden.")
+                    Text("Doppel-Leertaste = Punkt. Entf halten = schneller löschen. Chip „Fragen“ = Mini-Chat.")
                 }
 
                 Section("Erweitert") {
@@ -219,24 +214,11 @@ struct SettingsView: View {
                         CodeStudioView()
                             .environmentObject(connection)
                     } label: {
-                        Label {
-                            VStack(alignment: .leading, spacing: 2) {
-                                Text("Code Assist")
-                                Text("Optional — läuft auf dem PC")
-                                    .font(.caption)
-                                    .foregroundStyle(.secondary)
-                            }
-                        } icon: {
-                            Image(systemName: "chevron.left.forwardslash.chevron.right")
-                        }
+                        Label("Code Assist", systemImage: "chevron.left.forwardslash.chevron.right")
                     }
-                }
 
-                Section("Gerät") {
                     TextField("Gerätename", text: $connection.deviceName)
-                }
 
-                Section {
                     Button("Status aktualisieren") {
                         Task { await connection.refreshStatus(showLoading: true) }
                     }
@@ -246,21 +228,21 @@ struct SettingsView: View {
                     }
                 }
 
-                Section("Kurzbefehl Speak") {
-                    Text("Kurzbefehle-App → „Mit NOCO sprechen“ zum Home-Bildschirm hinzufügen. Die App startet Speak im Hintergrund (Live Activity); das Speak-Fenster öffnet sich nicht.")
+                DisclosureGroup {
+                    Text("Kurzbefehl „Mit NOCO sprechen“ zum Home-Bildschirm. Link: nocoai://speak")
                         .font(.footnote)
-                    Text("Link: nocoai://speak · Stoppen: „NOCO Sprachmodus beenden“")
-                        .font(.caption2)
                         .foregroundStyle(.secondary)
                     Button("Speak jetzt testen") {
                         HapticService.medium()
                         connection.launchSpeakFromShortcut()
                     }
+                } label: {
+                    Text("Speak-Kurzbefehl")
                 }
 
                 Section("Info") {
-                    Text("NOCO AI Companion v6.3")
-                    Text("Premium keyboard · custom AI shortcuts")
+                    Text("NOCO AI Companion v6.4")
+                    Text("Ask · Hold-Delete · Magic Eraser")
                         .font(.footnote)
                         .foregroundStyle(NOCOAITheme.secondaryText(for: scheme))
                 }

@@ -39,8 +39,10 @@ struct KeyboardLayoutView: View {
                     model.toggleShift()
                 }
                 letterRowContent(row3)
-                ModifierKey(symbol: "delete.backward", width: 44) {
-                    model.deleteBackward()
+                DeleteKey(width: 44) {
+                    model.beginDeleteHold()
+                } onEnd: {
+                    model.endDeleteHold()
                 }
             }
             bottomRow(leftTitle: "123")
@@ -56,8 +58,10 @@ struct KeyboardLayoutView: View {
                     model.insert("#")
                 }
                 letterRowContent(num3)
-                ModifierKey(symbol: "delete.backward", width: 44) {
-                    model.deleteBackward()
+                DeleteKey(width: 44) {
+                    model.beginDeleteHold()
+                } onEnd: {
+                    model.endDeleteHold()
                 }
             }
             bottomRow(leftTitle: "ABC")
@@ -160,6 +164,7 @@ private struct LetterKey: View {
     var body: some View {
         Text(label)
             .font(.system(size: 24, weight: .regular, design: .rounded))
+            .foregroundStyle(.white)
             .frame(maxWidth: .infinity)
             .frame(height: 46)
             .background(
@@ -167,15 +172,10 @@ private struct LetterKey: View {
                     .fill(keyFill)
                     .overlay(
                         RoundedRectangle(cornerRadius: 9, style: .continuous)
-                            .stroke(
-                                scheme == .dark
-                                ? Color.white.opacity(pressed ? 0.08 : 0.12)
-                                : Color.white.opacity(0.7),
-                                lineWidth: 0.5
-                            )
+                            .stroke(Color.white.opacity(pressed ? 0.08 : 0.14), lineWidth: 0.5)
                     )
                     .shadow(
-                        color: .black.opacity(scheme == .dark ? 0.35 : 0.14),
+                        color: .black.opacity(0.35),
                         radius: pressed ? 0 : 0.5,
                         y: pressed ? 0 : 1
                     )
@@ -234,11 +234,9 @@ private struct LetterKey: View {
 
     private var keyFill: Color {
         if pressed {
-            return scheme == .dark ? Color(red: 0.42, green: 0.43, blue: 0.48) : Color(white: 0.9)
+            return Color(red: 0.38, green: 0.40, blue: 0.46)
         }
-        return scheme == .dark
-            ? Color(red: 0.34, green: 0.35, blue: 0.39)
-            : Color(red: 0.99, green: 0.995, blue: 1.0)
+        return Color(red: 0.28, green: 0.29, blue: 0.34)
     }
 
     private var popupFill: Color {
@@ -293,6 +291,44 @@ private struct LetterKey: View {
 
 // MARK: - Modifier / Space
 
+private struct DeleteKey: View {
+    var width: CGFloat = 44
+    var onBegin: () -> Void
+    var onEnd: () -> Void
+    @Environment(\.colorScheme) private var scheme
+    @State private var pressed = false
+
+    var body: some View {
+        Image(systemName: "delete.backward")
+            .font(.system(size: 16, weight: .semibold))
+            .frame(width: width, height: 46)
+            .foregroundStyle(.white.opacity(0.9))
+            .background(
+                RoundedRectangle(cornerRadius: 9, style: .continuous)
+                    .fill(Color(red: 0.18, green: 0.19, blue: 0.23))
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 9, style: .continuous)
+                            .stroke(Color.white.opacity(0.1), lineWidth: 0.5)
+                    )
+            )
+            .scaleEffect(pressed ? 0.96 : 1)
+            .contentShape(Rectangle())
+            .gesture(
+                DragGesture(minimumDistance: 0)
+                    .onChanged { _ in
+                        if !pressed {
+                            pressed = true
+                            onBegin()
+                        }
+                    }
+                    .onEnded { _ in
+                        pressed = false
+                        onEnd()
+                    }
+            )
+    }
+}
+
 private struct ModifierKey: View {
     var title: String? = nil
     var symbol: String? = nil
@@ -314,7 +350,7 @@ private struct ModifierKey: View {
             }
         }
         .frame(width: width, height: 46)
-        .foregroundStyle(prominent ? .white : .primary)
+        .foregroundStyle(prominent ? .white : .white.opacity(0.9))
         .background(
             RoundedRectangle(cornerRadius: 9, style: .continuous)
                 .fill(fill)
@@ -360,9 +396,7 @@ private struct ModifierKey: View {
             return AnyShapeStyle(scheme == .dark ? Color.white.opacity(0.52) : Color.white)
         }
         return AnyShapeStyle(
-            scheme == .dark
-            ? Color(red: 0.22, green: 0.23, blue: 0.27)
-            : Color(red: 0.70, green: 0.72, blue: 0.76)
+            Color(red: 0.18, green: 0.19, blue: 0.23)
         )
     }
 }
@@ -375,18 +409,17 @@ private struct SpaceKey: View {
     var body: some View {
         Text("Leertaste")
             .font(.system(size: 15, weight: .medium, design: .rounded))
+            .foregroundStyle(.white.opacity(0.9))
             .frame(maxWidth: .infinity)
             .frame(height: 46)
             .background(
                 RoundedRectangle(cornerRadius: 9, style: .continuous)
-                    .fill(scheme == .dark
-                          ? Color(red: 0.34, green: 0.35, blue: 0.39).opacity(pressed ? 0.85 : 1)
-                          : (pressed ? Color(white: 0.9) : Color(red: 0.99, green: 0.995, blue: 1.0)))
+                    .fill(Color(red: 0.26, green: 0.27, blue: 0.32).opacity(pressed ? 0.85 : 1))
                     .overlay(
                         RoundedRectangle(cornerRadius: 9, style: .continuous)
-                            .stroke(scheme == .dark ? Color.white.opacity(0.1) : Color.white.opacity(0.65), lineWidth: 0.5)
+                            .stroke(Color.white.opacity(0.1), lineWidth: 0.5)
                     )
-                    .shadow(color: .black.opacity(0.1), radius: 0.4, y: 1)
+                    .shadow(color: .black.opacity(0.25), radius: 0.4, y: 1)
             )
             .contentShape(Rectangle())
             .gesture(

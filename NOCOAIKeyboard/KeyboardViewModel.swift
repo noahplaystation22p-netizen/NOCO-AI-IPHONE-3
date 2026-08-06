@@ -15,6 +15,10 @@ final class KeyboardViewModel: ObservableObject {
     @Published var animationPhase: AnimationPhase = .idle
     @Published var overlayTitle = "…"
     @Published var toolbarChips: [KeyboardToolbarChip] = KeyboardChipPreferences.resolvedChips()
+    @Published var showAskPanel = false
+    @Published var askDraft = ""
+    @Published var askReply = ""
+    @Published var isAsking = false
 
     enum AnimationPhase: Equatable {
         case idle, thinking, writing, success
@@ -24,6 +28,8 @@ final class KeyboardViewModel: ObservableObject {
     private var snapshotBefore = ""
     private var snapshotSelected = ""
     private var runTask: Task<Void, Never>?
+    private var deleteHoldTask: Task<Void, Never>?
+    private var lastSpaceAt: Date?
     private let keyHaptic = UIImpactFeedbackGenerator(style: .medium)
     private let selectHaptic = UISelectionFeedbackGenerator()
     private let notifyHaptic = UINotificationFeedbackGenerator()
@@ -87,8 +93,150 @@ final class KeyboardViewModel: ObservableObject {
         syncDocumentSnapshot()
     }
 
+    /// Start hold-to-delete: chars → words → wipe all before cursor.
+    func beginDeleteHold() {
+        deleteHoldTask?.cancel()
+        deleteBackward()
+        deleteHoldTask = Task { [weak self] in
+            guard let self else { return }
+            // Continuous chars
+            try? await Task.sleep(nanoseconds: 320_000_000)
+            var ticks = 0
+            while !Task.isCancelled {
+                ticks += 1
+                if ticks > 28 {
+                    // Long hold: wipe everything before the cursor
+                    await MainActor.run { self.deleteAllBeforeCursor() }
+                    break
+                } else if ticks > 10 {
+                    await MainActor.run { self.deleteWordBackward() }
+                    try? await Task.sleep(nanoseconds: 70_000_000)
+                } else {
+                    await MainActor.run { self.deleteBackward() }
+                    let delay = UInt64(max(45, 120 - ticks * 8)) * 1_000_000
+                    try? await Task.sleep(nanoseconds: delay)
+                }
+            }
+        }
+    }
+
+    func endDeleteHold() {
+        deleteHoldTask?.cancel()
+        deleteHoldTask = nil
+    }
+
+    func deleteWordBackward() {
+        guard let proxy = controller?.textDocumentProxy else { return }
+        let before = proxy.documentContextBeforeInput ?? ""
+        guard !before.isEmpty else { return }
+        var count = 0
+        var sawContent = false
+        for ch in before.reversed() {
+            if ch.isWhitespace || ch.isNewline {
+                if sawContent { break }
+                count += 1
+            } else {
+                sawContent = true
+                count += 1
+            }
+        }
+        for _ in 0..<max(1, count) {
+            proxy.deleteBackward()
+        }
+        heavyHaptic.impactOccurred(intensity: 0.7)
+        heavyHaptic.prepare()
+        syncDocumentSnapshot()
+    }
+
+    func deleteAllBeforeCursor() {
+        guard let proxy = controller?.textDocumentProxy else { return }
+        let before = proxy.documentContextBeforeInput ?? ""
+        guard !before.isEmpty else { return }
+        for _ in 0..<before.count {
+            proxy.deleteBackward()
+        }
+        notifyHaptic.notificationOccurred(.warning)
+        syncDocumentSnapshot()
+        statusLine = "Alles gelöscht"
+    }
+
     func returnKey() { insert("\n") }
-    func space() { insert(" ") }
+
+    /// Double-tap space → period + space (iOS-style).
+    func space() {
+        let now = Date()
+        if let last = lastSpaceAt, now.timeIntervalSince(last) < 0.35 {
+            lastSpaceAt = nil
+            // Replace the previous space with ". "
+            controller?.textDocumentProxy.deleteBackward()
+            insert(". ")
+            selectHaptic.selectionChanged()
+            return
+        }
+        lastSpaceAt = now
+        insert(" ")
+    }
+
+    func toggleAskPanel() {
+        withAnimation(.spring(response: 0.38, dampingFraction: 0.86)) {
+            showAskPanel.toggle()
+        }
+        if showAskPanel {
+            statusLine = "Frage an NOCO tippen"
+            selectHaptic.selectionChanged()
+        }
+    }
+
+    func sendAsk() {
+        let q = askDraft.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !q.isEmpty else { return }
+        guard hasFullAccess, isConfigured else {
+            statusLine = hasFullAccess ? "Zuerst in der App koppeln" : "Vollzugriff nötig"
+            notifyHaptic.notificationOccurred(.warning)
+            return
+        }
+        guard !isAsking, !isProcessing else { return }
+        isAsking = true
+        askReply = ""
+        showIntelligenceBurst = true
+        animationPhase = .thinking
+        overlayTitle = "Frage…"
+        statusLine = "NOCO denkt…"
+        heavyHaptic.impactOccurred(intensity: 1.0)
+
+        runTask?.cancel()
+        runTask = Task {
+            defer { isAsking = false }
+            do {
+                let reply = try await KeyboardAIClient.ask(question: q)
+                if Task.isCancelled { return }
+                animationPhase = .success
+                askReply = reply
+                statusLine = "Antwort bereit"
+                notifyHaptic.notificationOccurred(.success)
+                try? await Task.sleep(nanoseconds: 350_000_000)
+                withAnimation(.easeOut(duration: 0.28)) {
+                    showIntelligenceBurst = false
+                    animationPhase = .idle
+                }
+            } catch {
+                if Task.isCancelled { return }
+                showIntelligenceBurst = false
+                animationPhase = .idle
+                askReply = ""
+                statusLine = error.localizedDescription
+                notifyHaptic.notificationOccurred(.error)
+            }
+        }
+    }
+
+    func insertAskReply() {
+        let text = askReply.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !text.isEmpty else { return }
+        insert(text)
+        statusLine = "Eingefügt"
+        notifyHaptic.notificationOccurred(.success)
+    }
 
     func nextKeyboard() {
         controller?.advanceToNextInputMode()

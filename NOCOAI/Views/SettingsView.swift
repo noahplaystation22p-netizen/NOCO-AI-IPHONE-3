@@ -44,7 +44,7 @@ struct SettingsView: View {
 
                 Section {
                     Picker("Speak-Modell", selection: $voiceMode) {
-                        ForEach(AIMode.allCases) { mode in
+                        ForEach(AIMode.premiumCases + [.flash, .think, .knowledge]) { mode in
                             Text("\(mode.label) — \(mode.subtitle)").tag(mode)
                         }
                     }

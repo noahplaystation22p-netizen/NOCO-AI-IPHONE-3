@@ -215,7 +215,7 @@ struct ChatInputBar: View {
             .init(title: "Foto", icon: "photo.on.rectangle", action: .library),
             .init(title: "Kamera", icon: "camera.fill", action: .camera)
         ]
-        items += AIMode.allCases.map { .init(title: $0.label, icon: $0.systemImage, action: .mode($0)) }
+        items += AIMode.premiumCases.map { .init(title: $0.label, icon: $0.systemImage, action: .mode($0)) }
         if onWritingTools != nil {
             items.append(.init(title: "Schreibwerkzeuge", icon: "pencil.and.outline", action: .writingTools))
         }

@@ -48,7 +48,7 @@ struct MoreView: View {
                         } label: {
                             IntelligenceFeatureTile(
                                 title: "Agent",
-                                subtitle: connection.isOnline ? "Aufgaben erledigen" : "Offline",
+                                subtitle: connection.isOnline ? "Aufgaben · Computer" : "Offline",
                                 systemImage: "brain.head.profile",
                                 accent: Color(red: 0.35, green: 0.78, blue: 0.72)
                             )

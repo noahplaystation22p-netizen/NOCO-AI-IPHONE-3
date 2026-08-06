@@ -31,6 +31,7 @@ struct ChatHubView: View {
                     .padding(.horizontal, 20)
                     .opacity(0.55)
                     .allowsHitTesting(false)
+                    .animation(.easeInOut(duration: 0.35), value: connection.chat.mode)
 
                 ScrollViewReader { proxy in
                     ScrollView {
@@ -88,14 +89,25 @@ struct ChatHubView: View {
                     .transition(.opacity.combined(with: .move(edge: .bottom)))
                 }
 
-                ScrollView(.horizontal, showsIndicators: false) {
-                    ModePicker(mode: Binding(
-                        get: { connection.chat.mode },
-                        set: { connection.chat.setMode($0) }
-                    ))
+                ModePicker(
+                        mode: Binding(
+                            get: { connection.chat.mode },
+                            set: { connection.chat.setMode($0) }
+                        ),
+                        recommendation: connection.chat.modeRecommendation.map { ($0.mode, $0.reason) },
+                        onSelect: { _ in
+                            connection.chat.modeRecommendation = nil
+                        },
+                        onDismissRecommendation: {
+                            connection.chat.dismissModeRecommendation()
+                        }
+                    )
                     .padding(.horizontal, 16)
                     .padding(.vertical, 6)
-                }
+
+                ModeStatusTheater(phase: connection.chat.workPhase, mode: connection.chat.mode)
+                    .padding(.horizontal, 16)
+                    .padding(.bottom, connection.chat.workPhase == .idle ? 0 : 6)
 
                 ChatInputBar(
                     text: $input,
@@ -108,6 +120,9 @@ struct ChatHubView: View {
                     onVoice: { connection.speak.openUI() },
                     onWritingTools: { showWritingTools = true }
                 )
+                .onChange(of: input) { _, newValue in
+                    connection.chat.noteDraftChanged(newValue)
+                }
             }
             .animation(.spring(response: 0.35, dampingFraction: 0.82), value: connection.chat.peerTyping)
             .nocoBackground()

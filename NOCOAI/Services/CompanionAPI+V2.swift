@@ -72,8 +72,7 @@ extension CompanionAPI {
             let mode: String
             let source: String
         }
-        // Companion stack: Agent uses deepest think path.
-        let wire = mode == .agent ? AIMode.think.rawValue : mode.rawValue
+        let wire = mode.wireModeValue ?? "auto"
         let _: EmptyResponse = try await post(
             "mode",
             body: Body(mode: wire, source: "mobile"),
@@ -100,14 +99,9 @@ extension CompanionAPI {
         if speak {
             modeValue = "flash"
         } else if agentPower {
-            // Deepest reasoning stack on Companion; Agent directive is in the message.
-            modeValue = "think"
-        } else if mode == .auto {
-            modeValue = nil
-        } else if mode == .agent {
             modeValue = "think"
         } else {
-            modeValue = mode.rawValue
+            modeValue = mode.wireModeValue
         }
         return streamSSEChunks(
             path: "chat",
@@ -176,7 +170,9 @@ extension CompanionAPI {
         goal: String,
         mode: AgentMode,
         kind: AgentKind = .general,
-        autoRun: Bool = true
+        autoRun: Bool = true,
+        qualityProfile: AgentQualityProfile = .auto,
+        source: String = "mobile"
     ) async throws -> AgentTask {
         struct Body: Encodable {
             let goal: String
@@ -184,12 +180,20 @@ extension CompanionAPI {
             let kind: String
             let source: String
             let auto_run: Bool
+            let quality_profile: String
         }
         var request = try authorizedRequest(path: "agent/tasks", method: "POST")
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
         request.timeoutInterval = 300
         request.httpBody = try encoder.encode(
-            Body(goal: goal, mode: mode.rawValue, kind: kind.rawValue, source: "mobile", auto_run: autoRun)
+            Body(
+                goal: goal,
+                mode: mode.rawValue,
+                kind: kind.rawValue,
+                source: source,
+                auto_run: autoRun,
+                quality_profile: qualityProfile.rawValue
+            )
         )
         let (data, response) = try await session.data(for: request)
         try validate(response: response, data: data, isPairRequest: false)
@@ -242,6 +246,74 @@ extension CompanionAPI {
             throw CompanionAPIError.server(resp.error ?? "Agent-Antwort leer")
         }
         return task
+    }
+
+    func listAgentProjects() async throws -> [AgentProject] {
+        let resp: AgentProjectsResponse = try await get("agent/projects", as: AgentProjectsResponse.self)
+        return resp.projects ?? []
+    }
+
+    func fetchAgentMemory() async throws -> AgentMemorySnapshot? {
+        struct Resp: Decodable { let memory: AgentMemorySnapshot? }
+        let resp: Resp = try await get("agent/memory", as: Resp.self)
+        return resp.memory
+    }
+
+    // MARK: - Computer Control
+
+    func fetchComputerControlStatus() async throws -> ComputerControlStatus {
+        try await get("computer/status", as: ComputerControlStatus.self)
+    }
+
+    func setComputerControlPermission(
+        enabled: Bool,
+        allowMouse: Bool,
+        allowKeyboard: Bool,
+        allowOpenApps: Bool,
+        allowWindowFocus: Bool,
+        confirmEveryInput: Bool
+    ) async throws -> ComputerControlStatus {
+        struct Body: Encodable {
+            let enabled: Bool
+            let allowMouse: Bool
+            let allowKeyboard: Bool
+            let allowOpenApps: Bool
+            let allowWindowFocus: Bool
+            let confirmEveryInput: Bool
+        }
+        return try await post(
+            "computer/permission",
+            body: Body(
+                enabled: enabled,
+                allowMouse: allowMouse,
+                allowKeyboard: allowKeyboard,
+                allowOpenApps: allowOpenApps,
+                allowWindowFocus: allowWindowFocus,
+                confirmEveryInput: confirmEveryInput
+            ),
+            as: ComputerControlStatus.self
+        )
+    }
+
+    func pauseComputerControl() async throws -> ComputerControlStatus {
+        try await post("computer/pause", body: EmptyBody(), as: ComputerControlStatus.self)
+    }
+
+    func resumeComputerControl() async throws -> ComputerControlStatus {
+        try await post("computer/resume", body: EmptyBody(), as: ComputerControlStatus.self)
+    }
+
+    func executeComputerAction(action: String, extras: [String: String] = [:]) async throws -> ComputerControlStatus {
+        struct Body: Encodable {
+            let action: String
+            let question: String?
+            let confirm: Bool?
+        }
+        return try await post(
+            "computer/execute",
+            body: Body(action: action, question: extras["question"], confirm: extras["confirm"] == "true"),
+            as: ComputerControlStatus.self
+        )
     }
 
     func generateImage(prompt: String, conversationId: String?) async throws -> ImageGenerateResponse {

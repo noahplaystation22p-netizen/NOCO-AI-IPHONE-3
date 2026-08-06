@@ -1,55 +1,82 @@
 import Foundation
 
 enum AIMode: String, CaseIterable, Identifiable, Codable {
-    case flash, knowledge, think, agent, auto
+    case auto, agent, vision, developer, writing, study, creative
+    /// Legacy depth / Speak compat (hidden from premium picker).
+    case flash, knowledge, think
 
     var id: String { rawValue }
 
+    /// Modes shown in the premium picker.
+    static var premiumCases: [AIMode] {
+        [.auto, .agent, .vision, .developer, .writing, .study, .creative]
+    }
+
     var label: String {
         switch self {
+        case .auto: return "Intelligent"
+        case .agent: return "Agent"
+        case .vision: return "Vision"
+        case .developer: return "Developer"
+        case .writing: return "Writing"
+        case .study: return "Study"
+        case .creative: return "Creative"
         case .flash: return "Blitz"
         case .knowledge: return "Wissen"
         case .think: return "Tiefe"
-        case .agent: return "Agent"
-        case .auto: return "Intelligent"
         }
     }
 
     var subtitle: String {
         switch self {
+        case .auto: return "Wählt automatisch"
+        case .agent: return "Plant & führt aus"
+        case .vision: return "Bilder & Screen"
+        case .developer: return "Code & Debug"
+        case .writing: return "Texte & Stil"
+        case .study: return "Lernen & Erklären"
+        case .creative: return "Ideen & Design"
         case .flash: return "Schnelle Antworten"
         case .knowledge: return "Ohne Chat-Kontext"
         case .think: return "Nachdenken"
-        case .agent: return "Maximale Kraft"
-        case .auto: return "Wählt automatisch"
         }
     }
 
     var systemImage: String {
         switch self {
-        case .flash: return "bolt.fill"
-        case .knowledge: return "book.fill"
-        case .think: return "brain"
-        case .agent: return "cpu.fill"
         case .auto: return "sparkles"
+        case .agent: return "cpu.fill"
+        case .vision: return "eye.circle.fill"
+        case .developer: return "chevron.left.forwardslash.chevron.right"
+        case .writing: return "pencil.line"
+        case .study: return "book.fill"
+        case .creative: return "paintpalette.fill"
+        case .flash: return "bolt.fill"
+        case .knowledge: return "globe"
+        case .think: return "brain"
         }
     }
 
-    /// True for the ultra-capable Agent chat mode (stronger than Think).
+    /// True for the ultra-capable Agent chat mode (task engine).
     var isAgentPower: Bool { self == .agent }
 
     static func from(_ raw: String?) -> AIMode {
         switch (raw ?? "").lowercased() {
+        case "auto", "intelligent": return .auto
+        case "agent", "noco-agent", "max": return .agent
+        case "vision", "sehen", "bild": return .vision
+        case "developer", "dev", "coding", "code": return .developer
+        case "writing", "write", "schreiben", "text": return .writing
+        case "study", "lernen", "learn": return .study
+        case "creative", "kreativ": return .creative
         case "flash", "blitz": return .flash
         case "knowledge", "wissen", "normal", "klar": return .knowledge
         case "think", "tiefe", "depth": return .think
-        case "agent", "noco-agent", "max": return .agent
-        case "auto", "intelligent": return .auto
         default: return .auto
         }
     }
 
-    /// Accept legacy "normal" / "klar" / "wissen" from older builds / PC.
+    /// Accept legacy values from older builds / PC.
     init(from decoder: Decoder) throws {
         let raw = try decoder.singleValueContainer().decode(String.self)
         self = AIMode.from(raw)

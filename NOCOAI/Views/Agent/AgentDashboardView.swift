@@ -22,14 +22,39 @@ struct AgentDashboardView: View {
                     VStack(spacing: 16) {
                         composeCard
                         modeRow
+                        skillRow
+                        qualityRow
+                        if let task = session.activeTask, let label = task.activeModelLabel, !label.isEmpty {
+                            Text("NOCO nutzt: \(label)")
+                                .font(.caption.weight(.semibold))
+                                .foregroundStyle(task.phaseColor)
+                                .frame(maxWidth: .infinity, alignment: .leading)
+                        }
                         if let pending = session.activeTask?.pendingConfirm {
                             confirmCard(pending)
                         }
                         if let task = session.activeTask {
                             activeTaskCard(task)
                         }
+                        projectsSection
                         historySection
-                        futureKindsHint
+                        skillsHint
+                        NavigationLink {
+                            ComputerControlView().environmentObject(connection)
+                        } label: {
+                            HStack {
+                                Image(systemName: "hand.point.up.left.fill")
+                                Text("Computer Control")
+                                    .fontWeight(.semibold)
+                                Spacer()
+                                Image(systemName: "chevron.right")
+                                    .font(.caption)
+                                    .foregroundStyle(.tertiary)
+                            }
+                            .padding(14)
+                            .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
+                        }
+                        .buttonStyle(.plain)
                     }
                     .padding(.horizontal, 18)
                     .padding(.top, 14)
@@ -92,14 +117,17 @@ struct AgentDashboardView: View {
             VStack(alignment: .leading, spacing: 2) {
                 Text("NOCO Agent")
                     .font(.system(size: 22, weight: .bold, design: .rounded))
-                Text(session.statusLine)
+                Text(session.activeTask.map { "\($0.phaseTitle) · \(session.statusLine)" } ?? session.statusLine)
                     .font(.caption)
                     .foregroundStyle(.secondary)
             }
             Spacer()
             AgentCoreOrb(
-                isActive: session.isWorking || session.activeTask?.status == "running",
-                progress: Double(session.activeTask?.progress ?? 0)
+                isActive: session.isWorking
+                    || session.activeTask?.status == "running"
+                    || session.activeTask?.status == "planning",
+                progress: Double(session.activeTask?.progress ?? 0),
+                phaseColor: session.activeTask?.phaseColor ?? session.mode.accent
             )
             .scaleEffect(0.85)
         }
@@ -181,6 +209,66 @@ struct AgentDashboardView: View {
         }
     }
 
+    private var skillRow: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Text("Skill")
+                .font(.caption.weight(.semibold))
+                .foregroundStyle(.secondary)
+            ScrollView(.horizontal, showsIndicators: false) {
+                HStack(spacing: 8) {
+                    ForEach(AgentKind.allCases) { kind in
+                        Button {
+                            HapticService.selection()
+                            session.kind = kind
+                        } label: {
+                            Text(kind.title)
+                                .font(.caption.weight(.semibold))
+                                .padding(.horizontal, 12)
+                                .padding(.vertical, 8)
+                                .background(
+                                    Capsule().fill(session.kind == kind
+                                        ? Color(red: 0.35, green: 0.78, blue: 0.72).opacity(0.85)
+                                        : Color.primary.opacity(0.06))
+                                )
+                                .foregroundStyle(session.kind == kind ? .white : .primary)
+                        }
+                        .buttonStyle(.plain)
+                    }
+                }
+            }
+        }
+    }
+
+    private var qualityRow: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Text("Modell-Profil")
+                .font(.caption.weight(.semibold))
+                .foregroundStyle(.secondary)
+            ScrollView(.horizontal, showsIndicators: false) {
+                HStack(spacing: 8) {
+                    ForEach(AgentQualityProfile.allCases) { profile in
+                        Button {
+                            HapticService.selection()
+                            session.qualityProfile = profile
+                        } label: {
+                            Text(profile.title)
+                                .font(.caption.weight(.semibold))
+                                .padding(.horizontal, 12)
+                                .padding(.vertical, 8)
+                                .background(
+                                    Capsule().fill(session.qualityProfile == profile
+                                        ? NOCOAITheme.accent.opacity(0.85)
+                                        : Color.primary.opacity(0.06))
+                                )
+                                .foregroundStyle(session.qualityProfile == profile ? .white : .primary)
+                        }
+                        .buttonStyle(.plain)
+                    }
+                }
+            }
+        }
+    }
+
     private func confirmCard(_ pending: AgentPendingConfirm) -> some View {
         GlassCard {
             VStack(alignment: .leading, spacing: 12) {
@@ -232,7 +320,13 @@ struct AgentDashboardView: View {
                 }
 
                 ProgressView(value: Double(task.progress), total: 100)
-                    .tint(session.mode.accent)
+                    .tint(task.phaseColor)
+
+                if let notes = task.qualityNotes, !notes.isEmpty {
+                    Text(notes)
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
 
                 if !task.planSummary.isEmpty {
                     Text(task.planSummary)
@@ -321,6 +415,37 @@ struct AgentDashboardView: View {
         .opacity(step.status == "pending" ? 0.7 : 1)
     }
 
+    private var projectsSection: some View {
+        Group {
+            if !session.projects.isEmpty || !session.memoryFacts.isEmpty {
+                VStack(alignment: .leading, spacing: 10) {
+                    Text("Projekte & Gedächtnis")
+                        .font(.subheadline.weight(.semibold))
+                        .foregroundStyle(.secondary)
+                    ForEach(session.projects.prefix(6)) { project in
+                        VStack(alignment: .leading, spacing: 4) {
+                            Text(project.title)
+                                .font(.subheadline.weight(.medium))
+                            Text(project.goal)
+                                .font(.caption2)
+                                .foregroundStyle(.secondary)
+                                .lineLimit(2)
+                            ProgressView(value: Double(project.progress), total: 100)
+                                .tint(Color(red: 0.35, green: 0.78, blue: 0.72))
+                        }
+                        .padding(12)
+                        .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
+                    }
+                    ForEach(session.memoryFacts.prefix(4)) { fact in
+                        Text("• \(fact.text)")
+                            .font(.caption2)
+                            .foregroundStyle(.secondary)
+                    }
+                }
+            }
+        }
+    }
+
     private func stepColor(_ status: String) -> Color {
         switch status {
         case "completed": return NOCOAITheme.success
@@ -367,8 +492,8 @@ struct AgentDashboardView: View {
         }
     }
 
-    private var futureKindsHint: some View {
-        Text("Vorbereitet: Smart Home · Coding · Study · Travel · Finance · Creative")
+    private var skillsHint: some View {
+        Text("Skills: Coding · Study · Creative · Life · Travel · Finance · Smart Home")
             .font(.caption2)
             .foregroundStyle(.tertiary)
             .frame(maxWidth: .infinity)

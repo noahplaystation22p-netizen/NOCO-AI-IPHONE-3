@@ -5,7 +5,10 @@ import Foundation
 final class AgentSessionController: ObservableObject {
     @Published var mode: AgentMode = .assistant
     @Published var kind: AgentKind = .general
+    @Published var qualityProfile: AgentQualityProfile = .auto
     @Published var tasks: [AgentTask] = []
+    @Published var projects: [AgentProject] = []
+    @Published var memoryFacts: [AgentMemoryFact] = []
     @Published var activeTask: AgentTask?
     @Published var draftGoal = ""
     @Published var isWorking = false
@@ -44,6 +47,12 @@ final class AgentSessionController: ObservableObject {
         do {
             let list = try await api.listAgentTasks()
             tasks = list
+            if let projects = try? await api.listAgentProjects() {
+                self.projects = projects
+            }
+            if let memory = try? await api.fetchAgentMemory() {
+                memoryFacts = memory.facts ?? []
+            }
             if let id = activeTask?.id, let fresh = list.first(where: { $0.id == id }) {
                 activeTask = fresh
             }
@@ -87,7 +96,13 @@ final class AgentSessionController: ObservableObject {
         HapticService.open()
         defer { isWorking = false }
         do {
-            let task = try await api.createAgentTask(goal: goal, mode: mode, kind: kind, autoRun: true)
+            let task = try await api.createAgentTask(
+                goal: goal,
+                mode: mode,
+                kind: kind,
+                autoRun: true,
+                qualityProfile: qualityProfile
+            )
             draftGoal = ""
             activeTask = task
             await refresh()

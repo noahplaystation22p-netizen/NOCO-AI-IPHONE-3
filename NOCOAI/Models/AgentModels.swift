@@ -46,7 +46,7 @@ enum AgentMode: String, CaseIterable, Identifiable, Codable {
     }
 }
 
-enum AgentKind: String, CaseIterable, Codable {
+enum AgentKind: String, CaseIterable, Identifiable, Codable {
     case general
     case smartHome = "smart_home"
     case coding
@@ -54,6 +54,8 @@ enum AgentKind: String, CaseIterable, Codable {
     case travel
     case finance
     case creative
+
+    var id: String { rawValue }
 
     var title: String {
         switch self {
@@ -64,6 +66,35 @@ enum AgentKind: String, CaseIterable, Codable {
         case .travel: return "Travel"
         case .finance: return "Finance"
         case .creative: return "Creative"
+        }
+    }
+
+    var subtitle: String {
+        switch self {
+        case .general: return "Life Agent"
+        case .smartHome: return "Geräte"
+        case .coding: return "Code & Debug"
+        case .study: return "Lernen"
+        case .travel: return "Reisen"
+        case .finance: return "Finanzen"
+        case .creative: return "Texte & Ideen"
+        }
+    }
+}
+
+enum AgentQualityProfile: String, CaseIterable, Identifiable {
+    case auto, fast, accurate, creative, developer, offline
+
+    var id: String { rawValue }
+
+    var title: String {
+        switch self {
+        case .auto: return "Auto"
+        case .fast: return "Schnell"
+        case .accurate: return "Genau"
+        case .creative: return "Kreativ"
+        case .developer: return "Entwickler"
+        case .offline: return "Offline"
         }
     }
 }
@@ -226,6 +257,10 @@ struct AgentTask: Codable, Identifiable, Equatable {
     var source: String?
     var createdAt: String?
     var updatedAt: String?
+    var phase: String?
+    var qualityProfile: String?
+    var activeModelLabel: String?
+    var qualityNotes: String?
 
     var statusEnum: AgentTaskStatus {
         AgentTaskStatus(rawValue: status) ?? .draft
@@ -235,14 +270,43 @@ struct AgentTask: Codable, Identifiable, Equatable {
         AgentMode(rawValue: mode) ?? .assistant
     }
 
+    var phaseColor: Color {
+        switch (phase ?? "").lowercased() {
+        case "analyzing": return Color(red: 0.35, green: 0.55, blue: 1.0) // blau
+        case "planning": return Color(red: 0.62, green: 0.42, blue: 0.98) // violett
+        case "executing": return Color(red: 0.98, green: 0.58, blue: 0.28) // orange
+        case "reviewing": return Color(red: 0.72, green: 0.45, blue: 0.98)
+        case "awaiting": return Color(red: 0.98, green: 0.78, blue: 0.32)
+        case "done": return Color(red: 0.28, green: 0.86, blue: 0.55) // grün
+        case "failed": return NOCOAITheme.danger
+        default: return Color(red: 0.45, green: 0.72, blue: 1.0)
+        }
+    }
+
+    var phaseTitle: String {
+        switch (phase ?? "").lowercased() {
+        case "analyzing": return "Analysiert"
+        case "planning": return "Plant Lösung"
+        case "executing": return "Führt aus"
+        case "reviewing": return "Prüft Qualität"
+        case "awaiting": return "Wartet auf dich"
+        case "done": return "Fertig"
+        case "failed": return "Fehler"
+        default: return statusEnum.label
+        }
+    }
+
     enum CodingKeys: String, CodingKey {
-        case id, goal, mode, kind, status, steps, progress, artifacts, log, source
+        case id, goal, mode, kind, status, steps, progress, artifacts, log, source, phase
         case planSummary, plan_summary
         case currentStepIndex, current_step_index
         case resultSummary, result_summary
         case pendingConfirm, pending_confirm
         case createdAt, created_at
         case updatedAt, updated_at
+        case qualityProfile, quality_profile
+        case activeModelLabel, active_model_label
+        case qualityNotes, quality_notes
     }
 
     init(from decoder: Decoder) throws {
@@ -271,6 +335,13 @@ struct AgentTask: Codable, Identifiable, Equatable {
             ?? c.decodeIfPresent(String.self, forKey: .created_at)
         updatedAt = try c.decodeIfPresent(String.self, forKey: .updatedAt)
             ?? c.decodeIfPresent(String.self, forKey: .updated_at)
+        phase = try c.decodeIfPresent(String.self, forKey: .phase)
+        qualityProfile = try c.decodeIfPresent(String.self, forKey: .qualityProfile)
+            ?? c.decodeIfPresent(String.self, forKey: .quality_profile)
+        activeModelLabel = try c.decodeIfPresent(String.self, forKey: .activeModelLabel)
+            ?? c.decodeIfPresent(String.self, forKey: .active_model_label)
+        qualityNotes = try c.decodeIfPresent(String.self, forKey: .qualityNotes)
+            ?? c.decodeIfPresent(String.self, forKey: .quality_notes)
     }
 
     func encode(to encoder: Encoder) throws {
@@ -291,7 +362,66 @@ struct AgentTask: Codable, Identifiable, Equatable {
         try c.encodeIfPresent(source, forKey: .source)
         try c.encodeIfPresent(createdAt, forKey: .createdAt)
         try c.encodeIfPresent(updatedAt, forKey: .updatedAt)
+        try c.encodeIfPresent(phase, forKey: .phase)
+        try c.encodeIfPresent(qualityProfile, forKey: .qualityProfile)
+        try c.encodeIfPresent(activeModelLabel, forKey: .activeModelLabel)
+        try c.encodeIfPresent(qualityNotes, forKey: .qualityNotes)
     }
+}
+
+struct AgentProject: Decodable, Identifiable, Equatable {
+    let id: String
+    var title: String
+    var goal: String
+    var progress: Int
+    var notes: String?
+    var relatedTaskIds: [String]?
+    var createdAt: String?
+    var updatedAt: String?
+
+    enum CodingKeys: String, CodingKey {
+        case id, title, goal, progress, notes
+        case relatedTaskIds, related_task_ids
+        case createdAt, created_at
+        case updatedAt, updated_at
+    }
+
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        id = try c.decodeIfPresent(String.self, forKey: .id) ?? UUID().uuidString
+        title = try c.decodeIfPresent(String.self, forKey: .title) ?? "Projekt"
+        goal = try c.decodeIfPresent(String.self, forKey: .goal) ?? ""
+        progress = try c.decodeIfPresent(Int.self, forKey: .progress) ?? 0
+        notes = try c.decodeIfPresent(String.self, forKey: .notes)
+        relatedTaskIds = try c.decodeIfPresent([String].self, forKey: .relatedTaskIds)
+            ?? c.decodeIfPresent([String].self, forKey: .related_task_ids)
+        createdAt = try c.decodeIfPresent(String.self, forKey: .createdAt)
+            ?? c.decodeIfPresent(String.self, forKey: .created_at)
+        updatedAt = try c.decodeIfPresent(String.self, forKey: .updatedAt)
+            ?? c.decodeIfPresent(String.self, forKey: .updated_at)
+    }
+}
+
+struct AgentProjectsResponse: Decodable {
+    let projects: [AgentProject]?
+}
+
+struct AgentMemorySnapshot: Decodable {
+    let preferences: AgentMemoryPreferences?
+    let facts: [AgentMemoryFact]?
+    let lastGoals: [String]?
+}
+
+struct AgentMemoryPreferences: Decodable {
+    let language: String?
+    let style: String?
+    let confirmDangerous: Bool?
+}
+
+struct AgentMemoryFact: Decodable, Identifiable {
+    var id: String { text }
+    let text: String
+    let at: String?
 }
 
 struct AgentTaskResponse: Decodable {

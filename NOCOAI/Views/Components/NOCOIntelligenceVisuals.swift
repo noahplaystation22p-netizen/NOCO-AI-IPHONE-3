@@ -43,10 +43,11 @@ struct LiveScreenIntelligenceWave: View {
     }
 }
 
-/// Living agent core — rainbow/glass identity orb.
+/// Living agent core — rainbow/glass identity orb with phase colors.
 struct AgentCoreOrb: View {
     var isActive: Bool
     var progress: Double
+    var phaseColor: Color = Color(red: 0.45, green: 0.72, blue: 1.0)
     @State private var spin = false
 
     var body: some View {
@@ -55,20 +56,21 @@ struct AgentCoreOrb: View {
                 .fill(
                     AngularGradient(
                         colors: [
-                            Color(red: 0.35, green: 0.85, blue: 0.75),
+                            phaseColor,
                             Color(red: 0.45, green: 0.55, blue: 1.0),
                             Color(red: 0.85, green: 0.45, blue: 0.95),
                             Color(red: 1.0, green: 0.7, blue: 0.45),
-                            Color(red: 0.35, green: 0.85, blue: 0.75)
+                            phaseColor
                         ],
                         center: .center
                     )
                 )
                 .frame(width: 72, height: 72)
-                .blur(radius: isActive ? 10 : 6)
-                .opacity(0.85)
+                .blur(radius: isActive ? 12 : 6)
+                .opacity(0.9)
                 .rotationEffect(.degrees(spin ? 360 : 0))
-                .animation(.linear(duration: isActive ? 6 : 14).repeatForever(autoreverses: false), value: spin)
+                .animation(.linear(duration: isActive ? 4.5 : 14).repeatForever(autoreverses: false), value: spin)
+                .animation(.easeInOut(duration: 0.45), value: phaseColor)
 
             Circle()
                 .fill(.ultraThinMaterial)
@@ -77,21 +79,22 @@ struct AgentCoreOrb: View {
                     Circle()
                         .stroke(
                             LinearGradient(
-                                colors: [.white.opacity(0.5), .clear, .white.opacity(0.25)],
+                                colors: [.white.opacity(0.55), .clear, phaseColor.opacity(0.45)],
                                 startPoint: .topLeading,
                                 endPoint: .bottomTrailing
                             ),
-                            lineWidth: 1
+                            lineWidth: 1.2
                         )
                 )
 
-            Image(systemName: "brain.head.profile")
-                .font(.system(size: 22, weight: .semibold))
-                .foregroundStyle(.primary)
+            Image(systemName: "cpu.fill")
+                .font(.system(size: 20, weight: .semibold))
+                .foregroundStyle(phaseColor)
+                .symbolEffect(.pulse, options: .repeating, isActive: isActive)
 
             Circle()
                 .trim(from: 0, to: max(0.04, progress / 100))
-                .stroke(Color(red: 0.35, green: 0.85, blue: 0.7), style: StrokeStyle(lineWidth: 3, lineCap: .round))
+                .stroke(phaseColor, style: StrokeStyle(lineWidth: 3, lineCap: .round))
                 .frame(width: 64, height: 64)
                 .rotationEffect(.degrees(-90))
                 .animation(.spring(response: 0.5, dampingFraction: 0.85), value: progress)

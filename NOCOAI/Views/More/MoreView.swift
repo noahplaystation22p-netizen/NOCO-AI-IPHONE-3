@@ -6,6 +6,7 @@ struct MoreView: View {
     @Environment(\.colorScheme) private var scheme
     @State private var appear = false
     @State private var openLiveScreen = false
+    @State private var openAgent = false
 
     var body: some View {
         NavigationStack {
@@ -13,7 +14,7 @@ struct MoreView: View {
                 VStack(spacing: 18) {
                     IntelligenceHeroBanner(
                         title: "Studio",
-                        subtitle: "Speak, Live Screen & Sync — alles an einem Ort.",
+                        subtitle: "Agent, Speak & Live Screen — dein Assistent.",
                         online: connection.isOnline
                     )
                     .opacity(appear ? 1 : 0)
@@ -25,6 +26,19 @@ struct MoreView: View {
                         .opacity(0.85)
 
                     LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible())], spacing: 14) {
+                        NavigationLink {
+                            AgentDashboardView()
+                                .environmentObject(connection)
+                        } label: {
+                            IntelligenceFeatureTile(
+                                title: "NOCO Agent",
+                                subtitle: "Plant & erledigt Aufgaben",
+                                systemImage: "brain.head.profile",
+                                accent: Color(red: 0.35, green: 0.78, blue: 0.72)
+                            )
+                        }
+                        .buttonStyle(IntelligencePressStyle(haptic: { HapticService.open() }))
+
                         Button {
                             HapticService.open()
                             connection.speak.openUI()
@@ -91,13 +105,6 @@ struct MoreView: View {
                             )
                         }
                         .buttonStyle(IntelligencePressStyle(haptic: { HapticService.open() }))
-
-                        IntelligenceFeatureTile(
-                            title: "NOCO Sync",
-                            subtitle: connection.isOnline ? "Live mit dem PC" : "Warte auf PC…",
-                            systemImage: "arrow.triangle.2.circlepath",
-                            accent: NOCOAITheme.glowPrimary
-                        )
                     }
                     .opacity(appear ? 1 : 0)
                     .offset(y: appear ? 0 : 18)
@@ -125,10 +132,20 @@ struct MoreView: View {
                 LiveScreenView()
                     .environmentObject(connection)
             }
+            .navigationDestination(isPresented: $openAgent) {
+                AgentDashboardView()
+                    .environmentObject(connection)
+            }
             .onChange(of: connection.pendingOpenLiveScreen) { _, open in
                 if open {
                     openLiveScreen = true
                     connection.pendingOpenLiveScreen = false
+                }
+            }
+            .onChange(of: connection.pendingOpenAgent) { _, open in
+                if open {
+                    openAgent = true
+                    connection.pendingOpenAgent = false
                 }
             }
             .onAppear {
@@ -138,6 +155,10 @@ struct MoreView: View {
                 if connection.pendingOpenLiveScreen {
                     openLiveScreen = true
                     connection.pendingOpenLiveScreen = false
+                }
+                if connection.pendingOpenAgent {
+                    openAgent = true
+                    connection.pendingOpenAgent = false
                 }
             }
         }

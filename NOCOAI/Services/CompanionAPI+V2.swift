@@ -128,6 +128,91 @@ extension CompanionAPI {
         let _: Resp = try await post("chat/interrupt", body: Body(conversationId: conversationId), as: Resp.self)
     }
 
+    // MARK: - NOCO Agent
+
+    func listAgentTasks() async throws -> [AgentTask] {
+        let resp: AgentTaskListResponse = try await get("agent/tasks", as: AgentTaskListResponse.self)
+        return resp.tasks ?? []
+    }
+
+    func getAgentTask(id: String) async throws -> AgentTask {
+        let resp: AgentTaskResponse = try await get("agent/tasks/\(id)", as: AgentTaskResponse.self)
+        guard let task = resp.task else { throw CompanionAPIError.server(resp.error ?? "Aufgabe fehlt") }
+        return task
+    }
+
+    func createAgentTask(
+        goal: String,
+        mode: AgentMode,
+        kind: AgentKind = .general,
+        autoRun: Bool = true
+    ) async throws -> AgentTask {
+        struct Body: Encodable {
+            let goal: String
+            let mode: String
+            let kind: String
+            let source: String
+            let auto_run: Bool
+        }
+        var request = try authorizedRequest(path: "agent/tasks", method: "POST")
+        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        request.timeoutInterval = 300
+        request.httpBody = try encoder.encode(
+            Body(goal: goal, mode: mode.rawValue, kind: kind.rawValue, source: "mobile", auto_run: autoRun)
+        )
+        let (data, response) = try await session.data(for: request)
+        try validate(response: response, data: data, isPairRequest: false)
+        let resp = try decoder.decode(AgentTaskResponse.self, from: data)
+        guard let task = resp.task else {
+            throw CompanionAPIError.server(resp.error ?? "Agent-Antwort leer")
+        }
+        return task
+    }
+
+    func runAgentTask(id: String) async throws -> AgentTask {
+        var request = try authorizedRequest(path: "agent/tasks/\(id)/run", method: "POST")
+        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        request.timeoutInterval = 300
+        request.httpBody = Data("{}".utf8)
+        let (data, response) = try await session.data(for: request)
+        try validate(response: response, data: data, isPairRequest: false)
+        let resp = try decoder.decode(AgentTaskResponse.self, from: data)
+        guard let task = resp.task else {
+            throw CompanionAPIError.server(resp.error ?? "Agent-Antwort leer")
+        }
+        return task
+    }
+
+    func confirmAgentStep(taskId: String, stepId: String, allow: Bool) async throws -> AgentTask {
+        struct Body: Encodable {
+            let step_id: String
+            let allow: Bool
+        }
+        var request = try authorizedRequest(path: "agent/tasks/\(taskId)/confirm", method: "POST")
+        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        request.timeoutInterval = 300
+        request.httpBody = try encoder.encode(Body(step_id: stepId, allow: allow))
+        let (data, response) = try await session.data(for: request)
+        try validate(response: response, data: data, isPairRequest: false)
+        let resp = try decoder.decode(AgentTaskResponse.self, from: data)
+        guard let task = resp.task else {
+            throw CompanionAPIError.server(resp.error ?? "Agent-Antwort leer")
+        }
+        return task
+    }
+
+    func cancelAgentTask(id: String) async throws -> AgentTask {
+        let resp: AgentTaskResponse = try await post(
+            "agent/tasks/\(id)/cancel",
+            body: EmptyBody(),
+            as: AgentTaskResponse.self
+        )
+        guard let task = resp.task else {
+            throw CompanionAPIError.server(resp.error ?? "Agent-Antwort leer")
+        }
+        return task
+    }
+
     func generateImage(prompt: String, conversationId: String?) async throws -> ImageGenerateResponse {
         var request = try authorizedRequest(path: "images/txt2img", method: "POST")
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")

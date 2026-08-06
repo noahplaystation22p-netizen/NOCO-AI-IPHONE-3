@@ -50,6 +50,9 @@
 		NA00000100000000000000L3 /* LiveScreenCapture.swift in Sources */ = {isa = PBXBuildFile; fileRef = NA00000200000000000000L3 /* LiveScreenCapture.swift */; };
 		NA00000100000000000000L4 /* LiveScreenSessionController.swift in Sources */ = {isa = PBXBuildFile; fileRef = NA00000200000000000000L4 /* LiveScreenSessionController.swift */; };
 		NA00000100000000000000L5 /* LiveScreenView.swift in Sources */ = {isa = PBXBuildFile; fileRef = NA00000200000000000000L5 /* LiveScreenView.swift */; };
+		NA00000100000000000000A1 /* AgentModels.swift in Sources */ = {isa = PBXBuildFile; fileRef = NA00000200000000000000A1 /* AgentModels.swift */; };
+		NA00000100000000000000A2 /* AgentSessionController.swift in Sources */ = {isa = PBXBuildFile; fileRef = NA00000200000000000000A2 /* AgentSessionController.swift */; };
+		NA00000100000000000000A3 /* AgentDashboardView.swift in Sources */ = {isa = PBXBuildFile; fileRef = NA00000200000000000000A3 /* AgentDashboardView.swift */; };
 		NA0000010000000000000021 /* CompanionAPI+V2.swift in Sources */ = {isa = PBXBuildFile; fileRef = NA0000020000000000000021 /* CompanionAPI+V2.swift */; };
 		NA0000010000000000000022 /* ChatStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = NA0000020000000000000022 /* ChatStore.swift */; };
 		NA0000010000000000000023 /* ImageStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = NA0000020000000000000023 /* ImageStore.swift */; };
@@ -149,6 +152,9 @@
 		NA00000200000000000000L3 /* LiveScreenCapture.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LiveScreenCapture.swift; sourceTree = "<group>"; };
 		NA00000200000000000000L4 /* LiveScreenSessionController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LiveScreenSessionController.swift; sourceTree = "<group>"; };
 		NA00000200000000000000L5 /* LiveScreenView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LiveScreenView.swift; sourceTree = "<group>"; };
+		NA00000200000000000000A1 /* AgentModels.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AgentModels.swift; sourceTree = "<group>"; };
+		NA00000200000000000000A2 /* AgentSessionController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AgentSessionController.swift; sourceTree = "<group>"; };
+		NA00000200000000000000A3 /* AgentDashboardView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AgentDashboardView.swift; sourceTree = "<group>"; };
 		NA0000020000000000000021 /* CompanionAPI+V2.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "CompanionAPI+V2.swift"; sourceTree = "<group>"; };
 		NA0000020000000000000022 /* ChatStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ChatStore.swift; sourceTree = "<group>"; };
 		NA0000020000000000000023 /* ImageStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ImageStore.swift; sourceTree = "<group>"; };
@@ -253,6 +259,7 @@
 				NA0000020000000000000020 /* V2Models.swift */,
 				NA0000020000000000000031 /* IntelligenceTools.swift */,
 				NA00000200000000000000L1 /* LiveScreenModels.swift */,
+				NA00000200000000000000A1 /* AgentModels.swift */,
 			);
 			path = Models;
 			sourceTree = "<group>";
@@ -289,6 +296,7 @@
 				NA00000200000000000000L2 /* LiveScreenImagePipeline.swift */,
 				NA00000200000000000000L3 /* LiveScreenCapture.swift */,
 				NA00000200000000000000L4 /* LiveScreenSessionController.swift */,
+				NA00000200000000000000A2 /* AgentSessionController.swift */,
 			);
 			path = Services;
 			sourceTree = "<group>";
@@ -314,6 +322,7 @@
 				NA000005000000000000000D /* Code */,
 				NA000005000000000000000E /* More */,
 				NA00000500000000000000LF /* LiveScreen */,
+				NA00000500000000000000AF /* Agent */,
 				NA0000020000000000000010 /* SettingsView.swift */,
 				NA0000020000000000000090 /* KeyboardCustomizationView.swift */,
 				NA0000050000000000000008 /* Components */,
@@ -387,6 +396,14 @@
 				NA00000200000000000000L5 /* LiveScreenView.swift */,
 			);
 			path = LiveScreen;
+			sourceTree = "<group>";
+		};
+		NA00000500000000000000AF /* Agent */ = {
+			isa = PBXGroup;
+			children = (
+				NA00000200000000000000A3 /* AgentDashboardView.swift */,
+			);
+			path = Agent;
 			sourceTree = "<group>";
 		};
 
@@ -621,6 +638,9 @@
 				NA00000100000000000000L3 /* LiveScreenCapture.swift in Sources */,
 				NA00000100000000000000L4 /* LiveScreenSessionController.swift in Sources */,
 				NA00000100000000000000L5 /* LiveScreenView.swift in Sources */,
+				NA00000100000000000000A1 /* AgentModels.swift in Sources */,
+				NA00000100000000000000A2 /* AgentSessionController.swift in Sources */,
+				NA00000100000000000000A3 /* AgentDashboardView.swift in Sources */,
 				NA0000010000000000000021 /* CompanionAPI+V2.swift in Sources */,
 				NA0000010000000000000022 /* ChatStore.swift in Sources */,
 				NA0000010000000000000023 /* ImageStore.swift in Sources */,

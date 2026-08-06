@@ -23,6 +23,8 @@ final class ConnectionStore: ObservableObject {
     @Published var pendingOpenEraser = false
     /// Open Live Screen after switching to Studio
     @Published var pendingOpenLiveScreen = false
+    /// Open NOCO Agent after switching to Studio
+    @Published var pendingOpenAgent = false
     /// Open this gallery image after switching to Bildideen
     @Published var pendingGalleryImageURL: URL?
     @Published var pendingGalleryImageId: String?
@@ -314,6 +316,11 @@ final class ConnectionStore: ObservableObject {
         if host == "livescreen" || host == "live-screen" || path.contains("livescreen") || path.contains("live-screen") {
             pendingTab = 2
             pendingOpenLiveScreen = true
+            return
+        }
+        if host == "agent" || host == "noco-agent" || path.contains("agent") {
+            pendingTab = 2
+            pendingOpenAgent = true
             return
         }
         if host == "images" || host == "bildideen" || path.contains("images") || path.contains("bild") {

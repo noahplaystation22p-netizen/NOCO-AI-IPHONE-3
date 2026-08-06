@@ -26,11 +26,15 @@ final class AppDelegate: NSObject, UIApplicationDelegate, UNUserNotificationCent
         if (info["screen"] as? String) == "images" {
             NotificationCenter.default.post(name: .nocoOpenImages, object: nil)
         }
+        if (info["screen"] as? String) == "agent" {
+            NotificationCenter.default.post(name: .nocoOpenAgent, object: nil)
+        }
     }
 }
 
 extension Notification.Name {
     static let nocoOpenImages = Notification.Name("nocoai.openImages")
+    static let nocoOpenAgent = Notification.Name("nocoai.openAgent")
 }
 
 @main
@@ -47,6 +51,10 @@ struct NOCOAIApp: App {
                 }
                 .onReceive(NotificationCenter.default.publisher(for: .nocoOpenImages)) { _ in
                     connection.openImagesTab()
+                }
+                .onReceive(NotificationCenter.default.publisher(for: .nocoOpenAgent)) { _ in
+                    connection.pendingTab = 2
+                    connection.pendingOpenAgent = true
                 }
                 .onReceive(NotificationCenter.default.publisher(for: .nocoStartSpeak)) { _ in
                     connection.launchSpeakFromShortcut()

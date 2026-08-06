@@ -82,6 +82,40 @@ enum AppNotificationService {
         try? await UNUserNotificationCenter.current().add(request)
     }
 
+    static func notifyAgentReady(goal: String) async {
+        guard await requestAuthorizationIfNeeded() else { return }
+        let content = UNMutableNotificationContent()
+        content.title = "NOCO Agent fertig"
+        content.body = goal.isEmpty ? "Deine Aufgabe ist erledigt." : String(goal.prefix(120))
+        content.sound = .default
+        content.badge = NSNumber(value: 1)
+        content.userInfo = ["screen": "agent"]
+        content.interruptionLevel = .timeSensitive
+        let request = UNNotificationRequest(
+            identifier: "nocoai.agent.ready.\(UUID().uuidString)",
+            content: content,
+            trigger: nil
+        )
+        try? await UNUserNotificationCenter.current().add(request)
+    }
+
+    static func notifyAgentNeedsConfirm(goal: String) async {
+        guard await requestAuthorizationIfNeeded() else { return }
+        let content = UNMutableNotificationContent()
+        content.title = "NOCO Agent wartet"
+        content.body = goal.isEmpty
+            ? "Eine Aktion braucht deine Freigabe."
+            : "Freigabe nötig: \(String(goal.prefix(100)))"
+        content.sound = .default
+        content.userInfo = ["screen": "agent"]
+        let request = UNNotificationRequest(
+            identifier: "nocoai.agent.confirm.\(UUID().uuidString)",
+            content: content,
+            trigger: nil
+        )
+        try? await UNUserNotificationCenter.current().add(request)
+    }
+
     static func notifyImageFailed(_ message: String) async {
         guard await requestAuthorizationIfNeeded() else { return }
         guard UIApplication.shared.applicationState != .active else { return }

@@ -8,13 +8,27 @@ on:
 
 jobs:
   build-ipa:
-    runs-on: macos-latest
+    runs-on: macos-15
     concurrency:
       group: build-nocoai-ipa-${{ github.ref }}
       cancel-in-progress: true
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+
+      - name: Select Xcode
+        shell: bash
+        run: |
+          # Prefer a stable Xcode 16.x on macos-15 if present
+          ls /Applications | grep -i Xcode || true
+          if [ -d /Applications/Xcode_16.4.app ]; then
+            sudo xcode-select -s /Applications/Xcode_16.4.app
+          elif [ -d /Applications/Xcode_16.3.app ]; then
+            sudo xcode-select -s /Applications/Xcode_16.3.app
+          elif [ -d /Applications/Xcode_16.2.app ]; then
+            sudo xcode-select -s /Applications/Xcode_16.2.app
+          fi
+          xcodebuild -version
 
       - name: Build unsigned IPA
         shell: bash
@@ -23,32 +37,34 @@ jobs:
           mkdir -p build
 
           run_build() {
+            local clean_flag="$1"
             rm -rf build/DerivedData
-            # Avoid flaky Xcode 26 WMO / asset-catalog service crashes on GHA
-            xcodebuild clean build \
+            # shellcheck disable=SC2086
+            xcodebuild $clean_flag build \
               -project NOCOAI.xcodeproj \
               -scheme NOCOAI \
               -configuration Release \
               -sdk iphoneos \
               -destination 'generic/platform=iOS' \
               -derivedDataPath build/DerivedData \
-              -jobs 2 \
+              -jobs 1 \
               CODE_SIGNING_ALLOWED=NO \
               CODE_SIGNING_REQUIRED=NO \
               CODE_SIGN_IDENTITY="" \
               CODE_SIGNING_STYLE=Manual \
               VALIDATE_PRODUCT=NO \
+              COMPILER_INDEX_STORE_ENABLE=NO \
               SWIFT_COMPILATION_MODE=incremental \
               SWIFT_WHOLE_MODULE_OPTIMIZATION=NO \
               2>&1 | tee build/xcodebuild.log
             grep -q "BUILD SUCCEEDED" build/xcodebuild.log
           }
 
-          if ! run_build; then
+          if ! run_build clean; then
             if grep -qi "build system has crashed\|unexpected service error" build/xcodebuild.log; then
-              echo "=== Xcode build system crashed — retrying once ==="
-              sleep 5
-              if ! run_build; then
+              echo "=== Xcode build system crashed — retrying once (no clean) ==="
+              sleep 8
+              if ! run_build ""; then
                 echo "=== xcodebuild failed after retry ==="
                 grep -E "error:|fatal error:|BUILD FAILED" build/xcodebuild.log | tail -40 || tail -80 build/xcodebuild.log
                 exit 1

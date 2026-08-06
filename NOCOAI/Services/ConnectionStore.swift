@@ -25,6 +25,8 @@ final class ConnectionStore: ObservableObject {
     @Published var pendingOpenLiveScreen = false
     /// Open NOCO Agent after switching to Studio
     @Published var pendingOpenAgent = false
+    /// Open Vision Live after switching to Studio
+    @Published var pendingOpenVisionLive = false
     /// Open this gallery image after switching to Bildideen
     @Published var pendingGalleryImageURL: URL?
     @Published var pendingGalleryImageId: String?
@@ -318,9 +320,14 @@ final class ConnectionStore: ObservableObject {
             pendingOpenLiveScreen = true
             return
         }
-        if host == "agent" || host == "noco-agent" || path.contains("agent") {
+        if host == "agent" || host == "noco-agent" || path.contains("/agent") {
             pendingTab = 2
             pendingOpenAgent = true
+            return
+        }
+        if host == "visionlive" || host == "vision-live" || host == "vision" || path.contains("visionlive") || path.contains("vision-live") {
+            pendingTab = 2
+            pendingOpenVisionLive = true
             return
         }
         if host == "images" || host == "bildideen" || path.contains("images") || path.contains("bild") {

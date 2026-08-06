@@ -7,6 +7,7 @@ struct MoreView: View {
     @State private var appear = false
     @State private var openLiveScreen = false
     @State private var openAgent = false
+    @State private var openVisionLive = false
 
     var body: some View {
         NavigationStack {
@@ -14,7 +15,7 @@ struct MoreView: View {
                 VStack(spacing: 18) {
                     IntelligenceHeroBanner(
                         title: "Studio",
-                        subtitle: "Agent, Speak & Live Screen — dein Assistent.",
+                        subtitle: "Vision Live, Agent & Speak — deine KI mit Augen.",
                         online: connection.isOnline
                     )
                     .opacity(appear ? 1 : 0)
@@ -26,6 +27,19 @@ struct MoreView: View {
                         .opacity(0.85)
 
                     LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible())], spacing: 14) {
+                        NavigationLink {
+                            VisionLiveView()
+                                .environmentObject(connection)
+                        } label: {
+                            IntelligenceFeatureTile(
+                                title: "Vision Live",
+                                subtitle: "Kamera verstehen & helfen",
+                                systemImage: "eye.circle.fill",
+                                accent: Color(red: 0.45, green: 0.72, blue: 1.0)
+                            )
+                        }
+                        .buttonStyle(IntelligencePressStyle(haptic: { HapticService.open() }))
+
                         NavigationLink {
                             AgentDashboardView()
                                 .environmentObject(connection)
@@ -92,19 +106,6 @@ struct MoreView: View {
                             )
                         }
                         .buttonStyle(IntelligencePressStyle(haptic: { HapticService.open() }))
-
-                        NavigationLink {
-                            MagischerRadiererView()
-                                .environmentObject(connection)
-                        } label: {
-                            IntelligenceFeatureTile(
-                                title: "Radierer",
-                                subtitle: "Bereich bemalen & ändern",
-                                systemImage: "eraser.fill",
-                                accent: Color(red: 0.75, green: 0.4, blue: 0.95)
-                            )
-                        }
-                        .buttonStyle(IntelligencePressStyle(haptic: { HapticService.open() }))
                     }
                     .opacity(appear ? 1 : 0)
                     .offset(y: appear ? 0 : 18)
@@ -136,6 +137,10 @@ struct MoreView: View {
                 AgentDashboardView()
                     .environmentObject(connection)
             }
+            .navigationDestination(isPresented: $openVisionLive) {
+                VisionLiveView()
+                    .environmentObject(connection)
+            }
             .onChange(of: connection.pendingOpenLiveScreen) { _, open in
                 if open {
                     openLiveScreen = true
@@ -146,6 +151,12 @@ struct MoreView: View {
                 if open {
                     openAgent = true
                     connection.pendingOpenAgent = false
+                }
+            }
+            .onChange(of: connection.pendingOpenVisionLive) { _, open in
+                if open {
+                    openVisionLive = true
+                    connection.pendingOpenVisionLive = false
                 }
             }
             .onAppear {
@@ -159,6 +170,10 @@ struct MoreView: View {
                 if connection.pendingOpenAgent {
                     openAgent = true
                     connection.pendingOpenAgent = false
+                }
+                if connection.pendingOpenVisionLive {
+                    openVisionLive = true
+                    connection.pendingOpenVisionLive = false
                 }
             }
         }

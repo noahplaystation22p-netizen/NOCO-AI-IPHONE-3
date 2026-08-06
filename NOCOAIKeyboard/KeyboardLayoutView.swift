@@ -77,9 +77,10 @@ struct KeyboardLayoutView: View {
             PunctuationKey { inserted in
                 model.insert(inserted)
             }
-            SpaceKey {
-                model.space()
-            }
+            SpaceKey(
+                onTap: { model.space() },
+                onCursorMove: { model.moveCursor(by: $0) }
+            )
             ModifierKey(symbol: "bubble.left.fill", width: 44) {
                 model.toggleAskPanel()
             }
@@ -125,22 +126,67 @@ enum AccentMap {
         let lower = String(first).lowercased()
         let upper = label == label.uppercased() && label != label.lowercased()
         let map: [String: String] = [
-            "a": "aäàáâæãåā",
-            "e": "eèéêëēėę",
+            "a": "aäàáâæãåā@",
+            "e": "eèéêëēėę€",
             "i": "iìíîïīį",
             "o": "oöòóôõøōœ",
             "u": "uüùúûū",
-            "s": "sßśš",
+            "s": "sßśš$",
             "n": "nñń",
-            "c": "cçćč",
+            "c": "cçćč©",
             "y": "yÿý",
             "z": "zžźż",
             "ä": "äæ",
             "ö": "öøœ",
             "ü": "ü",
-            "ß": "ßss"
+            "ß": "ßss",
+            "d": "dð",
+            "l": "lł",
+            "r": "rř",
+            "t": "tþ",
+            "g": "gğ",
+            "q": "q@",
+            "w": "wŵ",
+            "x": "x×",
+            "b": "bß",
+            "m": "mµ",
+            "p": "p¶",
+            "k": "kķ",
+            "f": "fƒ",
+            "h": "hħ",
+            "j": "jȷ",
+            "v": "v√",
+            "1": "1¹½⅓¼¡",
+            "2": "2²½⅔",
+            "3": "3³¾⅓",
+            "4": "4¼€£¥",
+            "5": "5‰",
+            "0": "0°∅",
+            "-": "-–—_",
+            "/": "/\\÷|",
+            ":": ":;…",
+            ";": ";:",
+            "(": "()[]{}",
+            ")": ")(][}{",
+            "€": "€$£¥₩",
+            "&": "&§@",
+            "@": "@©®",
+            "\"": "\"„“”«»",
+            ".": ".,?!…·•",
+            ",": ",;:",
+            "?": "?¿!",
+            "!": "!¡?",
+            "'": "'‘’‛"
         ]
-        guard let chars = map[lower] else { return [] }
+        guard let chars = map[lower] ?? map[String(first)] else {
+            // Fallback: letter + common punctuation siblings so every key has a long-press menu
+            if first.isLetter {
+                return upper
+                    ? [label, ".", ",", "!", "?", "-", "'"]
+                    : [lower, ".", ",", "!", "?", "-", "'"]
+            }
+            return [String(first)]
+        }
         let variants = chars.map { String($0) }
         if upper {
             return variants.map { $0.uppercased() }
@@ -251,7 +297,7 @@ private struct LetterKey: View {
             showAccents = false
             holdTask?.cancel()
             holdTask = Task {
-                try? await Task.sleep(nanoseconds: 380_000_000)
+                try? await Task.sleep(nanoseconds: 280_000_000)
                 guard !Task.isCancelled else { return }
                 if accents.count > 1 {
                     showAccents = true
@@ -296,7 +342,7 @@ private struct LetterKey: View {
 private struct PunctuationKey: View {
     var onInsert: (String) -> Void
 
-    private let marks = [".", ",", ";", ":", "!", "?", "…", "—", "'", "\""]
+    private let marks = [".", ",", ";", ":", "!", "?", "…", "·", "—", "'", "\"", "„", "“", "(", ")", "@"]
 
     @Environment(\.colorScheme) private var scheme
     @State private var pressed = false
@@ -525,33 +571,86 @@ private struct ModifierKey: View {
 }
 
 private struct SpaceKey: View {
-    var action: () -> Void
+    var onTap: () -> Void
+    var onCursorMove: (Int) -> Void
+
     @Environment(\.colorScheme) private var scheme
     @State private var pressed = false
+    @State private var trackpad = false
+    @State private var holdTask: Task<Void, Never>?
+    @State private var lastDragX: CGFloat = 0
+    @State private var accumX: CGFloat = 0
 
     var body: some View {
-        Text("Leertaste")
+        Text(trackpad ? "Cursor" : "Leertaste")
             .font(.system(size: 15, weight: .medium, design: .rounded))
             .foregroundStyle(.white.opacity(0.9))
             .frame(maxWidth: .infinity)
             .frame(height: 46)
             .background(
                 RoundedRectangle(cornerRadius: 9, style: .continuous)
-                    .fill(Color(red: 0.26, green: 0.27, blue: 0.32).opacity(pressed ? 0.85 : 1))
+                    .fill(
+                        trackpad
+                        ? Color(red: 0.18, green: 0.32, blue: 0.55)
+                        : Color(red: 0.26, green: 0.27, blue: 0.32).opacity(pressed ? 0.85 : 1)
+                    )
                     .overlay(
                         RoundedRectangle(cornerRadius: 9, style: .continuous)
-                            .stroke(Color.white.opacity(0.1), lineWidth: 0.5)
+                            .stroke(Color.white.opacity(trackpad ? 0.28 : 0.1), lineWidth: 0.5)
                     )
                     .shadow(color: .black.opacity(0.25), radius: 0.4, y: 1)
             )
             .contentShape(Rectangle())
             .gesture(
                 DragGesture(minimumDistance: 0)
-                    .onChanged { _ in if !pressed { pressed = true } }
-                    .onEnded { _ in
-                        pressed = false
-                        action()
-                    }
+                    .onChanged(handleChanged)
+                    .onEnded(handleEnded)
             )
+    }
+
+    private func handleChanged(_ value: DragGesture.Value) {
+        if !pressed {
+            pressed = true
+            trackpad = false
+            lastDragX = value.location.x
+            accumX = 0
+            holdTask?.cancel()
+            holdTask = Task {
+                try? await Task.sleep(nanoseconds: 380_000_000)
+                guard !Task.isCancelled else { return }
+                await MainActor.run {
+                    trackpad = true
+                    UIImpactFeedbackGenerator(style: .medium).impactOccurred(intensity: 0.85)
+                }
+            }
+        }
+        guard trackpad else { return }
+        let dx = value.location.x - lastDragX
+        lastDragX = value.location.x
+        accumX += dx
+        let step: CGFloat = 8
+        while accumX <= -step {
+            accumX += step
+            onCursorMove(-1)
+        }
+        while accumX >= step {
+            accumX -= step
+            onCursorMove(1)
+        }
+    }
+
+    private func handleEnded(_ value: DragGesture.Value) {
+        holdTask?.cancel()
+        holdTask = nil
+        let wasTrackpad = trackpad
+        pressed = false
+        trackpad = false
+        accumX = 0
+        if wasTrackpad {
+            // Cursor move only — no space
+            return
+        }
+        // Tiny movement still counts as tap
+        onTap()
     }
 }

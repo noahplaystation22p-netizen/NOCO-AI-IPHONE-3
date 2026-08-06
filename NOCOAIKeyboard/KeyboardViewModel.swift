@@ -227,6 +227,14 @@ final class KeyboardViewModel: ObservableObject {
         insert(" ")
     }
 
+    /// Apple-style cursor scrub via long-press space + drag.
+    func moveCursor(by offset: Int) {
+        guard offset != 0 else { return }
+        if showAskPanel { return }
+        controller?.textDocumentProxy.adjustTextPosition(byCharacterOffset: offset)
+        selectHaptic.selectionChanged()
+    }
+
     func toggleAskPanel() {
         withAnimation(.spring(response: 0.38, dampingFraction: 0.86)) {
             showAskPanel.toggle()

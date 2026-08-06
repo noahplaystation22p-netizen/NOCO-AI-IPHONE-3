@@ -305,6 +305,10 @@ private struct ChatBubble: View {
     @Environment(\.colorScheme) private var scheme
     let message: ChatMessage
     var onReplyAction: ((ReplyAction) -> Void)?
+    @State private var copiedFlash = false
+
+    private var copyMode: ChatCopyMode { ChatCopyMode.current }
+    private var allowTextSelection: Bool { copyMode == .textSelection }
 
     var body: some View {
         HStack(alignment: .bottom) {
@@ -345,38 +349,16 @@ private struct ChatBubble: View {
                     if message.isStreaming && message.text.isEmpty {
                         IntelligenceThinkingDots()
                     } else {
-                        HStack(alignment: .bottom, spacing: 6) {
-                            Text(message.text)
-                                .font(.body)
-                                .foregroundStyle(message.role == .user ? .white : NOCOAITheme.primaryText(for: scheme))
-                                .textSelection(.enabled)
-                            if message.isStreaming {
-                                StreamingGlowCursor()
-                            }
-                        }
-                        .padding(.horizontal, 16)
-                        .padding(.vertical, 12)
-                        .background(GlowBubbleBackground(isUser: message.role == .user, streaming: message.isStreaming))
-                        .intelligenceStreaming(message.isStreaming && message.role == .assistant)
-                        .animation(.easeOut(duration: 0.12), value: message.text)
-                        .contextMenu {
-                            Button {
-                                UIPasteboard.general.string = message.text
-                                HapticService.success()
-                            } label: {
-                                Label("Kopieren", systemImage: "doc.on.doc")
-                            }
-                        }
+                        bubbleText
                     }
                 }
 
                 if !message.isStreaming, !message.text.isEmpty {
                     HStack(spacing: 8) {
                         Button {
-                            UIPasteboard.general.string = message.text
-                            HapticService.success()
+                            copyWholeMessage()
                         } label: {
-                            Label("Kopieren", systemImage: "doc.on.doc")
+                            Label(copiedFlash ? "Kopiert" : "Kopieren", systemImage: copiedFlash ? "checkmark" : "doc.on.doc")
                                 .font(.caption2.weight(.semibold))
                                 .padding(.horizontal, 10)
                                 .padding(.vertical, 7)
@@ -392,6 +374,50 @@ private struct ChatBubble: View {
                 }
             }
             if message.role == .assistant { Spacer(minLength: 48) }
+        }
+    }
+
+    @ViewBuilder
+    private var bubbleText: some View {
+        let content = HStack(alignment: .bottom, spacing: 6) {
+            Text(message.text)
+                .font(.body)
+                .foregroundStyle(message.role == .user ? .white : NOCOAITheme.primaryText(for: scheme))
+                .textSelection(allowTextSelection ? .enabled : .disabled)
+            if message.isStreaming {
+                StreamingGlowCursor()
+            }
+        }
+        .padding(.horizontal, 16)
+        .padding(.vertical, 12)
+        .background(GlowBubbleBackground(isUser: message.role == .user, streaming: message.isStreaming))
+        .intelligenceStreaming(message.isStreaming && message.role == .assistant)
+        .animation(.easeOut(duration: 0.12), value: message.text)
+        .contextMenu {
+            Button {
+                copyWholeMessage()
+            } label: {
+                Label("Ganze Nachricht kopieren", systemImage: "doc.on.doc")
+            }
+        }
+
+        if allowTextSelection || message.isStreaming {
+            content
+        } else {
+            content
+                .contentShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
+                .onTapGesture {
+                    copyWholeMessage()
+                }
+        }
+    }
+
+    private func copyWholeMessage() {
+        MessageClipboard.copy(message.text)
+        HapticService.success()
+        withAnimation(.easeOut(duration: 0.2)) { copiedFlash = true }
+        DispatchQueue.main.asyncAfter(deadline: .now() + 1.2) {
+            withAnimation { copiedFlash = false }
         }
     }
 }

@@ -32,6 +32,8 @@ final class ImageStore: ObservableObject {
     @Published var lastPrompt = ""
     @Published var saveMessage: String?
     @Published var phase: Phase = .idle
+    @Published var isPreparingEngine = false
+    @Published var engineStatusText = ""
 
     enum Phase: Equatable {
         case idle
@@ -255,6 +257,37 @@ final class ImageStore: ObservableObject {
         lastPrompt = prompt
         phase = .done
         statusText = "Radierer fertig"
+    }
+
+    /// Start / warm Stable Diffusion on the PC (same engine as Bildidee + Radierer).
+    func prepareEngine() async -> Bool {
+        guard let api, !isPreparingEngine else { return false }
+        isPreparingEngine = true
+        engineStatusText = "Bilder-Engine startet auf dem PC…"
+        statusText = engineStatusText
+        defer { isPreparingEngine = false }
+        do {
+            let res = try await api.prepareImageEngine()
+            engineStatusText = res.displayMessage
+            statusText = engineStatusText
+            if res.isReady {
+                HapticService.success()
+                return true
+            }
+            HapticService.warning()
+            return false
+        } catch {
+            engineStatusText = (error as? LocalizedError)?.errorDescription ?? error.localizedDescription
+            statusText = engineStatusText
+            HapticService.error()
+            return false
+        }
+    }
+
+    /// Soft SD progress for eraser theater (0…1).
+    func peekProgress() async -> Double {
+        guard let api else { return 0 }
+        return (try? await api.imageProgress())?.normalizedProgress ?? 0
     }
 
     func runInpaint(

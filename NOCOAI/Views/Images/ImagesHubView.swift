@@ -35,6 +35,8 @@ struct ImagesHubView: View {
 
                     createCard
 
+                    engineCard
+
                     Button {
                         HapticService.open()
                         openEraser = true
@@ -181,6 +183,52 @@ struct ImagesHubView: View {
     }
 
     // MARK: - Create
+
+    private var engineCard: some View {
+        let ready = connection.status.stableDiffusion == true
+        return GlassCard {
+            VStack(alignment: .leading, spacing: 10) {
+                HStack {
+                    Text("Bilder-Engine")
+                        .font(.headline)
+                    Spacer()
+                    Circle()
+                        .fill(ready ? Color.green : Color.orange)
+                        .frame(width: 10, height: 10)
+                    Text(ready ? "Bereit" : "Aus / startet")
+                        .font(.caption.weight(.semibold))
+                        .foregroundStyle(.secondary)
+                }
+                Text("Gleiche Stable-Diffusion-Engine für Bildideen und Magischen Radierer — kein anderes Modell. Wenn der Radierer bei 96 % hängt: hier starten.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                Button {
+                    HapticService.open()
+                    Task {
+                        _ = await connection.images.prepareEngine()
+                        await connection.refreshStatus(showLoading: false)
+                    }
+                } label: {
+                    Label(
+                        connection.images.isPreparingEngine
+                            ? "Startet auf dem PC…"
+                            : (ready ? "Engine nochmal warm halten" : "Bilder-Engine starten"),
+                        systemImage: "bolt.circle.fill"
+                    )
+                    .font(.subheadline.weight(.semibold))
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, 12)
+                }
+                .buttonStyle(.borderedProminent)
+                .disabled(!connection.isOnline || connection.images.isPreparingEngine || connection.images.isGenerating)
+                if !connection.images.engineStatusText.isEmpty {
+                    Text(connection.images.engineStatusText)
+                        .font(.caption2)
+                        .foregroundStyle(.secondary)
+                }
+            }
+        }
+    }
 
     private var createCard: some View {
         GlassCard {

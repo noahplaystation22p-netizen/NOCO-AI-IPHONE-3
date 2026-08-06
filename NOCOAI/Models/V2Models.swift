@@ -309,6 +309,27 @@ struct ImageProgressResponse: Decodable {
     }
 }
 
+struct ImageEnginePrepareResponse: Decodable {
+    let ok: Bool?
+    let starting: Bool?
+    let stableDiffusion: Bool?
+    let message: String?
+    let error: String?
+
+    var isReady: Bool {
+        if let ok, ok { return true }
+        if let stableDiffusion, stableDiffusion { return true }
+        return false
+    }
+
+    var displayMessage: String {
+        if let message, !message.isEmpty { return message }
+        if let error, !error.isEmpty { return error }
+        if isReady { return "Bilder-Engine bereit" }
+        return "Bilder-Engine startet noch…"
+    }
+}
+
 struct ImageInterruptResponse: Decodable {
     let ok: Bool?
 }

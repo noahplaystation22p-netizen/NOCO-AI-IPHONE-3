@@ -202,7 +202,7 @@ extension CompanionAPI {
             do {
                 var request = try authorizedRequest(path: path, method: "POST")
                 request.setValue("application/json", forHTTPHeaderField: "Content-Type")
-                request.timeoutInterval = 360
+                request.timeoutInterval = 420
                 request.httpBody = try encoder.encode(body)
                 let (data, response) = try await session.data(for: request)
                 try validate(response: response, data: data, isPairRequest: false)
@@ -223,6 +223,31 @@ extension CompanionAPI {
             }
         }
         throw lastError ?? CompanionAPIError.server("Inpaint fehlgeschlagen — Companion neu starten")
+    }
+
+    /// Warm up Stable Diffusion / Bilder-Engine on the PC (same engine as Bildidee).
+    func prepareImageEngine() async throws -> ImageEnginePrepareResponse {
+        struct Empty: Encodable {}
+        var lastError: Error?
+        for path in ["images/prepare", "images/engine", "images/start-engine"] {
+            do {
+                var request = try authorizedRequest(path: path, method: "POST")
+                request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+                request.timeoutInterval = 200
+                request.httpBody = try encoder.encode(Empty())
+                let (data, response) = try await session.data(for: request)
+                try validate(response: response, data: data, isPairRequest: false)
+                return try decoder.decode(ImageEnginePrepareResponse.self, from: data)
+            } catch {
+                lastError = error
+                let msg = (error as? LocalizedError)?.errorDescription?.lowercased() ?? ""
+                if msg.contains("unbekannte") || msg.contains("route") || msg.contains("404") {
+                    continue
+                }
+                throw error
+            }
+        }
+        throw lastError ?? CompanionAPIError.server("Bilder-Engine-Start fehlt — Companion neu starten")
     }
 
     func imageProgress(jobId: String? = nil) async throws -> ImageProgressResponse {

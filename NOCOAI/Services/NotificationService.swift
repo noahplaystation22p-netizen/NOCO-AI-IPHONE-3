@@ -55,6 +55,33 @@ enum AppNotificationService {
         try? await UNUserNotificationCenter.current().add(request)
     }
 
+    static func notifyEraserReady(prompt: String) async {
+        guard await requestAuthorizationIfNeeded() else { return }
+
+        UNUserNotificationCenter.current().removeDeliveredNotifications(withIdentifiers: [imageRunningId])
+        UNUserNotificationCenter.current().removePendingNotificationRequests(withIdentifiers: [imageRunningId])
+
+        let content = UNMutableNotificationContent()
+        content.title = "Magischer Radierer fertig ✨"
+        content.body = prompt.isEmpty
+            ? "Dein bearbeitetes Bild ist bereit."
+            : "Fertig: \(String(prompt.prefix(100)))"
+        content.sound = .default
+        content.badge = NSNumber(value: 1)
+        content.userInfo = ["screen": "images", "eraser": true]
+        content.interruptionLevel = .timeSensitive
+        if #available(iOS 15.0, *) {
+            content.relevanceScore = 1.0
+        }
+
+        let request = UNNotificationRequest(
+            identifier: "\(imageReadyId).eraser.\(UUID().uuidString)",
+            content: content,
+            trigger: nil
+        )
+        try? await UNUserNotificationCenter.current().add(request)
+    }
+
     static func notifyImageFailed(_ message: String) async {
         guard await requestAuthorizationIfNeeded() else { return }
         guard UIApplication.shared.applicationState != .active else { return }

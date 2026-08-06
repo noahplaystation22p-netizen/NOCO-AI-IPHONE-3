@@ -126,13 +126,33 @@ struct MagischerRadiererView: View {
         VStack(alignment: .leading, spacing: 8) {
             Text("Nur der bemalte Bereich ändert sich")
                 .font(.subheadline.weight(.semibold))
-            Text("Standard: Entfernen. Markieren → fertig — oder eigene Anweisung tippen.")
+            Text("Gleiche Bilder-Engine wie Bildideen (Stable Diffusion). Bei 96 % oft nur kalter Start — Engine starten hilft.")
                 .font(.footnote)
                 .foregroundStyle(.secondary)
             Text(status)
                 .font(.caption)
                 .foregroundStyle(NOCOAITheme.accent)
                 .contentTransition(.opacity)
+
+            HStack(spacing: 10) {
+                Button {
+                    HapticService.open()
+                    Task { await startEngineTapped() }
+                } label: {
+                    Label(
+                        connection.images.isPreparingEngine
+                            ? "Engine startet…"
+                            : (connection.status.stableDiffusion == true ? "Engine bereit" : "Bilder-Engine starten"),
+                        systemImage: connection.status.stableDiffusion == true ? "checkmark.circle.fill" : "bolt.circle.fill"
+                    )
+                    .font(.caption.weight(.semibold))
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, 10)
+                }
+                .buttonStyle(.borderedProminent)
+                .disabled(!connection.isOnline || connection.images.isPreparingEngine || isWorking)
+                .tint(connection.status.stableDiffusion == true ? .green : NOCOAITheme.accent)
+            }
         }
         .frame(maxWidth: .infinity, alignment: .leading)
     }
@@ -417,8 +437,8 @@ struct MagischerRadiererView: View {
         if lower.contains("error 64") || lower.contains("host is down") || lower.contains("nicht erreichbar") {
             return "PC nicht erreichbar (Netzwerk). Companion starten, gleiches WLAN, Port 4747."
         }
-        if lower.contains("stable diffusion") || lower.contains("nicht bereit") {
-            return "Stable Diffusion auf dem PC ist nicht bereit — SD WebUI starten."
+        if lower.contains("stable diffusion") || lower.contains("nicht bereit") || lower.contains("bilder-engine") {
+            return "Bilder-Engine (Stable Diffusion) nicht bereit — oben „Bilder-Engine starten“ tippen und 30–90s warten. Gleiche Engine wie Bildideen."
         }
         if lower.contains("unbekannte") || lower.contains("route") || lower.contains("404") {
             return "Inpaint-Route fehlt — NOCO AI X Companion neu starten."
@@ -426,6 +446,19 @@ struct MagischerRadiererView: View {
         return raw
             .replacingOccurrences(of: "Fehler: ", with: "")
             .trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+
+    private func startEngineTapped() async {
+        status = "Bilder-Engine startet auf dem PC…"
+        let ok = await connection.images.prepareEngine()
+        await connection.refreshStatus(showLoading: false)
+        if ok {
+            status = "Bilder-Engine bereit — bemalen & Entfernen"
+        } else {
+            status = connection.images.engineStatusText.isEmpty
+                ? "Engine startet noch — in 30s nochmal tippen"
+                : connection.images.engineStatusText
+        }
     }
 
     private func runEraser() async {
@@ -460,27 +493,72 @@ struct MagischerRadiererView: View {
         status = "Nur Maske wird bearbeitet…"
         HapticService.medium()
 
+        _ = await AppNotificationService.requestAuthorizationIfNeeded()
+        ImageBackgroundKeeper.shared.begin(reason: "NOCO Magischer Radierer")
+        ImageLiveActivityManager.start(prompt: "🪄 \(prompt)")
+        ImageLiveActivityManager.update(
+            progress: 0.08,
+            status: "Radierer startet…",
+            insight: "PC bereitet Stable Diffusion vor…",
+            etaSeconds: 180,
+            phase: .preparing,
+            force: true
+        )
+
         let progressTask = Task {
             var waitedAtHold = 0
             while !Task.isCancelled {
-                try? await Task.sleep(nanoseconds: 280_000_000)
+                try? await Task.sleep(nanoseconds: 320_000_000)
+                let real = await connection.images.peekProgress()
                 await MainActor.run {
+                    if real > 0.05 {
+                        workProgress = max(workProgress, min(0.97, 0.2 + real * 0.75))
+                        status = real < 0.9 ? "Stable Diffusion zeichnet…" : "Fast fertig…"
+                        ImageLiveActivityManager.update(
+                            progress: workProgress,
+                            status: status,
+                            insight: "Nur die Maske wird neu gezeichnet",
+                            etaSeconds: max(15, Int((1 - workProgress) * 120)),
+                            phase: .rendering,
+                            force: false
+                        )
+                        return
+                    }
                     if workProgress < 0.88 {
-                        workProgress = min(0.88, workProgress + Double.random(in: 0.025...0.055))
-                        if workProgress < 0.35 {
-                            status = "Maske lesen…"
-                        } else if workProgress < 0.65 {
+                        workProgress = min(0.88, workProgress + Double.random(in: 0.02...0.045))
+                        if workProgress < 0.28 {
+                            status = "Bilder-Engine prüfen…"
+                        } else if workProgress < 0.55 {
                             status = preset == .erase ? "Entfernen auf dem PC…" : "Magie auf dem PC…"
                         } else {
                             status = "Detail neu zeichnen…"
                         }
-                    } else if workProgress < 0.96 {
-                        // Stay near 88–96% while waiting on Stable Diffusion (normal)
+                        ImageLiveActivityManager.update(
+                            progress: workProgress,
+                            status: status,
+                            insight: "Engine kann 1–2 Min brauchen",
+                            etaSeconds: 150,
+                            phase: workProgress < 0.35 ? .preparing : .rendering,
+                            force: false
+                        )
+                    } else {
                         waitedAtHold += 1
-                        workProgress = min(0.96, workProgress + 0.004)
-                        status = waitedAtHold < 25
-                            ? "PC arbeitet noch… bitte warten"
-                            : "Immer noch am PC — SD kann 1–2 Min dauern"
+                        workProgress = min(0.97, workProgress + 0.003)
+                        if waitedAtHold < 40 {
+                            status = "PC arbeitet noch… bitte warten"
+                        } else if waitedAtHold < 90 {
+                            status = "Immer noch am PC — oft kalter SD-Start (1–2 Min)"
+                        } else {
+                            status = "Lange Wartezeit — ggf. Bilder-Engine starten"
+                        }
+                        ImageLiveActivityManager.update(
+                            progress: workProgress,
+                            status: status,
+                            insight: "Hintergrund aktiv — Notification bei Fertig",
+                            etaSeconds: 90,
+                            phase: .rendering,
+                            force: waitedAtHold % 5 == 0
+                        )
                     }
                 }
             }
@@ -490,6 +568,13 @@ struct MagischerRadiererView: View {
         let denoise = ImageAttachIntent.denoising(for: prompt)
 
         do {
+            if connection.status.stableDiffusion != true {
+                status = "Bilder-Engine startet zuerst…"
+                workProgress = max(workProgress, 0.15)
+                _ = await connection.images.prepareEngine()
+                await connection.refreshStatus(showLoading: false)
+            }
+
             let result = try await connection.images.runInpaint(
                 prompt: sdPrompt,
                 imageJPEG: jpeg,
@@ -520,8 +605,14 @@ struct MagischerRadiererView: View {
                         localData: data,
                         path: result.resolvedPath
                     )
+                    ImageLiveActivityManager.complete(prompt: "🪄 \(prompt)")
+                    await AppNotificationService.notifyEraserReady(prompt: prompt)
+                    ImageBackgroundKeeper.shared.end(preserveAudioSession: true)
                 } else {
                     isWorking = false
+                    ImageLiveActivityManager.fail("Bild unlesbar")
+                    await AppNotificationService.notifyImageFailed("Radierer: Bild unlesbar")
+                    ImageBackgroundKeeper.shared.end(preserveAudioSession: true)
                     presentError("Bild konnte nicht gelesen werden")
                     HapticService.error()
                 }
@@ -529,8 +620,14 @@ struct MagischerRadiererView: View {
                 isWorking = false
                 status = "Fertig — siehe Galerie"
                 HapticService.success()
+                ImageLiveActivityManager.complete(prompt: "🪄 \(prompt)")
+                await AppNotificationService.notifyEraserReady(prompt: prompt)
+                ImageBackgroundKeeper.shared.end(preserveAudioSession: true)
             } else {
                 isWorking = false
+                ImageLiveActivityManager.fail("Keine Bilddaten")
+                await AppNotificationService.notifyImageFailed("Radierer: keine Bilddaten")
+                ImageBackgroundKeeper.shared.end(preserveAudioSession: true)
                 presentError("Keine Bilddaten vom PC")
                 HapticService.error()
             }
@@ -538,6 +635,9 @@ struct MagischerRadiererView: View {
             progressTask.cancel()
             isWorking = false
             let msg = (error as? LocalizedError)?.errorDescription ?? error.localizedDescription
+            ImageLiveActivityManager.fail(msg)
+            await AppNotificationService.notifyImageFailed(msg)
+            ImageBackgroundKeeper.shared.end(preserveAudioSession: true)
             presentError(msg)
             HapticService.error()
         }

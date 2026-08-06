@@ -78,6 +78,8 @@ struct ServerStatus: Decodable, Equatable {
     let lastActivity: String?
     let requestCount: Int?
     let tokenCount: Int?
+    /// Stable Diffusion / Bilder-Engine ready on the PC (same engine for Bildidee + Radierer).
+    let stableDiffusion: Bool?
 
     // camelCase keys — CompanionAPI uses convertFromSnakeCase
     enum CodingKeys: String, CodingKey {
@@ -86,6 +88,7 @@ struct ServerStatus: Decodable, Equatable {
         case responseTimeMs, temperatureC, uptimeSeconds
         case lastActivity, requestCount, tokenCount
         case gpu, ram, cpu, activeModel, system
+        case stableDiffusion, imageEngine, bilderEngine
     }
 
     init(
@@ -100,7 +103,8 @@ struct ServerStatus: Decodable, Equatable {
         uptimeSeconds: Double? = nil,
         lastActivity: String? = nil,
         requestCount: Int? = nil,
-        tokenCount: Int? = nil
+        tokenCount: Int? = nil,
+        stableDiffusion: Bool? = nil
     ) {
         self.online = online
         self.model = model
@@ -114,6 +118,7 @@ struct ServerStatus: Decodable, Equatable {
         self.lastActivity = lastActivity
         self.requestCount = requestCount
         self.tokenCount = tokenCount
+        self.stableDiffusion = stableDiffusion
     }
 
     init(from decoder: Decoder) throws {
@@ -137,6 +142,11 @@ struct ServerStatus: Decodable, Equatable {
         lastActivity = try c.decodeIfPresent(String.self, forKey: .lastActivity)
         requestCount = try c.decodeIfPresent(Int.self, forKey: .requestCount)
         tokenCount = try c.decodeIfPresent(Int.self, forKey: .tokenCount)
+
+        stableDiffusion =
+            (try c.decodeIfPresent(Bool.self, forKey: .stableDiffusion))
+            ?? (try c.decodeIfPresent(Bool.self, forKey: .imageEngine))
+            ?? (try c.decodeIfPresent(Bool.self, forKey: .bilderEngine))
 
         var decodedGPU: Double?
         if let gpu = try? c.decode(Double.self, forKey: .gpuPercent) {

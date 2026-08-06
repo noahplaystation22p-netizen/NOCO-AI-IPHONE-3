@@ -210,14 +210,21 @@ enum KeyboardChipPreferences {
             }
         }
 
-        // Append new built-ins missing from older saved orders (e.g. Satzergänzung)
+        // Append new built-ins missing from older saved orders (e.g. Satz / Liste)
         for action in KeyboardAIAction.allCases {
             let key = "builtin:\(action.rawValue)"
             if !seen.contains(key) {
-                // Prefer after improve
-                if action == .complete, let idx = out.firstIndex(where: {
-                    if case .builtin(let a) = $0 { return a == .improve } else { return false }
-                }) {
+                let insertAfter: KeyboardAIAction? = {
+                    switch action {
+                    case .complete: return .improve
+                    case .list: return .complete
+                    default: return nil
+                    }
+                }()
+                if let after = insertAfter,
+                   let idx = out.firstIndex(where: {
+                       if case .builtin(let a) = $0 { return a == after } else { return false }
+                   }) {
                     out.insert(.builtin(action), at: idx + 1)
                 } else {
                     out.append(.builtin(action))

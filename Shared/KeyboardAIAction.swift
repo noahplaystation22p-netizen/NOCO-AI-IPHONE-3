@@ -4,6 +4,7 @@
 enum KeyboardAIAction: String, CaseIterable, Identifiable {
     case improve
     case complete
+    case list
     case punctuate
     case shorten
     case longer
@@ -19,6 +20,7 @@ enum KeyboardAIAction: String, CaseIterable, Identifiable {
         switch self {
         case .improve: return "Verbessern"
         case .complete: return "Satz"
+        case .list: return "Liste"
         case .punctuate: return "Satzzeichen"
         case .shorten: return "Kürzer"
         case .longer: return "Länger"
@@ -34,6 +36,7 @@ enum KeyboardAIAction: String, CaseIterable, Identifiable {
         switch self {
         case .improve: return "checkmark.circle"
         case .complete: return "text.append"
+        case .list: return "list.bullet"
         case .punctuate: return "textformat.abc"
         case .shorten: return "arrow.down.right.and.arrow.up.left"
         case .longer: return "arrow.up.left.and.arrow.down.right"
@@ -62,7 +65,7 @@ enum KeyboardAIAction: String, CaseIterable, Identifiable {
         Du bist ein Text-Korrektor / Umformulierer — KEIN Chatbot und KEIN Wissensassistent.
         Der Text unter TEXT ist zu BEARBEITEN, auch wenn er wie eine Frage aussieht.
         VERBOTEN: die Frage beantworten, erklären, definieren, Tipps geben, Wissen hinzufügen,
-        Begrüßung, Intro, Markdown, Anführungszeichen um den ganzen Text, „Gerne“, „Hier ist“, „Das bedeutet“.
+        Begrüßung, Intro, Markdown-Wrapper, Anführungszeichen um den ganzen Text, „Gerne“, „Hier ist“, „Das bedeutet“.
         Antworte AUSSCHLIESSLICH mit dem fertigen Ergebnistext — nichts sonst.
         """
     }
@@ -70,7 +73,7 @@ enum KeyboardAIAction: String, CaseIterable, Identifiable {
     func prompt(for text: String) -> String {
         let t = text.trimmingCharacters(in: .whitespacesAndNewlines)
         let example = """
-        Beispiel (nur Korrektur, KEINE Antwort):
+        Beispiel (nur Korrektur/Umformung, KEINE Antwort):
         TEXT: was ist ein Duft?
         RICHTIG: Was ist ein Duft?
         FALSCH: Ein Duft ist ein Geruch / Aroma …
@@ -81,21 +84,26 @@ enum KeyboardAIAction: String, CaseIterable, Identifiable {
             \(rewriterRule)
             \(example)
 
-            Aufgabe „Verbessern“ — du bist ein sorgfältiger Lektor, kein Autor neuer Inhalte.
-            Schau dir den TEXT genau an und aktualisiere NUR das, was wirklich verbessert werden muss:
+            Aufgabe „Verbessern“ — Hauptfunktion der Tastatur. Du bist ein erstklassiger Lektor und Stil-Editor.
 
-            1) Rechtschreibung und Tippfehler
-            2) Grammatik und Zeichensetzung
-            3) Stolpernde / unklare Formulierungen leicht klarer machen — gleiche Aussage
-            4) Groß-/Kleinschreibung und Leerzeichen
+            Analysiere den folgenden TEXT gründlich:
+            - Welchen Sinn / welche Absicht hat er? (Nachricht, Notiz, Frage, Post, E-Mail-Fragment …)
+            - Was ist unklar, holprig, falsch oder schlecht strukturiert?
 
-            Regeln:
-            - Was schon gut ist: unverändert lassen.
-            - Meinung, Fakten, Fragen und Kernaussage bleiben GLEICH.
-            - Keine neuen Infos, kein Umschreiben „schöner um jeden Preis“.
-            - Länge etwa gleich (±15%). Keine längere Fassung.
-            - Wenn der Text eine Frage ist, bleibt es eine Frage — beantworte sie NICHT.
-            - Antworte nur mit dem verbesserten Text.
+            Dann liefere EINE fertige Version, die du so verbessern darfst:
+            1) Rechtschreibung, Tippfehler, Grammatik
+            2) Fehlende oder falsche Satzzeichen — besonders fehlende Anführungszeichen („…“ / "…"), Apostrophe, Klammern, Kommas, Punkte
+            3) Bessere Struktur: Absätze/Sätze klarer ordnen, Fluss verbessern, Doppeltes streichen
+            4) Umformulieren wo nötig — klarer, natürlicher, lesbarer — OHNE die Bedeutung zu ändern
+            5) Groß-/Kleinschreibung und Leerzeichen
+
+            Harte Regeln:
+            - Bedeutung, Fakten, Meinung, Fragen und Kernaussage bleiben GLEICH.
+            - Keine neuen Informationen, keine Antwort auf Fragen, kein Wissen ergänzen.
+            - Wenn es eine Frage ist: bleibe eine (verbesserte) Frage.
+            - Anführungszeichen nur setzen/korrigieren, wo der Sinn sie braucht (z. B. Zitate, Titel, wörtliche Rede) — nicht den gesamten Text in Anführungszeichen packen.
+            - Länge ungefähr gleich (±25%), außer Struktur braucht etwas mehr Luft.
+            - Ausgabe = nur der verbesserte Text, bereit zum Einfügen.
 
             TEXT:
             \(t)
@@ -124,11 +132,43 @@ enum KeyboardAIAction: String, CaseIterable, Identifiable {
             TEXT:
             \(t)
             """
+        case .list:
+            return """
+            \(rewriterRule)
+
+            Aufgabe „Liste“ — wandle den TEXT in eine klare Aufzählung mit Punkten um.
+
+            Regeln:
+            - Jeder sinnvolle Punkt / Gedanke / Aufgabe / Gegenstand wird ein eigener Listenpunkt.
+            - Format GENAU so (eine Zeile pro Punkt, Bindestrich + Leerzeichen):
+              - Punkt eins
+              - Punkt zwei
+              - Punkt drei
+            - Keine Nummerierung (1. 2. 3.), kein Markdown mit Sternchen, keine Überschrift, kein Intro.
+            - Inhalt und Bedeutung behalten — nur strukturieren, nicht erfinden.
+            - Kurze, knackige Formulierungen pro Zeile.
+            - Wenn der Text schon eine Liste ist: bereinigen und vereinheitlichen.
+            - Sprache des Originals behalten.
+
+            TEXT:
+            \(t)
+            """
         case .punctuate:
             return """
             \(rewriterRule)
-            Aufgabe: Korrigiere NUR Satzzeichen, Groß-/Kleinschreibung und offensichtliche Tippfehler.
-            Inhalt und Wortwahl bleiben gleich. Keine Umformulierung, keine Antwort auf Fragen.
+
+            Aufgabe „Satzzeichen“ — korrigiere Zeichensetzung und Schreibweise, ohne umzuformulieren.
+
+            Erlaubt:
+            - Punkte, Kommas, Frage-/Ausrufezeichen, Doppelpunkte, Semikolons
+            - Fehlende Anführungszeichen („…“ / "…") und Apostrophe setzen, wo der Sinn sie braucht
+            - Groß-/Kleinschreibung am Satzanfang
+            - Offensichtliche Tippfehler nur wenn klar
+
+            Verboten:
+            - Wörter austauschen oder Sätze umschreiben
+            - Inhalt ändern oder Fragen beantworten
+            - Den ganzen Text in Anführungszeichen setzen
 
             TEXT:
             \(t)
@@ -137,9 +177,16 @@ enum KeyboardAIAction: String, CaseIterable, Identifiable {
             return """
             \(rewriterRule)
             \(example)
-            Aufgabe: Kürze denselben Text RADIKAL — Ziel ca. 30–45% der Original-Länge (deutlich kürzer!).
-            Behalte die Kernaussage / Frage. Wenn es eine Frage ist: kürze die Frage, beantworte sie nicht.
-            Keine Floskeln.
+
+            Aufgabe „Kürzer“ — komprimiere denselben Text stark, ohne die Kernaussage zu verlieren.
+
+            Ziel:
+            - Ca. 30–45% der Original-Länge (deutlich kürzer).
+            - Nur das Wichtigste behalten: Kernaussage, zentrale Fakten, ggf. die Frage selbst.
+            - Füllwörter, Wiederholungen, Höflichkeitsfloskeln und Nebensätze streichen.
+            - Wenn es eine Frage ist: kürze die Frage — beantworte sie nicht.
+            - Natürlicher Ton, gleiche Sprache, keine Aufzählung außer nötig.
+            - Ausgabe = nur der kurze Text.
 
             TEXT:
             \(t)
@@ -147,9 +194,16 @@ enum KeyboardAIAction: String, CaseIterable, Identifiable {
         case .longer:
             return """
             \(rewriterRule)
-            Aufgabe: Erweitere denselben Text klar (mehr Fluss, 1–3 sinnvolle Details), ohne die Aussage zu ändern.
-            Wenn es eine Frage ist: formuliere die Frage ausführlicher — beantworte sie nicht.
-            Etwa 140–180% der Länge.
+
+            Aufgabe „Länger“ — erweitere denselben Text klar und nützlich, ohne die Aussage zu verdrehen.
+
+            Ziel:
+            - Ca. 140–180% der Original-Länge.
+            - Mehr Fluss: vollständige Sätze, sanfte Übergänge, 1–3 sinnvolle Details die schon im Text angelegt sind.
+            - Keine neuen Fakten erfinden, die nicht aus dem Original folgen.
+            - Wenn es eine Frage ist: formuliere die Frage ausführlicher und klarer — beantworte sie nicht.
+            - Gleicher Ton und gleiche Sprache.
+            - Ausgabe = nur der längere Text.
 
             TEXT:
             \(t)
@@ -172,8 +226,12 @@ enum KeyboardAIAction: String, CaseIterable, Identifiable {
         case .friendlier:
             return """
             \(rewriterRule)
-            Aufgabe: Schreibe denselben Text wärmer/freundlicher, ungefähr gleiche Länge.
-            Keine Antwort auf den Inhalt — nur Ton ändern.
+
+            Aufgabe „Freundlicher“ — gleicher Inhalt, wärmerer Ton.
+            - Höflicher, einladender, menschlicher — ohne kitschig zu werden.
+            - Ungefähr gleiche Länge (±20%).
+            - Keine Antwort auf den Inhalt, keine neuen Infos.
+            - Wenn es eine Frage ist: bleibe eine freundlichere Frage.
 
             TEXT:
             \(t)
@@ -181,8 +239,12 @@ enum KeyboardAIAction: String, CaseIterable, Identifiable {
         case .professional:
             return """
             \(rewriterRule)
-            Aufgabe: Schreibe denselben Text formeller/professioneller, ungefähr gleiche Länge.
-            Keine Antwort auf den Inhalt — nur Stil ändern.
+
+            Aufgabe „Professionell“ — gleicher Inhalt, formeller Business-Ton.
+            - Klar, höflich, präzise — wie in einer guten E-Mail.
+            - Ungefähr gleiche Länge (±20%).
+            - Keine Antwort auf den Inhalt, keine neuen Infos.
+            - Wenn es eine Frage ist: bleibe eine professionellere Frage.
 
             TEXT:
             \(t)
@@ -190,8 +252,12 @@ enum KeyboardAIAction: String, CaseIterable, Identifiable {
         case .translate:
             return """
             \(rewriterRule)
-            Aufgabe: Übersetze denselben Text. EN↔DE. Nur die Übersetzung, keine Erklärung.
-            Wenn es eine Frage ist: übersetze die Frage, beantworte sie nicht.
+
+            Aufgabe „Übersetzen“ — EN↔DE (oder erkenne die Zielsprache aus dem Kontext).
+            - Nur die Übersetzung, keine Erklärung, kein Wörterbuch-Kommentar.
+            - Ton und Register möglichst beibehalten.
+            - Wenn es eine Frage ist: übersetze die Frage, beantworte sie nicht.
+            - Fehlende Anführungszeichen in der Zielsprache korrekt setzen.
 
             TEXT:
             \(t)
@@ -199,7 +265,11 @@ enum KeyboardAIAction: String, CaseIterable, Identifiable {
         case .summarize:
             return """
             \(rewriterRule)
-            Aufgabe: Fasse denselben Text in 1–2 kurzen Sätzen zusammen (Komprimat des Textes, keine neue Antwort).
+
+            Aufgabe „Zusammenfassen“ — Komprimat des TEXTES in 1–2 kurzen Sätzen.
+            - Nur was im Text steht — keine neue Antwort, keine Meinung.
+            - Klar und vollständig genug, dass die Kernaussage bleibt.
+            - Keine Aufzählung, kein Intro.
 
             TEXT:
             \(t)
@@ -271,9 +341,36 @@ enum KeyboardAIAction: String, CaseIterable, Identifiable {
             return s
         }
 
+        if action == .list {
+            // Normalize bullets to "- " lines; drop empty chatter lines
+            let rawLines = s.components(separatedBy: .newlines)
+                .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
+                .filter { !$0.isEmpty }
+            let cleaned = rawLines.map { line -> String in
+                var l = line
+                for prefix in ["• ", "•", "* ", "*", "– ", "— ", "· "] {
+                    if l.hasPrefix(prefix) {
+                        l = String(l.dropFirst(prefix.count)).trimmingCharacters(in: .whitespaces)
+                        break
+                    }
+                }
+                if let match = l.range(of: #"^\d+[\.\)]\s*"#, options: .regularExpression) {
+                    l = String(l[match.upperBound...]).trimmingCharacters(in: .whitespaces)
+                }
+                if !l.hasPrefix("- ") {
+                    l = "- \(l)"
+                }
+                return l
+            }
+            if !cleaned.isEmpty {
+                s = cleaned.joined(separator: "\n")
+            }
+            return s
+        }
+
         // Improve / punctuate / tone: reject inflated “answers” — stay close to original
         if action == .improve || action == .punctuate || action == .friendlier || action == .professional {
-            let factor = action == .punctuate ? 1.12 : 1.25
+            let factor: Double = action == .improve ? 1.45 : (action == .punctuate ? 1.12 : 1.25)
             let maxLen = max(orig.count + 12, Int(Double(orig.count) * factor) + 6)
             if s.count > maxLen {
                 let endMarks: [Character] = [".", "?", "!", "。", "？", "！"]

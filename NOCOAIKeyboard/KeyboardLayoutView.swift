@@ -73,8 +73,9 @@ struct KeyboardLayoutView: View {
             ModifierKey(title: leftTitle, width: 44) {
                 model.toggleNumbers()
             }
-            ModifierKey(symbol: "globe", width: 40) {
-                model.nextKeyboard()
+            // Period key — hold & scrub for comma and other punctuation (replaces language globe)
+            PunctuationKey { inserted in
+                model.insert(inserted)
             }
             SpaceKey {
                 model.space()
@@ -285,6 +286,128 @@ private struct LetterKey: View {
         showAccents = false
         accentIndex = 0
         // Tiny movement still counts as tap
+        onInsert(insertChar)
+    }
+}
+
+// MARK: - Punctuation (tap = period, hold = comma / more)
+
+/// Fixed-width `.` key with long-press scrub for `, ; : ! ? …` etc.
+private struct PunctuationKey: View {
+    var onInsert: (String) -> Void
+
+    private let marks = [".", ",", ";", ":", "!", "?", "…", "—", "'", "\""]
+
+    @Environment(\.colorScheme) private var scheme
+    @State private var pressed = false
+    @State private var showPicker = false
+    @State private var pickIndex = 0
+    @State private var holdTask: Task<Void, Never>?
+
+    var body: some View {
+        Text(".")
+            .font(.system(size: 22, weight: .semibold, design: .rounded))
+            .frame(width: 40, height: 46)
+            .foregroundStyle(.white.opacity(0.95))
+            .background(
+                RoundedRectangle(cornerRadius: 9, style: .continuous)
+                    .fill(Color(red: 0.18, green: 0.19, blue: 0.23))
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 9, style: .continuous)
+                            .stroke(Color.white.opacity(0.1), lineWidth: 0.5)
+                    )
+            )
+            .overlay(alignment: .top) {
+                if pressed {
+                    picker
+                        .offset(y: showPicker ? -62 : -58)
+                        .transition(.opacity.combined(with: .scale(scale: 0.85, anchor: .bottom)))
+                        .zIndex(50)
+                }
+            }
+            .zIndex(pressed ? 40 : 0)
+            .scaleEffect(pressed ? 0.96 : 1)
+            .contentShape(Rectangle())
+            .gesture(
+                DragGesture(minimumDistance: 0)
+                    .onChanged(handleChanged)
+                    .onEnded(handleEnded)
+            )
+    }
+
+    @ViewBuilder
+    private var picker: some View {
+        if showPicker {
+            HStack(spacing: 2) {
+                ForEach(Array(marks.enumerated()), id: \.offset) { idx, ch in
+                    Text(ch)
+                        .font(.system(size: 20, weight: .medium, design: .rounded))
+                        .frame(width: 30, height: 42)
+                        .foregroundStyle(idx == pickIndex ? Color.white : Color.primary)
+                        .background(
+                            RoundedRectangle(cornerRadius: 7, style: .continuous)
+                                .fill(idx == pickIndex
+                                      ? Color(red: 0.28, green: 0.48, blue: 0.98)
+                                      : Color.clear)
+                        )
+                }
+            }
+            .padding(4)
+            .background(
+                RoundedRectangle(cornerRadius: 10, style: .continuous)
+                    .fill(scheme == .dark ? Color(white: 0.42) : .white)
+                    .shadow(color: .black.opacity(0.28), radius: 8, y: 3)
+            )
+        } else {
+            Text(".")
+                .font(.system(size: 28, weight: .semibold, design: .rounded))
+                .frame(width: 48, height: 52)
+                .background(
+                    RoundedRectangle(cornerRadius: 10, style: .continuous)
+                        .fill(scheme == .dark ? Color(white: 0.42) : .white)
+                        .shadow(color: .black.opacity(0.28), radius: 8, y: 3)
+                )
+        }
+    }
+
+    private func handleChanged(_ value: DragGesture.Value) {
+        if !pressed {
+            pressed = true
+            pickIndex = 0
+            showPicker = false
+            holdTask?.cancel()
+            holdTask = Task {
+                try? await Task.sleep(nanoseconds: 320_000_000)
+                guard !Task.isCancelled else { return }
+                showPicker = true
+                pickIndex = 1 // default highlight comma on hold
+                UIImpactFeedbackGenerator(style: .medium).impactOccurred(intensity: 0.7)
+            }
+        }
+        if showPicker {
+            let x = value.translation.width
+            let step: CGFloat = 30
+            let raw = Int((x / step).rounded()) + 1
+            let next = min(max(raw, 0), marks.count - 1)
+            if next != pickIndex {
+                pickIndex = next
+                UISelectionFeedbackGenerator().selectionChanged()
+            }
+        }
+    }
+
+    private func handleEnded(_ value: DragGesture.Value) {
+        holdTask?.cancel()
+        holdTask = nil
+        let insertChar: String
+        if showPicker, marks.indices.contains(pickIndex) {
+            insertChar = marks[pickIndex]
+        } else {
+            insertChar = "."
+        }
+        pressed = false
+        showPicker = false
+        pickIndex = 0
         onInsert(insertChar)
     }
 }

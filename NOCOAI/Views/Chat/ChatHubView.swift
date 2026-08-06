@@ -129,7 +129,7 @@ struct ChatHubView: View {
                 await connection.chat.loadConversations()
                 if let id = connection.chat.activeConversationId {
                     await connection.chat.loadMessages(for: id)
-                } else if let first = connection.chat.conversations.first {
+                } else if let first = connection.chat.filteredConversations.first {
                     await connection.chat.selectConversation(first.id)
                 }
             }
@@ -381,6 +381,39 @@ struct ConversationListView: View {
                                 Task { await connection.chat.deleteConversation(convo.id) }
                             } label: { Label("Löschen", systemImage: "trash") }
                         }
+                    }
+                }
+                if !connection.chat.keyboardConversations.isEmpty {
+                    Section {
+                        ForEach(connection.chat.keyboardConversations) { convo in
+                            Button {
+                                Task {
+                                    await connection.chat.selectConversation(convo.id)
+                                    dismiss()
+                                }
+                            } label: {
+                                HStack(spacing: 10) {
+                                    Image(systemName: "keyboard")
+                                        .foregroundStyle(NOCOAITheme.accent)
+                                    VStack(alignment: .leading, spacing: 4) {
+                                        Text(convo.title.isEmpty ? "Tastatur" : convo.title)
+                                            .font(.headline)
+                                        Text("Verbessern · Kürzer · Antwort …")
+                                            .font(.caption)
+                                            .foregroundStyle(.secondary)
+                                    }
+                                }
+                            }
+                            .swipeActions {
+                                Button(role: .destructive) {
+                                    Task { await connection.chat.deleteConversation(convo.id) }
+                                } label: { Label("Löschen", systemImage: "trash") }
+                            }
+                        }
+                    } header: {
+                        Label("Tastatur", systemImage: "keyboard")
+                    } footer: {
+                        Text("Keyboard-Aktionen landen hier — nicht in normalen Chats.")
                     }
                 }
             }

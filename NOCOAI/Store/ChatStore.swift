@@ -40,8 +40,15 @@ final class ChatStore: ObservableObject {
     }
 
     var filteredConversations: [ConversationSummary] {
-        guard !searchText.isEmpty else { return conversations }
-        return conversations.filter { $0.title.localizedCaseInsensitiveContains(searchText) }
+        let base = conversations.filter { !$0.isKeyboard }
+        guard !searchText.isEmpty else { return base }
+        return base.filter { $0.title.localizedCaseInsensitiveContains(searchText) }
+    }
+
+    var keyboardConversations: [ConversationSummary] {
+        let base = conversations.filter(\.isKeyboard)
+        guard !searchText.isEmpty else { return base }
+        return base.filter { $0.title.localizedCaseInsensitiveContains(searchText) }
     }
 
     func bind(api: CompanionAPI?, host: String, port: Int) {

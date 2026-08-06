@@ -6,6 +6,10 @@ enum KeyboardAIClient {
         let message: String
         let stream: Bool
         let mode: String
+        let source: String
+        let channel: String
+        let display: String
+        let keyboard: Bool
     }
 
     enum ClientError: LocalizedError {
@@ -38,7 +42,7 @@ enum KeyboardAIClient {
         return URLSession(configuration: config)
     }()
 
-    /// Preferred path: single flash response, sanitized — stable & fast.
+    /// Preferred path: single flash response, sanitized — logs into ⌨️ Tastatur channel.
     static func rewrite(action: KeyboardAIAction, text: String) async throws -> String {
         CompanionCredentials.refreshFromDisk()
         guard CompanionCredentials.isConfigured,
@@ -49,11 +53,19 @@ enum KeyboardAIClient {
         let url = base.appendingPathComponent("chat")
         var request = URLRequest(url: url)
         request.httpMethod = "POST"
-        request.timeoutInterval = 28
+        request.timeoutInterval = action.isAnswer ? 40 : 28
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
         request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
         request.httpBody = try JSONEncoder().encode(
-            ChatBody(message: action.prompt(for: text), stream: false, mode: "flash")
+            ChatBody(
+                message: action.prompt(for: text),
+                stream: false,
+                mode: action.isAnswer ? "flash" : "flash",
+                source: "keyboard",
+                channel: "keyboard",
+                display: action.displayLabel(for: text),
+                keyboard: true
+            )
         )
 
         let (data, response) = try await session.data(for: request)

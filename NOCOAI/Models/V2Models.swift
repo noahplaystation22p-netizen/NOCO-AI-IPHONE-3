@@ -59,8 +59,16 @@ struct ConversationSummary: Identifiable, Decodable, Equatable {
     var title: String
     let updatedAt: String?
     let type: String?
+    let channel: String?
     let pinned: Bool?
     let favorite: Bool?
+
+    var isKeyboard: Bool {
+        if let channel, channel.lowercased() == "keyboard" { return true }
+        if let type, type.lowercased() == "keyboard" { return true }
+        let t = title.trimmingCharacters(in: .whitespacesAndNewlines)
+        return t.hasPrefix("⌨️") || t.lowercased().hasPrefix("tastatur")
+    }
 }
 
 struct ConversationListResponse: Decodable {

@@ -23,14 +23,16 @@ final class KeyboardViewModel: ObservableObject {
     private var snapshotBefore = ""
     private var snapshotSelected = ""
     private var runTask: Task<Void, Never>?
-    private let keyHaptic = UIImpactFeedbackGenerator(style: .light)
+    private let keyHaptic = UIImpactFeedbackGenerator(style: .medium)
     private let selectHaptic = UISelectionFeedbackGenerator()
     private let notifyHaptic = UINotificationFeedbackGenerator()
+    private let heavyHaptic = UIImpactFeedbackGenerator(style: .heavy)
 
     func bind(controller: KeyboardViewController) {
         self.controller = controller
         keyHaptic.prepare()
         selectHaptic.prepare()
+        heavyHaptic.prepare()
         refreshAccess()
     }
 
@@ -70,14 +72,14 @@ final class KeyboardViewModel: ObservableObject {
     func insert(_ text: String) {
         controller?.textDocumentProxy.insertText(text)
         if shiftOn && !capsLock { shiftOn = false }
-        keyHaptic.impactOccurred(intensity: 0.38)
+        keyHaptic.impactOccurred(intensity: 0.92)
         keyHaptic.prepare()
         syncDocumentSnapshot()
     }
 
     func deleteBackward() {
         controller?.textDocumentProxy.deleteBackward()
-        keyHaptic.impactOccurred(intensity: 0.28)
+        keyHaptic.impactOccurred(intensity: 0.78)
         keyHaptic.prepare()
         syncDocumentSnapshot()
     }
@@ -148,7 +150,9 @@ final class KeyboardViewModel: ObservableObject {
         overlayTitle = "\(action.title)…"
         lastError = nil
         statusLine = "\(action.title)…"
-        UIImpactFeedbackGenerator(style: .medium).impactOccurred(intensity: 0.7)
+        heavyHaptic.impactOccurred(intensity: 1.0)
+        heavyHaptic.prepare()
+        UIImpactFeedbackGenerator(style: .rigid).impactOccurred(intensity: 0.9)
 
         let hadSelection = !(snapshotSelected.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
         let deleteCount = hadSelection

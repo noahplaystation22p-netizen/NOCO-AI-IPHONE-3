@@ -134,11 +134,23 @@ struct KeyboardRootView: View {
                 )
             )
         }
+        if action.isAnswer {
+            return AnyShapeStyle(
+                LinearGradient(
+                    colors: [
+                        Color(red: 0.2, green: 0.75, blue: 0.65),
+                        Color(red: 0.35, green: 0.55, blue: 1)
+                    ],
+                    startPoint: .leading,
+                    endPoint: .trailing
+                )
+            )
+        }
         return AnyShapeStyle(.ultraThinMaterial)
     }
 
     private func chipForeground(for action: KeyboardAIAction) -> Color {
-        action.isPrimary ? .white : .primary
+        (action.isPrimary || action.isAnswer) ? .white : .primary
     }
 
     private var chipStroke: Color {
@@ -209,15 +221,16 @@ private struct IntelligenceRewriteOverlay: View {
                 .blur(radius: 8)
                 .opacity(0.85)
 
-            ForEach(0..<8, id: \.self) { i in
+            ForEach(0..<12, id: \.self) { i in
                 Image(systemName: "sparkle")
-                    .font(.system(size: CGFloat(7 + i % 4 * 2), weight: .bold))
-                    .foregroundStyle(rainbow[i % 6].opacity(sparkle ? 1 : 0.2))
+                    .font(.system(size: CGFloat(6 + i % 4 * 2), weight: .bold))
+                    .foregroundStyle(rainbow[i % 6].opacity(sparkle ? 1 : 0.15))
                     .offset(
-                        x: CGFloat([-78, -48, -10, 28, 58, 82, 12, -30][i]),
-                        y: CGFloat([-55, 38, -70, 22, -28, 48, 62, -12][i]) * (sparkle ? 1.08 : 0.88)
+                        x: cos(Double(i) / 12 * .pi * 2) * (sparkle ? 88 : 70),
+                        y: sin(Double(i) / 12 * .pi * 2) * (sparkle ? 58 : 48)
                     )
-                    .scaleEffect(sparkle ? 1.2 : 0.65)
+                    .scaleEffect(sparkle ? 1.25 : 0.55)
+                    .rotationEffect(.degrees(spin ? Double(i * 30) : 0))
             }
 
             VStack(spacing: 10) {

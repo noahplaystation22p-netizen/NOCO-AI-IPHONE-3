@@ -1,47 +1,58 @@
 ﻿import Foundation
 
-/// AI rewrite actions for the keyboard (flash-mode, text-only rewrite — never Q&A).
+/// AI rewrite / answer actions for the keyboard.
 enum KeyboardAIAction: String, CaseIterable, Identifiable {
     case improve
+    case punctuate
     case shorten
     case longer
+    case answer
     case friendlier
     case professional
     case translate
     case summarize
-    case noco
 
     var id: String { rawValue }
 
     var title: String {
         switch self {
         case .improve: return "Verbessern"
+        case .punctuate: return "Satzzeichen"
         case .shorten: return "Kürzer"
         case .longer: return "Länger"
+        case .answer: return "Antwort"
         case .friendlier: return "Freundlicher"
         case .professional: return "Professionell"
         case .translate: return "Übersetzen"
         case .summarize: return "Zusammenfassen"
-        case .noco: return "NOCO"
         }
     }
 
     var systemImage: String {
         switch self {
         case .improve: return "checkmark.circle"
+        case .punctuate: return "textformat.abc"
         case .shorten: return "arrow.down.right.and.arrow.up.left"
         case .longer: return "arrow.up.left.and.arrow.down.right"
+        case .answer: return "questionmark.circle.fill"
         case .friendlier: return "face.smiling"
         case .professional: return "briefcase"
         case .translate: return "globe"
         case .summarize: return "text.justify.left"
-        case .noco: return "sparkles"
         }
     }
 
     var isPrimary: Bool { self == .improve }
+    var isAnswer: Bool { self == .answer }
 
-    /// Absolute rule: rewrite the user's text — never answer it as a question.
+    /// Short label stored in the Tastatur chat log (not the full system prompt).
+    func displayLabel(for text: String) -> String {
+        let t = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        let clip = t.count > 72 ? String(t.prefix(72)) + "…" : t
+        return "\(title): \(clip)"
+    }
+
+    /// Absolute rule for rewrite actions — never Q&A (except `.answer`).
     private var rewriterRule: String {
         """
         Du bist ein Text-Korrektor / Umformulierer — KEIN Chatbot und KEIN Wissensassistent.
@@ -65,10 +76,20 @@ enum KeyboardAIAction: String, CaseIterable, Identifiable {
             return """
             \(rewriterRule)
             \(example)
-            Aufgabe: NUR Rechtschreibung, Grammatik und Zeichensetzung korrigieren.
-            Formuliere höchstens minimal klarer. Gleiche Länge (±15%). Keine längere Fassung.
+            Aufgabe: Korrigiere Rechtschreibung, Grammatik und Zeichensetzung.
+            Formuliere höchstens leicht klarer — Inhalt und Aussage bleiben GLEICH.
+            Ändere den Inhalt NUR wenn der Text sonst sinnlos/unverständlich ist.
+            Gleiche Länge (±15%). Keine längere Fassung, keine neuen Fakten.
             Wenn der Text eine Frage ist, bleibt es eine Frage — beantworte sie NICHT.
-            Keine Definitionen, kein Wissen, keine Erklärungen.
+
+            TEXT:
+            \(t)
+            """
+        case .punctuate:
+            return """
+            \(rewriterRule)
+            Aufgabe: Korrigiere NUR Satzzeichen, Groß-/Kleinschreibung und offensichtliche Tippfehler.
+            Inhalt und Wortwahl bleiben gleich. Keine Umformulierung, keine Antwort auf Fragen.
 
             TEXT:
             \(t)
@@ -77,8 +98,9 @@ enum KeyboardAIAction: String, CaseIterable, Identifiable {
             return """
             \(rewriterRule)
             \(example)
-            Aufgabe: Kürze denselben Text (ca. 50–70% der Länge). Behalte die Aussage / Frage.
-            Wenn es eine Frage ist: kürze die Frage, beantworte sie nicht.
+            Aufgabe: Kürze denselben Text RADIKAL — Ziel ca. 30–45% der Original-Länge (deutlich kürzer!).
+            Behalte die Kernaussage / Frage. Wenn es eine Frage ist: kürze die Frage, beantworte sie nicht.
+            Keine Floskeln.
 
             TEXT:
             \(t)
@@ -86,11 +108,27 @@ enum KeyboardAIAction: String, CaseIterable, Identifiable {
         case .longer:
             return """
             \(rewriterRule)
-            Aufgabe: Erweitere denselben Text leicht (mehr Fluss, 1–2 Details), ohne die Aussage zu ändern.
+            Aufgabe: Erweitere denselben Text klar (mehr Fluss, 1–3 sinnvolle Details), ohne die Aussage zu ändern.
             Wenn es eine Frage ist: formuliere die Frage ausführlicher — beantworte sie nicht.
+            Etwa 140–180% der Länge.
 
             TEXT:
             \(t)
+            """
+        case .answer:
+            return """
+            Du beantwortest eine Frage knapp und klar auf Deutsch (oder in der Sprache der Frage).
+            Format — GENAU so, nichts anderes:
+
+            \(t)
+
+            <kurze klare Antwort in 1–3 Sätzen>
+
+            Regeln:
+            - Die Originalfrage bleibt in der ersten Zeile/Zeilen EXAKT erhalten (nur minimale Rechtschreibkorrektur erlaubt).
+            - Dann eine Leerzeile, dann die Antwort.
+            - Kein „Gerne“, kein Intro, kein Markdown, keine Aufzählung außer nötig.
+            - Kurz und direkt.
             """
         case .friendlier:
             return """
@@ -123,16 +161,6 @@ enum KeyboardAIAction: String, CaseIterable, Identifiable {
             return """
             \(rewriterRule)
             Aufgabe: Fasse denselben Text in 1–2 kurzen Sätzen zusammen (Komprimat des Textes, keine neue Antwort).
-
-            TEXT:
-            \(t)
-            """
-        case .noco:
-            return """
-            \(rewriterRule)
-            \(example)
-            Aufgabe: Verbessere denselben Text menschlich und klar. Gleiche Absicht, ähnliche Länge.
-            Wenn es eine Frage ist: verbessere die Frage — beantworte sie nicht.
 
             TEXT:
             \(t)
@@ -178,24 +206,31 @@ enum KeyboardAIAction: String, CaseIterable, Identifiable {
             || orig.lowercased().hasPrefix("why ") || orig.lowercased().hasPrefix("when ")
             || orig.lowercased().hasPrefix("who ") || orig.lowercased().hasPrefix("where ")
 
-        // Improve / tone: reject inflated “answers” — stay close to original length
-        if action == .improve || action == .friendlier || action == .professional || action == .noco {
-            let maxLen = max(orig.count + 12, Int(Double(orig.count) * 1.22) + 4)
+        if action == .answer {
+            // Ensure question stays on top if model dropped it
+            if !s.lowercased().contains(orig.lowercased().prefix(min(24, orig.count))) {
+                s = "\(orig)\n\n\(s)"
+            }
+            return s
+        }
+
+        // Improve / punctuate / tone: reject inflated “answers” — stay close to original
+        if action == .improve || action == .punctuate || action == .friendlier || action == .professional {
+            let factor = action == .punctuate ? 1.12 : 1.2
+            let maxLen = max(orig.count + 10, Int(Double(orig.count) * factor) + 4)
             if s.count > maxLen {
-                // Likely answered the question — keep first sentence if short enough, else fall back
                 let endMarks: [Character] = [".", "?", "!", "。", "？", "！"]
                 if let idx = s.firstIndex(where: { endMarks.contains($0) }) {
                     let first = String(s[...idx]).trimmingCharacters(in: .whitespacesAndNewlines)
                     if first.count <= maxLen, first.count >= max(3, orig.count / 3) {
                         s = first
                     } else {
-                        s = orig
+                        s = origIsQuestion ? polishQuestionFallback(orig) : orig
                     }
                 } else {
                     s = orig
                 }
             }
-            // Question in → must stay a question (never a definition)
             if origIsQuestion {
                 let outIsQuestion = s.contains("?") || s.contains("？")
                 let looksLikeDefinition = s.lowercased().contains(" is ") || s.lowercased().hasPrefix("ein ")
@@ -209,26 +244,32 @@ enum KeyboardAIAction: String, CaseIterable, Identifiable {
             }
         }
         if action == .shorten {
-            // If model answered instead of shortening, prefer keeping the original question
-            let maxLen = max(8, Int(Double(orig.count) * 0.75) + 6)
-            if s.count > orig.count + 20 {
+            let maxLen = max(6, Int(Double(orig.count) * 0.5) + 4)
+            if s.count > orig.count + 12 {
                 if origIsQuestion {
                     s = polishQuestionFallback(orig)
                 } else {
                     s = String(s.prefix(maxLen)).trimmingCharacters(in: .whitespacesAndNewlines)
                 }
-            } else if s.count > maxLen + 30 {
+            } else if s.count > maxLen + 20 {
                 s = String(s.prefix(maxLen)).trimmingCharacters(in: .whitespacesAndNewlines)
+            }
+        }
+        if action == .longer {
+            // If model answered instead of expanding, fall back
+            if origIsQuestion {
+                let outIsQuestion = s.contains("?") || s.contains("？")
+                if !outIsQuestion, s.count > orig.count + 30 {
+                    s = polishQuestionFallback(orig)
+                }
             }
         }
         return s
     }
 
-    /// Light local polish when the model answered instead of rewriting a question.
     private static func polishQuestionFallback(_ text: String) -> String {
         var t = text.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !t.isEmpty else { return t }
-        // Capitalize first letter
         let first = t.prefix(1).uppercased()
         let rest = String(t.dropFirst())
         t = first + rest

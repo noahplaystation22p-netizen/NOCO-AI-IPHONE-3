@@ -190,40 +190,21 @@ struct KeyboardCustomizationView: View {
         }
     }
 
-    @ViewBuilder
     private func previewChip(for token: String) -> some View {
-        let title: String
-        let icon: String
-        let primary: Bool
-        if token.hasPrefix("custom:") {
-            let id = String(token.dropFirst("custom:".count))
-            let c = customs.first(where: { $0.id == id })
-            title = c?.name ?? "?"
-            icon = c?.systemImage ?? "sparkles"
-            primary = false
-        } else if let action = KeyboardAIAction(rawValue: token) {
-            title = action.title
-            icon = action.systemImage
-            primary = action.isPrimary
-        } else {
-            title = token
-            icon = "questionmark"
-            primary = false
-        }
-
-        HStack(spacing: 4) {
-            Image(systemName: icon)
+        let meta = chipMeta(for: token)
+        return HStack(spacing: 4) {
+            Image(systemName: meta.icon)
                 .font(.system(size: 10, weight: .semibold))
-            Text(title)
+            Text(meta.title)
                 .font(.system(size: 11, weight: .semibold, design: .rounded))
         }
         .padding(.horizontal, 10)
         .padding(.vertical, 7)
-        .foregroundStyle(primary ? .white : .primary)
+        .foregroundStyle(meta.primary ? .white : .primary)
         .background(
             RoundedRectangle(cornerRadius: 10, style: .continuous)
                 .fill(
-                    primary
+                    meta.primary
                     ? AnyShapeStyle(
                         LinearGradient(
                             colors: [
@@ -237,6 +218,18 @@ struct KeyboardCustomizationView: View {
                     : AnyShapeStyle(Color.primary.opacity(scheme == .dark ? 0.12 : 0.08))
                 )
         )
+    }
+
+    private func chipMeta(for token: String) -> (title: String, icon: String, primary: Bool) {
+        if token.hasPrefix("custom:") {
+            let id = String(token.dropFirst("custom:".count))
+            let c = customs.first(where: { $0.id == id })
+            return (c?.name ?? "?", c?.systemImage ?? "sparkles", false)
+        }
+        if let action = KeyboardAIAction(rawValue: token) {
+            return (action.title, action.systemImage, action.isPrimary)
+        }
+        return (token, "questionmark", false)
     }
 
     @ViewBuilder

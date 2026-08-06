@@ -3,62 +3,40 @@ import SwiftUI
 /// Animated intelligence wave — color encodes Live Screen phase.
 struct LiveScreenIntelligenceWave: View {
     var phase: LiveScreenPhase
-
-    private var amplitude: CGFloat {
-        switch phase {
-        case .idle: return 4
-        case .done: return 6
-        default: return 11
-        }
-    }
-
-    private var speed: Double {
-        phase == .understanding ? 2.4 : 1.6
-    }
-
-    private var lineWidth: CGFloat {
-        phase == .idle ? 2 : 3
-    }
+    @State private var shift = false
 
     var body: some View {
-        TimelineView(.animation(minimumInterval: 1.0 / 30.0, paused: false)) { timeline in
-            waveCanvas(time: timeline.date.timeIntervalSinceReferenceDate)
+        GeometryReader { geo in
+            ZStack {
+                Capsule()
+                    .fill(phase.color.opacity(0.25))
+                    .frame(height: 4)
+                    .offset(x: shift ? 12 : -12)
+                Capsule()
+                    .fill(
+                        LinearGradient(
+                            colors: [
+                                phase.color.opacity(0.2),
+                                phase.color,
+                                Color(red: 1, green: 0.7, blue: 0.85).opacity(0.8)
+                            ],
+                            startPoint: .leading,
+                            endPoint: .trailing
+                        )
+                    )
+                    .frame(width: geo.size.width * 0.55, height: phase == .idle ? 3 : 5)
+                    .offset(x: shift ? geo.size.width * 0.2 : -geo.size.width * 0.2)
+                    .blur(radius: 0.4)
+            }
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
         }
         .frame(height: 36)
-        .blur(radius: phase == .idle ? 0.2 : 0.4)
-        .animation(.easeInOut(duration: 0.45), value: phase)
-    }
-
-    private func waveCanvas(time: TimeInterval) -> some View {
-        Canvas { context, size in
-            let midY = size.height * 0.5
-            let amp = amplitude
-            let spd = speed
-            var path = Path()
-            var x: CGFloat = 0
-            while x <= size.width {
-                let y = midY
-                    + sin((x / size.width) * .pi * 3 + time * spd) * amp
-                    + sin((x / size.width) * .pi * 7 + time * spd * 1.3) * (amp * 0.35)
-                if x == 0 {
-                    path.move(to: CGPoint(x: x, y: y))
-                } else {
-                    path.addLine(to: CGPoint(x: x, y: y))
-                }
-                x += 3
+        .onAppear {
+            withAnimation(.easeInOut(duration: phase == .understanding ? 0.9 : 1.4).repeatForever(autoreverses: true)) {
+                shift = true
             }
-            let gradient = Gradient(colors: [
-                phase.color.opacity(0.2),
-                phase.color,
-                Color(red: 1, green: 0.7, blue: 0.85).opacity(0.85),
-                phase.color.opacity(0.35)
-            ])
-            context.stroke(
-                path,
-                with: .linearGradient(gradient, startPoint: .zero, endPoint: CGPoint(x: size.width, y: 0)),
-                style: StrokeStyle(lineWidth: lineWidth, lineCap: .round)
-            )
         }
+        .animation(.easeInOut(duration: 0.35), value: phase)
     }
 }
 

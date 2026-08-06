@@ -5,6 +5,7 @@ struct MoreView: View {
     @EnvironmentObject private var connection: ConnectionStore
     @Environment(\.colorScheme) private var scheme
     @State private var appear = false
+    @State private var openLiveScreen = false
 
     var body: some View {
         NavigationStack {
@@ -12,7 +13,7 @@ struct MoreView: View {
                 VStack(spacing: 18) {
                     IntelligenceHeroBanner(
                         title: "Studio",
-                        subtitle: "Speak, System & Sync — alles an einem Ort.",
+                        subtitle: "Speak, Live Screen & Sync — alles an einem Ort.",
                         online: connection.isOnline
                     )
                     .opacity(appear ? 1 : 0)
@@ -38,6 +39,19 @@ struct MoreView: View {
                         .buttonStyle(IntelligencePressStyle(haptic: { HapticService.soft() }))
                         .disabled(!connection.isOnline && !connection.speak.isRunning)
                         .opacity(connection.isOnline || connection.speak.isRunning ? 1 : 0.55)
+
+                        NavigationLink {
+                            LiveScreenView()
+                                .environmentObject(connection)
+                        } label: {
+                            IntelligenceFeatureTile(
+                                title: "Live Screen",
+                                subtitle: "Bildschirm verstehen & helfen",
+                                systemImage: "rectangle.inset.filled.and.person.filled",
+                                accent: Color(red: 0.98, green: 0.55, blue: 0.35)
+                            )
+                        }
+                        .buttonStyle(IntelligencePressStyle(haptic: { HapticService.open() }))
 
                         NavigationLink {
                             HomeView()
@@ -107,9 +121,23 @@ struct MoreView: View {
             }
             .navigationTitle("Studio")
             .navigationBarTitleDisplayMode(.large)
+            .navigationDestination(isPresented: $openLiveScreen) {
+                LiveScreenView()
+                    .environmentObject(connection)
+            }
+            .onChange(of: connection.pendingOpenLiveScreen) { _, open in
+                if open {
+                    openLiveScreen = true
+                    connection.pendingOpenLiveScreen = false
+                }
+            }
             .onAppear {
                 withAnimation(.spring(response: 0.55, dampingFraction: 0.84)) {
                     appear = true
+                }
+                if connection.pendingOpenLiveScreen {
+                    openLiveScreen = true
+                    connection.pendingOpenLiveScreen = false
                 }
             }
         }

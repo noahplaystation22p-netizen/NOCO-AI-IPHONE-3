@@ -21,6 +21,8 @@ final class ConnectionStore: ObservableObject {
     @Published var pendingTab: Int?
     /// Open Magischer Radierer after switching to Bildideen
     @Published var pendingOpenEraser = false
+    /// Open Live Screen after switching to Studio
+    @Published var pendingOpenLiveScreen = false
     /// Open this gallery image after switching to Bildideen
     @Published var pendingGalleryImageURL: URL?
     @Published var pendingGalleryImageId: String?
@@ -111,6 +113,9 @@ final class ConnectionStore: ObservableObject {
         api = CompanionAPI(baseURL: url, token: token)
         bindStores()
     }
+
+    /// Shared Companion client for features outside Chat/Image stores (e.g. Live Screen).
+    func companionAPI() -> CompanionAPI? { api }
 
     private func bindStores() {
         chat.bind(api: api, host: serverHost, port: serverPort)
@@ -304,6 +309,11 @@ final class ConnectionStore: ObservableObject {
         if host == "eraser" || host == "radierer" || path.contains("eraser") || path.contains("radierer") {
             pendingTab = 1
             pendingOpenEraser = true
+            return
+        }
+        if host == "livescreen" || host == "live-screen" || path.contains("livescreen") || path.contains("live-screen") {
+            pendingTab = 2
+            pendingOpenLiveScreen = true
             return
         }
         if host == "images" || host == "bildideen" || path.contains("images") || path.contains("bild") {

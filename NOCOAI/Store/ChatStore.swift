@@ -672,7 +672,25 @@ final class ChatStore: ObservableObject {
     }
 
     private func mapMessages(_ dtos: [ConversationMessageDTO]) -> [ChatMessage] {
-        dtos.map(mapMessage)
+        let activeIsKeyboard = conversations.first(where: { $0.id == activeConversationId })?.isKeyboard == true
+        return dtos.compactMap { dto in
+            // Keep keyboard rewriter spam out of normal chats
+            if !activeIsKeyboard, looksLikeKeyboardLog(dto.content) {
+                return nil
+            }
+            return mapMessage(dto)
+        }
+    }
+
+    private func looksLikeKeyboardLog(_ text: String) -> Bool {
+        let t = text.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+        let prefixes = [
+            "verbessern:", "kürzer:", "länger:", "antwort:", "satz:", "fragen:",
+            "satzzeichen:", "freundlicher:", "professionell:", "übersetzen:",
+            "zusammenfassen:", "frage:", "du bist ein text-korrektor",
+            "du bist ein smarter text-assistent", "du bist noco ai auf einer iphone-tastatur"
+        ]
+        return prefixes.contains { t.hasPrefix($0) }
     }
 
     private func mapMessage(_ dto: ConversationMessageDTO) -> ChatMessage {

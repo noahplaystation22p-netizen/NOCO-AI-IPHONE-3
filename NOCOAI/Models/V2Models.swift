@@ -66,8 +66,15 @@ struct ConversationSummary: Identifiable, Decodable, Equatable {
     var isKeyboard: Bool {
         if let channel, channel.lowercased() == "keyboard" { return true }
         if let type, type.lowercased() == "keyboard" { return true }
-        let t = title.trimmingCharacters(in: .whitespacesAndNewlines)
-        return t.hasPrefix("⌨️") || t.lowercased().hasPrefix("tastatur")
+        let t = title.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+        if t.hasPrefix("⌨️") || t.hasPrefix("tastatur") { return true }
+        // Keyboard action labels that sometimes leaked as chat titles
+        let keyboardPrefixes = [
+            "verbessern:", "kürzer:", "länger:", "antwort:", "satz:", "fragen:",
+            "satzzeichen:", "freundlicher:", "professionell:", "übersetzen:",
+            "zusammenfassen:", "improve:", "shorten:", "frage:"
+        ]
+        return keyboardPrefixes.contains { t.hasPrefix($0) }
     }
 }
 

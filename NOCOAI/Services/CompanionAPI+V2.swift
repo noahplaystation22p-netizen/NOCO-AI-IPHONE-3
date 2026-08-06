@@ -193,7 +193,10 @@ extension CompanionAPI {
             steps: steps,
             denoisingStrength: denoisingStrength
         )
-        // Try primary + aliases (older companions / path quirks)
+        guard !body.imageBase64.isEmpty, !body.maskBase64.isEmpty, !prompt.isEmpty else {
+            throw CompanionAPIError.server("Bild/Maske leer — erneut bemalen und tippen")
+        }
+        // Encoder uses snake_case globally — companion accepts both.
         var lastError: Error?
         for path in ["images/inpaint", "images/erase", "images/magic-erase", "inpaint"] {
             do {
@@ -209,6 +212,12 @@ extension CompanionAPI {
                 let msg = (error as? LocalizedError)?.errorDescription?.lowercased() ?? ""
                 if msg.contains("unbekannte") || msg.contains("route") || msg.contains("404") {
                     continue
+                }
+                // Retry next alias only for missing-route; payload errors stop immediately
+                if msg.contains("fehlen") || msg.contains("base64") {
+                    throw CompanionAPIError.server(
+                        "Radierer: Companion erwartet Bild+Maske — NOCO AI X neu starten (snake_case Fix)"
+                    )
                 }
                 throw error
             }

@@ -147,10 +147,13 @@ struct KeyboardRootView: View {
 
     private var askPanel: some View {
         VStack(alignment: .leading, spacing: 8) {
-            HStack(spacing: 8) {
-                TextField("Frag NOCO AI…", text: $model.askDraft)
-                    .textFieldStyle(.plain)
+            HStack(alignment: .top, spacing: 8) {
+                // Not a real TextField — extensions can't steal host focus.
+                // Type with the keys below; text lands here.
+                Text(model.askDraft.isEmpty ? "Frag NOCO AI… tippe unten" : model.askDraft)
                     .font(.system(size: 14, weight: .medium, design: .rounded))
+                    .foregroundStyle(model.askDraft.isEmpty ? Color.white.opacity(0.4) : .white)
+                    .frame(maxWidth: .infinity, alignment: .leading)
                     .padding(.horizontal, 12)
                     .padding(.vertical, 10)
                     .background(
@@ -158,17 +161,27 @@ struct KeyboardRootView: View {
                             .fill(Color.white.opacity(0.08))
                             .overlay(
                                 RoundedRectangle(cornerRadius: 12, style: .continuous)
-                                    .stroke(Color(red: 0.4, green: 0.75, blue: 1).opacity(0.35), lineWidth: 1)
+                                    .stroke(
+                                        AngularGradient(
+                                            colors: [
+                                                Color(red: 0.4, green: 0.8, blue: 1),
+                                                Color(red: 0.55, green: 0.9, blue: 0.85),
+                                                Color(red: 0.45, green: 0.55, blue: 1),
+                                                Color(red: 0.4, green: 0.8, blue: 1)
+                                            ],
+                                            center: .center
+                                        ),
+                                        lineWidth: 1.2
+                                    )
                             )
                     )
-                    .foregroundStyle(.white)
-                    .disabled(model.isAsking)
 
                 Button {
                     model.sendAsk()
                 } label: {
                     Image(systemName: model.isAsking ? "ellipsis" : "arrow.up.circle.fill")
-                        .font(.system(size: 26, weight: .semibold))
+                        .font(.system(size: 28, weight: .semibold))
+                        .symbolEffect(.pulse, options: .repeating, isActive: model.isAsking)
                         .foregroundStyle(
                             model.askDraft.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
                             ? Color.white.opacity(0.35)
@@ -182,33 +195,44 @@ struct KeyboardRootView: View {
             }
 
             if !model.askReply.isEmpty {
-                VStack(alignment: .leading, spacing: 8) {
+                ScrollView {
                     Text(model.askReply)
                         .font(.system(size: 13, weight: .medium, design: .rounded))
                         .foregroundStyle(.white.opacity(0.92))
-                        .fixedSize(horizontal: false, vertical: true)
-                    HStack {
-                        Button("Einfügen") {
-                            model.insertAskReply()
-                        }
-                        .font(.caption.weight(.bold))
-                        .buttonStyle(.borderedProminent)
-                        .tint(Color(red: 0.35, green: 0.6, blue: 1))
-                        .controlSize(.mini)
-
-                        Button("Schließen") {
-                            model.toggleAskPanel()
-                        }
-                        .font(.caption.weight(.semibold))
-                        .foregroundStyle(.secondary)
-                    }
+                        .frame(maxWidth: .infinity, alignment: .leading)
                 }
+                .frame(maxHeight: 72)
                 .padding(10)
-                .frame(maxWidth: .infinity, alignment: .leading)
                 .background(
                     RoundedRectangle(cornerRadius: 12, style: .continuous)
                         .fill(Color.white.opacity(0.07))
+                        .overlay(
+                            RoundedRectangle(cornerRadius: 12, style: .continuous)
+                                .stroke(Color(red: 0.4, green: 0.8, blue: 1).opacity(0.25), lineWidth: 1)
+                        )
                 )
+
+                HStack(spacing: 12) {
+                    Button("Einfügen") {
+                        model.insertAskReply()
+                    }
+                    .font(.caption.weight(.bold))
+                    .buttonStyle(.borderedProminent)
+                    .tint(Color(red: 0.35, green: 0.6, blue: 1))
+                    .controlSize(.mini)
+
+                    Button("Neue Frage") {
+                        model.clearAskDraft()
+                    }
+                    .font(.caption.weight(.semibold))
+                    .foregroundStyle(.secondary)
+
+                    Button("Schließen") {
+                        model.toggleAskPanel()
+                    }
+                    .font(.caption.weight(.semibold))
+                    .foregroundStyle(.secondary)
+                }
             }
         }
         .padding(.horizontal, 10)
@@ -480,9 +504,9 @@ private struct IntelligenceRewriteOverlay: View {
         }
         .allowsHitTesting(false)
         .onAppear {
-            withAnimation(.linear(duration: 4.2).repeatForever(autoreverses: false)) { spin = true }
-            withAnimation(.easeInOut(duration: 1.4).repeatForever(autoreverses: true)) { pulse = true }
-            withAnimation(.easeInOut(duration: 2.2).repeatForever(autoreverses: true)) { drift = true }
+            withAnimation(.linear(duration: 3.2).repeatForever(autoreverses: false)) { spin = true }
+            withAnimation(.easeInOut(duration: 1.15).repeatForever(autoreverses: true)) { pulse = true }
+            withAnimation(.easeInOut(duration: 1.8).repeatForever(autoreverses: true)) { drift = true }
         }
     }
 }

@@ -241,7 +241,7 @@ struct SettingsView: View {
                 }
 
                 Section("Info") {
-                    Text("NOCO AI Companion v6.5")
+                    Text("NOCO AI Companion v6.6")
                     Text("Ask · Hold-Delete · Magic Eraser")
                         .font(.footnote)
                         .foregroundStyle(NOCOAITheme.secondaryText(for: scheme))

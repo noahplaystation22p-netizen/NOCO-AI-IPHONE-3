@@ -79,6 +79,14 @@ final class KeyboardViewModel: ObservableObject {
     }
 
     func insert(_ text: String) {
+        // Ask panel captures typing — keyboard extensions can't reliably focus a TextField
+        if showAskPanel {
+            askDraft += text
+            if shiftOn && !capsLock { shiftOn = false }
+            keyHaptic.impactOccurred(intensity: 0.85)
+            keyHaptic.prepare()
+            return
+        }
         controller?.textDocumentProxy.insertText(text)
         if shiftOn && !capsLock { shiftOn = false }
         keyHaptic.impactOccurred(intensity: 0.92)
@@ -87,6 +95,14 @@ final class KeyboardViewModel: ObservableObject {
     }
 
     func deleteBackward() {
+        if showAskPanel {
+            if !askDraft.isEmpty {
+                askDraft.removeLast()
+                keyHaptic.impactOccurred(intensity: 0.7)
+                keyHaptic.prepare()
+            }
+            return
+        }
         controller?.textDocumentProxy.deleteBackward()
         keyHaptic.impactOccurred(intensity: 0.78)
         keyHaptic.prepare()
@@ -126,6 +142,12 @@ final class KeyboardViewModel: ObservableObject {
     }
 
     func deleteWordBackward() {
+        if showAskPanel {
+            while let last = askDraft.last, last.isWhitespace { askDraft.removeLast() }
+            while let last = askDraft.last, !last.isWhitespace { askDraft.removeLast() }
+            heavyHaptic.impactOccurred(intensity: 0.65)
+            return
+        }
         guard let proxy = controller?.textDocumentProxy else { return }
         let before = proxy.documentContextBeforeInput ?? ""
         guard !before.isEmpty else { return }
@@ -149,6 +171,12 @@ final class KeyboardViewModel: ObservableObject {
     }
 
     func deleteAllBeforeCursor() {
+        if showAskPanel {
+            askDraft = ""
+            notifyHaptic.notificationOccurred(.warning)
+            statusLine = "Frage gelöscht"
+            return
+        }
         guard let proxy = controller?.textDocumentProxy else { return }
         let before = proxy.documentContextBeforeInput ?? ""
         guard !before.isEmpty else { return }
@@ -160,7 +188,17 @@ final class KeyboardViewModel: ObservableObject {
         statusLine = "Alles gelöscht"
     }
 
-    func returnKey() { insert("\n") }
+    func returnKey() {
+        if showAskPanel {
+            if !askDraft.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                sendAsk()
+            } else {
+                insert("\n")
+            }
+            return
+        }
+        insert("\n")
+    }
 
     /// Double-tap space → period + space (iOS-style).
     func space() {
@@ -182,9 +220,10 @@ final class KeyboardViewModel: ObservableObject {
             showAskPanel.toggle()
         }
         if showAskPanel {
-            statusLine = "Frage an NOCO tippen"
+            statusLine = "Tippe deine Frage auf der Tastatur"
             selectHaptic.selectionChanged()
         }
+        controller?.updateKeyboardHeight()
     }
 
     func sendAsk() {
@@ -214,6 +253,7 @@ final class KeyboardViewModel: ObservableObject {
                 askReply = reply
                 statusLine = "Antwort bereit"
                 notifyHaptic.notificationOccurred(.success)
+                controller?.updateKeyboardHeight()
                 try? await Task.sleep(nanoseconds: 350_000_000)
                 withAnimation(.easeOut(duration: 0.28)) {
                     showIntelligenceBurst = false
@@ -233,9 +273,18 @@ final class KeyboardViewModel: ObservableObject {
     func insertAskReply() {
         let text = askReply.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !text.isEmpty else { return }
-        insert(text)
+        // Always insert into the host field, not the Ask draft
+        controller?.textDocumentProxy.insertText(text)
         statusLine = "Eingefügt"
         notifyHaptic.notificationOccurred(.success)
+        syncDocumentSnapshot()
+    }
+
+    func clearAskDraft() {
+        askDraft = ""
+        askReply = ""
+        statusLine = "Tippe deine Frage auf der Tastatur"
+        controller?.updateKeyboardHeight()
     }
 
     func nextKeyboard() {

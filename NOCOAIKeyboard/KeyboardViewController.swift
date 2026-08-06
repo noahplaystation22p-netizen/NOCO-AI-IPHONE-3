@@ -25,12 +25,14 @@ final class KeyboardViewController: UIInputViewController {
         ])
         host.didMove(toParent: self)
         hosting = host
+        updateKeyboardHeight()
     }
 
     override func viewWillAppear(_ animated: Bool) {
         super.viewWillAppear(animated)
         model.refreshAccess()
         model.syncDocumentSnapshot()
+        updateKeyboardHeight()
     }
 
     /// Custom schemes often fail via `extensionContext.open` from keyboards — use responder chain.
@@ -53,16 +55,33 @@ final class KeyboardViewController: UIInputViewController {
         }
     }
 
-    override func updateViewConstraints() {
-        let needed: CGFloat = 326
+    func updateKeyboardHeight() {
+        let hasAsk = model.showAskPanel
+        let hasReply = !model.askReply.isEmpty
+        let needed: CGFloat
+        if hasAsk && hasReply {
+            needed = 470
+        } else if hasAsk {
+            needed = 390
+        } else {
+            needed = 318
+        }
         if let heightConstraint {
             heightConstraint.constant = needed
         } else {
             let c = view.heightAnchor.constraint(equalToConstant: needed)
-            c.priority = .defaultHigh
+            c.priority = .required
             c.isActive = true
             heightConstraint = c
         }
+        view.setNeedsUpdateConstraints()
+        UIView.animate(withDuration: 0.25) {
+            self.view.superview?.layoutIfNeeded()
+        }
+    }
+
+    override func updateViewConstraints() {
+        updateKeyboardHeight()
         super.updateViewConstraints()
     }
 

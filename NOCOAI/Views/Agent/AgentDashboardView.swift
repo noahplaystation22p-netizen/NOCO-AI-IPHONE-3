@@ -41,6 +41,12 @@ struct AgentDashboardView: View {
         .navigationBarHidden(true)
         .onAppear {
             session.bind { connection.companionAPI() }
+            if let draft = connection.pendingAgentDraft?.trimmingCharacters(in: .whitespacesAndNewlines), !draft.isEmpty {
+                session.draftGoal = draft
+                connection.pendingAgentDraft = nil
+                goalFocused = true
+                HapticService.open()
+            }
             session.startPolling()
             Task { await session.refresh() }
             withAnimation(.spring(response: 0.55, dampingFraction: 0.84)) { appear = true }
@@ -262,6 +268,14 @@ struct AgentDashboardView: View {
                         .font(.caption.weight(.semibold))
                     }
                     Spacer()
+                    if task.status == "completed", let result = task.resultSummary, !result.isEmpty {
+                        Button("Im Chat") {
+                            connection.continueInChat(
+                                draft: "Agent-Ergebnis zu „\(task.goal)“:\n\n\(result)\n\nBitte fasse zusammen und schlage Nächstes vor."
+                            )
+                        }
+                        .font(.caption.weight(.semibold))
+                    }
                     if task.status == "draft" {
                         Button("Weiterlaufen") {
                             Task { await session.continueRun() }

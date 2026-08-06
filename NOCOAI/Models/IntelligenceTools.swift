@@ -139,11 +139,11 @@ enum IntelligenceIdea: String, CaseIterable, Identifiable {
     var prompt: String {
         switch self {
         case .whatCanYou:
-            return "Was kannst du über den NOCO AI Companion alles für mich tun? Kurz und klar."
+            return "Was kannst du als System-KI? Kurz Speak, Vision Live, Agent, Live Screen, Chat und Bilder erklären."
         case .createImage:
             return "Hilf mir, einen starken Prompt für ein Bild zu schreiben. Frage kurz nach Stil und Motiv."
         case .summarize:
-            return "Erkläre mir kurz, wie ich Texte mit dir zusammenfassen kann."
+            return "Erkläre mir kurz, wie ich Texte mit dir zusammenfassen und weiterverarbeiten kann."
         case .goDeeper:
             return "Wähle ein spannendes Alltagsthema und erkläre es mir in der Tiefe (Nachdenken)."
         case .codeHelp:

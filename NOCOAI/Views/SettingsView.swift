@@ -15,7 +15,6 @@ struct SettingsView: View {
     @State private var copyMode: ChatCopyMode = ChatCopyMode.current
 
     var body: some View {
-        NavigationStack {
             List {
                 Section("NOCO Sync") {
                     LabeledContent("PC-Adresse", value: connection.serverHost)
@@ -261,8 +260,8 @@ struct SettingsView: View {
                 }
 
                 Section("Info") {
-                    Text("NOCO AI Companion v6.6")
-                    Text("Ask · Hold-Delete · Magic Eraser")
+                    Text(appVersionLabel)
+                    Text("Chat · Speak · Vision · Agent · Live Screen")
                         .font(.footnote)
                         .foregroundStyle(NOCOAITheme.secondaryText(for: scheme))
                 }
@@ -294,7 +293,11 @@ struct SettingsView: View {
                 previewSynth.stopSpeaking(at: .immediate)
                 connection.profile.setName(nameDraft)
             }
-        }
+    }
+
+    private var appVersionLabel: String {
+        let short = Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "7.9"
+        return "NOCO AI · v\(short)"
     }
 
     private func keyboardSetupStep(_ n: Int, _ text: String) -> some View {

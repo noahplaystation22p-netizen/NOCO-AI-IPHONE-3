@@ -25,6 +25,7 @@ final class LiveScreenSessionController: ObservableObject {
     /// In-memory only — frames are never written to disk by default (privacy).
     private var latestFrame: LiveScreenFrame?
     private var replayCapture: LiveScreenInAppReplayCapture?
+    private var broadcastCapture: LiveScreenBroadcastCapture?
     private var lastAutoAnalyzeAt: Date?
     private var lastFrameFingerprint: Int?
     private var apiProvider: (() -> CompanionAPI?)?
@@ -66,16 +67,19 @@ final class LiveScreenSessionController: ObservableObject {
             turns.append(
                 LiveScreenTurn(
                     role: .system,
-                    text: "Live Screen ist aktiv. Teile einen Screenshot, füge ein Bild aus der Zwischenablage ein oder starte die In-App-Aufnahme. NOCO analysiert den sichtbaren Kontext."
+                    text: "Live Screen ist aktiv. Starte Bildschirmübertragung (wie im Kontrollzentrum), teile einen Screenshot oder nutze die In-App-Aufnahme."
                 )
             )
         }
         HapticService.open()
+        Task { await startBroadcastCapture() }
     }
 
     func stopSession() {
         replayCapture?.stop()
         replayCapture = nil
+        broadcastCapture?.stop()
+        broadcastCapture = nil
         isActive = false
         isAnalyzing = false
         phase = .idle
@@ -151,11 +155,12 @@ final class LiveScreenSessionController: ObservableObject {
 
     func startInAppCapture() async {
         guard isActive else { return }
+        broadcastCapture?.stop()
+        broadcastCapture = nil
         let capture = LiveScreenInAppReplayCapture()
         capture.onFrame = { [weak self] image in
             Task { @MainActor in
                 guard let self, self.isActive else { return }
-                // Keep preview fresh; analyze only on demand or throttled assist
                 self.latestPreview = image
                 self.captureKind = .inAppReplay
                 if self.autoAssistEnabled, self.mode == .assist {
@@ -174,6 +179,44 @@ final class LiveScreenSessionController: ObservableObject {
         } catch {
             lastError = (error as? LocalizedError)?.errorDescription ?? error.localizedDescription
             HapticService.error()
+        }
+    }
+
+    /// Start listening for system Broadcast frames (Control Center / picker).
+    func startBroadcastCapture() async {
+        guard isActive else { return }
+        replayCapture?.stop()
+        replayCapture = nil
+        let capture = LiveScreenBroadcastCapture()
+        capture.onFrame = { [weak self] image in
+            Task { @MainActor in
+                guard let self, self.isActive else { return }
+                self.latestPreview = image
+                self.captureKind = .broadcastExtension
+                let now = Date()
+                let throttle: TimeInterval = self.autoAssistEnabled ? 5.0 : 12.0
+                if let last = self.lastAutoAnalyzeAt, now.timeIntervalSince(last) < throttle { return }
+                self.lastAutoAnalyzeAt = now
+                await self.ingest(image: image, source: .broadcastExtension, autoAnalyze: true)
+            }
+        }
+        do {
+            try await capture.prepare()
+            broadcastCapture = capture
+            statusLine = "Warte auf Bildschirmübertragung…"
+            HapticService.success()
+        } catch {
+            lastError = (error as? LocalizedError)?.errorDescription ?? error.localizedDescription
+            HapticService.error()
+        }
+    }
+
+    func stopBroadcastCapture() {
+        broadcastCapture?.stop()
+        broadcastCapture = nil
+        if captureKind == .broadcastExtension {
+            captureKind = nil
+            statusLine = "Übertragung gestoppt"
         }
     }
 

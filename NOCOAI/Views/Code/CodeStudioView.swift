@@ -7,7 +7,6 @@ struct CodeStudioView: View {
     @FocusState private var focused: Bool
 
     var body: some View {
-        NavigationStack {
             VStack(spacing: 0) {
                 if !connection.code.previewCode.isEmpty {
                     ScrollView {
@@ -78,7 +77,6 @@ struct CodeStudioView: View {
                 }
             }
             .task { await connection.code.loadSessions() }
-        }
     }
 
     private func send() {

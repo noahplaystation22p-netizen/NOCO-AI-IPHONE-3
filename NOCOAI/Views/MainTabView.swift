@@ -14,13 +14,13 @@ struct MainTabView: View {
 
             ImagesHubView()
                 .tabItem {
-                    Label("Bildideen", systemImage: "paintbrush.pointed.fill")
+                    Label("Bilder", systemImage: "paintbrush.pointed.fill")
                 }
                 .tag(1)
 
             MoreView()
                 .tabItem {
-                    Label("Studio", systemImage: "square.grid.2x2.fill")
+                    Label("Studio", systemImage: selectedTab == 2 ? "square.grid.2x2.fill" : "square.grid.2x2")
                 }
                 .tag(2)
         }
@@ -32,7 +32,9 @@ struct MainTabView: View {
         }
         .onChange(of: connection.pendingTab) { _, tab in
             if let tab {
-                selectedTab = tab
+                withAnimation(.spring(response: 0.38, dampingFraction: 0.86)) {
+                    selectedTab = tab
+                }
                 connection.pendingTab = nil
                 HapticService.open()
             }

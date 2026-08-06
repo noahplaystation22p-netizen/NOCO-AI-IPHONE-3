@@ -1,7 +1,7 @@
 import Foundation
 
 enum AIMode: String, CaseIterable, Identifiable, Codable {
-    case flash, knowledge, think, auto
+    case flash, knowledge, think, agent, auto
 
     var id: String { rawValue }
 
@@ -10,6 +10,7 @@ enum AIMode: String, CaseIterable, Identifiable, Codable {
         case .flash: return "Blitz"
         case .knowledge: return "Wissen"
         case .think: return "Tiefe"
+        case .agent: return "Agent"
         case .auto: return "Intelligent"
         }
     }
@@ -19,6 +20,7 @@ enum AIMode: String, CaseIterable, Identifiable, Codable {
         case .flash: return "Schnelle Antworten"
         case .knowledge: return "Ohne Chat-Kontext"
         case .think: return "Nachdenken"
+        case .agent: return "Maximale Kraft"
         case .auto: return "Wählt automatisch"
         }
     }
@@ -27,16 +29,21 @@ enum AIMode: String, CaseIterable, Identifiable, Codable {
         switch self {
         case .flash: return "bolt.fill"
         case .knowledge: return "book.fill"
-        case .think: return "brain.head.profile"
+        case .think: return "brain"
+        case .agent: return "cpu.fill"
         case .auto: return "sparkles"
         }
     }
+
+    /// True for the ultra-capable Agent chat mode (stronger than Think).
+    var isAgentPower: Bool { self == .agent }
 
     static func from(_ raw: String?) -> AIMode {
         switch (raw ?? "").lowercased() {
         case "flash", "blitz": return .flash
         case "knowledge", "wissen", "normal", "klar": return .knowledge
         case "think", "tiefe", "depth": return .think
+        case "agent", "noco-agent", "max": return .agent
         case "auto", "intelligent": return .auto
         default: return .auto
         }
@@ -162,6 +169,8 @@ struct ChatRequestV2: Encodable {
     let stream: Bool
     let mode: String?
     let speak: Bool?
+    /// Marks ultra Agent power requests for Companion (optional; ignored if unknown).
+    let agent: Bool?
 }
 
 struct SyncEventsResponse: Decodable {

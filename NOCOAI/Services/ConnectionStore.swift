@@ -27,6 +27,10 @@ final class ConnectionStore: ObservableObject {
     @Published var pendingOpenAgent = false
     /// Open Vision Live after switching to Studio
     @Published var pendingOpenVisionLive = false
+    /// Prefill Chat composer when switching to Chat
+    @Published var pendingChatDraft: String?
+    /// Prefill Agent goal when opening Studio → Agent
+    @Published var pendingAgentDraft: String?
     /// Open this gallery image after switching to Bildideen
     @Published var pendingGalleryImageURL: URL?
     @Published var pendingGalleryImageId: String?
@@ -185,15 +189,25 @@ final class ConnectionStore: ObservableObject {
         await images.loadFromConversations(chat.conversations, api: api)
     }
 
+    private var voiceRefreshScheduled = false
+
     private func forwardStoreChanges() {
         chat.objectWillChange.sink { [weak self] _ in self?.objectWillChange.send() }.store(in: &cancellables)
         images.objectWillChange.sink { [weak self] _ in self?.objectWillChange.send() }.store(in: &cancellables)
         code.objectWillChange.sink { [weak self] _ in self?.objectWillChange.send() }.store(in: &cancellables)
         speak.objectWillChange.sink { [weak self] _ in self?.objectWillChange.send() }.store(in: &cancellables)
         profile.objectWillChange.sink { [weak self] _ in self?.objectWillChange.send() }.store(in: &cancellables)
+        // Voice level meters fire very often — coalesce to keep tabs smooth.
         speak.voice.objectWillChange.sink { [weak self] _ in
-            self?.objectWillChange.send()
-            self?.speak.pushLiveActivity(force: false)
+            guard let self else { return }
+            self.speak.pushLiveActivity(force: false)
+            guard !self.voiceRefreshScheduled else { return }
+            self.voiceRefreshScheduled = true
+            Task { @MainActor in
+                try? await Task.sleep(nanoseconds: 48_000_000)
+                self.voiceRefreshScheduled = false
+                self.objectWillChange.send()
+            }
         }.store(in: &cancellables)
     }
 

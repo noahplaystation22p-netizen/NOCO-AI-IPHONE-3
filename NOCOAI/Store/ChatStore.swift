@@ -172,12 +172,17 @@ final class ChatStore: ObservableObject {
         var conversationId = activeConversationId
         var reply: String?
 
+        // Agent mode: ultra-capable directive — stronger than Think, still streams in Chat.
+        let outboundMessage = sendMode.isAgentPower ? Self.agentPowerPrompt(for: trimmed) : trimmed
+        let apiMode: AIMode = sendMode.isAgentPower ? .think : sendMode
+
         do {
             for try await chunk in api.streamChatV2(
-                message: trimmed,
+                message: outboundMessage,
                 conversationId: conversationId,
-                mode: sendMode,
-                speak: speak
+                mode: apiMode,
+                speak: speak,
+                agentPower: sendMode.isAgentPower
             ) {
                 try Task.checkCancellation()
                 if let cid = chunk.conversationId, !cid.isEmpty {
@@ -452,6 +457,9 @@ final class ChatStore: ObservableObject {
     func setMode(_ newMode: AIMode) {
         guard mode != newMode else { return }
         mode = newMode
+        if newMode == .agent {
+            HapticService.open()
+        }
         guard !applyingRemoteMode else { return }
         modeTask?.cancel()
         modeTask = Task { [weak self] in
@@ -460,6 +468,31 @@ final class ChatStore: ObservableObject {
             guard !Task.isCancelled else { return }
             try? await api.postMode(newMode)
         }
+    }
+
+    /// Ultra Agent directive — clearly stronger / more actionable than Think.
+    static func agentPowerPrompt(for userText: String) -> String {
+        """
+        [NOCO AGENT MODE — MAXIMALE KRAFT]
+        Du bist NOCO Agent, der stärkste Chat-Modus. Du bist DEUTLICH besser als normaler Tiefe-/Think-Modus: \
+        schärfer, strategischer, handlungsfähiger und präziser.
+
+        Pflicht-Antwortstruktur auf Deutsch:
+        1) Kurzfazit (1–2 Sätze, hart und klar)
+        2) Analyse (was wirklich zählt, Risiken, Chancen)
+        3) Konkreter Plan (nummerierte Schritte, sofort umsetzbar)
+        4) Nächste Aktionen (was der Nutzer JETZT tippen/tun soll)
+        5) Optional: welche NOCO-Funktion hilft als Nächstes (Speak, Vision Live, Live Screen, Bilder)
+
+        Regeln:
+        - Kein Fülltext, keine Floskeln
+        - Wenn Infos fehlen: nimm sinnvolle Annahmen und markiere sie kurz
+        - Sei proaktiv und decisiv — wie eine echte System-KI
+        - Qualität > Länge, aber liefere Substanz
+
+        Nutzerauftrag:
+        \(userText)
+        """
     }
 
     func publishTyping(_ text: String) {

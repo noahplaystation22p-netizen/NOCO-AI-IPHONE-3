@@ -23,8 +23,10 @@ struct ImagesHubView: View {
             ScrollView {
                 VStack(spacing: 20) {
                     IntelligenceHeroBanner(
-                        title: "Bildideen",
-                        subtitle: "Beschreiben → PC erzeugt mit Stable Diffusion",
+                        title: "Bilder",
+                        subtitle: connection.isOnline
+                            ? "Beschreiben — NOCO erzeugt auf dem PC"
+                            : "Companion verbinden, dann erzeugen",
                         online: connection.isOnline
                     )
                     .opacity(appear ? 1 : 0)
@@ -128,6 +130,11 @@ struct ImagesHubView: View {
                 focusPendingGalleryImage()
                 withAnimation(.spring(response: 0.55, dampingFraction: 0.84)) {
                     appear = true
+                }
+            }
+            .onChange(of: connection.images.prompt) { _, newPrompt in
+                if !newPrompt.isEmpty, draftPrompt != newPrompt {
+                    draftPrompt = newPrompt
                 }
             }
             .onChange(of: connection.images.phase) { _, phase in

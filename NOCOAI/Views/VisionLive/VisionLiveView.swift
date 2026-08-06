@@ -227,13 +227,31 @@ struct VisionLiveView: View {
             }
 
             if let last = session.turns.last(where: { $0.role == .assistant }) {
-                Text(last.text)
-                    .font(.subheadline)
-                    .foregroundStyle(.white)
-                    .padding(14)
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                    .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 18, style: .continuous))
-                    .lineLimit(8)
+                VStack(alignment: .leading, spacing: 10) {
+                    Text(last.text)
+                        .font(.subheadline)
+                        .foregroundStyle(.white)
+                        .padding(14)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 18, style: .continuous))
+                        .lineLimit(8)
+
+                    IntelligenceHandoffBar(
+                        text: last.text,
+                        onChat: {
+                            connection.continueInChat(
+                                draft: "Kontext aus Vision Live:\n\n\(last.text)\n\nBitte hilf mir weiter."
+                            )
+                        },
+                        onSpeak: {
+                            connection.speak.voice.speak(last.text)
+                            HapticService.speakCue()
+                        },
+                        onAgent: {
+                            connection.handoffToAgent(goal: last.text)
+                        }
+                    )
+                }
             }
 
             HStack(spacing: 10) {

@@ -80,6 +80,10 @@ jobs:
                 codesign --force --sign - --timestamp=none \
                   --entitlements NOCOAISpeakWidget/NOCOAISpeakWidget.entitlements "$ext"
                 ;;
+              NOCOAIBroadcast.appex)
+                codesign --force --sign - --timestamp=none \
+                  --entitlements NOCOAIBroadcast/NOCOAIBroadcast.entitlements "$ext"
+                ;;
               *)
                 codesign --force --sign - --timestamp=none "$ext"
                 ;;
@@ -94,13 +98,18 @@ jobs:
           mkdir -p build/sidestore-entitlements
           cp NOCOAI/NOCOAI.entitlements build/sidestore-entitlements/NOCOAI.plist
           cp NOCOAIKeyboard/NOCOAIKeyboard.entitlements build/sidestore-entitlements/NOCOAIKeyboard.plist
+          cp NOCOAIBroadcast/NOCOAIBroadcast.entitlements build/sidestore-entitlements/NOCOAIBroadcast.plist
           cp sidestore-entitlements/ANLEITUNG.txt build/sidestore-entitlements/ANLEITUNG.txt
           cd build && zip -rq NOCO-AI.ipa Payload sidestore-entitlements
           ls -la NOCO-AI.ipa
 
-          # Verify IPA contains the widget
+          # Verify IPA contains the widget + broadcast extension
           unzip -l NOCO-AI.ipa | grep -E "appex|PlugIns" || {
             echo "FATAL: IPA missing PlugIns/appex"
+            exit 1
+          }
+          unzip -l NOCO-AI.ipa | grep -q "NOCOAIBroadcast.appex" || {
+            echo "FATAL: IPA missing NOCOAIBroadcast.appex — Live Screen broadcast cannot work"
             exit 1
           }
 

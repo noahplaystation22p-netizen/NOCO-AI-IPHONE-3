@@ -252,7 +252,7 @@ struct LiveScreenView: View {
                             Image(systemName: "sparkle.magnifyingglass")
                                 .font(.system(size: 28, weight: .medium))
                                 .foregroundStyle(session.mode.accent)
-                            Text("Screenshot teilen oder Aufnahme starten")
+                            Text("Bildschirmübertragung starten oder Screenshot teilen")
                                 .font(.footnote)
                                 .foregroundStyle(.secondary)
                                 .multilineTextAlignment(.center)
@@ -277,36 +277,69 @@ struct LiveScreenView: View {
     }
 
     private var captureActions: some View {
-        HStack(spacing: 10) {
-            PhotosPicker(selection: $photoItem, matching: .images) {
-                labelChip(title: "Screenshot", icon: "photo.on.rectangle")
-            }
-            .disabled(!session.isActive)
+        VStack(spacing: 10) {
+            // Primary: system Broadcast (Control Center style)
+            HStack(spacing: 12) {
+                BroadcastPickerRepresentable()
+                    .frame(width: 48, height: 48)
+                    .background(
+                        Circle()
+                            .fill(Color.red.opacity(0.14))
+                    )
+                    .disabled(!session.isActive)
+                    .opacity(session.isActive ? 1 : 0.45)
+                    .allowsHitTesting(session.isActive)
 
-            Button {
-                HapticService.light()
-                Task { _ = await session.ingestClipboardIfPossible() }
-            } label: {
-                labelChip(title: "Einfügen", icon: "doc.on.clipboard")
-            }
-            .disabled(!session.isActive)
-
-            Button {
-                HapticService.open()
-                Task {
-                    if session.captureKind == .inAppReplay {
-                        await session.captureCurrentInAppFrame()
-                    } else {
-                        await session.startInAppCapture()
-                    }
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("Bildschirmübertragung")
+                        .font(.subheadline.weight(.semibold))
+                    Text(session.captureKind == .broadcastExtension
+                          ? "Live — Frames kommen vom System"
+                          : "Wie Kontrollzentrum: App wählen, Übertragung starten")
+                        .font(.caption2)
+                        .foregroundStyle(.secondary)
+                        .fixedSize(horizontal: false, vertical: true)
                 }
-            } label: {
-                labelChip(
-                    title: session.captureKind == .inAppReplay ? "Frame" : "Aufnahme",
-                    icon: "record.circle"
-                )
+                Spacer(minLength: 0)
             }
-            .disabled(!session.isActive)
+            .padding(12)
+            .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 16, style: .continuous))
+            .overlay(
+                RoundedRectangle(cornerRadius: 16, style: .continuous)
+                    .stroke(Color.red.opacity(session.captureKind == .broadcastExtension ? 0.55 : 0.2), lineWidth: 1)
+            )
+
+            HStack(spacing: 10) {
+                PhotosPicker(selection: $photoItem, matching: .images) {
+                    labelChip(title: "Screenshot", icon: "photo.on.rectangle")
+                }
+                .disabled(!session.isActive)
+
+                Button {
+                    HapticService.light()
+                    Task { _ = await session.ingestClipboardIfPossible() }
+                } label: {
+                    labelChip(title: "Einfügen", icon: "doc.on.clipboard")
+                }
+                .disabled(!session.isActive)
+
+                Button {
+                    HapticService.open()
+                    Task {
+                        if session.captureKind == .inAppReplay {
+                            await session.captureCurrentInAppFrame()
+                        } else {
+                            await session.startInAppCapture()
+                        }
+                    }
+                } label: {
+                    labelChip(
+                        title: session.captureKind == .inAppReplay ? "Frame" : "In-App",
+                        icon: "record.circle"
+                    )
+                }
+                .disabled(!session.isActive)
+            }
         }
     }
 
@@ -447,6 +480,24 @@ struct LiveScreenView: View {
                         RoundedRectangle(cornerRadius: 16, style: .continuous)
                             .fill(bubbleColor(for: turn.role))
                     }
+
+                if turn.role == .assistant, !turn.text.isEmpty {
+                    IntelligenceHandoffBar(
+                        text: turn.text,
+                        onChat: {
+                            connection.continueInChat(
+                                draft: "Kontext aus Live Screen:\n\n\(turn.text)\n\nBitte hilf mir weiter."
+                            )
+                        },
+                        onSpeak: {
+                            connection.speak.voice.speak(turn.text)
+                            HapticService.speakCue()
+                        },
+                        onAgent: {
+                            connection.handoffToAgent(goal: turn.text)
+                        }
+                    )
+                }
             }
 
             if turn.role != .user { Spacer(minLength: 40) }
@@ -532,15 +583,15 @@ struct LiveScreenView: View {
                 Text("Bildschirmhilfe mit Zustimmung")
                     .font(.title2.bold())
 
-                Text("NOCO Live Screen analysiert nur Bilder, die du aktiv teilst oder aufnimmst. Es gibt keine heimliche Aufnahme. Frames bleiben standardmäßig im Speicher und werden für die Analyse an deinen NOCO Companion gesendet.")
+                Text("NOCO Live Screen analysiert nur Bilder, die du aktiv teilst oder überträgst. Nutze Bildschirmübertragung (wie im Kontrollzentrum), Screenshot oder In-App-Aufnahme. Es gibt keine heimliche Aufnahme. Frames bleiben standardmäßig im Speicher und werden für die Analyse an deinen NOCO Companion gesendet.")
                     .font(.subheadline)
                     .foregroundStyle(.secondary)
 
                 VStack(alignment: .leading, spacing: 8) {
+                    consentBullet("Bildschirmübertragung über Kontrollzentrum")
                     consentBullet("Klare LIVE-Anzeige, solange aktiv")
                     consentBullet("OCR lokal auf dem Gerät")
                     consentBullet("Jederzeit stoppen")
-                    consentBullet("Erweiterbar für Kamera, AR & mehr")
                 }
 
                 Spacer()

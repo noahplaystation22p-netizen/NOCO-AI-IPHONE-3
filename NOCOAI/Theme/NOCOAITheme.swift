@@ -15,9 +15,9 @@ enum NOCOAITheme {
         if scheme == .dark {
             return LinearGradient(
                 colors: [
-                    Color(red: 0.035, green: 0.04, blue: 0.07),
-                    Color(red: 0.06, green: 0.07, blue: 0.11),
-                    Color(red: 0.045, green: 0.05, blue: 0.085)
+                    Color(red: 0.028, green: 0.032, blue: 0.055),
+                    Color(red: 0.048, green: 0.055, blue: 0.095),
+                    Color(red: 0.038, green: 0.042, blue: 0.072)
                 ],
                 startPoint: .topLeading,
                 endPoint: .bottomTrailing
@@ -25,9 +25,9 @@ enum NOCOAITheme {
         }
         return LinearGradient(
             colors: [
-                Color(red: 0.96, green: 0.97, blue: 1.0),
-                Color(red: 0.93, green: 0.95, blue: 0.99),
-                Color(red: 0.97, green: 0.96, blue: 0.99)
+                Color(red: 0.965, green: 0.975, blue: 1.0),
+                Color(red: 0.93, green: 0.945, blue: 0.99),
+                Color(red: 0.97, green: 0.965, blue: 0.995)
             ],
             startPoint: .topLeading,
             endPoint: .bottomTrailing
@@ -39,11 +39,11 @@ enum NOCOAITheme {
     }
 
     static func cardFill(for scheme: ColorScheme) -> Color {
-        scheme == .dark ? Color.white.opacity(0.08) : Color.white.opacity(0.68)
+        scheme == .dark ? Color.white.opacity(0.075) : Color.white.opacity(0.72)
     }
 
     static func cardStroke(for scheme: ColorScheme) -> Color {
-        scheme == .dark ? Color.white.opacity(0.12) : Color.black.opacity(0.045)
+        scheme == .dark ? Color.white.opacity(0.14) : Color.black.opacity(0.04)
     }
 
     static func primaryText(for scheme: ColorScheme) -> Color {

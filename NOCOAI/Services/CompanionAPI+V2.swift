@@ -72,9 +72,11 @@ extension CompanionAPI {
             let mode: String
             let source: String
         }
+        // Companion stack: Agent uses deepest think path.
+        let wire = mode == .agent ? AIMode.think.rawValue : mode.rawValue
         let _: EmptyResponse = try await post(
             "mode",
-            body: Body(mode: mode.rawValue, source: "mobile"),
+            body: Body(mode: wire, source: "mobile"),
             as: EmptyResponse.self
         )
     }
@@ -87,15 +89,35 @@ extension CompanionAPI {
         try await post("profile", body: profile, as: NocoUserProfile.self)
     }
 
-    func streamChatV2(message: String, conversationId: String?, mode: AIMode, speak: Bool = false) -> AsyncThrowingStream<ChatStreamChunk, Error> {
-        streamSSEChunks(
+    func streamChatV2(
+        message: String,
+        conversationId: String?,
+        mode: AIMode,
+        speak: Bool = false,
+        agentPower: Bool = false
+    ) -> AsyncThrowingStream<ChatStreamChunk, Error> {
+        let modeValue: String?
+        if speak {
+            modeValue = "flash"
+        } else if agentPower {
+            // Deepest reasoning stack on Companion; Agent directive is in the message.
+            modeValue = "think"
+        } else if mode == .auto {
+            modeValue = nil
+        } else if mode == .agent {
+            modeValue = "think"
+        } else {
+            modeValue = mode.rawValue
+        }
+        return streamSSEChunks(
             path: "chat",
             body: ChatRequestV2(
                 message: message,
                 conversationId: conversationId,
                 stream: true,
-                mode: mode == .auto && !speak ? nil : (speak ? "flash" : mode.rawValue),
-                speak: speak ? true : nil
+                mode: modeValue,
+                speak: speak ? true : nil,
+                agent: agentPower ? true : nil
             )
         )
     }

@@ -35,7 +35,7 @@ struct ChatInputBar: View {
             HStack(alignment: .bottom, spacing: 10) {
                 plusButton
 
-                TextField("Frag NOCO AI…", text: $text, axis: .vertical)
+                TextField("Frag NOCO…", text: $text, axis: .vertical)
                 .lineLimit(1...8)
                 .focused($focused)
                 .submitLabel(.send)

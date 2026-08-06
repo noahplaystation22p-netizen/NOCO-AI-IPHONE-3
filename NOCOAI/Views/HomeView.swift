@@ -129,9 +129,9 @@ struct HomeView: View {
 
     private var smartHints: some View {
         GlassCard {
-            VStack(alignment: .leading, spacing: 10) {
+            VStack(alignment: .leading, spacing: 12) {
                 HStack {
-                    Text("Einblicke").font(.headline)
+                    Text("NOCO denkt mit").font(.headline)
                     Spacer()
                     Image(systemName: "sparkles")
                         .foregroundStyle(NOCOAITheme.accent)
@@ -140,6 +140,20 @@ struct HomeView: View {
                 Text(hintText)
                     .font(.subheadline)
                     .foregroundStyle(NOCOAITheme.secondaryText(for: scheme))
+
+                if connection.isOnline {
+                    ScrollView(.horizontal, showsIndicators: false) {
+                        HStack(spacing: 8) {
+                            systemChip("Speak", "waveform") { connection.speak.openUI() }
+                            systemChip("Vision", "eye.circle.fill") { connection.openStudioFeature(.visionLive) }
+                            systemChip("Agent", "brain.head.profile") { connection.openStudioFeature(.agent) }
+                            systemChip("Screen", "rectangle.inset.filled.and.person.filled") {
+                                connection.openStudioFeature(.liveScreen)
+                            }
+                        }
+                    }
+                }
+
                 if let features = connection.features, !features.enabled.isEmpty {
                     Text("Aktiv: \(features.enabled.joined(separator: " · "))")
                         .font(.caption)
@@ -148,6 +162,20 @@ struct HomeView: View {
             }
             .frame(maxWidth: .infinity, alignment: .leading)
         }
+    }
+
+    private func systemChip(_ title: String, _ icon: String, action: @escaping () -> Void) -> some View {
+        Button {
+            HapticService.selection()
+            action()
+        } label: {
+            Label(title, systemImage: icon)
+                .font(.caption.weight(.semibold))
+                .padding(.horizontal, 12)
+                .padding(.vertical, 8)
+                .background(.ultraThinMaterial, in: Capsule(style: .continuous))
+        }
+        .buttonStyle(.plain)
     }
 
     private var hintText: String {

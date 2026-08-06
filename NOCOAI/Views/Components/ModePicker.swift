@@ -22,24 +22,33 @@ struct ModePicker: View {
                     .padding(.vertical, 8)
                     .background {
                         Capsule()
-                            .fill(mode == m ? NOCOAITheme.accent.opacity(0.22) : Color.primary.opacity(0.05))
+                            .fill(fill(for: m))
                             .overlay(
                                 Capsule()
-                                    .stroke(
-                                        mode == m
-                                            ? NOCOAITheme.glowPrimary.opacity(0.55)
-                                            : Color.clear,
-                                        lineWidth: 1
-                                    )
+                                    .stroke(stroke(for: m), lineWidth: m == .agent && mode == m ? 1.4 : 1)
                             )
-                            .shadow(color: mode == m ? NOCOAITheme.glowPrimary.opacity(0.35) : .clear, radius: 8)
+                            .shadow(color: mode == m ? accent(for: m).opacity(0.4) : .clear, radius: 8)
                     }
                 }
                 .buttonStyle(.plain)
-                .foregroundStyle(mode == m ? NOCOAITheme.accent : .secondary)
+                .foregroundStyle(mode == m ? accent(for: m) : .secondary)
                 .accessibilityLabel("\(m.label), \(m.subtitle)")
             }
         }
         .intelligenceSelectionFeedback(mode)
+    }
+
+    private func accent(for m: AIMode) -> Color {
+        m == .agent ? Color(red: 0.35, green: 0.78, blue: 0.72) : NOCOAITheme.accent
+    }
+
+    private func fill(for m: AIMode) -> Color {
+        guard mode == m else { return Color.primary.opacity(0.05) }
+        return accent(for: m).opacity(m == .agent ? 0.28 : 0.22)
+    }
+
+    private func stroke(for m: AIMode) -> Color {
+        guard mode == m else { return .clear }
+        return accent(for: m).opacity(0.65)
     }
 }

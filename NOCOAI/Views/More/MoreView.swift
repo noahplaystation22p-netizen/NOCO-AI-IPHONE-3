@@ -1,9 +1,10 @@
 import SwiftUI
 
-/// Studio hub — Speak, System & Settings; Code Assist in Settings.
+/// Studio hub — senses first, utilities second. Unified system-AI surface.
 struct MoreView: View {
     @EnvironmentObject private var connection: ConnectionStore
     @Environment(\.colorScheme) private var scheme
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var appear = false
     @State private var openLiveScreen = false
     @State private var openAgent = false
@@ -12,28 +13,30 @@ struct MoreView: View {
     var body: some View {
         NavigationStack {
             ScrollView {
-                VStack(spacing: 18) {
+                VStack(spacing: 20) {
                     IntelligenceHeroBanner(
-                        title: "Studio",
-                        subtitle: "Vision Live, Agent & Speak — deine KI mit Augen.",
+                        title: "NOCO",
+                        subtitle: connection.isOnline
+                            ? "Dein System-Assistent · \(connection.status.model ?? "lokal")"
+                            : "Warte auf Companion…",
                         online: connection.isOnline
                     )
                     .opacity(appear ? 1 : 0)
                     .offset(y: appear ? 0 : 12)
 
                     IntelligenceWaveRibbon()
-                        .frame(height: 28)
+                        .frame(height: 26)
                         .padding(.horizontal, 8)
                         .opacity(0.85)
 
+                    sectionHeader("Intelligenz", subtitle: "Sehen, Handeln, Sprechen")
                     LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible())], spacing: 14) {
                         NavigationLink {
-                            VisionLiveView()
-                                .environmentObject(connection)
+                            VisionLiveView().environmentObject(connection)
                         } label: {
                             IntelligenceFeatureTile(
                                 title: "Vision Live",
-                                subtitle: "Kamera verstehen & helfen",
+                                subtitle: "Kamera verstehen",
                                 systemImage: "eye.circle.fill",
                                 accent: Color(red: 0.45, green: 0.72, blue: 1.0)
                             )
@@ -41,14 +44,25 @@ struct MoreView: View {
                         .buttonStyle(IntelligencePressStyle(haptic: { HapticService.open() }))
 
                         NavigationLink {
-                            AgentDashboardView()
-                                .environmentObject(connection)
+                            AgentDashboardView().environmentObject(connection)
                         } label: {
                             IntelligenceFeatureTile(
-                                title: "NOCO Agent",
-                                subtitle: "Plant & erledigt Aufgaben",
+                                title: "Agent",
+                                subtitle: connection.isOnline ? "Aufgaben erledigen" : "Offline",
                                 systemImage: "brain.head.profile",
                                 accent: Color(red: 0.35, green: 0.78, blue: 0.72)
+                            )
+                        }
+                        .buttonStyle(IntelligencePressStyle(haptic: { HapticService.open() }))
+
+                        NavigationLink {
+                            LiveScreenView().environmentObject(connection)
+                        } label: {
+                            IntelligenceFeatureTile(
+                                title: "Live Screen",
+                                subtitle: "Bildschirmhilfe",
+                                systemImage: "rectangle.inset.filled.and.person.filled",
+                                accent: Color(red: 0.98, green: 0.55, blue: 0.35)
                             )
                         }
                         .buttonStyle(IntelligencePressStyle(haptic: { HapticService.open() }))
@@ -59,7 +73,7 @@ struct MoreView: View {
                         } label: {
                             IntelligenceFeatureTile(
                                 title: "Speak",
-                                subtitle: connection.speak.isRunning ? "Live aktiv" : "Sprechen & Spoken Reply",
+                                subtitle: connection.speak.isRunning ? "Live aktiv" : "Sprachmodus",
                                 systemImage: "waveform",
                                 accent: Color(red: 0.55, green: 0.45, blue: 1)
                             )
@@ -67,27 +81,18 @@ struct MoreView: View {
                         .buttonStyle(IntelligencePressStyle(haptic: { HapticService.soft() }))
                         .disabled(!connection.isOnline && !connection.speak.isRunning)
                         .opacity(connection.isOnline || connection.speak.isRunning ? 1 : 0.55)
+                    }
+                    .opacity(appear ? 1 : 0)
+                    .offset(y: appear ? 0 : 14)
 
+                    sectionHeader("Werkzeuge", subtitle: "System und Einstellungen")
+                    LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible())], spacing: 14) {
                         NavigationLink {
-                            LiveScreenView()
-                                .environmentObject(connection)
-                        } label: {
-                            IntelligenceFeatureTile(
-                                title: "Live Screen",
-                                subtitle: "Bildschirm verstehen & helfen",
-                                systemImage: "rectangle.inset.filled.and.person.filled",
-                                accent: Color(red: 0.98, green: 0.55, blue: 0.35)
-                            )
-                        }
-                        .buttonStyle(IntelligencePressStyle(haptic: { HapticService.open() }))
-
-                        NavigationLink {
-                            HomeView()
-                                .environmentObject(connection)
+                            HomeView().environmentObject(connection)
                         } label: {
                             IntelligenceFeatureTile(
                                 title: "System",
-                                subtitle: "GPU · CPU · RAM · Latenz",
+                                subtitle: systemSubtitle,
                                 systemImage: "desktopcomputer",
                                 accent: NOCOAITheme.glowSecondary
                             )
@@ -95,12 +100,11 @@ struct MoreView: View {
                         .buttonStyle(IntelligencePressStyle(haptic: { HapticService.light() }))
 
                         NavigationLink {
-                            SettingsView()
-                                .environmentObject(connection)
+                            SettingsView().environmentObject(connection)
                         } label: {
                             IntelligenceFeatureTile(
                                 title: "Einstellungen",
-                                subtitle: "Profil · Speak · Sync",
+                                subtitle: "Profil · Speak · Tastatur",
                                 systemImage: "gearshape.fill",
                                 accent: NOCOAITheme.glowAccent
                             )
@@ -108,74 +112,88 @@ struct MoreView: View {
                         .buttonStyle(IntelligencePressStyle(haptic: { HapticService.open() }))
                     }
                     .opacity(appear ? 1 : 0)
-                    .offset(y: appear ? 0 : 18)
 
                     connectionCard
                         .opacity(appear ? 1 : 0)
 
-                    Text("NOCO AI Companion v5.5")
+                    Text(appVersionLabel)
                         .font(.caption2)
-                        .foregroundStyle(.secondary)
+                        .foregroundStyle(.tertiary)
                         .padding(.top, 4)
                 }
                 .padding(20)
             }
             .nocoBackground()
             .overlay {
-                FloatingIntelligenceDots(count: 2)
-                    .opacity(0.35)
-                    .opacity(0.22)
-                    .allowsHitTesting(false)
+                if !reduceMotion {
+                    FloatingIntelligenceDots(count: 2)
+                        .opacity(0.22)
+                        .allowsHitTesting(false)
+                }
             }
             .navigationTitle("Studio")
             .navigationBarTitleDisplayMode(.large)
             .navigationDestination(isPresented: $openLiveScreen) {
-                LiveScreenView()
-                    .environmentObject(connection)
+                LiveScreenView().environmentObject(connection)
             }
             .navigationDestination(isPresented: $openAgent) {
-                AgentDashboardView()
-                    .environmentObject(connection)
+                AgentDashboardView().environmentObject(connection)
             }
             .navigationDestination(isPresented: $openVisionLive) {
-                VisionLiveView()
-                    .environmentObject(connection)
+                VisionLiveView().environmentObject(connection)
             }
             .onChange(of: connection.pendingOpenLiveScreen) { _, open in
-                if open {
-                    openLiveScreen = true
-                    connection.pendingOpenLiveScreen = false
-                }
+                if open { openLiveScreen = true; connection.pendingOpenLiveScreen = false }
             }
             .onChange(of: connection.pendingOpenAgent) { _, open in
-                if open {
-                    openAgent = true
-                    connection.pendingOpenAgent = false
-                }
+                if open { openAgent = true; connection.pendingOpenAgent = false }
             }
             .onChange(of: connection.pendingOpenVisionLive) { _, open in
-                if open {
-                    openVisionLive = true
-                    connection.pendingOpenVisionLive = false
-                }
+                if open { openVisionLive = true; connection.pendingOpenVisionLive = false }
             }
             .onAppear {
-                withAnimation(.spring(response: 0.55, dampingFraction: 0.84)) {
+                withAnimation(reduceMotion ? .easeOut(duration: 0.2) : .spring(response: 0.55, dampingFraction: 0.84)) {
                     appear = true
                 }
-                if connection.pendingOpenLiveScreen {
-                    openLiveScreen = true
-                    connection.pendingOpenLiveScreen = false
-                }
-                if connection.pendingOpenAgent {
-                    openAgent = true
-                    connection.pendingOpenAgent = false
-                }
-                if connection.pendingOpenVisionLive {
-                    openVisionLive = true
-                    connection.pendingOpenVisionLive = false
-                }
+                consumePendingOpens()
             }
+        }
+    }
+
+    private var systemSubtitle: String {
+        let gpu = connection.status.gpuPercent.map { "\($0)%" } ?? "—"
+        return connection.isOnline ? "GPU \(gpu)" : "Offline"
+    }
+
+    private var appVersionLabel: String {
+        let short = Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "7.9"
+        return "NOCO AI · v\(short)"
+    }
+
+    private func sectionHeader(_ title: String, subtitle: String) -> some View {
+        VStack(alignment: .leading, spacing: 2) {
+            Text(title)
+                .font(.subheadline.weight(.bold))
+            Text(subtitle)
+                .font(.caption)
+                .foregroundStyle(.secondary)
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(.top, 4)
+    }
+
+    private func consumePendingOpens() {
+        if connection.pendingOpenLiveScreen {
+            openLiveScreen = true
+            connection.pendingOpenLiveScreen = false
+        }
+        if connection.pendingOpenAgent {
+            openAgent = true
+            connection.pendingOpenAgent = false
+        }
+        if connection.pendingOpenVisionLive {
+            openVisionLive = true
+            connection.pendingOpenVisionLive = false
         }
     }
 
@@ -196,7 +214,7 @@ struct MoreView: View {
                     VStack(alignment: .leading, spacing: 2) {
                         Text(connection.isOnline ? "PC verbunden" : "PC offline")
                             .font(.subheadline.weight(.semibold))
-                        Text(connection.serverHost)
+                        Text(connection.serverHost.isEmpty ? "—" : "\(connection.serverHost):\(connection.serverPort)")
                             .font(.caption)
                             .foregroundStyle(NOCOAITheme.secondaryText(for: scheme))
                     }
@@ -226,14 +244,26 @@ struct MoreView: View {
                     }
                 }
 
-                Button {
-                    Task { await connection.refreshStatus(showLoading: true) }
-                    HapticService.light()
-                } label: {
-                    Label("Verbindung prüfen", systemImage: "antenna.radiowaves.left.and.right")
-                        .font(.subheadline.weight(.semibold))
-                        .frame(maxWidth: .infinity)
-                        .padding(.vertical, 10)
+                if connection.isOnline {
+                    Button {
+                        Task { await connection.refreshStatus(showLoading: true) }
+                        HapticService.light()
+                    } label: {
+                        Label("Verbindung prüfen", systemImage: "antenna.radiowaves.left.and.right")
+                            .font(.subheadline.weight(.semibold))
+                            .frame(maxWidth: .infinity)
+                            .padding(.vertical, 10)
+                    }
+                } else {
+                    Button {
+                        Task { await connection.refreshStatus(showLoading: true) }
+                        HapticService.open()
+                    } label: {
+                        Label("Erneut verbinden", systemImage: "link")
+                            .font(.subheadline.weight(.semibold))
+                            .frame(maxWidth: .infinity)
+                            .padding(.vertical, 10)
+                    }
                 }
 
                 Button(role: .destructive) {
@@ -253,9 +283,11 @@ struct MoreView: View {
     private func friendlyFeature(_ feature: String) -> String {
         switch feature.lowercased() {
         case "chat": return "Chat"
-        case "bilder", "images": return "Bildideen"
+        case "bilder", "images": return "Bilder"
         case "code": return "Code"
-        case "vision": return "Vision"
+        case "vision", "visionlive": return "Vision"
+        case "agent": return "Agent"
+        case "livescreen", "live_screen": return "Live Screen"
         case "sync": return "Sync"
         case "typing": return "Tipp-Sync"
         default: return feature

@@ -1,6 +1,7 @@
 import CoreMedia
 import Foundation
 import ReplayKit
+import SwiftUI
 import UIKit
 
 /// Pluggable capture — Broadcast Extension / Camera / AR plug in without rewriting the session.
@@ -37,7 +38,6 @@ final class LiveScreenInAppReplayCapture: NSObject, LiveScreenCaptureProviding {
                     guard let self else { return }
                     self.latestSample = image
                     let now = Date()
-                    // ~2.5 fps preview — keeps UI smooth without burning CPU
                     guard now.timeIntervalSince(self.lastEmitAt) >= 0.4 else { return }
                     self.lastEmitAt = now
                     self.onFrame?(image)
@@ -73,6 +73,60 @@ final class LiveScreenInAppReplayCapture: NSObject, LiveScreenCaptureProviding {
     }
 }
 
+/// System-wide screen broadcast via Control Center / RPSystemBroadcastPickerView.
+/// Frames arrive from `NOCOAIBroadcast` SampleHandler through the App Group.
+@MainActor
+final class LiveScreenBroadcastCapture: LiveScreenCaptureProviding {
+    let kind: LiveScreenCaptureKind = .broadcastExtension
+
+    private var pollTask: Task<Void, Never>?
+    private var lastFingerprint: Int?
+    var onFrame: ((UIImage) -> Void)?
+
+    func prepare() async throws {
+        stop()
+        pollTask = Task { [weak self] in
+            while !Task.isCancelled {
+                if let image = SharedBroadcastFrameStore.readImage() {
+                    let fp = image.pngData()?.count ?? 0
+                    if fp != self?.lastFingerprint {
+                        self?.lastFingerprint = fp
+                        self?.onFrame?(image)
+                    }
+                }
+                try? await Task.sleep(nanoseconds: 450_000_000)
+            }
+        }
+    }
+
+    func stop() {
+        pollTask?.cancel()
+        pollTask = nil
+    }
+}
+
+/// System Broadcast picker — same path as holding Screen Recording in Control Center.
+struct BroadcastPickerRepresentable: UIViewRepresentable {
+    var preferredExtension: String = SharedBroadcastFrameStore.preferredExtensionBundleId
+    var showsMicrophoneButton: Bool = false
+
+    func makeUIView(context: Context) -> RPSystemBroadcastPickerView {
+        let picker = RPSystemBroadcastPickerView(frame: CGRect(x: 0, y: 0, width: 48, height: 48))
+        picker.preferredExtension = preferredExtension
+        picker.showsMicrophoneButton = showsMicrophoneButton
+        if let button = picker.subviews.compactMap({ $0 as? UIButton }).first {
+            button.setImage(UIImage(systemName: "record.circle.fill"), for: .normal)
+            button.tintColor = UIColor(red: 0.98, green: 0.35, blue: 0.32, alpha: 1)
+            button.setTitle(nil, for: .normal)
+        }
+        return picker
+    }
+
+    func updateUIView(_ uiView: RPSystemBroadcastPickerView, context: Context) {
+        uiView.preferredExtension = preferredExtension
+    }
+}
+
 enum LiveScreenError: LocalizedError {
     case notConsented
     case notActive
@@ -85,7 +139,7 @@ enum LiveScreenError: LocalizedError {
         switch self {
         case .notConsented: return "Live Screen braucht deine Zustimmung zur Bildschirmhilfe."
         case .notActive: return "Live Screen ist nicht aktiv."
-        case .noFrame: return "Kein Bildschirmbild vorhanden — Screenshot teilen oder Aufnahme starten."
+        case .noFrame: return "Kein Bildschirmbild — Übertragung starten oder Screenshot teilen."
         case .offline: return "NOCO Companion ist offline."
         case .captureUnavailable: return "Bildschirmaufnahme ist auf diesem Gerät nicht verfügbar."
         case .processing: return "Analyse läuft noch."

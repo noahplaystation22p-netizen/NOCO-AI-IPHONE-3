@@ -53,6 +53,7 @@ struct IntelligenceAtmosphere: View {
 
 struct FloatingIntelligenceDots: View {
     let count: Int
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var animate = false
 
     init(count: Int = 12) {
@@ -71,19 +72,24 @@ struct FloatingIntelligenceDots: View {
                             x: CGFloat((i * 67) % Int(max(geo.size.width, 1))),
                             y: CGFloat((i * 97) % Int(max(geo.size.height, 1)))
                         )
-                        .offset(y: animate ? -16 : 12)
-                        .opacity(animate ? 0.95 : 0.3)
+                        .offset(y: (!reduceMotion && animate) ? -16 : 0)
+                        .opacity((!reduceMotion && animate) ? 0.95 : 0.45)
                         .animation(
-                            .easeInOut(duration: 1.9 + Double(i % 5) * 0.28)
-                            .repeatForever(autoreverses: true)
-                            .delay(Double(i) * 0.11),
+                            reduceMotion
+                                ? nil
+                                : .easeInOut(duration: 1.9 + Double(i % 5) * 0.28)
+                                    .repeatForever(autoreverses: true)
+                                    .delay(Double(i) * 0.11),
                             value: animate
                         )
                 }
             }
         }
         .allowsHitTesting(false)
-        .onAppear { animate = true }
+        .onAppear {
+            guard !reduceMotion else { return }
+            animate = true
+        }
     }
 
     private func dotColor(_ i: Int) -> Color {

@@ -70,9 +70,9 @@ struct ConversationSummary: Identifiable, Decodable, Equatable {
         if t.hasPrefix("⌨️") || t.hasPrefix("tastatur") { return true }
         // Keyboard action labels that sometimes leaked as chat titles
         let keyboardPrefixes = [
-            "verbessern:", "kürzer:", "länger:", "antwort:", "satz:", "fragen:",
+            "verbessern:", "aufräumen:", "kürzer:", "länger:", "antwort:", "satz:", "fragen:",
             "satzzeichen:", "freundlicher:", "professionell:", "übersetzen:",
-            "zusammenfassen:", "liste:", "improve:", "shorten:", "frage:",
+            "zusammenfassen:", "liste:", "improve:", "shorten:", "cleanup:", "frage:",
             "zusammenfassung bisher", "fortsetzung (zusammenfassung)"
         ]
         return keyboardPrefixes.contains { t.hasPrefix($0) }

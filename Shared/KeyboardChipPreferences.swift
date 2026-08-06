@@ -216,7 +216,8 @@ enum KeyboardChipPreferences {
             if !seen.contains(key) {
                 let insertAfter: KeyboardAIAction? = {
                     switch action {
-                    case .complete: return .improve
+                    case .cleanup: return .improve
+                    case .complete: return .cleanup
                     case .list: return .complete
                     default: return nil
                     }

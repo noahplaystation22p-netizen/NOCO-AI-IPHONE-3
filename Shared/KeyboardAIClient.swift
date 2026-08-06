@@ -130,12 +130,20 @@ enum KeyboardAIClient {
 
     private static func sanitizeCustom(_ raw: String) -> String {
         var s = raw.trimmingCharacters(in: .whitespacesAndNewlines)
-        let banned = ["gerne", "hier ist", "hier sind", "sure", "of course", "certainly"]
-        let lines = s.components(separatedBy: .newlines)
+        let banned = [
+            "gerne", "hier ist", "hier sind", "sure", "of course", "certainly",
+            "here is", "here's", "please provide", "please give", "gib mir den"
+        ]
+        var lines = s.components(separatedBy: .newlines)
         if let first = lines.first?.trimmingCharacters(in: .whitespacesAndNewlines).lowercased(),
            banned.contains(where: { first.hasPrefix($0) }),
            lines.count > 1 {
-            s = lines.dropFirst().joined(separator: "\n").trimmingCharacters(in: .whitespacesAndNewlines)
+            lines.removeFirst()
+            s = lines.joined(separator: "\n").trimmingCharacters(in: .whitespacesAndNewlines)
+        }
+        let askNeedles = ["please provide", "gib mir den text", "welcher text", "send me the text"]
+        if askNeedles.contains(where: { s.lowercased().contains($0) }) {
+            return ""
         }
         if (s.hasPrefix("\"") && s.hasSuffix("\"")) || (s.hasPrefix("„") && s.hasSuffix("“")) {
             s = String(s.dropFirst().dropLast()).trimmingCharacters(in: .whitespacesAndNewlines)

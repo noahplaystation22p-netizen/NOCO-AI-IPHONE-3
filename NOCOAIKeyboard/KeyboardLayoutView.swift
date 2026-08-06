@@ -80,8 +80,8 @@ struct KeyboardLayoutView: View {
             SpaceKey {
                 model.space()
             }
-            ModifierKey(symbol: "waveform", width: 44) {
-                model.openSpeak()
+            ModifierKey(symbol: "bubble.left.fill", width: 44) {
+                model.toggleAskPanel()
             }
             ModifierKey(title: "return", width: 70, prominent: true) {
                 model.returnKey()

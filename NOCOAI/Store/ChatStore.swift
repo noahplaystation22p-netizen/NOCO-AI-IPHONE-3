@@ -846,6 +846,12 @@ final class ChatStore: ObservableObject {
     }
 
     private func evaluateChatLimit() {
+        // Keyboard log is a firehose of short rewrites — never auto-summarize it into the Tastatur chat
+        if let id = activeConversationId,
+           conversations.first(where: { $0.id == id })?.isKeyboard == true {
+            chatLimitReached = false
+            return
+        }
         let reached = messages.count >= softMessageLimit
         chatLimitReached = reached || isCompacting
         guard reached, !isCompacting else { return }
@@ -858,6 +864,10 @@ final class ChatStore: ObservableObject {
     /// Summarize long chat, keep last N messages, drop the rest (new compact thread on PC).
     func compactChatBecauseLimit() async {
         guard let api, let oldId = activeConversationId, !isCompacting else { return }
+        if conversations.first(where: { $0.id == oldId })?.isKeyboard == true {
+            chatLimitReached = false
+            return
+        }
         isCompacting = true
         chatLimitReached = true
         defer { isCompacting = false }

@@ -72,7 +72,8 @@ struct ConversationSummary: Identifiable, Decodable, Equatable {
         let keyboardPrefixes = [
             "verbessern:", "kürzer:", "länger:", "antwort:", "satz:", "fragen:",
             "satzzeichen:", "freundlicher:", "professionell:", "übersetzen:",
-            "zusammenfassen:", "improve:", "shorten:", "frage:"
+            "zusammenfassen:", "liste:", "improve:", "shorten:", "frage:",
+            "zusammenfassung bisher", "fortsetzung (zusammenfassung)"
         ]
         return keyboardPrefixes.contains { t.hasPrefix($0) }
     }

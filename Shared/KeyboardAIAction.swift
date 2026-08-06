@@ -84,26 +84,39 @@ enum KeyboardAIAction: String, CaseIterable, Identifiable {
             \(rewriterRule)
             \(example)
 
-            Aufgabe „Verbessern“ — Hauptfunktion der Tastatur. Du bist ein erstklassiger Lektor und Stil-Editor.
+            Aufgabe „Verbessern“ — Hauptfunktion der Tastatur. Du bist ein erstklassiger Lektor und Schreib-Assistent.
 
-            Analysiere den folgenden TEXT gründlich:
-            - Welchen Sinn / welche Absicht hat er? (Nachricht, Notiz, Frage, Post, E-Mail-Fragment …)
-            - Was ist unklar, holprig, falsch oder schlecht strukturiert?
+            Der TEXT ist oft Diktat / gesprochene Sprache: holprig, ohne Absätze, „äh“, Wiederholungen.
+            Deine Aufgabe: daraus einen klaren, fertigen Text machen, den man so absenden kann.
 
-            Dann liefere EINE fertige Version, die du so verbessern darfst:
-            1) Rechtschreibung, Tippfehler, Grammatik
-            2) Fehlende oder falsche Satzzeichen — besonders fehlende Anführungszeichen („…“ / "…"), Apostrophe, Klammern, Kommas, Punkte
-            3) Bessere Struktur: Absätze/Sätze klarer ordnen, Fluss verbessern, Doppeltes streichen
-            4) Umformulieren wo nötig — klarer, natürlicher, lesbarer — OHNE die Bedeutung zu ändern
+            Analysiere zuerst:
+            - Absicht (Nachricht, Glückwunsch, Notiz, Frage, E-Mail …)
+            - Welche Gedanken / Infos stecken drin (auch wenn chaotisch)?
+
+            Dann schreibe den Text NEU und STRUKTURIERT auf:
+            1) Sinnvolle Absätze (Begrüßung / Kern / Detail / Abschluss — nur was passt)
+            2) Rechtschreibung, Grammatik, Satzzeichen — fehlende Anführungszeichen („…“) setzen
+            3) Holpriges Diktat in natürliche Sätze gießen — gleiche Aussage, klarer Ton
+            4) Doppeltes streichen, Füllwörter („richtig richtig“, „irgendwie“) reduzieren
             5) Groß-/Kleinschreibung und Leerzeichen
 
+            Beispiel Diktat → Ergebnis:
+            TEXT: ey ich freu mich so auf deinen geburtstag das wär echt mega cool weiß noch nicht ob ich was mitbringen soll lg
+            RICHTIG:
+            Hey!
+
+            Ich freue mich richtig auf deinen Geburtstag — das wird mega cool.
+
+            Ich weiß noch nicht, ob ich etwas mitbringen soll.
+
+            LG
+
             Harte Regeln:
-            - Bedeutung, Fakten, Meinung, Fragen und Kernaussage bleiben GLEICH.
-            - Keine neuen Informationen, keine Antwort auf Fragen, kein Wissen ergänzen.
-            - Wenn es eine Frage ist: bleibe eine (verbesserte) Frage.
-            - Anführungszeichen nur setzen/korrigieren, wo der Sinn sie braucht (z. B. Zitate, Titel, wörtliche Rede) — nicht den gesamten Text in Anführungszeichen packen.
-            - Länge ungefähr gleich (±25%), außer Struktur braucht etwas mehr Luft.
-            - Ausgabe = nur der verbesserte Text, bereit zum Einfügen.
+            - Bedeutung und Infos bleiben — nichts erfinden, nichts weglassen was inhaltlich zählt.
+            - Keine Antwort auf Fragen im Text, kein Wissen ergänzen.
+            - Wenn es eine Frage ist: bleibe eine (klare) Frage — oder strukturierte Nachricht die die Frage enthält.
+            - Nicht den ganzen Text in Anführungszeichen packen.
+            - Ausgabe = nur der fertige Text, bereit zum Einfügen (mit Absätzen wo sinnvoll).
 
             TEXT:
             \(t)
@@ -178,15 +191,22 @@ enum KeyboardAIAction: String, CaseIterable, Identifiable {
             \(rewriterRule)
             \(example)
 
-            Aufgabe „Kürzer“ — komprimiere denselben Text stark, ohne die Kernaussage zu verlieren.
+            Aufgabe „Kürzer“ — RADIKAL kürzen, aber nichts Wichtiges verlieren.
 
-            Ziel:
-            - Ca. 30–45% der Original-Länge (deutlich kürzer).
-            - Nur das Wichtigste behalten: Kernaussage, zentrale Fakten, ggf. die Frage selbst.
-            - Füllwörter, Wiederholungen, Höflichkeitsfloskeln und Nebensätze streichen.
-            - Wenn es eine Frage ist: kürze die Frage — beantworte sie nicht.
-            - Natürlicher Ton, gleiche Sprache, keine Aufzählung außer nötig.
-            - Ausgabe = nur der kurze Text.
+            Ziel-Länge: ca. 20–35% des Originals (deutlich, spürbar kürzer — nicht nur ein bisschen).
+
+            So gehst du vor:
+            1) Alle Kerninfos / Fakten / die eigentliche Aussage behalten
+            2) Alles Füllmaterial streichen: Wiederholungen, Füllwörter, Höflichkeits-Schleifen, Nebensätze ohne Mehrwert
+            3) Mehrere Sätze zu einem knappen Satz verschmelzen, wo möglich
+            4) Natürlicher Ton, gleiche Sprache — klingt nicht abgehackt oder „schlechter“
+            5) Wenn es eine Frage ist: kürze die Frage — beantworte sie nicht
+
+            Beispiel:
+            TEXT: Hey, also ich wollte dir eigentlich nur kurz schreiben, dass ich mich echt mega auf deinen Geburtstag freue, das wird bestimmt total cool, und ich weiß halt noch nicht so ganz, ob ich irgendwas mitbringen soll, lg
+            RICHTIG: Hey, freue mich auf deinen Geburtstag! Weiß noch nicht, ob ich was mitbringe. LG
+
+            Ausgabe = nur der kurze Text.
 
             TEXT:
             \(t)
@@ -370,19 +390,32 @@ enum KeyboardAIAction: String, CaseIterable, Identifiable {
 
         // Improve / punctuate / tone: reject inflated “answers” — stay close to original
         if action == .improve || action == .punctuate || action == .friendlier || action == .professional {
-            let factor: Double = action == .improve ? 1.45 : (action == .punctuate ? 1.12 : 1.25)
-            let maxLen = max(orig.count + 12, Int(Double(orig.count) * factor) + 6)
+            // Improve may add paragraph breaks for dictation → allow more room
+            let factor: Double = {
+                switch action {
+                case .improve: return orig.count > 120 ? 2.2 : 1.6
+                case .punctuate: return 1.12
+                default: return 1.25
+                }
+            }()
+            let maxLen = max(orig.count + 24, Int(Double(orig.count) * factor) + 12)
             if s.count > maxLen {
-                let endMarks: [Character] = [".", "?", "!", "。", "？", "！"]
-                if let idx = s.firstIndex(where: { endMarks.contains($0) }) {
-                    let first = String(s[...idx]).trimmingCharacters(in: .whitespacesAndNewlines)
-                    if first.count <= maxLen, first.count >= max(3, orig.count / 3) {
-                        s = first
-                    } else {
-                        s = origIsQuestion ? polishQuestionFallback(orig) : orig
-                    }
+                // Prefer keeping structured multi-paragraph improve output when it's not a Q&A dump
+                let paragraphCount = s.components(separatedBy: "\n\n").filter { !$0.trimmingCharacters(in: .whitespaces).isEmpty }.count
+                if action == .improve, paragraphCount >= 2, s.count < orig.count * 3 + 80, !looksLikeAnswerDump(s, original: orig) {
+                    // keep
                 } else {
-                    s = orig
+                    let endMarks: [Character] = [".", "?", "!", "。", "？", "！"]
+                    if let idx = s.firstIndex(where: { endMarks.contains($0) }) {
+                        let first = String(s[...idx]).trimmingCharacters(in: .whitespacesAndNewlines)
+                        if first.count <= maxLen, first.count >= max(3, orig.count / 3) {
+                            s = first
+                        } else {
+                            s = origIsQuestion ? polishQuestionFallback(orig) : orig
+                        }
+                    } else {
+                        s = orig
+                    }
                 }
             }
             if origIsQuestion {
@@ -398,15 +431,14 @@ enum KeyboardAIAction: String, CaseIterable, Identifiable {
             }
         }
         if action == .shorten {
-            let maxLen = max(6, Int(Double(orig.count) * 0.5) + 4)
-            if s.count > orig.count + 12 {
-                if origIsQuestion {
-                    s = polishQuestionFallback(orig)
-                } else {
-                    s = String(s.prefix(maxLen)).trimmingCharacters(in: .whitespacesAndNewlines)
-                }
-            } else if s.count > maxLen + 20 {
-                s = String(s.prefix(maxLen)).trimmingCharacters(in: .whitespacesAndNewlines)
+            // Expect ~20–40% length; if model barely shortened, keep its attempt if still under 55%
+            let hardMax = max(8, Int(Double(orig.count) * 0.55) + 6)
+            let idealMax = max(6, Int(Double(orig.count) * 0.38) + 4)
+            if s.count > orig.count + 8 {
+                // Model answered / expanded — reject
+                s = origIsQuestion ? polishQuestionFallback(orig) : String(orig.prefix(idealMax))
+            } else if s.count > hardMax {
+                s = String(s.prefix(idealMax)).trimmingCharacters(in: .whitespacesAndNewlines)
             }
         }
         if action == .longer {
@@ -430,5 +462,15 @@ enum KeyboardAIAction: String, CaseIterable, Identifiable {
             t += "?"
         }
         return t
+    }
+
+    /// Detect model answering instead of rewriting (e.g. definitions).
+    private static func looksLikeAnswerDump(_ s: String, original: String) -> Bool {
+        let lower = s.lowercased()
+        let banned = ["das bedeutet", "kurz gesagt", "zusammengefasst", "die antwort", "hier ist die"]
+        if banned.contains(where: { lower.hasPrefix($0) || lower.contains("\n\n\($0)") }) { return true }
+        let origQ = original.contains("?") || original.lowercased().hasPrefix("was ")
+        if origQ, !s.contains("?"), s.count > original.count + 40 { return true }
+        return false
     }
 }

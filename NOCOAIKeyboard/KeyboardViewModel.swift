@@ -64,18 +64,30 @@ final class KeyboardViewModel: ObservableObject {
         snapshotSelected = proxy.selectedText ?? ""
     }
 
-    /// Selection first; else last paragraph / capped context for speed.
+    /// Soft cap for unselected context (host apps often truncate anyway; selection = full text).
+    private static let maxWorkingChars = 4500
+
+    /// Selection first (best for long dictation); else as much before-cursor text as we can get.
     var workingText: String {
         let selected = snapshotSelected.trimmingCharacters(in: .whitespacesAndNewlines)
-        if !selected.isEmpty { return selected }
+        if !selected.isEmpty {
+            return selected.count <= Self.maxWorkingChars
+                ? selected
+                : String(selected.suffix(Self.maxWorkingChars))
+        }
         let before = snapshotBefore.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !before.isEmpty else { return "" }
-        if before.count <= 600 { return before }
-        if let range = before.range(of: "\n", options: .backwards) {
-            let tail = String(before[range.upperBound...]).trimmingCharacters(in: .whitespacesAndNewlines)
-            if !tail.isEmpty { return String(tail.suffix(600)) }
+        if before.count <= Self.maxWorkingChars { return before }
+        // Prefer last paragraphs so the end of a long dictation isn't cut mid-thought
+        if let range = before.range(of: "\n\n", options: .backwards) {
+            let fromBreak = String(before[range.upperBound...]).trimmingCharacters(in: .whitespacesAndNewlines)
+            if fromBreak.count >= 200 {
+                return fromBreak.count <= Self.maxWorkingChars
+                    ? fromBreak
+                    : String(fromBreak.suffix(Self.maxWorkingChars))
+            }
         }
-        return String(before.suffix(600))
+        return String(before.suffix(Self.maxWorkingChars))
     }
 
     func insert(_ text: String) {

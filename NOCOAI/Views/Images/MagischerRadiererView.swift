@@ -573,115 +573,132 @@ private struct MagicEraserTheater: View {
             let w = max(geo.size.width, 1)
             let h = max(geo.size.height, 1)
             ZStack {
-                // Full-bleed black so the photo underneath never peeks through
-                Color.black.opacity(0.82)
-                    .frame(width: w, height: h)
+                // Opaque full-bleed veil — photo silhouette must not show through
+                Color.black.opacity(0.94)
+                    .frame(width: w * 1.2, height: h * 1.2)
+                    .position(x: w / 2, y: h / 2)
                     .ignoresSafeArea()
+
+                // Extra soft vignette so edges stay solid black
+                RadialGradient(
+                    colors: [.clear, .black.opacity(0.55)],
+                    center: .center,
+                    startRadius: min(w, h) * 0.2,
+                    endRadius: max(w, h) * 0.85
+                )
+                .frame(width: w * 1.15, height: h * 1.15)
+                .position(x: w / 2, y: h / 2)
+                .allowsHitTesting(false)
 
                 // Wide aurora — fills the screen so you don't see a round cutout
                 AngularGradient(colors: rainbow, center: .center)
-                    .frame(width: w * 1.6, height: h * 1.6)
-                    .blur(radius: 70)
-                    .opacity(pulse ? 0.55 : 0.28)
-                    .scaleEffect(pulse ? 1.15 : 1.0)
+                    .frame(width: w * 1.85, height: h * 1.85)
+                    .blur(radius: 78)
+                    .opacity(pulse ? 0.62 : 0.32)
+                    .scaleEffect(pulse ? 1.18 : 1.02)
                     .rotationEffect(.degrees(spin ? 360 : 0))
                     .blendMode(.plusLighter)
                     .position(x: w / 2, y: h / 2)
 
                 Capsule()
                     .fill(LinearGradient(
-                        colors: [.clear, .white.opacity(0.65), rainbow[2].opacity(0.45), .clear],
+                        colors: [.clear, .white.opacity(0.7), rainbow[2].opacity(0.5), .clear],
                         startPoint: .leading, endPoint: .trailing
                     ))
-                    .frame(width: min(w * 1.1, 520), height: 100)
+                    .frame(width: min(w * 1.2, 560), height: 110)
                     .rotationEffect(.degrees(-18))
-                    .offset(x: hue ? w * 0.35 : -w * 0.35, y: -h * 0.12)
-                    .blur(radius: 14)
+                    .offset(x: hue ? w * 0.38 : -w * 0.38, y: -h * 0.12)
+                    .blur(radius: 16)
                     .blendMode(.plusLighter)
 
                 VStack(spacing: 22) {
                     ZStack {
                         AngularGradient(colors: rainbow, center: .center)
-                            .frame(width: min(w * 0.78, 340), height: min(w * 0.78, 340))
-                            .blur(radius: 52)
-                            .opacity(pulse ? 0.75 : 0.4)
-                            .scaleEffect(pulse ? 1.12 : 0.94)
+                            .frame(width: min(w * 0.82, 360), height: min(w * 0.82, 360))
+                            .blur(radius: 56)
+                            .opacity(pulse ? 0.8 : 0.42)
+                            .scaleEffect(pulse ? 1.14 : 0.94)
                             .rotationEffect(.degrees(spin ? 360 : 0))
                             .blendMode(.plusLighter)
 
                         ForEach(0..<4, id: \.self) { i in
                             Circle()
-                                .stroke(rainbow[i].opacity(ripple ? 0.05 : 0.4 - Double(i) * 0.08), lineWidth: 2.2)
+                                .stroke(rainbow[i].opacity(ripple ? 0.05 : 0.42 - Double(i) * 0.08), lineWidth: 2.4)
                                 .frame(
-                                    width: min(w * 0.42, 160) + CGFloat(i * 42),
-                                    height: min(w * 0.42, 160) + CGFloat(i * 42)
+                                    width: min(w * 0.44, 168) + CGFloat(i * 44),
+                                    height: min(w * 0.44, 168) + CGFloat(i * 44)
                                 )
-                                .scaleEffect(ripple ? 1.35 : 0.92)
+                                .scaleEffect(ripple ? 1.38 : 0.92)
                         }
 
                         Circle()
-                            .stroke(AngularGradient(colors: rainbow, center: .center), lineWidth: 7)
-                            .frame(width: min(w * 0.36, 150), height: min(w * 0.36, 150))
+                            .stroke(AngularGradient(colors: rainbow, center: .center), lineWidth: 8)
+                            .frame(width: min(w * 0.38, 158), height: min(w * 0.38, 158))
                             .rotationEffect(.degrees(spin ? 360 : 0))
-                            .shadow(color: Color(red: 0.7, green: 0.4, blue: 1).opacity(0.85), radius: 24)
+                            .shadow(color: Color(red: 0.7, green: 0.4, blue: 1).opacity(0.9), radius: 28)
 
                         Circle()
                             .trim(from: 0, to: max(0.04, min(progress, 1)))
                             .stroke(
                                 AngularGradient(colors: [.white, rainbow[0], rainbow[5]], center: .center),
-                                style: StrokeStyle(lineWidth: 4.5, lineCap: .round)
+                                style: StrokeStyle(lineWidth: 5, lineCap: .round)
                             )
-                            .frame(width: min(w * 0.3, 126), height: min(w * 0.3, 126))
+                            .frame(width: min(w * 0.32, 132), height: min(w * 0.32, 132))
                             .rotationEffect(.degrees(-90))
                             .animation(.easeOut(duration: 0.3), value: progress)
 
                         Image(systemName: "wand.and.stars")
-                            .font(.system(size: 34, weight: .bold))
+                            .font(.system(size: 36, weight: .bold))
                             .foregroundStyle(.white)
                             .symbolEffect(.pulse, options: .repeating)
                             .symbolEffect(.bounce, value: pct / 5)
-                            .scaleEffect(pulse ? 1.1 : 0.94)
+                            .scaleEffect(pulse ? 1.12 : 0.94)
 
-                        ForEach(0..<14, id: \.self) { i in
+                        ForEach(0..<16, id: \.self) { i in
                             Image(systemName: "sparkle")
                                 .font(.system(size: CGFloat(5 + i % 5 * 2), weight: .bold))
-                                .foregroundStyle(rainbow[i % (rainbow.count - 1)].opacity(spark ? 1 : 0.15))
+                                .foregroundStyle(rainbow[i % (rainbow.count - 1)].opacity(spark ? 1 : 0.12))
                                 .offset(
-                                    x: cos(Double(i) / 14 * .pi * 2) * (spark ? min(w * 0.28, 110) : min(w * 0.22, 85)),
-                                    y: sin(Double(i) / 14 * .pi * 2) * (spark ? min(w * 0.28, 110) : min(w * 0.22, 85))
+                                    x: cos(Double(i) / 16 * .pi * 2) * (spark ? min(w * 0.3, 118) : min(w * 0.22, 88)),
+                                    y: sin(Double(i) / 16 * .pi * 2) * (spark ? min(w * 0.3, 118) : min(w * 0.22, 88))
                                 )
-                                .scaleEffect(spark ? 1.25 : 0.5)
+                                .scaleEffect(spark ? 1.3 : 0.45)
                         }
                     }
-                    .frame(height: min(w * 0.72, 300))
-                    .hueRotation(.degrees(hue ? 32 : -16))
+                    .frame(height: min(w * 0.74, 310))
+                    .hueRotation(.degrees(hue ? 36 : -18))
 
                     VStack(spacing: 8) {
+                        Text("Magischer Radierer")
+                            .font(.caption.weight(.semibold))
+                            .foregroundStyle(.white.opacity(0.55))
+                            .textCase(.uppercase)
+                            .tracking(1.2)
                         Text("\(pct)%")
-                            .font(.system(size: 36, weight: .bold, design: .rounded).monospacedDigit())
+                            .font(.system(size: 38, weight: .bold, design: .rounded).monospacedDigit())
                             .foregroundStyle(.white)
                             .contentTransition(.numericText())
-                            .shadow(color: rainbow[2].opacity(0.55), radius: 12)
+                            .shadow(color: rainbow[2].opacity(0.6), radius: 14)
                         Text(status)
                             .font(.subheadline.weight(.semibold))
                             .foregroundStyle(.white.opacity(0.95))
                             .multilineTextAlignment(.center)
                             .padding(.horizontal, 12)
-                        Text(pct >= 88 ? "Normal — warte auf Stable Diffusion" : "Apple Intelligence · nur Maske")
+                        Text(pct >= 88 ? "Normal — PC / Stable Diffusion arbeitet noch" : "Apple Intelligence · nur die Maske")
                             .font(.caption.weight(.medium))
                             .foregroundStyle(.white.opacity(0.55))
                     }
                     .padding(.horizontal, 28)
-                    .padding(.vertical, 18)
-                    .frame(maxWidth: min(w - 32, 360))
+                    .padding(.vertical, 20)
+                    .frame(maxWidth: min(w - 28, 380))
                     .background(
-                        RoundedRectangle(cornerRadius: 22, style: .continuous)
-                            .fill(.ultraThinMaterial.opacity(0.92))
+                        RoundedRectangle(cornerRadius: 24, style: .continuous)
+                            .fill(.ultraThinMaterial.opacity(0.95))
                             .overlay(
-                                RoundedRectangle(cornerRadius: 22, style: .continuous)
-                                    .stroke(AngularGradient(colors: rainbow, center: .center), lineWidth: 1.6)
+                                RoundedRectangle(cornerRadius: 24, style: .continuous)
+                                    .stroke(AngularGradient(colors: rainbow, center: .center), lineWidth: 1.8)
                             )
-                            .shadow(color: rainbow[2].opacity(0.4), radius: 22, y: 8)
+                            .shadow(color: rainbow[2].opacity(0.45), radius: 26, y: 10)
                     )
                 }
                 .frame(maxWidth: .infinity, maxHeight: .infinity)

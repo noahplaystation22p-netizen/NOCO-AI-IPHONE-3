@@ -34,20 +34,29 @@ enum KeyboardAIClient {
 
     private static let session: URLSession = {
         let config = URLSessionConfiguration.ephemeral
-        config.timeoutIntervalForRequest = 28
-        config.timeoutIntervalForResource = 40
+        config.timeoutIntervalForRequest = 55
+        config.timeoutIntervalForResource = 75
         config.waitsForConnectivity = true
         config.requestCachePolicy = .reloadIgnoringLocalCacheData
         config.httpMaximumConnectionsPerHost = 2
         return URLSession(configuration: config)
     }()
 
+    /// Longer dictation needs more time on the PC.
+    private static func timeout(for text: String, base: TimeInterval) -> TimeInterval {
+        let n = text.count
+        if n > 2500 { return max(base, 55) }
+        if n > 900 { return max(base, 42) }
+        return base
+    }
+
     /// Preferred path: single flash response, sanitized — logs into ⌨️ Tastatur channel.
     static func rewrite(action: KeyboardAIAction, text: String) async throws -> String {
+        let base: TimeInterval = action.isAnswer ? 45 : (action.isPrimary ? 40 : 32)
         let reply = try await post(
             message: action.prompt(for: text),
             display: action.displayLabel(for: text),
-            timeout: action.isAnswer ? 40 : 28
+            timeout: timeout(for: text, base: base)
         )
         let clean = KeyboardAIAction.sanitize(reply, action: action, original: text)
         guard !clean.isEmpty else { throw ClientError.empty }
@@ -59,7 +68,7 @@ enum KeyboardAIClient {
         let reply = try await post(
             message: shortcut.fullPrompt(for: text),
             display: shortcut.displayLabel(for: text),
-            timeout: 36
+            timeout: timeout(for: text, base: 42)
         )
         let clean = sanitizeCustom(reply)
         guard !clean.isEmpty else { throw ClientError.empty }

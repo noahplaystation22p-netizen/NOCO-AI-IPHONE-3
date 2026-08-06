@@ -199,7 +199,7 @@ struct ImagesHubView: View {
                         .font(.caption.weight(.semibold))
                         .foregroundStyle(.secondary)
                 }
-                Text("Gleiche Stable-Diffusion-Engine f?r Bildideen und Magischen Radierer ? kein anderes Modell. Wenn der Radierer bei 96?% h?ngt: hier starten.")
+                Text("Gleiche Stable-Diffusion-Engine fuer Bildideen und Magischen Radierer ? kein anderes Modell. Wenn der Radierer bei 96% haengt: hier starten.")
                     .font(.caption)
                     .foregroundStyle(.secondary)
                 Button {
@@ -353,7 +353,7 @@ struct ImagesHubView: View {
                         VStack(spacing: 2) {
                             Text("\(mode.emoji) \(mode.title)")
                                 .font(.caption.weight(.bold))
-                            Text(mode == .flash ? "Tempo" : (mode == .think ? "Qualität" : "Auto"))
+                            Text(mode == .flash ? "Tempo" : (mode == .think ? "Qualitaet" : "Auto"))
                                 .font(.caption2)
                                 .opacity(0.75)
                         }
@@ -372,7 +372,7 @@ struct ImagesHubView: View {
                     .buttonStyle(.plain)
                 }
             }
-            Text("Gleiche Stable-Diffusion-Engine ? Flash/Think steuern Schritte & Auflösung.")
+            Text("Gleiche Stable-Diffusion-Engine ? Flash/Think steuern Schritte und Aufloesung.")
                 .font(.caption2)
                 .foregroundStyle(.secondary)
         }

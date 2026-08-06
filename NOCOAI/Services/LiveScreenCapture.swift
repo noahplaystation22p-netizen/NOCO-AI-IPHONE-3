@@ -8,7 +8,7 @@ import UIKit
 protocol LiveScreenCaptureProviding: AnyObject {
     var kind: LiveScreenCaptureKind { get }
     func prepare() async throws
-    func stop()
+    nonisolated func stop()
 }
 
 /// In-app ReplayKit capture of the NOCO window (official API, user-started).
@@ -55,11 +55,13 @@ final class LiveScreenInAppReplayCapture: NSObject, LiveScreenCaptureProviding {
         }
     }
 
-    func stop() {
-        guard isCapturing else { return }
-        RPScreenRecorder.shared().stopCapture { _ in }
-        isCapturing = false
-        latestSample = nil
+    nonisolated func stop() {
+        Task { @MainActor in
+            guard self.isCapturing else { return }
+            RPScreenRecorder.shared().stopCapture { _ in }
+            self.isCapturing = false
+            self.latestSample = nil
+        }
     }
 
     func currentFrame() -> UIImage? { latestSample }
@@ -109,11 +111,13 @@ final class LiveScreenBroadcastCapture: LiveScreenCaptureProviding {
         }
     }
 
-    func stop() {
-        pollTask?.cancel()
-        pollTask = nil
-        lastUpdatedAt = 0
-        lastBytes = -1
+    nonisolated func stop() {
+        Task { @MainActor in
+            self.pollTask?.cancel()
+            self.pollTask = nil
+            self.lastUpdatedAt = 0
+            self.lastBytes = -1
+        }
     }
 }
 

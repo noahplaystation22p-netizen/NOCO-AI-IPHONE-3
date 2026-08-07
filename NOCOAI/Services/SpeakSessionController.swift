@@ -60,6 +60,17 @@ final class SpeakSessionController: ObservableObject {
                 await self?.enqueueUtterance(text)
             }
         }
+        voice.onBargeIn = { [weak self] text in
+            guard let self else { return }
+            // Sync cancel so the TTS watchdog cannot reopen the mic mid-barge-in.
+            self.resumeTask?.cancel()
+            self.resumeTask = nil
+            self.holdMicForTTS = false
+            self.isBusy = false
+            Task { @MainActor in
+                await self.handleBargeIn(text)
+            }
+        }
         voice.onSpeakFinished = { [weak self] in
             guard let self else { return }
             // Don't reopen mic while TTS hold / exit — watchdog owns the delayed resume
@@ -150,6 +161,8 @@ final class SpeakSessionController: ObservableObject {
         holdMicForTTS = false
         resumeTask?.cancel()
         resumeTask = nil
+        // Publish closed state immediately so Shortcuts / Action Button never see a stale "on".
+        VoiceAISessionState.publish(active: false, micOn: false, islandOn: false)
         // Mute first so nothing else is captured/sent, then tear down
         isMuted = true
         voice.setMuted(true)
@@ -164,6 +177,7 @@ final class SpeakSessionController: ObservableObject {
         pendingVisionJPEG = nil
         pendingToolConfirm = nil
         pendingToolOriginal = nil
+        pendingUtterance = nil
         assistantPhase = .idle
         connection?.liveScreen.suppressAutoVision = false
         voice.setMuted(false)
@@ -172,25 +186,66 @@ final class SpeakSessionController: ObservableObject {
         ImageLiveActivityManager.end(immediate: true, onlyIfOwner: .speakVision)
         voice.phase = .idle
         statusLine = "Voice AI beendet"
-        VoiceAISessionState.publish(active: false)
         isExiting = false
     }
 
-    /// Full exit: farewell → stop mic/TTS → close UI → Chat.
-    func exitSpeakToChat() {
-        Task { @MainActor in
-            await exitVoiceAIGracefully()
+    /// Stop button / Shortcut / Action Button — instant, silent, no farewell.
+    func exitVoiceAISilent() {
+        isExiting = true
+        holdMicForTTS = false
+        resumeTask?.cancel()
+        voice.stopListening(cancel: true)
+        voice.stopSpeaking(notifyFinished: false)
+        statusLine = "Voice AI beendet"
+        VoiceAISessionState.publish(active: false, micOn: false, islandOn: false)
+        SpeakLiveActivityManager.update(
+            phase: .idle,
+            detail: "Voice AI beendet",
+            level: 0.15,
+            bars: [0.15, 0.18, 0.2, 0.18, 0.15, 0.12, 0.1],
+            isOnline: connection?.isOnline ?? false,
+            isMuted: false,
+            force: true,
+            titleOverride: "Voice AI beendet"
+        )
+
+        if let connection {
+            connection.liveScreen.suppressAutoVision = true
+            if connection.liveScreen.isActive || screenShareEnabled {
+                connection.liveScreen.stopSession(offerSave: false, keepContext: true)
+            }
         }
+        screenShareEnabled = false
+        visionCameraEnabled = false
+        visionFrameProvider = nil
+        pendingVisionJPEG = nil
+
+        stop(playCue: true)
+        showSpeakUI = false
+        connection?.pendingTab = 0
     }
 
-    /// Clean Voice AI shutdown used by voice commands + shortcuts.
+    /// UI Stop button — silent immediate exit back to Chat.
+    func exitSpeakToChat() {
+        exitVoiceAISilent()
+    }
+
+    /// Spoken farewell exit — only for voice commands like "Voice AI beenden".
     func exitVoiceAIGracefully() async {
+        await exitVoiceAI(spokenFarewell: true)
+    }
+
+    /// Voice-command exit with polite confirmation.
+    func exitVoiceAI(spokenFarewell: Bool) async {
         guard isRunning || showSpeakUI else {
-            stop(playCue: true)
-            showSpeakUI = false
-            connection?.pendingTab = 0
+            exitVoiceAISilent()
             return
         }
+        if !spokenFarewell {
+            exitVoiceAISilent()
+            return
+        }
+
         isExiting = true
         holdMicForTTS = true
         resumeTask?.cancel()
@@ -209,8 +264,8 @@ final class SpeakSessionController: ObservableObject {
         )
         // Brief spoken close — no mic reopen afterward.
         if voice.autoSpeakReplies {
-            lastReply = "Alles klar — Voice AI beendet."
-            voice.speak(lastReply)
+            lastReply = "Alles klar, Voice AI beendet."
+            voice.speak(lastReply, allowBargeIn: false)
             for _ in 0..<80 {
                 try? await Task.sleep(nanoseconds: 50_000_000)
                 if case .speaking = voice.phase { continue }
@@ -219,14 +274,11 @@ final class SpeakSessionController: ObservableObject {
             voice.stopSpeaking(notifyFinished: false)
         }
 
-        guard let connection else {
-            stop(playCue: false)
-            showSpeakUI = false
-            return
-        }
-        connection.liveScreen.suppressAutoVision = true
-        if connection.liveScreen.isActive || screenShareEnabled {
-            connection.liveScreen.stopSession(offerSave: false, keepContext: true)
+        if let connection {
+            connection.liveScreen.suppressAutoVision = true
+            if connection.liveScreen.isActive || screenShareEnabled {
+                connection.liveScreen.stopSession(offerSave: false, keepContext: true)
+            }
         }
         screenShareEnabled = false
         visionCameraEnabled = false
@@ -235,7 +287,7 @@ final class SpeakSessionController: ObservableObject {
 
         stop(playCue: false)
         showSpeakUI = false
-        connection.pendingTab = 0
+        connection?.pendingTab = 0
         HapticService.speakCue()
     }
 
@@ -366,8 +418,22 @@ final class SpeakSessionController: ObservableObject {
     private func enqueueUtterance(_ text: String) async {
         let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty else { return }
-        // Never accept speech while Voice AI is talking or shutting down.
-        if isExiting || holdMicForTTS {
+        // Never accept speech while shutting down.
+        if isExiting { return }
+        // During TTS hold: only exit phrases can interrupt (barge-in handler owns the rest).
+        if holdMicForTTS {
+            let intent = SpeakIntentEngine.classify(
+                trimmed,
+                cameraOn: visionCameraEnabled,
+                screenShareOn: screenShareEnabled,
+                hasPendingFrame: pendingVisionJPEG != nil
+            )
+            if case .endSpeak = intent.action {
+                holdMicForTTS = false
+                isBusy = false
+                voice.softStopSpeaking(notifyFinished: false)
+                await exitVoiceAI(spokenFarewell: true)
+            }
             return
         }
         if case .speaking = voice.phase {
@@ -385,6 +451,29 @@ final class SpeakSessionController: ObservableObject {
             pendingUtterance = nil
             await handleUtterance(next)
         }
+    }
+
+    /// User spoke over the assistant — soft-stop reply, prioritize their turn.
+    private func handleBargeIn(_ text: String) async {
+        guard isRunning, !isExiting else { return }
+        statusLine = "Ich höre zu…"
+        assistantPhase = .listening
+        pushLiveActivity(force: true)
+
+        let intent = SpeakIntentEngine.classify(
+            text,
+            cameraOn: visionCameraEnabled,
+            screenShareOn: screenShareEnabled,
+            hasPendingFrame: pendingVisionJPEG != nil
+        )
+        if case .endSpeak = intent.action {
+            await exitVoiceAI(spokenFarewell: true)
+            return
+        }
+        // Brief settle so TTS audio route releases before the next turn.
+        try? await Task.sleep(nanoseconds: 140_000_000)
+        guard isRunning, !isExiting else { return }
+        await handleUtterance(text)
     }
 
     private func handleUtterance(_ text: String) async {
@@ -427,7 +516,7 @@ final class SpeakSessionController: ObservableObject {
         )
 
         if case .endSpeak = intent.action {
-            await exitVoiceAIGracefully()
+            await exitVoiceAI(spokenFarewell: true)
             return
         }
 
@@ -465,7 +554,7 @@ final class SpeakSessionController: ObservableObject {
         switch intent.action {
         case .endSpeak:
             isBusy = false
-            await exitVoiceAIGracefully()
+            await exitVoiceAI(spokenFarewell: true)
             return
 
         case .screenMemory:
@@ -737,7 +826,7 @@ final class SpeakSessionController: ObservableObject {
                     holdMicForTTS = true
                     isBusy = true
                     assistantPhase = .speaking
-                    voice.speak(msg)
+                    voice.speak(msg, allowBargeIn: true)
                     startSpeakWatchdog()
                 } else {
                     isBusy = false
@@ -762,7 +851,7 @@ final class SpeakSessionController: ObservableObject {
             holdMicForTTS = true
             isBusy = true
             connection.liveScreen.suppressAutoVision = true
-            voice.speak(resolved)
+            voice.speak(resolved, allowBargeIn: true)
             startSpeakWatchdog()
         } else {
             isBusy = false
@@ -805,7 +894,7 @@ final class SpeakSessionController: ObservableObject {
         if voice.autoSpeakReplies {
             holdMicForTTS = true
             isBusy = true
-            voice.speak(text)
+            voice.speak(text, allowBargeIn: true)
             startSpeakWatchdog()
         } else {
             isBusy = false

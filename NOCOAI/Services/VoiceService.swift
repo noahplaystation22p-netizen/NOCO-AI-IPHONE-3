@@ -48,15 +48,21 @@ final class VoiceService: NSObject, ObservableObject {
     private var ttsUseAmplified = false
     private var ttsPendingBuffers = 0
 
-    /// Wait for a clear end of speech — finish mid-thought, then Flash answers fast.
-    private let silenceToEnd: TimeInterval = 1.35
-    private let transcriptStableToEnd: TimeInterval = 0.95
-    private let minSpeechSeconds: TimeInterval = 0.55
-    private let naturalEndQuiet: TimeInterval = 1.1
-    private let endConfirmGrace: TimeInterval = 0.28
-    private let speechLevelFactor: CGFloat = 2.5
+    /// Wait for a clear end of speech — responsive, but not mid-thought.
+    private let silenceToEnd: TimeInterval = 0.92
+    private let transcriptStableToEnd: TimeInterval = 0.68
+    private let minSpeechSeconds: TimeInterval = 0.42
+    private let naturalEndQuiet: TimeInterval = 0.78
+    private let endConfirmGrace: TimeInterval = 0.18
+    private let speechLevelFactor: CGFloat = 2.35
 
     private var pendingEndCandidateAt: Date?
+    /// Soft barge-in while TTS plays (Voice AI).
+    private var bargeInArmed = false
+    private var bargeInTask: Task<Void, Never>?
+    var onBargeIn: ((String) -> Void)?
+    /// Spoken text currently playing — used to ignore TTS echo as barge-in.
+    private var speakingTextLower = ""
 
     var preferredVoiceIdentifier: String {
         get { NOCOSpeakVoiceSettings.voiceIdentifier }
@@ -260,7 +266,7 @@ final class VoiceService: NSObject, ObservableObject {
         return text
     }
 
-    func speak(_ text: String) {
+    func speak(_ text: String, allowBargeIn: Bool = false) {
         let natural = NOCOSpeakVoiceSettings.usesNaturalPipeline
         let cleaned = natural
             ? Self.naturalizeForSpeech(Self.cleanForSpeech(text))
@@ -271,11 +277,20 @@ final class VoiceService: NSObject, ObservableObject {
             return
         }
 
+        cancelBargeIn()
         stopSpeaking(notifyFinished: false)
         stopListening(cancel: true)
 
+        speakingTextLower = cleaned.lowercased()
+        bargeInArmed = allowBargeIn
+
         do {
-            try activateLoudPlaybackSession()
+            // playAndRecord when barge-in needed so mic can hear the user mid-reply.
+            if allowBargeIn {
+                try activateBackgroundAudioSession()
+            } else {
+                try activateLoudPlaybackSession()
+            }
         } catch {
             try? activateBackgroundAudioSession()
         }
@@ -291,9 +306,33 @@ final class VoiceService: NSObject, ObservableObject {
         HapticService.soft()
 
         Task { await animateSpeakingBands() }
-
-        // Amplified path: write PCM → gain → AVAudioEngine (utterance.volume alone is capped at 1.0)
         speakAmplified(chunks: chunks, natural: natural)
+
+        if allowBargeIn {
+            scheduleBargeInArming()
+        }
+    }
+
+    /// Controlled interrupt — finish the current word, then stop.
+    func softStopSpeaking(notifyFinished: Bool = true) {
+        cancelBargeIn()
+        let wasSpeaking = synthesizer.isSpeaking || ttsPlayer.isPlaying || phase == .speaking
+        if synthesizer.isSpeaking {
+            synthesizer.stopSpeaking(at: .word)
+        }
+        // Amplified buffers: stop after a brief fade window so we don't clip mid-phoneme.
+        Task { @MainActor in
+            try? await Task.sleep(nanoseconds: 90_000_000)
+            self.stopTTSEngine()
+            self.pendingSpeakChunks = 0
+            self.ttsUseAmplified = false
+            if case .speaking = self.phase {
+                self.phase = .idle
+            }
+            if notifyFinished, wasSpeaking {
+                self.notifySpeakFinishedOnce()
+            }
+        }
     }
 
     /// Start reading, or stop if already speaking (second tap).
@@ -460,6 +499,7 @@ final class VoiceService: NSObject, ObservableObject {
     }
 
     func stopSpeaking(notifyFinished: Bool = true) {
+        cancelBargeIn()
         let wasSpeaking = synthesizer.isSpeaking || ttsPlayer.isPlaying || phase == .speaking
         if synthesizer.isSpeaking {
             synthesizer.stopSpeaking(at: .immediate)
@@ -467,6 +507,7 @@ final class VoiceService: NSObject, ObservableObject {
         stopTTSEngine()
         pendingSpeakChunks = 0
         ttsUseAmplified = false
+        speakingTextLower = ""
         if case .speaking = phase {
             phase = .idle
         }
@@ -503,7 +544,15 @@ final class VoiceService: NSObject, ObservableObject {
 
     private func emitAutoUtteranceIfNeeded(force: Bool) {
         guard !isMuted else { return }
-        guard autoFinishArmed, case .listening = phase else { return }
+        guard autoFinishArmed else { return }
+
+        // Barge-in path while TTS is playing.
+        if case .speaking = phase, bargeInArmed {
+            emitBargeInIfNeeded()
+            return
+        }
+
+        guard case .listening = phase else { return }
         let text = liveTranscript.trimmingCharacters(in: .whitespacesAndNewlines)
         guard text.count >= 2 else { return }
 
@@ -519,12 +568,17 @@ final class VoiceService: NSObject, ObservableObject {
         let transcriptStable = lastTranscriptChangeAt.map { now.timeIntervalSince($0) >= transcriptStableToEnd } ?? false
         let spokenLongEnough = speechStartAt.map { now.timeIntervalSince($0) >= minSpeechSeconds } ?? false
 
+        // Punctuation / clear end → send sooner.
+        let endsClean = text.hasSuffix(".") || text.hasSuffix("!") || text.hasSuffix("?") || text.hasSuffix("…")
+        let adaptiveSilence = endsClean ? max(0.55, silenceToEnd * 0.72) : silenceToEnd
+        let adaptiveNatural = endsClean ? max(0.48, naturalEndQuiet * 0.75) : naturalEndQuiet
+
         // Prefer clear pause after speech; never rush mid-thought.
-        let silenceReady = quietFor >= silenceToEnd
-        let naturalEnd = spokenLongEnough && transcriptStable && quietFor >= naturalEndQuiet
-        let longSilenceFallback = spokenLongEnough && quietFor >= silenceToEnd * 1.15
+        let silenceReady = quietFor >= adaptiveSilence
+        let naturalEnd = spokenLongEnough && transcriptStable && quietFor >= adaptiveNatural
+        let longSilenceFallback = spokenLongEnough && quietFor >= adaptiveSilence * 1.2
         // `force` kept for API compat — still requires a real quiet beat.
-        let softForce = force && spokenLongEnough && transcriptStable && quietFor >= 1.2
+        let softForce = force && spokenLongEnough && transcriptStable && quietFor >= 0.9
         let candidate = softForce || naturalEnd || (transcriptStable && silenceReady) || longSilenceFallback
 
         guard candidate else {
@@ -533,12 +587,13 @@ final class VoiceService: NSObject, ObservableObject {
         }
 
         // Confirm the pause sticks (user may still be thinking).
+        let confirmNeeded = endsClean ? max(0.12, endConfirmGrace * 0.7) : endConfirmGrace
         if let started = pendingEndCandidateAt {
-            if quietFor < 0.55 {
+            if quietFor < 0.4 {
                 pendingEndCandidateAt = nil
                 return
             }
-            guard now.timeIntervalSince(started) >= endConfirmGrace else { return }
+            guard now.timeIntervalSince(started) >= confirmNeeded else { return }
         } else {
             pendingEndCandidateAt = now
             return
@@ -561,6 +616,126 @@ final class VoiceService: NSObject, ObservableObject {
         }
         HapticService.selection()
         onAutoUtterance?(finished)
+    }
+
+    private func emitBargeInIfNeeded() {
+        let text = liveTranscript.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard text.count >= 3 else { return }
+        let lower = text.lowercased()
+        // Ignore TTS echo leaking into the mic.
+        if !speakingTextLower.isEmpty, speakingTextLower.contains(lower) || lower.count >= 8 && speakingTextLower.contains(String(lower.prefix(8))) {
+            return
+        }
+        let now = Date()
+        let lastActivity = max(lastVoiceAt ?? .distantPast, lastTranscriptChangeAt ?? .distantPast)
+        let quietFor = now.timeIntervalSince(lastActivity)
+        let spokenLongEnough = speechStartAt.map { now.timeIntervalSince($0) >= 0.55 } ?? false
+        let stable = lastTranscriptChangeAt.map { now.timeIntervalSince($0) >= 0.45 } ?? false
+        // Need clear user speech + short pause so we don't cut mid-user-word either.
+        guard spokenLongEnough, stable, quietFor >= 0.35 else { return }
+
+        autoFinishArmed = false
+        bargeInArmed = false
+        cancelBargeInListenOnly()
+        let captured = text
+        softStopSpeaking(notifyFinished: false)
+        liveTranscript = ""
+        HapticService.selection()
+        onBargeIn?(captured)
+    }
+
+    private func scheduleBargeInArming() {
+        bargeInTask?.cancel()
+        bargeInTask = Task { [weak self] in
+            // Let the first phrase settle so we don't interrupt ourselves.
+            try? await Task.sleep(nanoseconds: 750_000_000)
+            guard let self, !Task.isCancelled else { return }
+            await MainActor.run {
+                guard case .speaking = self.phase, self.bargeInArmed else { return }
+                self.startBargeInListening()
+            }
+        }
+    }
+
+    private func startBargeInListening() {
+        guard bargeInArmed, case .speaking = phase, !isMuted else { return }
+        do {
+            try activateBackgroundAudioSession()
+        } catch {
+            return
+        }
+        // Lightweight listen without killing TTS engine.
+        recognitionTask?.cancel()
+        recognitionRequest?.endAudio()
+        recognitionRequest = SFSpeechAudioBufferRecognitionRequest()
+        guard let recognitionRequest, let speechRecognizer, speechRecognizer.isAvailable else { return }
+        recognitionRequest.shouldReportPartialResults = true
+        recognitionRequest.taskHint = .dictation
+        recognitionRequest.addsPunctuation = true
+
+        liveTranscript = ""
+        speechStarted = false
+        speechStartAt = nil
+        lastVoiceAt = nil
+        lastTranscriptChangeAt = nil
+        pendingEndCandidateAt = nil
+        autoFinishArmed = true
+
+        let input = audioEngine.inputNode
+        let format = input.outputFormat(forBus: 0)
+        guard format.sampleRate > 0 else { return }
+        if !audioEngine.isRunning {
+            input.removeTap(onBus: 0)
+            input.installTap(onBus: 0, bufferSize: 1024, format: format) { [weak self] buffer, _ in
+                self?.recognitionRequest?.append(buffer)
+                Task { @MainActor in
+                    self?.processAudio(buffer)
+                }
+            }
+            do {
+                audioEngine.prepare()
+                try audioEngine.start()
+            } catch {
+                return
+            }
+        }
+
+        recognitionTask = speechRecognizer.recognitionTask(with: recognitionRequest) { [weak self] result, _ in
+            guard let self else { return }
+            Task { @MainActor in
+                guard self.bargeInArmed, case .speaking = self.phase else { return }
+                if let result {
+                    let text = result.bestTranscription.formattedString
+                    if text != self.liveTranscript {
+                        self.liveTranscript = text
+                        self.lastTranscriptChangeAt = Date()
+                        if !text.isEmpty { self.speechStarted = true }
+                    }
+                    self.emitBargeInIfNeeded()
+                }
+            }
+        }
+        startSilenceWatcher()
+    }
+
+    private func cancelBargeInListenOnly() {
+        recognitionTask?.cancel()
+        recognitionRequest?.endAudio()
+        recognitionRequest = nil
+        recognitionTask = nil
+        if audioEngine.isRunning {
+            // Keep TTS engine separate — only stop input tap if we installed it for barge-in.
+            // Full stopListening would kill session; here just detach recognition.
+            audioEngine.inputNode.removeTap(onBus: 0)
+            audioEngine.stop()
+        }
+    }
+
+    private func cancelBargeIn() {
+        bargeInArmed = false
+        bargeInTask?.cancel()
+        bargeInTask = nil
+        speakingTextLower = ""
     }
 
     private func processAudio(_ buffer: AVAudioPCMBuffer) {

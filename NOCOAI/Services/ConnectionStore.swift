@@ -482,6 +482,16 @@ final class ConnectionStore: ObservableObject {
     /// Honors `SpeakLaunchBridge.pendingToggle` for Action Button toggle semantics.
     func launchSpeakFromShortcut() {
         let wantsToggle = SpeakLaunchBridge.pendingToggle
+        let alreadyActive = speak.isRunning || VoiceAISessionState.isActive
+
+        // Instant silent stop — no companion wait, no farewell speech.
+        if wantsToggle && alreadyActive {
+            SpeakLaunchBridge.clearPending()
+            speak.exitVoiceAISilent()
+            HapticService.soft()
+            return
+        }
+
         SpeakLaunchBridge.pendingStart = true
         Task { @MainActor in
             for _ in 0..<40 {
@@ -494,7 +504,7 @@ final class ConnectionStore: ObservableObject {
             if isOnline {
                 let active = speak.isRunning || VoiceAISessionState.isActive
                 if toggle, active {
-                    await speak.exitVoiceAIGracefully()
+                    speak.exitVoiceAISilent()
                     SpeakLaunchBridge.clearPending()
                     HapticService.soft()
                 } else if !active {
@@ -516,13 +526,17 @@ final class ConnectionStore: ObservableObject {
 
     func stopSpeakFromShortcut() {
         SpeakLaunchBridge.clearPending()
-        Task { @MainActor in
-            await speak.exitVoiceAIGracefully()
-        }
+        speak.exitVoiceAISilent()
     }
 
     /// Action Button / primary Shortcut: on ↔ off.
     func toggleVoiceAIFromShortcut() {
+        if speak.isRunning || VoiceAISessionState.isActive {
+            SpeakLaunchBridge.clearPending()
+            speak.exitVoiceAISilent()
+            HapticService.soft()
+            return
+        }
         SpeakLaunchBridge.pendingToggle = true
         SpeakLaunchBridge.pendingStart = true
         launchSpeakFromShortcut()

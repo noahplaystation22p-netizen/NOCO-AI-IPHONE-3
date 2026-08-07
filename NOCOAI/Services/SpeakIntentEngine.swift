@@ -68,7 +68,7 @@ struct SpeakIntent: Equatable {
         case .conversation(let depth):
             return depth == .think ? "Ich denke kurz gründlicher nach." : ""
         case .screenMemory: return ""
-        case .endSpeak: return "Alles klar — Voice AI beendet."
+        case .endSpeak: return "Alles klar, Voice AI beendet."
         }
     }
 
@@ -334,7 +334,8 @@ enum SpeakIntentEngine {
         }
         if t.count > 72 { return false }
         let phrases = [
-            "sprachmodus verlassen", "sprachmodus beenden", "beende sprachmodus", "stopp sprachmodus",
+            "sprachmodus verlassen", "sprachmodus beenden", "sprachmodus deaktivieren",
+            "beende sprachmodus", "stopp sprachmodus", "deaktiviere sprachmodus",
             "speak verlassen", "speak beenden", "end speak", "stop speak", "exit speak",
             "voice verlassen", "voice beenden", "stop voice", "exit voice", "voice ai verlassen",
             "voice ai beenden", "stop voice ai", "noco verlassen", "noco beenden",

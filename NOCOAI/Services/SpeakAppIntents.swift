@@ -164,14 +164,14 @@ struct ToggleVoiceAIIntent: AppIntent {
 
     @MainActor
     func perform() async throws -> some IntentResult & ProvidesDialog {
-        if VoiceAISessionState.isActive {
+        if VoiceAISessionState.isActive || SpeakLaunchBridge.pendingStart {
             SpeakLaunchBridge.requestStop()
-            try? await Task.sleep(nanoseconds: 250_000_000)
-            return .result(dialog: "NOCO Voice AI wird beendet.")
+            try? await Task.sleep(nanoseconds: 80_000_000)
+            return .result(dialog: "NOCO Voice AI beendet.")
         }
         SpeakLaunchBridge.requestToggle()
-        try? await Task.sleep(nanoseconds: 350_000_000)
-        return .result(dialog: "NOCO Voice AI startet — sprich einfach.")
+        try? await Task.sleep(nanoseconds: 200_000_000)
+        return .result(dialog: "NOCO Voice AI startet.")
     }
 }
 

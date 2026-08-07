@@ -49,4 +49,39 @@ enum HostSanitizer {
             .split(separator: "/").first.map(String.init)?
             .trimmingCharacters(in: .whitespaces) ?? input
     }
+
+    /// Tailscale CGNAT 100.64.0.0/10
+    static func isTailscaleIP(_ host: String) -> Bool {
+        let parts = host.split(separator: ".").compactMap { Int($0) }
+        guard parts.count == 4 else { return false }
+        return parts[0] == 100 && parts[1] >= 64 && parts[1] <= 127
+    }
+
+    /// RFC1918 + link-local
+    static func isPrivateLanIP(_ host: String) -> Bool {
+        let parts = host.split(separator: ".").compactMap { Int($0) }
+        guard parts.count == 4 else { return false }
+        if parts[0] == 10 { return true }
+        if parts[0] == 192 && parts[1] == 168 { return true }
+        if parts[0] == 172 && parts[1] >= 16 && parts[1] <= 31 { return true }
+        if parts[0] == 169 && parts[1] == 254 { return true }
+        return false
+    }
+
+    static func classify(_ host: String) -> ConnectionPathKind {
+        if isTailscaleIP(host) { return .remote }
+        return .local
+    }
+}
+
+enum ConnectionPathKind: String, Codable {
+    case local
+    case remote
+
+    var label: String {
+        switch self {
+        case .local: return "Lokal (WLAN)"
+        case .remote: return "Remote (Tailscale)"
+        }
+    }
 }

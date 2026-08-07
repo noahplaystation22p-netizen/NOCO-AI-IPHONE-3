@@ -33,6 +33,8 @@ final class ChatStore: ObservableObject {
     @Published var isSending = false
     private var sendTask: Task<Void, Never>?
     private var agentConfirmPollTask: Task<Void, Never>?
+    /// Bumped to abort in-flight Speak streams (MainActor awaits aren't cancelled by Task.cancel alone).
+    private var speakSendEpoch: UInt64 = 0
     @Published var isSyncActive = false
     @Published var lastSyncAt: Date?
     @Published var searchText = ""
@@ -211,6 +213,7 @@ final class ChatStore: ObservableObject {
         isSending = true
         lastError = nil
         workPhase = .understanding
+        let speakEpochAtStart = speakSendEpoch
         // Speak may override depth (Flash/Think). Tools (Agent/Image) use speak:false.
         let uiMode = speak ? (modeOverride ?? .flash) : (modeOverride ?? mode)
         var effectiveMode = uiMode
@@ -344,6 +347,9 @@ final class ChatStore: ObservableObject {
                         web: webWire
                     ) {
                         try Task.checkCancellation()
+                        if speak, speakEpochAtStart != speakSendEpoch {
+                            throw CancellationError()
+                        }
                         if let cid = chunk.conversationId, !cid.isEmpty {
                             conversationId = cid
                             activeConversationId = cid
@@ -471,6 +477,7 @@ final class ChatStore: ObservableObject {
     }
 
     func cancelSend() {
+        speakSendEpoch &+= 1
         sendTask?.cancel()
         sendTask = nil
         Task { try? await api?.interruptChat(conversationId: activeConversationId) }
@@ -491,6 +498,22 @@ final class ChatStore: ObservableObject {
         ImageLiveActivityManager.end(immediate: true, onlyIfOwner: .generation)
         AgentLiveActivityManager.end(immediate: true)
         HapticService.soft()
+    }
+
+    /// Abort only Speak streams — leaves normal chat sends alone when possible.
+    func cancelSpeakSend() {
+        speakSendEpoch &+= 1
+        if isSending {
+            sendTask?.cancel()
+            sendTask = nil
+            Task { try? await api?.interruptChat(conversationId: activeConversationId) }
+            if let idx = messages.lastIndex(where: { $0.isStreaming }) {
+                messages[idx].isStreaming = false
+            }
+            workPhase = .idle
+            reconnectHint = nil
+            isSending = false
+        }
     }
 
     func respondAgentConfirm(allow: Bool) async {

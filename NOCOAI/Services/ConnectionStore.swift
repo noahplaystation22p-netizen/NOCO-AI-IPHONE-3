@@ -43,6 +43,19 @@ final class ConnectionStore: ObservableObject {
     /// Hide floating tab chrome (e.g. Magischer Radierer full focus).
     @Published var hideMainTabBar = false
 
+    /// LAN host for home Wi‑Fi (preferred).
+    @Published var localHost = ""
+    /// Tailscale / remote host (optional).
+    @Published var remoteHost = ""
+    @Published var activePath: ConnectionPathKind = .local
+    /// When true, switch to Tailscale without asking after local fails.
+    @Published var autoUseRemote = false
+    /// When true, switch back to LAN automatically when home Wi‑Fi returns.
+    @Published var autoSwitchToLocal = true
+    @Published var showRemotePrompt = false
+    @Published var showLocalAvailablePrompt = false
+    @Published var pathStatusLine: String?
+
     let chat = ChatStore()
     let images = ImageStore()
     let code = CodeStore()
@@ -57,12 +70,21 @@ final class ConnectionStore: ObservableObject {
     /// Hysteresis: require consecutive failures before marking offline
     private var consecutiveFailures = 0
     private let offlineFailureThreshold = 2
+    /// User confirmed remote for this away stretch (cleared when back on LAN).
+    private var remoteSessionApproved = false
+    private var lastLocalProbeAt: Date?
+    private var remotePromptSuppressedUntil: Date?
 
     private enum Keys {
         static let host = "nocoai.host"
         static let port = "nocoai.port"
         static let token = "nocoai.token"
         static let device = "nocoai.device"
+        static let localHost = "nocoai.localHost"
+        static let remoteHost = "nocoai.remoteHost"
+        static let autoUseRemote = "nocoai.autoUseRemote"
+        static let autoSwitchToLocal = "nocoai.autoSwitchToLocal"
+        static let activePath = "nocoai.activePath"
     }
 
     init() {
@@ -73,6 +95,27 @@ final class ConnectionStore: ObservableObject {
         if serverPort == 0 { serverPort = 4747 }
         deviceName = UserDefaults.standard.string(forKey: Keys.device) ?? UIDevice.current.name
         token = KeychainService.load(account: Keys.token)
+        localHost = HostSanitizer.hostOnly(UserDefaults.standard.string(forKey: Keys.localHost) ?? "")
+        remoteHost = HostSanitizer.hostOnly(UserDefaults.standard.string(forKey: Keys.remoteHost) ?? "")
+        autoUseRemote = UserDefaults.standard.bool(forKey: Keys.autoUseRemote)
+        if UserDefaults.standard.object(forKey: Keys.autoSwitchToLocal) == nil {
+            autoSwitchToLocal = true
+        } else {
+            autoSwitchToLocal = UserDefaults.standard.bool(forKey: Keys.autoSwitchToLocal)
+        }
+        if let raw = UserDefaults.standard.string(forKey: Keys.activePath),
+           let path = ConnectionPathKind(rawValue: raw) {
+            activePath = path
+        } else if !serverHost.isEmpty {
+            activePath = HostSanitizer.classify(serverHost)
+        }
+        // Seed local/remote from active host if legacy install.
+        if localHost.isEmpty, !serverHost.isEmpty, HostSanitizer.isPrivateLanIP(serverHost) {
+            localHost = serverHost
+        }
+        if remoteHost.isEmpty, !serverHost.isEmpty, HostSanitizer.isTailscaleIP(serverHost) {
+            remoteHost = serverHost
+        }
         isPaired = token != nil && !serverHost.isEmpty
         rebuildAPI()
         speak.bind(connection: self)
@@ -108,12 +151,15 @@ final class ConnectionStore: ObservableObject {
 
     /// Short freshness label for the Online badge (updates as status polls).
     var onlineBadgeDetail: String? {
-        guard isOnline, let at = lastStatusAt else { return nil }
+        guard isOnline, let at = lastStatusAt else {
+            return pathStatusLine
+        }
+        let path = activePath == .remote ? "Remote" : "Lokal"
         let sec = Int(Date().timeIntervalSince(at))
-        if sec < 3 { return "frisch" }
-        if sec < 60 { return "vor \(sec)s" }
+        if sec < 3 { return "\(path) · frisch" }
+        if sec < 60 { return "\(path) · vor \(sec)s" }
         let min = sec / 60
-        return "vor \(min) Min"
+        return "\(path) · vor \(min) Min"
     }
 
     /// Call when app returns to foreground to keep Local Network permission warm.
@@ -295,7 +341,7 @@ final class ConnectionStore: ObservableObject {
         }
     }
 
-    func pair(host: String, port: Int, pin: String) async {
+    func pair(host: String, port: Int, pin: String, remoteHint: String? = nil) async {
         guard let parsed = resolveHostPort(host: host, port: port) else {
             lastError = "Ungültige IP — nur 192.168.x.x eingeben (ohne http://)"
             return
@@ -304,6 +350,7 @@ final class ConnectionStore: ObservableObject {
         serverHost = parsed.host
         serverPort = parsed.port
         lastError = nil
+        rememberHosts(primary: parsed.host, remoteHint: remoteHint)
         prepareLocalNetworkAccess(host: parsed.host, port: parsed.port)
         rebuildAPI()
 
@@ -621,13 +668,18 @@ final class ConnectionStore: ObservableObject {
             return
         }
         lastError = nil
-        await pair(host: link.host, port: link.port, pin: pin)
+        await pair(host: link.host, port: link.port, pin: pin, remoteHint: link.remoteHost)
     }
 
     func refreshStatus(showLoading: Bool = false) async {
         guard let api else { return }
         if showLoading { isRefreshing = true }
         defer { if showLoading { isRefreshing = false } }
+
+        // Prefer local path when away-session can return home.
+        if activePath == .remote {
+            await maybeOfferOrSwitchToLocal()
+        }
 
         do {
             let started = Date()
@@ -642,12 +694,23 @@ final class ConnectionStore: ObservableObject {
             isOnline = true
             lastStatusAt = Date()
             lastError = nil
+            pathStatusLine = activePath.label
             if wasReconnecting {
                 clearReconnectBanner(restored: true)
             }
             publishWidgetStatus()
             await loadFeatures()
+            learnHosts(from: newStatus)
         } catch {
+            if let err = error as? CompanionAPIError, case .remoteAccessDisabled = err {
+                lastError = err.localizedDescription
+                if activePath == .remote {
+                    // Fall back to local if possible.
+                    if await trySwitchToHost(preferredLocalHost, path: .local) {
+                        return
+                    }
+                }
+            }
             consecutiveFailures += 1
             if consecutiveFailures == 1 {
                 beginReconnectBanner()
@@ -656,6 +719,7 @@ final class ConnectionStore: ObservableObject {
                 isOnline = false
                 beginReconnectBanner()
                 publishWidgetStatus()
+                await handleOfflinePathRecovery()
             }
             if let err = error as? CompanionAPIError, case .unauthorized = err {
                 disconnect()
@@ -664,12 +728,217 @@ final class ConnectionStore: ObservableObject {
         }
     }
 
+    /// Confirm Tailscale remote for this away stretch.
+    func confirmRemoteConnection() async {
+        showRemotePrompt = false
+        remoteSessionApproved = true
+        remotePromptSuppressedUntil = nil
+        guard !preferredRemoteHost.isEmpty else {
+            lastError = "Keine Tailscale-Adresse gespeichert. Zuhause erneut koppeln oder Remote-IP in den Einstellungen setzen."
+            return
+        }
+        pathStatusLine = "Verbinde über Tailscale…"
+        _ = await trySwitchToHost(preferredRemoteHost, path: .remote)
+    }
+
+    func declineRemoteConnection() {
+        showRemotePrompt = false
+        remoteSessionApproved = false
+        remotePromptSuppressedUntil = Date().addingTimeInterval(15 * 60)
+        pathStatusLine = "Nur lokale Verbindung"
+    }
+
+    func confirmLocalConnection() async {
+        showLocalAvailablePrompt = false
+        _ = await trySwitchToHost(preferredLocalHost, path: .local)
+    }
+
+    func declineLocalSwitch() {
+        showLocalAvailablePrompt = false
+    }
+
+    func setAutoUseRemote(_ on: Bool) {
+        autoUseRemote = on
+        UserDefaults.standard.set(on, forKey: Keys.autoUseRemote)
+    }
+
+    func setAutoSwitchToLocal(_ on: Bool) {
+        autoSwitchToLocal = on
+        UserDefaults.standard.set(on, forKey: Keys.autoSwitchToLocal)
+    }
+
+    func setManualRemoteHost(_ host: String) {
+        let cleaned = HostSanitizer.hostOnly(host)
+        guard !cleaned.isEmpty else { return }
+        remoteHost = cleaned
+        UserDefaults.standard.set(cleaned, forKey: Keys.remoteHost)
+    }
+
+    private var preferredLocalHost: String {
+        if !localHost.isEmpty { return localHost }
+        if HostSanitizer.isPrivateLanIP(serverHost) { return serverHost }
+        return localHost
+    }
+
+    private var preferredRemoteHost: String {
+        if !remoteHost.isEmpty { return remoteHost }
+        if HostSanitizer.isTailscaleIP(serverHost) { return serverHost }
+        return remoteHost
+    }
+
+    private func rememberHosts(primary: String, remoteHint: String? = nil) {
+        if HostSanitizer.isTailscaleIP(primary) {
+            remoteHost = primary
+            activePath = .remote
+        } else {
+            localHost = primary
+            activePath = .local
+        }
+        if let hint = remoteHint?.trimmingCharacters(in: .whitespacesAndNewlines), !hint.isEmpty {
+            remoteHost = HostSanitizer.hostOnly(hint)
+        }
+        persistPathHosts()
+    }
+
+    private func persistPathHosts() {
+        UserDefaults.standard.set(localHost, forKey: Keys.localHost)
+        UserDefaults.standard.set(remoteHost, forKey: Keys.remoteHost)
+        UserDefaults.standard.set(activePath.rawValue, forKey: Keys.activePath)
+        UserDefaults.standard.set(serverHost, forKey: Keys.host)
+    }
+
+    private func learnHosts(from status: ServerStatus) {
+        if let lan = status.lanHosts?.first(where: { HostSanitizer.isPrivateLanIP($0) })
+            ?? status.hosts?.first(where: { HostSanitizer.isPrivateLanIP($0) }) {
+            if localHost.isEmpty || localHost != lan {
+                localHost = lan
+            }
+        }
+        if let ts = status.tailscaleIP
+            ?? status.tailscaleHosts?.first
+            ?? status.hosts?.first(where: { HostSanitizer.isTailscaleIP($0) }) {
+            remoteHost = ts
+        }
+        persistPathHosts()
+    }
+
+    private func handleOfflinePathRecovery() async {
+        // 1) If on remote, try local first (home return / better path).
+        if activePath == .remote, !preferredLocalHost.isEmpty {
+            if await trySwitchToHost(preferredLocalHost, path: .local) {
+                return
+            }
+        }
+
+        // 2) If on local and offline, consider remote — never auto without consent/setting.
+        if activePath == .local, !preferredRemoteHost.isEmpty {
+            if autoUseRemote || remoteSessionApproved {
+                if await trySwitchToHost(preferredRemoteHost, path: .remote) {
+                    return
+                }
+            } else {
+                let suppressed = remotePromptSuppressedUntil.map { Date() < $0 } ?? false
+                if !suppressed {
+                    showRemotePrompt = true
+                    pathStatusLine = "NOCO PC nicht im lokalen Netzwerk gefunden."
+                    reconnectStatusLine = "NOCO PC nicht im lokalen Netzwerk gefunden."
+                }
+            }
+        }
+    }
+
+    private func maybeOfferOrSwitchToLocal() async {
+        guard !preferredLocalHost.isEmpty else { return }
+        let now = Date()
+        if let last = lastLocalProbeAt, now.timeIntervalSince(last) < 8 { return }
+        lastLocalProbeAt = now
+        guard await quickPing(host: preferredLocalHost) else { return }
+        if autoSwitchToLocal {
+            _ = await trySwitchToHost(preferredLocalHost, path: .local)
+        } else {
+            showLocalAvailablePrompt = true
+            pathStatusLine = "Lokale Verbindung verfügbar."
+        }
+    }
+
+    @discardableResult
+    private func trySwitchToHost(_ host: String, path: ConnectionPathKind) async -> Bool {
+        let cleaned = HostSanitizer.hostOnly(host)
+        guard !cleaned.isEmpty else { return false }
+        guard await quickPing(host: cleaned) else { return false }
+        serverHost = cleaned
+        activePath = path
+        if path == .local {
+            localHost = cleaned
+            remoteSessionApproved = false
+            showRemotePrompt = false
+            showLocalAvailablePrompt = false
+        } else {
+            remoteHost = cleaned
+            showRemotePrompt = false
+        }
+        persistPathHosts()
+        prepareLocalNetworkAccess(host: cleaned, port: serverPort)
+        rebuildAPI()
+        CompanionCredentials.sync(
+            host: serverHost,
+            port: serverPort,
+            token: token,
+            deviceName: deviceName
+        )
+        consecutiveFailures = 0
+        pathStatusLine = path.label
+        do {
+            guard let api else { return true }
+            let started = Date()
+            let newStatus = try await api.fetchStatus()
+            status = newStatus.withMeasuredLatency(Date().timeIntervalSince(started) * 1000)
+            isOnline = true
+            lastStatusAt = Date()
+            clearReconnectBanner(restored: true)
+            publishWidgetStatus()
+            HapticService.success()
+            return true
+        } catch {
+            // Ping worked; status may still settle on next poll.
+            isOnline = true
+            clearReconnectBanner(restored: true)
+            return true
+        }
+    }
+
+    private func quickPing(host: String) async -> Bool {
+        let cleaned = HostSanitizer.hostOnly(host)
+        guard !cleaned.isEmpty,
+              let url = URL(string: "http://\(cleaned):\(serverPort)/api/v1/ping") else { return false }
+        var request = URLRequest(url: url)
+        request.timeoutInterval = 2.2
+        do {
+            let (data, response) = try await URLSession.shared.data(for: request)
+            guard let http = response as? HTTPURLResponse else { return false }
+            if http.statusCode == 403 {
+                return false
+            }
+            guard (200...299).contains(http.statusCode) else { return false }
+            if let ping = try? JSONDecoder().decode(PingResponse.self, from: data) {
+                return ping.isAlive
+            }
+            return true
+        } catch {
+            return false
+        }
+    }
+
     private func beginReconnectBanner() {
         isReconnecting = true
-        reconnectStatusLine = "Verbindung wird wiederhergestellt…"
+        if showRemotePrompt {
+            reconnectStatusLine = "NOCO PC nicht im lokalen Netzwerk gefunden."
+        } else {
+            reconnectStatusLine = "Verbindung wird wiederhergestellt…"
+        }
         chat.applyReconnectStatus(reconnectStatusLine)
         if speak.isRunning {
-            speak.statusLine = "Verbindung wird wiederhergestellt…"
+            speak.statusLine = reconnectStatusLine ?? "Verbindung wird wiederhergestellt…"
         }
     }
 
@@ -679,7 +948,7 @@ final class ConnectionStore: ObservableObject {
         reconnectStatusLine = nil
         if restored {
             chat.clearReconnectStatus()
-            if speak.isRunning, speak.statusLine.contains("Verbindung") {
+            if speak.isRunning, speak.statusLine.contains("Verbindung") || speak.statusLine.contains("Netzwerk") {
                 speak.statusLine = "Wieder verbunden"
             }
         }
@@ -696,6 +965,10 @@ final class ConnectionStore: ObservableObject {
         consecutiveFailures = 0
         isReconnecting = false
         reconnectStatusLine = nil
+        showRemotePrompt = false
+        showLocalAvailablePrompt = false
+        remoteSessionApproved = false
+        pathStatusLine = nil
         KeychainService.delete(account: Keys.token)
         CompanionCredentials.clear()
         rebuildAPI()

@@ -14,20 +14,43 @@ struct PairingInfo: Decodable, Equatable {
     let qrData: String?
     let pairUrl: String?
     let hostname: String?
+    let hosts: [String]?
+    let lanHosts: [String]?
+    let tailscaleHosts: [String]?
+    let tailscaleIP: String?
+    let remoteAccessEnabled: Bool?
 
     // camelCase — CompanionAPI uses convertFromSnakeCase
     enum CodingKeys: String, CodingKey {
         case ip, host, pin, port, hostname
         case qrData, qr, qrPayload, pairUrl
+        case hosts, lanHosts, tailscaleHosts, tailscaleIP, remoteAccessEnabled
     }
 
-    init(ip: String, pin: String, port: Int? = 4747, qrData: String? = nil, pairUrl: String? = nil, hostname: String? = nil) {
+    init(
+        ip: String,
+        pin: String,
+        port: Int? = 4747,
+        qrData: String? = nil,
+        pairUrl: String? = nil,
+        hostname: String? = nil,
+        hosts: [String]? = nil,
+        lanHosts: [String]? = nil,
+        tailscaleHosts: [String]? = nil,
+        tailscaleIP: String? = nil,
+        remoteAccessEnabled: Bool? = nil
+    ) {
         self.ip = ip
         self.pin = pin
         self.port = port
         self.qrData = qrData
         self.pairUrl = pairUrl
         self.hostname = hostname
+        self.hosts = hosts
+        self.lanHosts = lanHosts
+        self.tailscaleHosts = tailscaleHosts
+        self.tailscaleIP = tailscaleIP
+        self.remoteAccessEnabled = remoteAccessEnabled
     }
 
     init(from decoder: Decoder) throws {
@@ -46,6 +69,11 @@ struct PairingInfo: Decodable, Equatable {
             ?? c.decodeIfPresent(String.self, forKey: .qr)
             ?? c.decodeIfPresent(String.self, forKey: .qrPayload)
         pairUrl = try c.decodeIfPresent(String.self, forKey: .pairUrl)
+        hosts = try c.decodeIfPresent([String].self, forKey: .hosts)
+        lanHosts = try c.decodeIfPresent([String].self, forKey: .lanHosts)
+        tailscaleHosts = try c.decodeIfPresent([String].self, forKey: .tailscaleHosts)
+        tailscaleIP = try c.decodeIfPresent(String.self, forKey: .tailscaleIP)
+        remoteAccessEnabled = try c.decodeIfPresent(Bool.self, forKey: .remoteAccessEnabled)
     }
 
     var resolvedPort: Int { port ?? 4747 }
@@ -80,6 +108,11 @@ struct ServerStatus: Decodable, Equatable {
     let tokenCount: Int?
     /// Stable Diffusion / Bilder-Engine ready on the PC (same engine for Bildidee + Radierer).
     let stableDiffusion: Bool?
+    let hosts: [String]?
+    let lanHosts: [String]?
+    let tailscaleHosts: [String]?
+    let tailscaleIP: String?
+    let remoteAccessEnabled: Bool?
 
     // camelCase keys — CompanionAPI uses convertFromSnakeCase
     enum CodingKeys: String, CodingKey {
@@ -89,6 +122,7 @@ struct ServerStatus: Decodable, Equatable {
         case lastActivity, requestCount, tokenCount
         case gpu, ram, cpu, activeModel, system
         case stableDiffusion, imageEngine, bilderEngine
+        case hosts, lanHosts, tailscaleHosts, tailscaleIP, remoteAccessEnabled
     }
 
     init(
@@ -104,7 +138,12 @@ struct ServerStatus: Decodable, Equatable {
         lastActivity: String? = nil,
         requestCount: Int? = nil,
         tokenCount: Int? = nil,
-        stableDiffusion: Bool? = nil
+        stableDiffusion: Bool? = nil,
+        hosts: [String]? = nil,
+        lanHosts: [String]? = nil,
+        tailscaleHosts: [String]? = nil,
+        tailscaleIP: String? = nil,
+        remoteAccessEnabled: Bool? = nil
     ) {
         self.online = online
         self.model = model
@@ -119,6 +158,11 @@ struct ServerStatus: Decodable, Equatable {
         self.requestCount = requestCount
         self.tokenCount = tokenCount
         self.stableDiffusion = stableDiffusion
+        self.hosts = hosts
+        self.lanHosts = lanHosts
+        self.tailscaleHosts = tailscaleHosts
+        self.tailscaleIP = tailscaleIP
+        self.remoteAccessEnabled = remoteAccessEnabled
     }
 
     /// Prefer server latency; otherwise fill with measured round-trip.
@@ -136,7 +180,12 @@ struct ServerStatus: Decodable, Equatable {
             lastActivity: lastActivity,
             requestCount: requestCount,
             tokenCount: tokenCount,
-            stableDiffusion: stableDiffusion
+            stableDiffusion: stableDiffusion,
+            hosts: hosts,
+            lanHosts: lanHosts,
+            tailscaleHosts: tailscaleHosts,
+            tailscaleIP: tailscaleIP,
+            remoteAccessEnabled: remoteAccessEnabled
         )
     }
 
@@ -160,6 +209,11 @@ struct ServerStatus: Decodable, Equatable {
         lastActivity = try c.decodeIfPresent(String.self, forKey: .lastActivity)
         requestCount = try c.decodeIfPresent(Int.self, forKey: .requestCount)
         tokenCount = try c.decodeIfPresent(Int.self, forKey: .tokenCount)
+        hosts = try c.decodeIfPresent([String].self, forKey: .hosts)
+        lanHosts = try c.decodeIfPresent([String].self, forKey: .lanHosts)
+        tailscaleHosts = try c.decodeIfPresent([String].self, forKey: .tailscaleHosts)
+        tailscaleIP = try c.decodeIfPresent(String.self, forKey: .tailscaleIP)
+        remoteAccessEnabled = try c.decodeIfPresent(Bool.self, forKey: .remoteAccessEnabled)
 
         if let v = try c.decodeIfPresent(Bool.self, forKey: .stableDiffusion) {
             stableDiffusion = v
@@ -291,6 +345,7 @@ struct PairingDeepLink {
     let host: String
     let port: Int
     let pin: String?
+    let remoteHost: String?
 
     static func parse(from raw: String) -> PairingDeepLink? {
         let trimmed = raw.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -305,7 +360,8 @@ struct PairingDeepLink {
             return PairingDeepLink(
                 host: host,
                 port: Int(url.queryItem("port") ?? "4747") ?? 4747,
-                pin: url.queryItem("pin")
+                pin: url.queryItem("pin"),
+                remoteHost: url.queryItem("remoteHost") ?? url.queryItem("remote_host")
             )
         }
         return nil
@@ -318,7 +374,8 @@ struct PairingDeepLink {
         return PairingDeepLink(
             host: host,
             port: Int(url.queryItem("port") ?? "4747") ?? 4747,
-            pin: url.queryItem("pin")
+            pin: url.queryItem("pin"),
+            remoteHost: url.queryItem("remoteHost") ?? url.queryItem("remote_host")
         )
     }
 
@@ -326,7 +383,8 @@ struct PairingDeepLink {
         guard let host = json["host"] as? String ?? json["ip"] as? String else { return nil }
         let port = json["port"] as? Int ?? Int(json["port"] as? String ?? "4747") ?? 4747
         let pin = json["pin"] as? String
-        return PairingDeepLink(host: host, port: port, pin: pin)
+        let remote = json["remoteHost"] as? String ?? json["remote_host"] as? String
+        return PairingDeepLink(host: host, port: port, pin: pin, remoteHost: remote)
     }
 }
 

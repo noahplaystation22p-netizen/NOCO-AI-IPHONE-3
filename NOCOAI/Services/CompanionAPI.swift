@@ -6,6 +6,7 @@ enum CompanionAPIError: LocalizedError {
     case invalidPIN
     case unreachable
     case badHost
+    case remoteAccessDisabled
     case server(String)
     case network(Error)
     case decoding
@@ -22,6 +23,8 @@ enum CompanionAPIError: LocalizedError {
             return "PC nicht erreichbar. Gleiches WLAN? Firewall Port 4747? NOCO AI läuft?"
         case .badHost:
             return "Ungültige IP — nur die Adresse eingeben, z. B. 192.168.178.197 (ohne http://)"
+        case .remoteAccessDisabled:
+            return "Remote-Zugriff ist auf dem NOCO-PC deaktiviert. Bitte in der Windows-App „Remote Zugriff aktivieren“ einschalten."
         case .server(let msg):
             return msg
         case .network(let err):
@@ -162,6 +165,14 @@ struct CompanionAPI {
             }
             if http.statusCode == 403, isPairRequest {
                 throw CompanionAPIError.invalidPIN
+            }
+            if http.statusCode == 403 {
+                let message = parseErrorMessage(data: data) ?? ""
+                let low = message.lowercased()
+                if low.contains("remote") || low.contains("tailscale") {
+                    throw CompanionAPIError.remoteAccessDisabled
+                }
+                throw CompanionAPIError.server(message.isEmpty ? "Zugriff verweigert" : message)
             }
             var message = parseErrorMessage(data: data) ?? "HTTP \(http.statusCode)"
             if http.statusCode == 404 || message.lowercased().contains("unbekannte route") {

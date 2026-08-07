@@ -41,6 +41,11 @@ final class VoiceService: NSObject, ObservableObject {
     private var autoFinishArmed = false
     private var pendingSpeakChunks = 0
     private var speakFinishedNotified = false
+    /// Bumped on each `speak()` / stop so late PCM callbacks from a prior utterance are ignored.
+    private var speakGeneration: UInt64 = 0
+    private var speakingStartedAt: Date?
+    private var recognitionStartedAt: Date?
+    private var audioObserversInstalled = false
 
     /// Amplified TTS path (gain > 1.0 — AVSpeechUtterance.volume alone caps at 1).
     private let ttsEngine = AVAudioEngine()
@@ -83,6 +88,89 @@ final class VoiceService: NSObject, ObservableObject {
         synthesizer.delegate = self
         synthesizer.usesApplicationAudioSession = true
         NOCOSpeakVoiceSettings.ensureDefaults()
+        installAudioSessionObservers()
+    }
+
+    private func installAudioSessionObservers() {
+        guard !audioObserversInstalled else { return }
+        audioObserversInstalled = true
+        let center = NotificationCenter.default
+        center.addObserver(
+            forName: AVAudioSession.interruptionNotification,
+            object: AVAudioSession.sharedInstance(),
+            queue: .main
+        ) { [weak self] note in
+            Task { @MainActor in
+                self?.handleAudioInterruption(note)
+            }
+        }
+        center.addObserver(
+            forName: AVAudioSession.routeChangeNotification,
+            object: AVAudioSession.sharedInstance(),
+            queue: .main
+        ) { [weak self] _ in
+            Task { @MainActor in
+                self?.handleRouteChange()
+            }
+        }
+        center.addObserver(
+            forName: AVAudioSession.mediaServicesWereResetNotification,
+            object: AVAudioSession.sharedInstance(),
+            queue: .main
+        ) { [weak self] _ in
+            Task { @MainActor in
+                self?.handleMediaServicesReset()
+            }
+        }
+    }
+
+    private func handleAudioInterruption(_ note: Notification) {
+        guard let info = note.userInfo,
+              let typeVal = info[AVAudioSessionInterruptionTypeKey] as? UInt,
+              let type = AVAudioSession.InterruptionType(rawValue: typeVal) else { return }
+        switch type {
+        case .began:
+            if case .listening = phase {
+                stopListening(cancel: true)
+                phase = .idle
+            }
+        case .ended:
+            let opts = (info[AVAudioSessionInterruptionOptionKey] as? UInt)
+                .flatMap { AVAudioSession.InterruptionOptions(rawValue: $0) } ?? []
+            guard opts.contains(.shouldResume), sessionActive, !isMuted else { return }
+            if case .speaking = phase { return }
+            try? activateListeningAfterTTS()
+            // Health loop / SpeakSession will reopen mic; mark idle so it can.
+            if case .listening = phase, !isActivelyListening {
+                phase = .idle
+            }
+        @unknown default:
+            break
+        }
+    }
+
+    private func handleRouteChange() {
+        guard sessionActive, !isMuted else { return }
+        if case .speaking = phase { return }
+        // After BT / speaker flips, recognition often dies silently.
+        if case .listening = phase, !audioEngine.isRunning {
+            phase = .idle
+        }
+    }
+
+    private func handleMediaServicesReset() {
+        stopTTSEngine()
+        ttsEngineReady = false
+        if case .speaking = phase {
+            stopSpeaking(notifyFinished: true)
+        }
+        if case .listening = phase {
+            stopListening(cancel: true)
+            phase = .idle
+        }
+        if sessionActive {
+            try? activateBackgroundAudioSession()
+        }
     }
 
     func requestPermissions() async -> Bool {
@@ -110,14 +198,23 @@ final class VoiceService: NSObject, ObservableObject {
         try session.setActive(true, options: [])
     }
 
-    /// Loud TTS route — pure playback is louder than playAndRecord; force speaker.
+    /// Loud TTS route — during an active Speak session keep duplex so background mic survives.
     func activateLoudPlaybackSession() throws {
         let session = AVAudioSession.sharedInstance()
-        try session.setCategory(
-            .playback,
-            mode: .spokenAudio,
-            options: [.defaultToSpeaker, .allowBluetoothA2DP]
-        )
+        if sessionActive {
+            // Pure `.playback` after filler TTS often kills Island/background follow-ups.
+            try session.setCategory(
+                .playAndRecord,
+                mode: .voiceChat,
+                options: [.defaultToSpeaker, .allowBluetooth, .mixWithOthers]
+            )
+        } else {
+            try session.setCategory(
+                .playback,
+                mode: .spokenAudio,
+                options: [.defaultToSpeaker, .allowBluetoothA2DP]
+            )
+        }
         try session.overrideOutputAudioPort(.speaker)
         try session.setActive(true, options: [])
     }
@@ -153,6 +250,24 @@ final class VoiceService: NSObject, ObservableObject {
     var isActivelyListening: Bool {
         if case .listening = phase { return audioEngine.isRunning && recognitionTask != nil }
         return false
+    }
+
+    /// STT tasks go stale in background — refresh so follow-ups still land.
+    func refreshRecognitionIfStale(maxAge: TimeInterval = 45) {
+        guard case .listening = phase, autoFinishArmed, !isMuted else { return }
+        let started = recognitionStartedAt ?? .distantPast
+        guard Date().timeIntervalSince(started) >= maxAge else { return }
+        let partial = liveTranscript
+        do {
+            try startListening(autoEnd: true)
+            if !partial.isEmpty {
+                liveTranscript = partial
+                lastTranscript = partial
+                speechStarted = true
+            }
+        } catch {
+            phase = .idle
+        }
     }
 
     func setMuted(_ muted: Bool) {
@@ -227,6 +342,7 @@ final class VoiceService: NSObject, ObservableObject {
         lastVoiceAt = nil
         lastTranscriptChangeAt = nil
         pendingEndCandidateAt = nil
+        recognitionStartedAt = Date()
         phase = .listening
         HapticService.medium()
         startSilenceWatcher()
@@ -336,32 +452,47 @@ final class VoiceService: NSObject, ObservableObject {
             : Self.speechChunks(from: cleaned)
         pendingSpeakChunks = chunks.count
         speakFinishedNotified = false
+        speakGeneration &+= 1
+        let generation = speakGeneration
+        speakingStartedAt = Date()
         ttsUseAmplified = true
         ttsPendingBuffers = 0
         phase = .speaking
         HapticService.soft()
 
         Task { await animateSpeakingBands() }
-        speakAmplified(chunks: chunks, natural: natural)
+        speakAmplified(chunks: chunks, natural: natural, generation: generation)
 
         if allowBargeIn {
             scheduleBargeInArming()
         }
     }
 
+    /// If amplified TTS stalls (chunk counters never reach 0), force-finish so mic can reopen.
+    func forceFinishIfSpeakingStuck(maxDuration: TimeInterval = 40) {
+        guard case .speaking = phase else { return }
+        let started = speakingStartedAt ?? .distantPast
+        guard Date().timeIntervalSince(started) >= maxDuration else { return }
+        stopSpeaking(notifyFinished: true)
+    }
+
     /// Controlled interrupt — finish the current word, then stop.
     func softStopSpeaking(notifyFinished: Bool = true) {
         cancelBargeIn()
         let wasSpeaking = synthesizer.isSpeaking || ttsPlayer.isPlaying || phase == .speaking
+        speakGeneration &+= 1
+        let generation = speakGeneration
         if synthesizer.isSpeaking {
             synthesizer.stopSpeaking(at: .word)
         }
         // Amplified buffers: stop after a brief fade window so we don't clip mid-phoneme.
         Task { @MainActor in
             try? await Task.sleep(nanoseconds: 90_000_000)
+            guard self.speakGeneration == generation else { return }
             self.stopTTSEngine()
             self.pendingSpeakChunks = 0
             self.ttsUseAmplified = false
+            self.speakingStartedAt = nil
             if case .speaking = self.phase {
                 self.phase = .idle
             }
@@ -386,9 +517,10 @@ final class VoiceService: NSObject, ObservableObject {
         return false
     }
 
-    private func speakAmplified(chunks: [String], natural: Bool) {
+    private func speakAmplified(chunks: [String], natural: Bool, generation: UInt64) {
         guard !chunks.isEmpty else {
             phase = .idle
+            speakingStartedAt = nil
             notifySpeakFinishedOnce()
             return
         }
@@ -418,8 +550,9 @@ final class VoiceService: NSObject, ObservableObject {
 
                 if pcm.frameLength == 0 {
                     Task { @MainActor in
+                        guard self.speakGeneration == generation else { return }
                         self.pendingSpeakChunks = max(0, self.pendingSpeakChunks - 1)
-                        self.finishAmplifiedIfIdle()
+                        self.finishAmplifiedIfIdle(generation: generation)
                     }
                     return
                 }
@@ -428,6 +561,7 @@ final class VoiceService: NSObject, ObservableObject {
                 Self.amplifyPCM(copy, gain: gain, soft: natural)
 
                 Task { @MainActor in
+                    guard self.speakGeneration == generation else { return }
                     do {
                         try self.ensureTTSEngine(format: copy.format)
                         self.ttsPendingBuffers += 1
@@ -437,11 +571,13 @@ final class VoiceService: NSObject, ObservableObject {
                         self.ttsPlayer.scheduleBuffer(copy, completionHandler: { [weak self] in
                             Task { @MainActor in
                                 guard let self else { return }
+                                guard self.speakGeneration == generation else { return }
                                 self.ttsPendingBuffers = max(0, self.ttsPendingBuffers - 1)
-                                self.finishAmplifiedIfIdle()
+                                self.finishAmplifiedIfIdle(generation: generation)
                             }
                         })
                     } catch {
+                        guard self.speakGeneration == generation else { return }
                         self.ttsUseAmplified = false
                         self.fallbackSpeak(chunks: chunks, natural: natural)
                     }
@@ -450,10 +586,12 @@ final class VoiceService: NSObject, ObservableObject {
         }
     }
 
-    private func finishAmplifiedIfIdle() {
+    private func finishAmplifiedIfIdle(generation: UInt64) {
+        guard speakGeneration == generation else { return }
         guard ttsUseAmplified, case .speaking = phase else { return }
         if pendingSpeakChunks > 0 || ttsPendingBuffers > 0 { return }
         phase = .idle
+        speakingStartedAt = nil
         HapticService.success()
         stopTTSEngine()
         notifySpeakFinishedOnce()
@@ -537,6 +675,8 @@ final class VoiceService: NSObject, ObservableObject {
     func stopSpeaking(notifyFinished: Bool = true) {
         cancelBargeIn()
         let wasSpeaking = synthesizer.isSpeaking || ttsPlayer.isPlaying || phase == .speaking
+        // Invalidate in-flight amplified buffers so they cannot finish a dead utterance.
+        speakGeneration &+= 1
         if synthesizer.isSpeaking {
             synthesizer.stopSpeaking(at: .immediate)
         }
@@ -544,6 +684,7 @@ final class VoiceService: NSObject, ObservableObject {
         pendingSpeakChunks = 0
         ttsUseAmplified = false
         speakingTextLower = ""
+        speakingStartedAt = nil
         if case .speaking = phase {
             phase = .idle
         }
@@ -591,6 +732,9 @@ final class VoiceService: NSObject, ObservableObject {
         guard case .listening = phase else { return }
         let text = liveTranscript.trimmingCharacters(in: .whitespacesAndNewlines)
         guard text.count >= 2 else { return }
+        // Ignore lone hesitations so Island sessions don't "send" noise.
+        let hesitation = Set(["äh", "ähm", "hm", "hmm", "mhm", "öh", "öhä", "em", "erm"])
+        if hesitation.contains(text.lowercased()) { return }
 
         // Transcript alone is enough to mark that the user spoke
         if !speechStarted {
@@ -609,10 +753,12 @@ final class VoiceService: NSObject, ObservableObject {
         let adaptiveSilence = endsClean ? max(0.55, silenceToEnd * 0.72) : silenceToEnd
         let adaptiveNatural = endsClean ? max(0.48, naturalEndQuiet * 0.75) : naturalEndQuiet
 
-        // Prefer clear pause after speech; never rush mid-thought.
-        let silenceReady = quietFor >= adaptiveSilence
-        let naturalEnd = spokenLongEnough && transcriptStable && quietFor >= adaptiveNatural
-        let longSilenceFallback = spokenLongEnough && quietFor >= adaptiveSilence * 1.2
+        // Background: slightly shorter silence so Island follow-ups don't feel stuck.
+        let bg = UIApplication.shared.applicationState != .active
+        let silenceScale = bg ? 0.82 : 1.0
+        let silenceReady = quietFor >= adaptiveSilence * silenceScale
+        let naturalEnd = spokenLongEnough && transcriptStable && quietFor >= adaptiveNatural * silenceScale
+        let longSilenceFallback = spokenLongEnough && quietFor >= adaptiveSilence * 1.2 * silenceScale
         // `force` kept for API compat — still requires a real quiet beat.
         let softForce = force && spokenLongEnough && transcriptStable && quietFor >= 0.9
         let candidate = softForce || naturalEnd || (transcriptStable && silenceReady) || longSilenceFallback
@@ -1049,6 +1195,7 @@ extension VoiceService: AVSpeechSynthesizerDelegate {
             guard !self.ttsUseAmplified else { return }
             if !synthesizer.isSpeaking {
                 self.phase = .idle
+                self.speakingStartedAt = nil
                 HapticService.success()
                 self.notifySpeakFinishedOnce()
             }

@@ -28,6 +28,8 @@ final class SpeakSessionController: ObservableObject {
 
     private weak var connection: ConnectionStore?
     private var isBusy = false
+    private var busySince: Date?
+    private var activeTurn: UInt64 = 0
     private var wired = false
     private var bgTask: UIBackgroundTaskIdentifier = .invalid
     private var resumeTask: Task<Void, Never>?
@@ -51,6 +53,26 @@ final class SpeakSessionController: ObservableObject {
         return false
     }
 
+    private func beginTurn() -> UInt64 {
+        activeTurn &+= 1
+        return activeTurn
+    }
+
+    private func invalidateTurn() {
+        activeTurn &+= 1
+    }
+
+    private func turnIsLive(_ turn: UInt64? = nil) -> Bool {
+        guard isRunning, !isExiting else { return false }
+        if let turn { return turn == activeTurn }
+        return true
+    }
+
+    private func setBusy(_ on: Bool) {
+        isBusy = on
+        busySince = on ? Date() : nil
+    }
+
     func bind(connection: ConnectionStore) {
         self.connection = connection
         guard !wired else { return }
@@ -69,7 +91,9 @@ final class SpeakSessionController: ObservableObject {
             self.resumeTask?.cancel()
             self.resumeTask = nil
             self.holdMicForTTS = false
-            self.isBusy = false
+            self.setBusy(false)
+            self.invalidateTurn()
+            self.connection?.chat.cancelSpeakSend()
             Task { @MainActor in
                 await self.handleBargeIn(text)
             }
@@ -121,7 +145,7 @@ final class SpeakSessionController: ObservableObject {
         do {
             try voice.activateBackgroundAudioSession()
             isRunning = true
-            isBusy = false
+            setBusy(false)
             isMuted = false
             voice.setMuted(false)
             voice.sessionActive = true
@@ -168,6 +192,8 @@ final class SpeakSessionController: ObservableObject {
         if playCue { HapticService.speakCue() }
         isExiting = true
         holdMicForTTS = false
+        invalidateTurn()
+        connection?.chat.cancelSpeakSend()
         resumeTask?.cancel()
         resumeTask = nil
         listenHealthTask?.cancel()
@@ -183,6 +209,7 @@ final class SpeakSessionController: ObservableObject {
         voice.stopSpeaking(notifyFinished: false)
         voice.stopListening(cancel: true)
         isRunning = false
+        setBusy(false)
         isMuted = false
         visionCameraEnabled = false
         screenShareEnabled = false
@@ -206,6 +233,8 @@ final class SpeakSessionController: ObservableObject {
     func exitVoiceAISilent() {
         isExiting = true
         holdMicForTTS = false
+        invalidateTurn()
+        connection?.chat.cancelSpeakSend()
         resumeTask?.cancel()
         voice.stopListening(cancel: true)
         voice.stopSpeaking(notifyFinished: false)
@@ -371,10 +400,37 @@ final class SpeakSessionController: ObservableObject {
     }
 
     private func ensureListeningHealthy() {
-        guard isRunning, !isExiting, !isMuted, !holdMicForTTS, !isBusy else { return }
+        guard isRunning, !isExiting, !isMuted else { return }
+
+        // Stuck busy without TTS → recover so the next question can send.
+        if isBusy, holdMicForTTS == false,
+           let since = busySince,
+           Date().timeIntervalSince(since) > 48 {
+            if case .speaking = voice.phase {
+                voice.forceFinishIfSpeakingStuck(maxDuration: 38)
+                return
+            }
+            setBusy(false)
+            holdMicForTTS = false
+            invalidateTurn()
+            connection?.chat.cancelSpeakSend()
+            statusLine = "NOCO hört wieder zu…"
+            scheduleResumeListening(after: 0.1)
+            return
+        }
+
+        // TTS hold stuck forever → force end and reopen mic.
+        if holdMicForTTS, case .speaking = voice.phase {
+            voice.forceFinishIfSpeakingStuck(maxDuration: 38)
+        }
+
+        guard !holdMicForTTS, !isBusy else { return }
         if case .speaking = voice.phase { return }
         if case .processing = voice.phase { return }
-        if voice.isActivelyListening { return }
+        if voice.isActivelyListening {
+            voice.refreshRecognitionIfStale(maxAge: 45)
+            return
+        }
         // Idle / error / dead recognition → reopen mic (common after background TTS).
         statusLine = "NOCO hört wieder zu…"
         scheduleResumeListening(after: 0.05)
@@ -423,7 +479,8 @@ final class SpeakSessionController: ObservableObject {
             for _ in 0..<500 {
                 try? await Task.sleep(nanoseconds: 80_000_000)
                 guard let self, !Task.isCancelled else { return }
-                let speaking = await MainActor.run {
+                let speaking = await MainActor.run { () -> Bool in
+                    self.voice.forceFinishIfSpeakingStuck(maxDuration: 38)
                     if case .speaking = self.voice.phase { return true }
                     return false
                 }
@@ -441,8 +498,12 @@ final class SpeakSessionController: ObservableObject {
                     self.holdMicForTTS = false
                     return
                 }
+                // Hard clear if TTS still marked speaking (stuck synthesizer / buffer).
+                if case .speaking = self.voice.phase {
+                    self.voice.stopSpeaking(notifyFinished: true)
+                }
                 self.holdMicForTTS = false
-                self.isBusy = false
+                self.setBusy(false)
                 self.listenRetryCount = 0
                 self.connection?.liveScreen.suppressAutoVision = false
                 self.connection?.liveScreen.resumeQueuedAnalysisIfNeeded()
@@ -455,7 +516,8 @@ final class SpeakSessionController: ObservableObject {
     }
 
     private func resumeListening() {
-        guard isRunning, connection?.isOnline == true else { return }
+        // Allow mic reopen even during brief PC blips — utterance send handles offline.
+        guard isRunning else { return }
         guard !isExiting, !holdMicForTTS else { return }
         guard !isMuted else {
             statusLine = "Stumm — tippe Mute aus zum Sprechen"
@@ -510,7 +572,9 @@ final class SpeakSessionController: ObservableObject {
             )
             if case .endSpeak = intent.action {
                 holdMicForTTS = false
-                isBusy = false
+                setBusy(false)
+                invalidateTurn()
+                connection?.chat.cancelSpeakSend()
                 voice.softStopSpeaking(notifyFinished: false)
                 await exitVoiceAI(spokenFarewell: true)
             }
@@ -620,45 +684,46 @@ final class SpeakSessionController: ObservableObject {
         originalText: String,
         connection: ConnectionStore
     ) async {
-        isBusy = true
+        let turn = beginTurn()
+        setBusy(true)
         mapAssistantPhase(for: intent)
         statusLine = intent.statusLine
         voice.phase = .processing
         pushLiveActivity(force: true)
         HapticService.send()
-        guard isRunning else {
-            isBusy = false
+        guard turnIsLive(turn) else {
+            setBusy(false)
             return
         }
 
         switch intent.action {
         case .endSpeak:
-            isBusy = false
+            setBusy(false)
             await exitVoiceAI(spokenFarewell: true)
             return
 
         case .screenMemory:
-            await handleScreenMemory(connection: connection)
+            await handleScreenMemory(connection: connection, turn: turn)
             return
 
         case .createImage(let prompt):
-            await handleImageCreate(prompt: prompt, ack: intent.spokenAck, connection: connection)
+            await handleImageCreate(prompt: prompt, ack: intent.spokenAck, connection: connection, turn: turn)
             return
 
         case .runAgent(let goal):
-            await handleAgent(goal: goal, ack: intent.spokenAck, connection: connection)
+            await handleAgent(goal: goal, ack: intent.spokenAck, connection: connection, turn: turn)
             return
 
         case .magicEraser:
-            await handleMagicEraser(ack: intent.spokenAck, connection: connection)
+            await handleMagicEraser(ack: intent.spokenAck, connection: connection, turn: turn)
             return
 
         case .summarize:
-            await handleSummarize(originalText: originalText, style: intent.style, connection: connection)
+            await handleSummarize(originalText: originalText, style: intent.style, connection: connection, turn: turn)
             return
 
         case .visionAnalyze:
-            await handleVision(originalText: originalText, connection: connection)
+            await handleVision(originalText: originalText, connection: connection, turn: turn)
             return
 
         case .conversation(let depth):
@@ -668,7 +733,8 @@ final class SpeakSessionController: ObservableObject {
                 style: intent.style,
                 useLiveKnowledge: intent.useLiveKnowledge,
                 ack: intent.spokenAck,
-                connection: connection
+                connection: connection,
+                turn: turn
             )
             return
         }
@@ -686,13 +752,14 @@ final class SpeakSessionController: ObservableObject {
         }
     }
 
-    private func handleScreenMemory(connection: ConnectionStore) async {
+    private func handleScreenMemory(connection: ConnectionStore, turn: UInt64) async {
+        guard turnIsLive(turn) else { setBusy(false); return }
         let memory = connection.liveScreen.sessionSummary.trimmingCharacters(in: .whitespacesAndNewlines)
         let briefing = connection.liveScreen.contextBriefing.trimmingCharacters(in: .whitespacesAndNewlines)
         let recall = !memory.isEmpty ? memory : briefing
         if !recall.isEmpty {
             let reply = "Vorhin auf dem Bildschirm:\n\n\(recall)"
-            await finishWithReply(reply, connection: connection)
+            await finishWithReply(reply, connection: connection, turn: turn)
         } else {
             await handleConversation(
                 originalText: "Was war zuletzt auf dem Bildschirm?",
@@ -700,66 +767,73 @@ final class SpeakSessionController: ObservableObject {
                 style: SpeakStyleHints(),
                 useLiveKnowledge: false,
                 ack: "",
-                connection: connection
+                connection: connection,
+                turn: turn
             )
         }
     }
 
-    private func handleImageCreate(prompt: String, ack: String, connection: ConnectionStore) async {
+    private func handleImageCreate(prompt: String, ack: String, connection: ConnectionStore, turn: UInt64) async {
+        guard turnIsLive(turn) else { setBusy(false); return }
         assistantPhase = .creatingImage
         statusLine = SpeakActivityPhase.creatingImage.title
         pushLiveActivity(force: true)
         if !ack.isEmpty {
-            await speakFillerPhrase(ack)
+            await speakFillerPhrase(ack, turn: turn)
+            guard turnIsLive(turn) else { setBusy(false); return }
             assistantPhase = .creatingImage
             statusLine = SpeakActivityPhase.creatingImage.title
             pushLiveActivity(force: true)
         }
-        guard isRunning else { isBusy = false; return }
 
         connection.chat.setMode(.image)
         let reply = await connection.chat.sendAndReturnReply(prompt, modeOverride: .image, speak: false)
+        guard turnIsLive(turn) else { setBusy(false); return }
         let spoken = reply?.trimmingCharacters(in: .whitespacesAndNewlines)
         let final = (spoken?.isEmpty == false)
             ? spoken!
             : "Das Bild ist fertig — du findest es im Chat."
-        await finishWithReply(final, connection: connection)
+        await finishWithReply(final, connection: connection, turn: turn)
     }
 
-    private func handleAgent(goal: String, ack: String, connection: ConnectionStore) async {
+    private func handleAgent(goal: String, ack: String, connection: ConnectionStore, turn: UInt64) async {
+        guard turnIsLive(turn) else { setBusy(false); return }
         assistantPhase = .agentWorking
         statusLine = SpeakActivityPhase.agentWorking.title
         pushLiveActivity(force: true)
         if !ack.isEmpty {
-            await speakFillerPhrase(ack)
+            await speakFillerPhrase(ack, turn: turn)
+            guard turnIsLive(turn) else { setBusy(false); return }
             assistantPhase = .agentWorking
             statusLine = SpeakActivityPhase.agentWorking.title
             pushLiveActivity(force: true)
         }
-        guard isRunning else { isBusy = false; return }
 
         connection.chat.setMode(.agent)
         let reply = await connection.chat.sendAndReturnReply(goal, modeOverride: .agent, speak: false)
+        guard turnIsLive(turn) else { setBusy(false); return }
         let spoken: String
         if let reply, !reply.isEmpty {
             spoken = String(reply.prefix(900))
         } else {
             spoken = "Die Aufgabe läuft im Chat weiter. Schau dort kurz nach."
         }
-        await finishWithReply(spoken, connection: connection)
+        await finishWithReply(spoken, connection: connection, turn: turn)
     }
 
-    private func handleMagicEraser(ack: String, connection: ConnectionStore) async {
+    private func handleMagicEraser(ack: String, connection: ConnectionStore, turn: UInt64) async {
+        guard turnIsLive(turn) else { setBusy(false); return }
         assistantPhase = .thinking
         statusLine = "🪄 Öffne Magischen Radierer…"
         pushLiveActivity(force: true)
         connection.pendingOpenEraser = true
         connection.pendingTab = 1
         showSpeakUI = false
-        await finishWithReply(ack.isEmpty ? "Ich öffne den Magischen Radierer." : ack, connection: connection)
+        await finishWithReply(ack.isEmpty ? "Ich öffne den Magischen Radierer." : ack, connection: connection, turn: turn)
     }
 
-    private func handleSummarize(originalText: String, style: SpeakStyleHints, connection: ConnectionStore) async {
+    private func handleSummarize(originalText: String, style: SpeakStyleHints, connection: ConnectionStore, turn: UInt64) async {
+        guard turnIsLive(turn) else { setBusy(false); return }
         assistantPhase = .thinking
         let prompt = """
         [NOCO SPEAK · ZUSAMMENFASSUNG]
@@ -773,15 +847,18 @@ final class SpeakSessionController: ObservableObject {
             speak: true,
             displayText: originalText
         )
-        await finishWithReply(reply ?? "", connection: connection, allowRetry: originalText)
+        guard turnIsLive(turn) else { setBusy(false); return }
+        await finishWithReply(reply ?? "", connection: connection, allowRetry: originalText, turn: turn)
     }
 
-    private func handleVision(originalText: String, connection: ConnectionStore) async {
+    private func handleVision(originalText: String, connection: ConnectionStore, turn: UInt64) async {
+        guard turnIsLive(turn) else { setBusy(false); return }
         assistantPhase = .vision
         connection.liveScreen.suppressAutoVision = true
         statusLine = SpeakActivityPhase.vision.title
         pushLiveActivity(force: true)
         try? await Task.sleep(nanoseconds: 120_000_000)
+        guard turnIsLive(turn) else { setBusy(false); return }
 
         var jpeg = pendingVisionJPEG
         pendingVisionJPEG = nil
@@ -802,7 +879,7 @@ final class SpeakSessionController: ObservableObject {
             let tip = visionCameraEnabled || screenShareEnabled
                 ? "Ich brauche noch ein klares Bild — tippe kurz auf Snapshot."
                 : "Aktiviere Kamera oder Bildschirm, dann frag nochmal."
-            await finishWithReply(tip, connection: connection)
+            await finishWithReply(tip, connection: connection, turn: turn)
             return
         }
 
@@ -832,7 +909,8 @@ final class SpeakSessionController: ObservableObject {
         }
         let reply = await connection.chat.sendVisionForSpeak(jpeg: jpeg, userText: prompt)
         ImageLiveActivityManager.complete(prompt: "Vision fertig")
-        await finishWithReply(reply ?? "", connection: connection, allowRetry: originalText)
+        guard turnIsLive(turn) else { setBusy(false); return }
+        await finishWithReply(reply ?? "", connection: connection, allowRetry: originalText, turn: turn)
     }
 
     private func handleConversation(
@@ -841,16 +919,18 @@ final class SpeakSessionController: ObservableObject {
         style: SpeakStyleHints,
         useLiveKnowledge: Bool,
         ack: String,
-        connection: ConnectionStore
+        connection: ConnectionStore,
+        turn: UInt64
     ) async {
+        guard turnIsLive(turn) else { setBusy(false); return }
         if useLiveKnowledge {
             connection.chat.armLiveKnowledge(.web)
             assistantPhase = .webSearch
             statusLine = SpeakActivityPhase.webSearch.title
             pushLiveActivity(force: true)
             let filler = ack.isEmpty ? SpeakIntentEngine.randomWebAck() : ack
-            await speakFillerPhrase(filler)
-            guard isRunning else { isBusy = false; return }
+            await speakFillerPhrase(filler, turn: turn)
+            guard turnIsLive(turn) else { setBusy(false); return }
             assistantPhase = .webSearch
             statusLine = SpeakActivityPhase.webSearch.title
             pushLiveActivity(force: true)
@@ -859,8 +939,8 @@ final class SpeakSessionController: ObservableObject {
             statusLine = SpeakActivityPhase.thinking.title
             pushLiveActivity(force: true)
             if !ack.isEmpty {
-                await speakFillerPhrase(ack)
-                guard isRunning else { isBusy = false; return }
+                await speakFillerPhrase(ack, turn: turn)
+                guard turnIsLive(turn) else { setBusy(false); return }
                 assistantPhase = .thinking
                 statusLine = SpeakActivityPhase.thinking.title
                 pushLiveActivity(force: true)
@@ -873,16 +953,18 @@ final class SpeakSessionController: ObservableObject {
             speak: true,
             displayText: originalText
         )
-        await finishWithReply(reply ?? "", connection: connection, allowRetry: originalText)
+        guard turnIsLive(turn) else { setBusy(false); return }
+        await finishWithReply(reply ?? "", connection: connection, allowRetry: originalText, turn: turn)
     }
 
     private func finishWithReply(
         _ reply: String,
         connection: ConnectionStore,
-        allowRetry: String? = nil
+        allowRetry: String? = nil,
+        turn: UInt64? = nil
     ) async {
-        guard isRunning else {
-            isBusy = false
+        guard turnIsLive(turn) else {
+            setBusy(false)
             return
         }
 
@@ -894,7 +976,7 @@ final class SpeakSessionController: ObservableObject {
             voice.phase = .processing
             pushLiveActivity(force: true)
             try? await Task.sleep(nanoseconds: 450_000_000)
-            guard isRunning else { isBusy = false; return }
+            guard turnIsLive(turn) else { setBusy(false); return }
             let prompt = VoiceService.speakPrompt(allowRetry, depth: .flash, style: SpeakStyleHints())
             resolved = (await connection.chat.sendAndReturnReply(
                 prompt,
@@ -903,6 +985,7 @@ final class SpeakSessionController: ObservableObject {
                 displayText: allowRetry
             ) ?? "")
                 .trimmingCharacters(in: .whitespacesAndNewlines)
+            guard turnIsLive(turn) else { setBusy(false); return }
             if resolved.isEmpty {
                 let msg = Self.friendlySpeakError(connection.chat.lastError ?? "")
                 statusLine = msg
@@ -911,12 +994,12 @@ final class SpeakSessionController: ObservableObject {
                 pushLiveActivity(force: true)
                 if voice.autoSpeakReplies, consecutiveFailures <= 2 {
                     holdMicForTTS = true
-                    isBusy = true
+                    setBusy(true)
                     assistantPhase = .speaking
                     voice.speak(msg, allowBargeIn: true)
                     startSpeakWatchdog()
                 } else {
-                    isBusy = false
+                    setBusy(false)
                     try? await Task.sleep(nanoseconds: 900_000_000)
                     if isRunning { scheduleResumeListening(after: 0.2) }
                     await drainPendingUtterance()
@@ -929,19 +1012,19 @@ final class SpeakSessionController: ObservableObject {
         if !resolved.isEmpty {
             lastReply = resolved
             try? await Task.sleep(nanoseconds: 100_000_000)
-            guard isRunning else { isBusy = false; return }
+            guard turnIsLive(turn) else { setBusy(false); return }
             // Always speak in Voice AI — hold mic until TTS fully finishes.
             statusLine = SpeakActivityPhase.speaking.title
             assistantPhase = .speaking
             pushLiveActivity(force: true)
             resumeTask?.cancel()
             holdMicForTTS = true
-            isBusy = true
+            setBusy(true)
             connection.liveScreen.suppressAutoVision = true
             voice.speak(resolved, allowBargeIn: true)
             startSpeakWatchdog()
         } else {
-            isBusy = false
+            setBusy(false)
             assistantPhase = .listening
             scheduleResumeListening(after: 0.2)
             await drainPendingUtterance()
@@ -949,23 +1032,29 @@ final class SpeakSessionController: ObservableObject {
     }
 
     /// Short spoken bridge while work continues — does not resume the mic.
-    private func speakFillerPhrase(_ text: String) async {
+    private func speakFillerPhrase(_ text: String, turn: UInt64? = nil) async {
         let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty, voice.autoSpeakReplies else { return }
+        guard turnIsLive(turn) else { return }
         resumeTask?.cancel()
         assistantPhase = .speaking
         lastReply = trimmed
         statusLine = trimmed
         pushLiveActivity(force: true)
-        voice.speak(trimmed)
-        for _ in 0..<160 {
+        // Short ack — no barge-in (avoids racing the in-flight turn).
+        voice.speak(trimmed, allowBargeIn: false)
+        for _ in 0..<100 {
             try? await Task.sleep(nanoseconds: 50_000_000)
-            guard isRunning else {
+            guard turnIsLive(turn) else {
                 voice.stopSpeaking(notifyFinished: false)
                 return
             }
+            voice.forceFinishIfSpeakingStuck(maxDuration: 8)
             if case .speaking = voice.phase { continue }
             break
+        }
+        if case .speaking = voice.phase {
+            voice.stopSpeaking(notifyFinished: false)
         }
         // Keep busy; do not startSpeakWatchdog — caller continues the task.
         try? await Task.sleep(nanoseconds: 60_000_000)
@@ -980,11 +1069,11 @@ final class SpeakSessionController: ObservableObject {
         pushLiveActivity(force: true)
         if voice.autoSpeakReplies {
             holdMicForTTS = true
-            isBusy = true
+            setBusy(true)
             voice.speak(text, allowBargeIn: true)
             startSpeakWatchdog()
         } else {
-            isBusy = false
+            setBusy(false)
             scheduleResumeListening(after: 0.2)
             await drainPendingUtterance()
         }

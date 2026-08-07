@@ -304,7 +304,7 @@ final class ChatStore: ObservableObject {
                 guard !Task.isCancelled, let self else { return }
                 if self.workPhase == .understanding { self.workPhase = .analyzing }
                 try? await Task.sleep(nanoseconds: 900_000_000)
-                guard !Task.isCancelled, let self else { return }
+                guard !Task.isCancelled else { return }
                 if self.workPhase == .analyzing { self.workPhase = .executing }
             }
 

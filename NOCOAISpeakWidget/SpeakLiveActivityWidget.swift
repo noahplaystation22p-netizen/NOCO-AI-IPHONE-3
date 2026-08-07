@@ -24,52 +24,53 @@ struct SpeakLiveActivityWidget: Widget {
         } dynamicIsland: { context in
             DynamicIsland {
                 DynamicIslandExpandedRegion(.leading) {
-                    SpeakIslandGlyph(state: context.state, size: 22)
+                    SpeakRainbowCore(state: context.state, diameter: 34)
+                        .frame(width: 40, height: 40)
                 }
                 DynamicIslandExpandedRegion(.trailing) {
-                    Text(context.state.isMuted ? "Mute" : (context.state.isOnline ? "Live" : "Offline"))
-                        .font(.caption2.weight(.bold))
-                        .foregroundStyle(context.state.isMuted ? .orange : (context.state.isOnline ? .green : .red))
+                    VStack(alignment: .trailing, spacing: 2) {
+                        Text(context.state.isMuted ? "MUTE" : (context.state.isOnline ? "LIVE" : "OFF"))
+                            .font(.caption2.weight(.bold))
+                            .foregroundStyle(context.state.isMuted ? .orange : (context.state.isOnline ? .green : .red))
+                        Text(SpeakPhasePalette.shortLabel(for: context.state.phaseRaw))
+                            .font(.system(size: 9, weight: .semibold))
+                            .foregroundStyle(.white.opacity(0.55))
+                    }
                 }
                 DynamicIslandExpandedRegion(.center) {
-                    VStack(spacing: 4) {
+                    VStack(spacing: 3) {
                         Text(context.state.title)
-                            .font(.headline)
+                            .font(.headline.weight(.semibold))
                             .foregroundStyle(.white)
-                            .minimumScaleFactor(0.75)
+                            .minimumScaleFactor(0.7)
                             .lineLimit(1)
                         Text(context.state.detail)
                             .font(.caption2)
-                            .foregroundStyle(.white.opacity(0.72))
+                            .foregroundStyle(.white.opacity(0.7))
                             .lineLimit(2)
                     }
                 }
                 DynamicIslandExpandedRegion(.bottom) {
-                    SpeakMiniVisualizer(bars: context.state.bars, level: context.state.level, phaseRaw: context.state.phaseRaw)
-                        .frame(height: 34)
-                        .padding(.top, 4)
+                    SpeakIslandWaveform(state: context.state)
+                        .frame(height: 36)
+                        .padding(.top, 2)
                 }
             } compactLeading: {
-                SpeakIslandGlyph(state: context.state, size: 14)
+                SpeakRainbowCore(state: context.state, diameter: 18)
             } compactTrailing: {
                 SpeakMiniVisualizer(
                     bars: Array(context.state.bars.prefix(5)),
                     level: context.state.level,
-                    barWidth: 2.5,
-                    spacing: 2,
+                    barWidth: 2.4,
+                    spacing: 1.8,
                     phaseRaw: context.state.phaseRaw
                 )
-                .frame(width: 36, height: 16)
+                .frame(width: 38, height: 16)
             } minimal: {
-                Image(systemName: context.state.isMuted ? "mic.slash.fill" : islandMinimalIcon(context.state))
-                    .foregroundStyle(context.state.isMuted ? .orange : SpeakPhasePalette.accent(for: context.state.phaseRaw))
+                SpeakRainbowCore(state: context.state, diameter: 14, showSymbol: false)
             }
             .widgetURL(URL(string: "nocoai://speak"))
         }
-    }
-
-    private func islandMinimalIcon(_ state: SpeakActivityAttributes.ContentState) -> String {
-        SpeakPhasePalette.symbol(for: state.phaseRaw, muted: false)
     }
 }
 
@@ -85,6 +86,21 @@ enum SpeakPhasePalette {
         case "error": return .orange
         case "awaitingConfirm": return .yellow
         default: return Color(red: 0.55, green: 0.45, blue: 1)
+        }
+    }
+
+    static func shortLabel(for phaseRaw: String) -> String {
+        switch phaseRaw {
+        case "listening": return "Hört zu"
+        case "thinking", "processing": return "Denkt"
+        case "webSearch": return "Web"
+        case "creatingImage": return "Bild"
+        case "agentWorking": return "Agent"
+        case "vision": return "Vision"
+        case "speaking": return "Spricht"
+        case "awaitingConfirm": return "OK?"
+        case "error": return "Fehler"
+        default: return "Speak"
         }
     }
 
@@ -109,6 +125,20 @@ enum SpeakPhasePalette {
             return [.mint, .cyan, Color(red: 0.4, green: 0.9, blue: 0.7), .mint]
         case "listening":
             return [.cyan, .purple, .mint, .cyan]
+        case "speaking":
+            return [
+                Color(red: 0.72, green: 0.55, blue: 1),
+                Color(red: 0.95, green: 0.45, blue: 0.78),
+                Color(red: 0.35, green: 0.85, blue: 1),
+                Color(red: 0.72, green: 0.55, blue: 1)
+            ]
+        case "thinking", "processing":
+            return [
+                Color(red: 0.55, green: 0.4, blue: 1),
+                Color(red: 0.35, green: 0.85, blue: 1),
+                Color(red: 0.95, green: 0.45, blue: 0.78),
+                Color(red: 0.55, green: 0.4, blue: 1)
+            ]
         default:
             return [
                 Color(red: 0.35, green: 0.85, blue: 1),
@@ -135,32 +165,113 @@ enum SpeakPhasePalette {
         default: return "mic.fill"
         }
     }
+
+    /// Animation speed factor — higher = faster spin (thinking/web).
+    static func spinPeriod(for phaseRaw: String) -> Double {
+        switch phaseRaw {
+        case "listening": return 5.5
+        case "thinking", "processing": return 3.2
+        case "webSearch": return 2.6
+        case "speaking": return 3.8
+        case "creatingImage", "agentWorking", "vision": return 3.5
+        default: return 6.0
+        }
+    }
 }
 
-struct SpeakIslandGlyph: View {
+/// Living Rainbow AI core for Dynamic Island / Lock Screen (lightweight for WidgetKit).
+struct SpeakRainbowCore: View {
     let state: SpeakActivityAttributes.ContentState
-    var size: CGFloat = 18
+    var diameter: CGFloat = 22
+    var showSymbol: Bool = true
 
     var body: some View {
-        TimelineView(.animation(minimumInterval: 0.12, paused: false)) { timeline in
-            let spin = timeline.date.timeIntervalSinceReferenceDate
-                .truncatingRemainder(dividingBy: 4) / 4
+        let period = SpeakPhasePalette.spinPeriod(for: state.phaseRaw)
+        let interval = max(0.08, min(0.16, period / 40))
+        TimelineView(.animation(minimumInterval: interval, paused: false)) { timeline in
+            let t = timeline.date.timeIntervalSinceReferenceDate
+            let spin = (t.truncatingRemainder(dividingBy: period) / period) * 360
+            let pulse = 0.92 + 0.08 * abs(sin(t * (state.phaseRaw == "listening" ? 2.2 : 3.4)))
             ZStack {
                 Circle()
                     .fill(
                         AngularGradient(
                             colors: SpeakPhasePalette.gradientColors(for: state.phaseRaw, muted: state.isMuted),
                             center: .center,
-                            angle: .degrees(spin * 360)
+                            angle: .degrees(spin)
                         )
                     )
-                    .frame(width: size + 10, height: size + 10)
-                    .opacity(0.85)
-                    .blur(radius: 0.4)
-                Image(systemName: SpeakPhasePalette.symbol(for: state.phaseRaw, muted: state.isMuted))
-                    .font(.system(size: size * 0.72, weight: .semibold))
-                    .foregroundStyle(.white)
+                    .frame(width: diameter + 8, height: diameter + 8)
+                    .blur(radius: diameter > 20 ? 2.2 : 1.0)
+                    .opacity(0.75)
+                    .scaleEffect(pulse)
+
+                Circle()
+                    .stroke(
+                        AngularGradient(
+                            colors: SpeakPhasePalette.gradientColors(for: state.phaseRaw, muted: state.isMuted),
+                            center: .center,
+                            angle: .degrees(-spin * 0.7)
+                        ),
+                        lineWidth: max(1.0, diameter * 0.06)
+                    )
+                    .frame(width: diameter + 2, height: diameter + 2)
+                    .opacity(0.9)
+
+                Circle()
+                    .fill(Color.black.opacity(0.35))
+                    .frame(width: diameter * 0.72, height: diameter * 0.72)
+
+                if showSymbol {
+                    Image(systemName: SpeakPhasePalette.symbol(for: state.phaseRaw, muted: state.isMuted))
+                        .font(.system(size: diameter * 0.38, weight: .semibold))
+                        .foregroundStyle(.white)
+                } else {
+                    Circle()
+                        .fill(
+                            AngularGradient(
+                                colors: SpeakPhasePalette.gradientColors(for: state.phaseRaw, muted: state.isMuted),
+                                center: .center,
+                                angle: .degrees(spin * 1.4)
+                            )
+                        )
+                        .frame(width: diameter * 0.35, height: diameter * 0.35)
+                }
             }
+            .shadow(color: SpeakPhasePalette.accent(for: state.phaseRaw).opacity(0.45), radius: diameter > 20 ? 6 : 3)
+        }
+    }
+}
+
+struct SpeakIslandWaveform: View {
+    let state: SpeakActivityAttributes.ContentState
+
+    var body: some View {
+        TimelineView(.animation(minimumInterval: 0.1, paused: false)) { timeline in
+            let t = timeline.date.timeIntervalSinceReferenceDate
+            let colors = SpeakPhasePalette.gradientColors(for: state.phaseRaw, muted: state.isMuted)
+            HStack(alignment: .center, spacing: 3) {
+                ForEach(0..<7, id: \.self) { i in
+                    let base = i < state.bars.count ? state.bars[i] : state.level
+                    let wave: Double = {
+                        switch state.phaseRaw {
+                        case "listening":
+                            return base
+                        case "speaking":
+                            return 0.35 + 0.55 * abs(sin(t * 7 + Double(i) * 0.7)) * (0.4 + base)
+                        case "webSearch", "thinking", "processing":
+                            return 0.25 + 0.6 * abs(sin(t * 4.5 + Double(i) * 0.5))
+                        default:
+                            return max(0.15, base)
+                        }
+                    }()
+                    Capsule()
+                        .fill(LinearGradient(colors: Array(colors.prefix(3)), startPoint: .bottom, endPoint: .top))
+                        .frame(width: 4, height: max(5, CGFloat(wave) * 30 + CGFloat(state.level) * 5))
+                        .opacity(0.55 + wave * 0.45)
+                }
+            }
+            .frame(maxWidth: .infinity)
         }
     }
 }
@@ -172,26 +283,8 @@ struct SpeakLockScreenView: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
             HStack(spacing: 12) {
-                TimelineView(.animation(minimumInterval: 0.1, paused: false)) { timeline in
-                    let spin = timeline.date.timeIntervalSinceReferenceDate
-                        .truncatingRemainder(dividingBy: 5) / 5
-                    ZStack {
-                        Circle()
-                            .fill(
-                                AngularGradient(
-                                    colors: SpeakPhasePalette.gradientColors(for: state.phaseRaw, muted: state.isMuted),
-                                    center: .center,
-                                    angle: .degrees(spin * 360)
-                                )
-                            )
-                            .frame(width: 52, height: 52)
-                            .opacity(0.95)
-                            .shadow(color: SpeakPhasePalette.accent(for: state.phaseRaw).opacity(0.45), radius: 8)
-                        Image(systemName: SpeakPhasePalette.symbol(for: state.phaseRaw, muted: state.isMuted))
-                            .foregroundStyle(.white)
-                            .font(.system(size: 20, weight: .semibold))
-                    }
-                }
+                SpeakRainbowCore(state: state, diameter: 44)
+                    .frame(width: 56, height: 56)
 
                 VStack(alignment: .leading, spacing: 3) {
                     Text(label)
@@ -214,15 +307,15 @@ struct SpeakLockScreenView: View {
                     Text(state.isMuted ? "MUTE" : (state.isOnline ? "LIVE" : "OFF"))
                         .font(.caption2.weight(.bold))
                         .foregroundStyle(state.isMuted ? .orange : (state.isOnline ? .green : .red))
-                    Text("\(Int(state.level * 100))%")
+                    Text(SpeakPhasePalette.shortLabel(for: state.phaseRaw))
                         .font(.caption.weight(.semibold))
                         .foregroundStyle(.white.opacity(0.7))
                 }
             }
 
-            SpeakMiniVisualizer(bars: state.bars, level: state.level, barWidth: 7, spacing: 5, phaseRaw: state.phaseRaw)
+            SpeakIslandWaveform(state: state)
                 .frame(maxWidth: .infinity)
-                .frame(height: 44)
+                .frame(height: 40)
         }
         .padding(18)
     }

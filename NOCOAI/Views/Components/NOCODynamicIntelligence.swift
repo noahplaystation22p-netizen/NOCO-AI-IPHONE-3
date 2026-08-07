@@ -34,6 +34,7 @@ enum NOCOIntelligenceEnergy: Equatable {
     case thinking
     case speaking
     case working
+    case webSearch
     case success
     case vision
 
@@ -41,9 +42,10 @@ enum NOCOIntelligenceEnergy: Equatable {
         switch self {
         case .idle: return 0.35
         case .listening: return 0.7
-        case .thinking: return 0.75
+        case .thinking: return 0.78
         case .speaking: return 0.9
         case .working: return 0.85
+        case .webSearch: return 0.82
         case .success: return 0.65
         case .vision: return 0.8
         }
@@ -53,9 +55,10 @@ enum NOCOIntelligenceEnergy: Equatable {
         switch self {
         case .idle: return 18
         case .listening: return 10
-        case .thinking: return 7
+        case .thinking: return 5.5
         case .speaking: return 5.5
         case .working: return 6
+        case .webSearch: return 4.2
         case .success: return 12
         case .vision: return 8
         }

@@ -5,6 +5,7 @@ struct IntelligenceVoiceStage: View {
     var phase: VoicePhase
     var level: CGFloat
     var bands: [CGFloat] = Array(repeating: 0.15, count: 16)
+    var assistantPhase: SpeakAssistantPhase = .idle
 
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var spin = false
@@ -13,21 +14,31 @@ struct IntelligenceVoiceStage: View {
     private var active: Bool {
         switch phase {
         case .listening, .processing, .speaking: return true
-        default: return false
+        default: return assistantPhase != .idle && assistantPhase != .error
         }
     }
 
     private var intensity: Double {
-        switch phase {
+        switch resolvedEnergy {
         case .listening: return 0.45 + Double(level) * 0.55
-        case .processing: return 0.8
+        case .thinking, .webSearch: return 0.82
         case .speaking: return 0.85 + Double(level) * 0.15
-        case .error: return 0.35
-        case .idle: return 0.35
+        case .working, .vision: return 0.8
+        case .error, .idle, .success: return 0.35
         }
     }
 
-    private var energy: NOCOIntelligenceEnergy {
+    private var resolvedEnergy: NOCOIntelligenceEnergy {
+        switch assistantPhase {
+        case .webSearch: return .webSearch
+        case .creatingImage, .agentWorking: return .working
+        case .vision: return .vision
+        case .thinking: return .thinking
+        case .speaking: return .speaking
+        case .listening: return .listening
+        case .awaitingConfirm: return .thinking
+        case .error, .idle: break
+        }
         switch phase {
         case .listening: return .listening
         case .processing: return .thinking
@@ -39,10 +50,11 @@ struct IntelligenceVoiceStage: View {
 
     var body: some View {
         let interval: Double = {
-            switch phase {
-            case .listening: return 1.0 / 20.0
-            case .speaking: return 1.0 / 24.0
-            case .processing: return 1.0 / 12.0
+            switch resolvedEnergy {
+            case .listening: return 1.0 / 18.0
+            case .speaking: return 1.0 / 22.0
+            case .thinking, .webSearch: return 1.0 / 14.0
+            case .working, .vision: return 1.0 / 12.0
             default: return 1.0 / 8.0
             }
         }()
@@ -52,20 +64,24 @@ struct IntelligenceVoiceStage: View {
                 auroraField
 
                 NOCOIntelligenceCore(
-                    energy: energy,
+                    energy: resolvedEnergy,
                     size: .hero,
-                    level: level
+                    level: level,
+                    systemImage: coreGlyph
                 )
                 .scaleEffect(1 + level * (phase == .listening ? 0.06 : 0.03))
-                .opacity(0.92)
+                .opacity(0.94)
 
                 softRings
                     .allowsHitTesting(false)
 
+                if resolvedEnergy == .webSearch {
+                    webSearchOrbit(t: t)
+                        .allowsHitTesting(false)
+                }
+
                 centerWaveform(t: t)
                     .offset(y: 78)
-
-                statusSpark
             }
             .scaleEffect(active ? 1 + level * 0.04 : 1)
             .animation(.easeOut(duration: 0.08), value: level)
@@ -73,6 +89,38 @@ struct IntelligenceVoiceStage: View {
         .frame(height: 280)
         .onAppear { startMotionIfNeeded() }
         .onChange(of: active) { _, _ in startMotionIfNeeded() }
+        .onChange(of: resolvedEnergy) { _, _ in startMotionIfNeeded() }
+    }
+
+    private var coreGlyph: String? {
+        switch resolvedEnergy {
+        case .webSearch: return "globe"
+        case .vision: return "eye.fill"
+        case .working: return "sparkles"
+        default: return nil
+        }
+    }
+
+    private func webSearchOrbit(t: Double) -> some View {
+        let angle = t * 110
+        return ZStack {
+            ForEach(0..<3, id: \.self) { i in
+                Circle()
+                    .fill(NOCORainbow.flow[i % NOCORainbow.flow.count].opacity(0.85))
+                    .frame(width: 7, height: 7)
+                    .offset(y: -92)
+                    .rotationEffect(.degrees(angle + Double(i) * 120))
+                    .blur(radius: 0.3)
+            }
+            Circle()
+                .stroke(
+                    AngularGradient(colors: NOCORainbow.flow.map { $0.opacity(0.55) }, center: .center),
+                    style: StrokeStyle(lineWidth: 1.2, dash: [4, 6])
+                )
+                .frame(width: 196, height: 196)
+                .rotationEffect(.degrees(-angle * 0.4))
+                .opacity(0.55)
+        }
     }
 
     private func startMotionIfNeeded() {
@@ -80,8 +128,11 @@ struct IntelligenceVoiceStage: View {
             if !active { spin = false; breathe = false }
             return
         }
-        withAnimation(.linear(duration: 14).repeatForever(autoreverses: false)) { spin = true }
-        withAnimation(.easeInOut(duration: 2.4).repeatForever(autoreverses: true)) { breathe = true }
+        let duration = resolvedEnergy.spinSeconds
+        withAnimation(.linear(duration: duration).repeatForever(autoreverses: false)) { spin = true }
+        withAnimation(.easeInOut(duration: resolvedEnergy == .listening ? 2.6 : 1.7).repeatForever(autoreverses: true)) {
+            breathe = true
+        }
     }
 
     private var auroraField: some View {
@@ -90,7 +141,8 @@ struct IntelligenceVoiceStage: View {
                 .fill(
                     RadialGradient(
                         colors: [
-                            NOCORainbow.blue.opacity(0.38 * intensity),
+                            (resolvedEnergy == .webSearch ? NOCORainbow.blue : NOCORainbow.blue)
+                                .opacity(0.38 * intensity),
                             NOCORainbow.teal.opacity(0.16 * intensity),
                             .clear
                         ],
@@ -104,13 +156,13 @@ struct IntelligenceVoiceStage: View {
                 .scaleEffect(breathe ? 1.07 : 0.93)
 
             Ellipse()
-                .fill(NOCORainbow.pink.opacity(0.14 * intensity))
+                .fill((resolvedEnergy == .speaking ? NOCORainbow.pink : NOCORainbow.violet).opacity(0.14 * intensity))
                 .frame(width: 270, height: 150)
                 .blur(radius: 36)
                 .offset(x: breathe ? 22 : -20, y: breathe ? -12 : 16)
 
             Ellipse()
-                .fill(NOCORainbow.violet.opacity(0.12 * intensity))
+                .fill(NOCORainbow.green.opacity(0.12 * intensity))
                 .frame(width: 200, height: 120)
                 .blur(radius: 28)
                 .offset(x: breathe ? -20 : 18, y: 18)
@@ -177,15 +229,6 @@ struct IntelligenceVoiceStage: View {
         .animation(.easeOut(duration: 0.05), value: bands)
     }
 
-    private var statusSpark: some View {
-        Image(systemName: glyph)
-            .font(.system(size: 16, weight: .semibold))
-            .foregroundStyle(.secondary)
-            .padding(.top, 168)
-            .symbolEffect(.pulse, options: .repeating, isActive: phase == .processing || phase == .listening)
-            .opacity(0.85)
-    }
-
     private func barHeight(_ i: Int, t: Double) -> CGFloat {
         let band: CGFloat
         if i < bands.count {
@@ -199,15 +242,18 @@ struct IntelligenceVoiceStage: View {
         let mid = abs(Double(i) - Double(max(bands.count, 1) - 1) / 2.0)
         let envelope = max(0.2, 1.0 - mid / 10.0)
 
-        switch phase {
+        switch resolvedEnergy {
         case .listening:
             return max(6, 10 + band * 72 * CGFloat(envelope) + level * 16)
         case .speaking:
             let wave = abs(sin(t * 8.5 + Double(i) * 0.7))
             return CGFloat(10 + (Double(band) * 0.75 + wave * 0.35) * envelope * 52)
-        case .processing:
-            let wave = abs(sin(t * 3.2 + Double(i) * 0.35))
-            return CGFloat(8 + wave * envelope * 24)
+        case .thinking, .webSearch:
+            let wave = abs(sin(t * (resolvedEnergy == .webSearch ? 5.5 : 3.6) + Double(i) * 0.4))
+            return CGFloat(8 + wave * envelope * (resolvedEnergy == .webSearch ? 34 : 26))
+        case .working, .vision:
+            let wave = abs(sin(t * 4.0 + Double(i) * 0.45))
+            return CGFloat(8 + wave * envelope * 28)
         default:
             return CGFloat(6 + Double(band) * envelope * 12)
         }
@@ -217,16 +263,6 @@ struct IntelligenceVoiceStage: View {
         let base = NOCORainbow.flow[i % (NOCORainbow.flow.count - 1)]
         let next = NOCORainbow.flow[(i + 1) % (NOCORainbow.flow.count - 1)]
         return [base, next]
-    }
-
-    private var glyph: String {
-        switch phase {
-        case .listening: return "ear.fill"
-        case .processing: return "sparkles"
-        case .speaking: return "speaker.wave.2.fill"
-        case .error: return "exclamationmark.circle"
-        case .idle: return "mic.fill"
-        }
     }
 }
 

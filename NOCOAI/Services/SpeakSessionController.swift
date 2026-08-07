@@ -533,12 +533,16 @@ final class SpeakSessionController: ObservableObject {
     private func handleVision(originalText: String, connection: ConnectionStore) async {
         assistantPhase = .vision
         connection.liveScreen.suppressAutoVision = true
-        statusLine = "👁 Ich schaue mir das an…"
+        statusLine = SpeakActivityPhase.vision.title
         pushLiveActivity(force: true)
-        try? await Task.sleep(nanoseconds: 180_000_000)
+        try? await Task.sleep(nanoseconds: 120_000_000)
 
         var jpeg = pendingVisionJPEG
         pendingVisionJPEG = nil
+        // Prefer a fresh frame when camera/screen is live — seamless Vision.
+        if jpeg == nil, let image = visionFrameProvider?() {
+            jpeg = image.jpegData(compressionQuality: 0.78)
+        }
         if jpeg == nil, screenShareEnabled,
            let preview = connection.liveScreen.latestPreview,
            let data = preview.jpegData(compressionQuality: 0.78) {
@@ -547,14 +551,11 @@ final class SpeakSessionController: ObservableObject {
         if jpeg == nil, screenShareEnabled, let screenJPEG = connection.liveScreen.latestJPEG {
             jpeg = screenJPEG
         }
-        if jpeg == nil, let image = visionFrameProvider?() {
-            jpeg = image.jpegData(compressionQuality: 0.78)
-        }
 
         guard let jpeg else {
             let tip = visionCameraEnabled || screenShareEnabled
-                ? "Ich brauche noch ein klares Bild — tippe kurz auf Momentaufnahme."
-                : "Aktiviere die Kamera oder den Bildschirm, dann frag nochmal."
+                ? "Ich brauche noch ein klares Bild — tippe kurz auf Snapshot."
+                : "Aktiviere Kamera oder Bildschirm, dann frag nochmal."
             await finishWithReply(tip, connection: connection)
             return
         }

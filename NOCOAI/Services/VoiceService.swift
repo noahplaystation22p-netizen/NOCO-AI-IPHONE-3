@@ -49,11 +49,11 @@ final class VoiceService: NSObject, ObservableObject {
     private var ttsPendingBuffers = 0
 
     /// Wait for a clear end of speech — finish mid-thought, then Flash answers fast.
-    private let silenceToEnd: TimeInterval = 1.85
-    private let transcriptStableToEnd: TimeInterval = 1.25
-    private let minSpeechSeconds: TimeInterval = 0.6
-    private let naturalEndQuiet: TimeInterval = 1.45
-    private let endConfirmGrace: TimeInterval = 0.35
+    private let silenceToEnd: TimeInterval = 1.35
+    private let transcriptStableToEnd: TimeInterval = 0.95
+    private let minSpeechSeconds: TimeInterval = 0.55
+    private let naturalEndQuiet: TimeInterval = 1.1
+    private let endConfirmGrace: TimeInterval = 0.28
     private let speechLevelFactor: CGFloat = 2.5
 
     private var pendingEndCandidateAt: Date?
@@ -547,7 +547,18 @@ final class VoiceService: NSObject, ObservableObject {
         pendingEndCandidateAt = nil
         autoFinishArmed = false
         let finished = finishUtterance()
-        guard !finished.isEmpty else { return }
+        guard !finished.isEmpty else {
+            // Empty recognition — keep listening instead of hanging in processing.
+            autoFinishArmed = true
+            if case .processing = phase { phase = .listening }
+            do {
+                try activateListeningAfterTTS()
+                try startListening(autoEnd: true)
+            } catch {
+                phase = .error(error.localizedDescription)
+            }
+            return
+        }
         HapticService.selection()
         onAutoUtterance?(finished)
     }

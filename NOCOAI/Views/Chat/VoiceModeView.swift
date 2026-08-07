@@ -1,5 +1,6 @@
 import SwiftUI
 
+/// NOCO Speak — Apple Intelligence–inspired system assistant surface.
 struct VoiceModeView: View {
     @EnvironmentObject private var connection: ConnectionStore
     @Environment(\.dismiss) private var dismiss
@@ -8,7 +9,7 @@ struct VoiceModeView: View {
 
     @StateObject private var camera = VisionLiveCameraController()
     @State private var cameraOn = false
-    @State private var micPulse = false
+    @State private var titlePulse = false
 
     private var speak: SpeakSessionController { connection.speak }
     private var voice: VoiceService { speak.voice }
@@ -19,57 +20,59 @@ struct VoiceModeView: View {
 
             VStack(spacing: 0) {
                 topBar
-                    .padding(.bottom, 4)
+                    .padding(.bottom, 2)
 
                 if cameraOn {
                     cameraPreview
-                        .padding(.horizontal, 18)
-                        .padding(.top, 8)
-                        .transition(.opacity.combined(with: .move(edge: .top)))
+                        .padding(.horizontal, 20)
+                        .padding(.top, 10)
+                        .transition(.asymmetric(
+                            insertion: .opacity.combined(with: .scale(scale: 0.96)),
+                            removal: .opacity
+                        ))
                 }
 
-                Spacer(minLength: 8)
+                Spacer(minLength: cameraOn ? 6 : 12)
 
+                // Living KI hero
                 ZStack {
                     if !cameraOn {
-                        IntelligenceVoiceStage(phase: voice.phase, level: voice.level, bands: voice.bands)
-                            .frame(maxHeight: 280)
-                            .padding(.horizontal, 4)
-                            .padding(.top, 6)
+                        IntelligenceVoiceStage(
+                            phase: voice.phase,
+                            level: voice.level,
+                            bands: voice.bands,
+                            assistantPhase: speak.assistantPhase
+                        )
+                        .frame(maxHeight: 300)
+                        .padding(.horizontal, 8)
                     } else {
-                        compactVoiceMeter
+                        compactHeroMeter
                     }
                 }
-                .animation(.spring(response: 0.4, dampingFraction: 0.84), value: cameraOn)
+                .animation(.spring(response: 0.45, dampingFraction: 0.86), value: cameraOn)
 
-                phaseBadge
-                    .padding(.top, 6)
+                animatedPhaseTitle
+                    .padding(.top, cameraOn ? 10 : 4)
+                    .padding(.horizontal, 24)
 
                 if let pending = speak.pendingToolConfirm {
                     confirmBanner(pending)
-                        .padding(.horizontal, 18)
-                        .padding(.top, 10)
+                        .padding(.horizontal, 20)
+                        .padding(.top, 12)
                         .transition(.opacity.combined(with: .move(edge: .bottom)))
                 }
 
-                promptPanel
-                    .padding(.horizontal, 18)
-                    .padding(.top, 14)
+                glassTranscript
+                    .padding(.horizontal, 20)
+                    .padding(.top, 16)
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
 
-                Text(speak.statusLine)
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-                    .multilineTextAlignment(.center)
-                    .padding(.horizontal, 24)
-                    .padding(.top, 8)
+                iconControls
+                    .padding(.top, 18)
+                    .padding(.bottom, 8)
 
-                modeChip
-                    .padding(.top, 10)
-
-                controls
-                    .padding(.top, 16)
-                    .padding(.bottom, 30)
+                primaryControl
+                    .padding(.bottom, 28)
             }
         }
         .animation(.spring(response: 0.42, dampingFraction: 0.86), value: cameraOn)
@@ -79,9 +82,9 @@ struct VoiceModeView: View {
         .task {
             _ = await voice.requestPermissions()
             if !connection.isOnline {
-                speak.statusLine = "PC offline — Companion in NOCO AI X starten"
+                speak.statusLine = "PC offline — Companion starten"
             } else if !speak.isRunning {
-                speak.statusLine = "Rede aus — danach verarbeitet NOCO und antwortet."
+                speak.statusLine = "Speak starten — dann natürlich sprechen"
             }
         }
         .onChange(of: scenePhase) { _, phase in
@@ -115,76 +118,114 @@ struct VoiceModeView: View {
             }
         }
         .onAppear {
-            withAnimation(.easeInOut(duration: 0.9).repeatForever(autoreverses: true)) {
-                micPulse = true
+            guard !reduceMotion else { return }
+            withAnimation(.easeInOut(duration: 1.6).repeatForever(autoreverses: true)) {
+                titlePulse = true
             }
         }
     }
 
+    // MARK: - Top
+
+    private var topBar: some View {
+        HStack {
+            Button {
+                dismiss()
+                speak.showSpeakUI = false
+            } label: {
+                Image(systemName: "chevron.down")
+                    .font(.body.weight(.semibold))
+                    .foregroundStyle(.secondary)
+                    .frame(width: 36, height: 36)
+                    .background(.ultraThinMaterial, in: Circle())
+            }
+            .accessibilityLabel(speak.isRunning ? "Im Hintergrund lassen" : "Schließen")
+
+            Spacer()
+
+            HStack(spacing: 6) {
+                Circle()
+                    .fill(connection.isOnline ? Color.green : Color.red)
+                    .frame(width: 7, height: 7)
+                    .shadow(color: (connection.isOnline ? Color.green : Color.red).opacity(0.6), radius: 4)
+                Text(connection.isOnline ? "Live" : "Offline")
+                    .font(.caption2.weight(.bold))
+                    .foregroundStyle(.secondary)
+                    .tracking(0.6)
+            }
+            .padding(.horizontal, 10)
+            .padding(.vertical, 6)
+            .background(.ultraThinMaterial, in: Capsule())
+        }
+        .padding(.horizontal, 18)
+        .padding(.top, 10)
+    }
+
+    // MARK: - Phase title (animated typography)
+
+    private var animatedPhaseTitle: some View {
+        Text(phaseLabel)
+            .font(.system(.title3, design: .rounded).weight(.semibold))
+            .foregroundStyle(
+                LinearGradient(
+                    colors: [
+                        NOCORainbow.blue,
+                        NOCORainbow.violet,
+                        NOCORainbow.pink
+                    ],
+                    startPoint: .leading,
+                    endPoint: .trailing
+                )
+            )
+            .shadow(color: NOCORainbow.violet.opacity(titlePulse ? 0.45 : 0.15), radius: titlePulse ? 14 : 6)
+            .scaleEffect(titlePulse && speak.isRunning ? 1.02 : 1)
+            .contentTransition(.opacity)
+            .animation(.easeInOut(duration: 0.35), value: phaseLabel)
+            .multilineTextAlignment(.center)
+            .accessibilityAddTraits(.isHeader)
+    }
+
+    // MARK: - Camera
+
     private var cameraPreview: some View {
         ZStack(alignment: .topTrailing) {
             VisionLiveCameraPreview(session: camera.session)
-                .frame(height: 220)
-                .clipShape(RoundedRectangle(cornerRadius: 22, style: .continuous))
+                .frame(height: 200)
+                .clipShape(RoundedRectangle(cornerRadius: 26, style: .continuous))
                 .overlay(
-                    RoundedRectangle(cornerRadius: 22, style: .continuous)
+                    RoundedRectangle(cornerRadius: 26, style: .continuous)
                         .stroke(
-                            LinearGradient(
-                                colors: [
-                                    Color(red: 0.45, green: 0.72, blue: 1),
-                                    Color(red: 0.95, green: 0.55, blue: 0.78),
-                                    Color(red: 0.45, green: 0.85, blue: 0.9)
-                                ],
-                                startPoint: .topLeading,
-                                endPoint: .bottomTrailing
-                            ),
+                            AngularGradient(colors: NOCORainbow.flow.map { $0.opacity(0.7) }, center: .center),
                             lineWidth: 1.4
                         )
                 )
-                .shadow(color: Color(red: 0.45, green: 0.72, blue: 1).opacity(0.35), radius: 16, y: 6)
+                .shadow(color: NOCORainbow.blue.opacity(0.3), radius: 18, y: 8)
 
-            HStack(spacing: 8) {
-                Label("Vision aktiv", systemImage: "eye.fill")
-                    .font(.caption2.weight(.bold))
-                    .padding(.horizontal, 10)
-                    .padding(.vertical, 6)
-                    .background(.ultraThinMaterial, in: Capsule())
-                Button {
-                    Task { await camera.flipCamera() }
-                } label: {
-                    Image(systemName: "camera.rotate.fill")
-                        .font(.caption.weight(.bold))
-                        .padding(8)
-                        .background(.ultraThinMaterial, in: Circle())
-                }
+            Button {
+                Task { await camera.flipCamera() }
+            } label: {
+                Image(systemName: "arrow.triangle.2.circlepath.camera.fill")
+                    .font(.caption.weight(.bold))
+                    .foregroundStyle(.white)
+                    .padding(10)
+                    .background(.ultraThinMaterial, in: Circle())
             }
             .padding(12)
         }
     }
 
-    private var compactVoiceMeter: some View {
-        HStack(spacing: 14) {
-            Circle()
-                .fill(
-                    RadialGradient(
-                        colors: [
-                            Color(red: 0.35, green: 0.8, blue: 1).opacity(0.9),
-                            Color(red: 0.55, green: 0.45, blue: 1).opacity(0.35),
-                            .clear
-                        ],
-                        center: .center,
-                        startRadius: 2,
-                        endRadius: 28
-                    )
-                )
-                .frame(width: 52, height: 52)
-                .scaleEffect(micPulse && voice.phase == .listening ? 1.12 : 1)
-                .overlay(
-                    Image(systemName: speak.isMuted ? "mic.slash.fill" : "mic.fill")
-                        .foregroundStyle(.white)
-                )
-            VStack(alignment: .leading, spacing: 4) {
-                Text(phaseLabel)
+    private var compactHeroMeter: some View {
+        HStack(spacing: 16) {
+            NOCOIntelligenceCore(
+                energy: speakEnergy,
+                size: .medium,
+                level: voice.level,
+                systemImage: speak.isMuted ? "mic.slash.fill" : "eye.fill"
+            )
+            .frame(width: 88, height: 88)
+
+            VStack(alignment: .leading, spacing: 8) {
+                Text(cameraOn ? "Vision + Sprache" : "Bereit")
                     .font(.subheadline.weight(.semibold))
                 GeometryReader { geo in
                     Capsule()
@@ -193,70 +234,48 @@ struct VoiceModeView: View {
                             Capsule()
                                 .fill(
                                     LinearGradient(
-                                        colors: [
-                                            Color(red: 0.35, green: 0.8, blue: 1),
-                                            Color(red: 0.55, green: 0.45, blue: 1)
-                                        ],
+                                        colors: [NOCORainbow.blue, NOCORainbow.violet],
                                         startPoint: .leading,
                                         endPoint: .trailing
                                     )
                                 )
-                                .frame(width: max(8, geo.size.width * CGFloat(max(0.08, voice.level))))
+                                .frame(width: max(10, geo.size.width * CGFloat(max(0.08, voice.level))))
                         }
                 }
-                .frame(height: 6)
+                .frame(height: 7)
             }
         }
-        .padding(.horizontal, 22)
-        .padding(.vertical, 10)
+        .padding(.horizontal, 28)
     }
 
-    private var phaseBadge: some View {
-        Text(phaseLabel)
-            .font(.caption.weight(.bold))
-            .tracking(0.8)
-            .textCase(.uppercase)
-            .foregroundStyle(NOCOAITheme.accent)
-            .padding(.horizontal, 12)
-            .padding(.vertical, 5)
-            .background(
-                Capsule(style: .continuous)
-                    .fill(NOCOAITheme.accent.opacity(0.12 + Double(voice.level) * 0.18))
-                    .overlay(
-                        Capsule(style: .continuous)
-                            .stroke(NOCOAITheme.accent.opacity(0.25 + Double(voice.level) * 0.45), lineWidth: 1)
-                    )
-            )
-            .scaleEffect(1 + voice.level * (voice.phase == .listening ? 0.08 : 0.03))
-            .animation(.easeOut(duration: 0.06), value: voice.level)
-    }
+    // MARK: - Transcript (minimal glass)
 
-    private var promptPanel: some View {
+    private var glassTranscript: some View {
         ScrollViewReader { proxy in
-            ScrollView {
-                VStack(alignment: .leading, spacing: 8) {
-                    Text(displayText)
-                        .font(.title3.weight(.semibold))
-                        .foregroundStyle(.primary)
-                        .frame(maxWidth: .infinity, alignment: .leading)
-                        .textSelection(.enabled)
-                        .id("promptBottom")
-                        .contentTransition(.opacity)
-                }
-                .padding(18)
+            ScrollView(showsIndicators: false) {
+                Text(displayText)
+                    .font(.body.weight(.medium))
+                    .foregroundStyle(.primary.opacity(0.92))
+                    .multilineTextAlignment(.center)
+                    .frame(maxWidth: .infinity)
+                    .padding(.horizontal, 8)
+                    .padding(.vertical, 6)
+                    .id("speakBottom")
+                    .contentTransition(.opacity)
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity)
-            .background(
-                RoundedRectangle(cornerRadius: 24, style: .continuous)
+            .padding(18)
+            .background {
+                RoundedRectangle(cornerRadius: 28, style: .continuous)
                     .fill(.ultraThinMaterial)
                     .overlay(
-                        RoundedRectangle(cornerRadius: 24, style: .continuous)
+                        RoundedRectangle(cornerRadius: 28, style: .continuous)
                             .stroke(
                                 LinearGradient(
                                     colors: [
-                                        Color(red: 0.4, green: 0.85, blue: 1).opacity(0.5),
-                                        Color(red: 0.55, green: 0.9, blue: 0.85).opacity(0.35),
-                                        Color(red: 0.4, green: 0.85, blue: 1).opacity(0.45)
+                                        Color.white.opacity(0.35),
+                                        NOCORainbow.blue.opacity(0.25),
+                                        NOCORainbow.pink.opacity(0.2)
                                     ],
                                     startPoint: .topLeading,
                                     endPoint: .bottomTrailing
@@ -264,12 +283,159 @@ struct VoiceModeView: View {
                                 lineWidth: 1
                             )
                     )
-            )
+                    .shadow(color: NOCORainbow.violet.opacity(0.12), radius: 20, y: 8)
+            }
             .onChange(of: displayText) { _, _ in
-                withAnimation(.easeOut(duration: 0.15)) {
-                    proxy.scrollTo("promptBottom", anchor: .bottom)
+                withAnimation(.easeOut(duration: 0.18)) {
+                    proxy.scrollTo("speakBottom", anchor: .bottom)
                 }
             }
+        }
+    }
+
+    // MARK: - Icon controls
+
+    private var iconControls: some View {
+        HStack(spacing: 22) {
+            SpeakIconButton(
+                systemImage: cameraOn ? "camera.fill" : "camera",
+                active: cameraOn,
+                tint: NOCORainbow.blue,
+                label: "Kamera"
+            ) {
+                Task { await toggleCamera() }
+            }
+            .disabled(!connection.isOnline && !cameraOn)
+
+            SpeakIconButton(
+                systemImage: speak.screenShareEnabled
+                    ? "rectangle.inset.filled.and.person.filled"
+                    : "rectangle.dashed",
+                active: speak.screenShareEnabled,
+                tint: NOCORainbow.teal,
+                label: "Bildschirm",
+                analyzing: speak.screenShareEnabled && speak.assistantPhase == .vision
+            ) {
+                Task { await toggleScreenShare() }
+            }
+            .disabled(!connection.isOnline && !speak.screenShareEnabled)
+
+            SpeakIconButton(
+                systemImage: speak.isMuted ? "mic.slash.fill" : "mic.fill",
+                active: speak.isMuted,
+                tint: .orange,
+                label: "Stumm",
+                enabled: speak.isRunning
+            ) {
+                HapticService.toggle()
+                speak.toggleMute()
+            }
+            .opacity(speak.isRunning ? 1 : 0.35)
+            .disabled(!speak.isRunning)
+
+            if cameraOn || speak.screenShareEnabled {
+                SpeakIconButton(
+                    systemImage: speak.pendingVisionJPEG == nil ? "viewfinder" : "checkmark.circle.fill",
+                    active: speak.pendingVisionJPEG != nil,
+                    tint: NOCORainbow.pink,
+                    label: "Snapshot"
+                ) {
+                    speak.captureVisionSnapshot()
+                    HapticService.selection()
+                }
+                .transition(.scale.combined(with: .opacity))
+            }
+        }
+        .animation(.spring(response: 0.4, dampingFraction: 0.82), value: cameraOn || speak.screenShareEnabled)
+    }
+
+    private var primaryControl: some View {
+        Button {
+            if speak.isRunning {
+                HapticService.speakCue()
+                speak.stop()
+            } else {
+                HapticService.send()
+                speak.start()
+            }
+        } label: {
+            ZStack {
+                Capsule()
+                    .fill(
+                        LinearGradient(
+                            colors: speak.isRunning
+                                ? [Color.red.opacity(0.9), Color.orange.opacity(0.75)]
+                                : [NOCORainbow.blue, NOCORainbow.violet, NOCORainbow.teal],
+                            startPoint: .leading,
+                            endPoint: .trailing
+                        )
+                    )
+                    .frame(width: 168, height: 54)
+                    .shadow(
+                        color: (speak.isRunning ? Color.red : NOCORainbow.blue).opacity(0.4),
+                        radius: 16,
+                        y: 4
+                    )
+
+                HStack(spacing: 10) {
+                    Image(systemName: speak.isRunning ? "stop.fill" : "waveform")
+                        .font(.title3.weight(.semibold))
+                        .symbolEffect(.variableColor.iterative, isActive: speak.isRunning && !reduceMotion)
+                    Text(speak.isRunning ? "Stop" : "Start")
+                        .font(.subheadline.weight(.bold))
+                        .tracking(0.4)
+                }
+                .foregroundStyle(.white)
+            }
+        }
+        .buttonStyle(.plain)
+        .disabled(!connection.isOnline && !speak.isRunning)
+        .opacity(connection.isOnline || speak.isRunning ? 1 : 0.4)
+        .accessibilityLabel(speak.isRunning ? "Speak stoppen" : "Speak starten")
+    }
+
+    private func confirmBanner(_ intent: SpeakIntent) -> some View {
+        VStack(alignment: .leading, spacing: 8) {
+            HStack(spacing: 10) {
+                NOCOIntelligenceCore(energy: .thinking, size: .compact, systemImage: "questionmark")
+                    .frame(width: 36, height: 36)
+                Text(intent.confirmationQuestion)
+                    .font(.subheadline.weight(.semibold))
+            }
+            Text("Sag „Ja“ oder „Nein“")
+                .font(.caption2)
+                .foregroundStyle(.secondary)
+        }
+        .padding(14)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background {
+            RoundedRectangle(cornerRadius: 20, style: .continuous)
+                .fill(.ultraThinMaterial)
+                .overlay(
+                    RoundedRectangle(cornerRadius: 20, style: .continuous)
+                        .stroke(AngularGradient(colors: NOCORainbow.flow.map { $0.opacity(0.4) }, center: .center), lineWidth: 1)
+                )
+        }
+    }
+
+    // MARK: - Copy / energy
+
+    private var speakEnergy: NOCOIntelligenceEnergy {
+        switch speak.assistantPhase {
+        case .webSearch: return .webSearch
+        case .creatingImage, .agentWorking: return .working
+        case .vision: return .vision
+        case .thinking: return .thinking
+        case .speaking: return .speaking
+        case .listening: return .listening
+        case .awaitingConfirm: return .thinking
+        case .error, .idle: break
+        }
+        switch voice.phase {
+        case .listening: return .listening
+        case .processing: return .thinking
+        case .speaking: return .speaking
+        default: return .idle
         }
     }
 
@@ -279,21 +445,19 @@ struct VoiceModeView: View {
         case .creatingImage: return "NOCO erstellt dein Bild…"
         case .agentWorking: return "NOCO arbeitet…"
         case .webSearch: return "NOCO sucht im Internet…"
-        case .vision: return cameraOn || speak.screenShareEnabled ? "NOCO sieht…" : "Analysiert"
+        case .vision: return "NOCO sieht…"
         case .thinking: return "NOCO denkt…"
         case .awaitingConfirm: return "Bestätigung"
         case .speaking: return "NOCO antwortet"
         case .error: return "Fehler"
-        case .listening, .idle:
-            break
+        case .listening, .idle: break
         }
         if cameraOn {
             switch voice.phase {
             case .listening: return "Hören + Sehen"
             case .processing: return "Verstehe Szene"
             case .speaking: return "NOCO antwortet"
-            case .error: return "Fehler"
-            case .idle: return speak.isRunning ? "Kamera bereit" : "Speak"
+            default: return speak.isRunning ? "Vision bereit" : "Speak"
             }
         }
         switch voice.phase {
@@ -301,109 +465,7 @@ struct VoiceModeView: View {
         case .processing: return "NOCO denkt…"
         case .speaking: return "NOCO antwortet"
         case .error: return "Fehler"
-        case .idle: return speak.isRunning ? "Assistent bereit" : "Speak"
-        }
-    }
-
-    private var topBar: some View {
-        HStack {
-            Button(speak.isRunning ? "Im Hintergrund lassen" : "Fertig") {
-                dismiss()
-                speak.showSpeakUI = false
-            }
-            .fontWeight(.medium)
-
-            Spacer()
-
-            HStack(spacing: 6) {
-                IntelligencePulseDot(
-                    color: connection.isOnline ? NOCOAITheme.success : NOCOAITheme.danger,
-                    size: 7
-                )
-                Text(connection.isOnline ? "NOCO Sync" : "Offline")
-                    .font(.caption.weight(.semibold))
-                    .foregroundStyle(connection.isOnline ? NOCOAITheme.success : NOCOAITheme.danger)
-            }
-        }
-        .padding(.horizontal, 20)
-        .padding(.top, 12)
-    }
-
-    private var modeChip: some View {
-        HStack(spacing: 8) {
-            Text(SpeakFullAccess.isEnabled ? "Assistent" : "Sicher")
-                .font(.caption2.weight(.bold))
-            if speak.isRunning {
-                Text("· Live")
-                    .font(.caption2.weight(.semibold))
-                    .foregroundStyle(.secondary)
-            }
-            switch speak.assistantPhase {
-            case .creatingImage:
-                Text("· Bild").font(.caption2.weight(.bold)).foregroundStyle(NOCORainbow.pink)
-            case .agentWorking:
-                Text("· Agent").font(.caption2.weight(.bold)).foregroundStyle(NOCORainbow.teal)
-            case .webSearch:
-                Text("· Web").font(.caption2.weight(.bold)).foregroundStyle(Color(red: 0.35, green: 0.62, blue: 1))
-            case .vision:
-                Text("· Vision").font(.caption2.weight(.bold)).foregroundStyle(NOCORainbow.blue)
-            case .thinking:
-                Text("· Think").font(.caption2.weight(.bold)).foregroundStyle(NOCORainbow.violet)
-            default:
-                EmptyView()
-            }
-            if cameraOn {
-                Text("· Kamera")
-                    .font(.caption2.weight(.bold))
-                    .foregroundStyle(Color(red: 0.45, green: 0.72, blue: 1))
-            }
-            if speak.isMuted {
-                Text("MUTE")
-                    .font(.caption2.weight(.bold))
-                    .foregroundStyle(.orange)
-            }
-        }
-        .padding(.horizontal, 12)
-        .padding(.vertical, 6)
-        .background(
-            Capsule()
-                .fill(.ultraThinMaterial)
-                .overlay(
-                    Capsule().stroke(
-                        AngularGradient(colors: NOCORainbow.flow.map { $0.opacity(0.55) }, center: .center),
-                        lineWidth: 1
-                    )
-                )
-        )
-        .foregroundStyle(NOCOAITheme.accent)
-    }
-
-    private func confirmBanner(_ intent: SpeakIntent) -> some View {
-        VStack(alignment: .leading, spacing: 8) {
-            HStack(spacing: 10) {
-                NOCOIntelligenceCore(energy: .thinking, size: .compact, systemImage: "questionmark")
-                    .frame(width: 36, height: 36)
-                VStack(alignment: .leading, spacing: 3) {
-                    Text("Bestätigung")
-                        .font(.caption.weight(.bold))
-                        .foregroundStyle(.secondary)
-                    Text(intent.confirmationQuestion)
-                        .font(.subheadline.weight(.semibold))
-                }
-            }
-            Text("Sag „Ja“ zum Starten oder „Nein“ zum Abbrechen.")
-                .font(.caption2)
-                .foregroundStyle(.secondary)
-        }
-        .padding(14)
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .background {
-            RoundedRectangle(cornerRadius: 18, style: .continuous)
-                .fill(.ultraThinMaterial)
-                .overlay(
-                    RoundedRectangle(cornerRadius: 18, style: .continuous)
-                        .stroke(AngularGradient(colors: NOCORainbow.flow.map { $0.opacity(0.4) }, center: .center), lineWidth: 1)
-                )
+        case .idle: return speak.isRunning ? "Bereit" : "NOCO Speak"
         }
     }
 
@@ -411,173 +473,24 @@ struct VoiceModeView: View {
         switch voice.phase {
         case .listening:
             return voice.liveTranscript.isEmpty
-                ? (cameraOn ? "Ich höre und sehe… frag einfach „Was ist das?“." : "Ich höre zu… sprich einfach.")
+                ? (cameraOn
+                   ? "Frag z. B. „Was sehe ich?“"
+                   : (speak.isRunning ? "Rede natürlich…" : "Tippe Start und sprich."))
                 : voice.liveTranscript
         case .processing:
-            return voice.liveTranscript.isEmpty
-                ? (cameraOn ? "Schaue und denke…" : "Sende an den PC…")
-                : voice.liveTranscript
+            return voice.liveTranscript.isEmpty ? "Einen Moment…" : voice.liveTranscript
         case .speaking:
-            return speak.lastReply.isEmpty ? "Antwort wird gesprochen…" : speak.lastReply
+            return speak.lastReply.isEmpty ? "…" : speak.lastReply
         case .error(let msg):
             return msg
         case .idle:
-            return speak.lastReply.isEmpty ? "Tippe Starten und frag mich etwas." : speak.lastReply
+            return speak.lastReply.isEmpty
+                ? (connection.isOnline ? "Dein persönlicher Assistent." : "PC offline.")
+                : speak.lastReply
         }
     }
 
-    private var controls: some View {
-        VStack(spacing: 12) {
-            Text(controlHint)
-                .font(.caption.weight(.semibold))
-                .foregroundStyle(.secondary)
-
-            Button {
-                Task { await toggleCamera() }
-            } label: {
-                HStack(spacing: 8) {
-                    Image(systemName: cameraOn ? "eye.slash.fill" : "camera.fill")
-                    Text(cameraOn ? "Kamera aus" : "📷 Kamera")
-                        .font(.subheadline.weight(.semibold))
-                }
-                .foregroundStyle(cameraOn ? Color(red: 0.45, green: 0.72, blue: 1) : .primary)
-                .frame(width: 240, height: 44)
-                .background(
-                    Capsule()
-                        .fill(cameraOn
-                              ? Color(red: 0.45, green: 0.72, blue: 1).opacity(0.18)
-                              : Color.primary.opacity(0.08))
-                )
-            }
-            .disabled(!connection.isOnline && !cameraOn)
-
-            Button {
-                Task { await toggleScreenShare() }
-            } label: {
-                HStack(spacing: 8) {
-                    Image(systemName: speak.screenShareEnabled ? "rectangle.slash" : "rectangle.inset.filled.and.person.filled")
-                    Text(speak.screenShareEnabled ? "Bildschirm aus" : "🖥 Bildschirm teilen")
-                        .font(.subheadline.weight(.semibold))
-                }
-                .foregroundStyle(speak.screenShareEnabled ? Color(red: 0.98, green: 0.45, blue: 0.4) : .primary)
-                .frame(width: 240, height: 44)
-                .background(
-                    Capsule()
-                        .fill(speak.screenShareEnabled
-                              ? Color.red.opacity(0.14)
-                              : Color.primary.opacity(0.08))
-                )
-            }
-            .disabled(!connection.isOnline && !speak.screenShareEnabled)
-
-            if cameraOn || speak.screenShareEnabled {
-                Button {
-                    speak.captureVisionSnapshot()
-                } label: {
-                    HStack(spacing: 8) {
-                        Image(systemName: "viewfinder")
-                        Text(speak.pendingVisionJPEG == nil ? "Momentaufnahme" : "Aufnahme bereit ✓")
-                            .font(.subheadline.weight(.semibold))
-                    }
-                    .foregroundStyle(.primary)
-                    .frame(width: 240, height: 44)
-                    .background(Capsule().fill(Color.primary.opacity(0.08)))
-                }
-            }
-
-            if speak.isRunning {
-                Button {
-                    HapticService.toggle()
-                    speak.toggleMute()
-                } label: {
-                    HStack(spacing: 8) {
-                        Image(systemName: speak.isMuted ? "mic.slash.fill" : "mic.fill")
-                        Text(speak.isMuted ? "Mute aus · wieder sprechen" : "Mute · nur zuhören")
-                            .font(.subheadline.weight(.semibold))
-                    }
-                    .foregroundStyle(speak.isMuted ? .orange : .primary)
-                    .frame(width: 240, height: 44)
-                    .background(
-                        Capsule()
-                            .fill(speak.isMuted ? Color.orange.opacity(0.18) : Color.primary.opacity(0.08))
-                            .overlay(
-                                Capsule().stroke(
-                                    speak.isMuted ? Color.orange.opacity(0.5) : Color.clear,
-                                    lineWidth: 1
-                                )
-                            )
-                    )
-                }
-            }
-
-            Button {
-                if speak.isRunning {
-                    HapticService.speakCue()
-                    speak.stop()
-                } else {
-                    HapticService.send()
-                    speak.start()
-                }
-            } label: {
-                HStack(spacing: 10) {
-                    Image(systemName: speak.isRunning ? "stop.fill" : "waveform")
-                        .font(.title3.weight(.semibold))
-                        .symbolEffect(.variableColor.iterative, isActive: speak.isRunning && !reduceMotion)
-                    Text(speak.isRunning ? "Stoppen" : "Speak starten")
-                        .font(.subheadline.weight(.semibold))
-                }
-                .foregroundStyle(.white)
-                .frame(width: 228, height: 58)
-                .background(
-                    Capsule()
-                        .fill(
-                            LinearGradient(
-                                colors: speak.isRunning
-                                    ? [Color.red.opacity(0.85), Color.orange.opacity(0.75)]
-                                    : [
-                                        Color(red: 0.35, green: 0.72, blue: 1),
-                                        Color(red: 0.45, green: 0.85, blue: 0.9)
-                                    ],
-                                startPoint: .leading,
-                                endPoint: .trailing
-                            )
-                        )
-                )
-                .shadow(color: Color(red: 0.4, green: 0.7, blue: 1).opacity(0.4), radius: 14)
-                .scaleEffect(speak.isRunning && voice.phase == .listening && micPulse ? 1.02 : 1)
-            }
-            .disabled(!connection.isOnline && !speak.isRunning)
-            .opacity(connection.isOnline || speak.isRunning ? 1 : 0.45)
-        }
-    }
-
-    private var controlHint: String {
-        if !connection.isOnline { return "PC offline" }
-        if speak.pendingToolConfirm != nil { return "Sag Ja oder Nein" }
-        if speak.screenShareEnabled { return "Bildschirm an — frag „Was soll ich tippen?“" }
-        if cameraOn { return "Kamera an — „Was sehe ich?“ analysiert die Szene" }
-        if speak.isMuted { return "Mute an — Antworten hörst du trotzdem" }
-        if speak.isRunning {
-            switch speak.assistantPhase {
-            case .creatingImage: return "Bildmodell arbeitet…"
-            case .agentWorking: return "Agent erledigt die Aufgabe…"
-            case .webSearch: return "Live Knowledge · ich hole aktuelle Infos…"
-            case .vision: return "Vision analysiert…"
-            case .thinking: return "NOCO denkt nach…"
-            case .awaitingConfirm: return "Bestätigung nötig"
-            default: break
-            }
-            switch voice.phase {
-            case .listening: return SpeakFullAccess.isEnabled
-                ? "Rede natürlich — Tools starten automatisch"
-                : "Rede natürlich — bei Tools fragt NOCO kurz"
-            case .processing: return "Einen Moment…"
-            case .speaking: return "Danach wieder Zuhören"
-            default: return "Live"
-            }
-        }
-        return "Starten · persönlicher KI-Assistent"
-    }
+    // MARK: - Actions
 
     private func toggleCamera() async {
         if cameraOn {
@@ -586,17 +499,16 @@ struct VoiceModeView: View {
             speak.visionCameraEnabled = false
             speak.visionFrameProvider = nil
             speak.pendingVisionJPEG = nil
-            speak.statusLine = speak.isRunning ? "Kamera aus · nur Sprache" : "Speak bereit"
+            speak.statusLine = speak.isRunning ? "Kamera aus" : "Speak bereit"
             HapticService.soft()
             return
         }
-        // Prefer one visual source at a time
         if speak.screenShareEnabled {
             speak.disableScreenShare()
         }
         await camera.requestAccessAndStart()
         guard !camera.permissionDenied else {
-            speak.statusLine = "Kamera-Berechtigung fehlt — in Einstellungen erlauben"
+            speak.statusLine = "Kamera-Berechtigung fehlt"
             HapticService.error()
             return
         }
@@ -604,7 +516,7 @@ struct VoiceModeView: View {
         speak.visionCameraEnabled = true
         speak.visionFrameProvider = { camera.latestFrame }
         speak.pendingVisionJPEG = nil
-        speak.statusLine = "Kamera bereit — Momentaufnahme oder frag „Was ist das?“"
+        speak.statusLine = "Kamera bereit"
         HapticService.success()
     }
 
@@ -623,10 +535,75 @@ struct VoiceModeView: View {
     }
 }
 
+// MARK: - Animated icon control
+
+private struct SpeakIconButton: View {
+    var systemImage: String
+    var active: Bool
+    var tint: Color
+    var label: String
+    var analyzing: Bool = false
+    var enabled: Bool = true
+    var action: () -> Void
+
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @State private var glow = false
+
+    var body: some View {
+        Button(action: action) {
+            VStack(spacing: 6) {
+                ZStack {
+                    Circle()
+                        .fill(active ? tint.opacity(0.22) : Color.primary.opacity(0.06))
+                        .frame(width: 52, height: 52)
+                        .overlay(
+                            Circle()
+                                .stroke(
+                                    active
+                                        ? AngularGradient(colors: NOCORainbow.flow.map { $0.opacity(0.75) }, center: .center)
+                                        : AngularGradient(colors: [Color.primary.opacity(0.12)], center: .center),
+                                    lineWidth: active ? 1.4 : 1
+                                )
+                        )
+                        .shadow(color: active ? tint.opacity(glow ? 0.55 : 0.25) : .clear, radius: glow ? 12 : 6)
+
+                    Image(systemName: systemImage)
+                        .font(.system(size: 18, weight: .semibold))
+                        .foregroundStyle(active ? tint : .primary.opacity(0.75))
+                        .symbolEffect(.bounce, value: active)
+                        .symbolEffect(.pulse, options: .repeating, isActive: analyzing && !reduceMotion)
+                }
+
+                Text(label)
+                    .font(.caption2.weight(.semibold))
+                    .foregroundStyle(active ? tint : .secondary)
+            }
+        }
+        .buttonStyle(.plain)
+        .disabled(!enabled)
+        .accessibilityLabel(label)
+        .onAppear {
+            guard !reduceMotion, active || analyzing else { return }
+            withAnimation(.easeInOut(duration: 1.2).repeatForever(autoreverses: true)) {
+                glow = true
+            }
+        }
+        .onChange(of: active) { _, on in
+            if on, !reduceMotion {
+                glow = false
+                withAnimation(.easeInOut(duration: 1.2).repeatForever(autoreverses: true)) {
+                    glow = true
+                }
+            } else {
+                glow = false
+            }
+        }
+    }
+}
+
 enum VoiceSettings {
     static var defaultMode: AIMode {
         get {
-            // Legacy key — Speak depth is chosen by SpeakIntentEngine now.
             if let raw = UserDefaults.standard.string(forKey: "nocoai.voiceMode") {
                 let mode = AIMode.from(raw)
                 if mode == .flash || mode == .knowledge { return .flash }

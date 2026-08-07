@@ -100,7 +100,7 @@ enum SpeakPhasePalette {
         case "speaking": return "Spricht"
         case "awaitingConfirm": return "OK?"
         case "error": return "Fehler"
-        default: return "Speak"
+        default: return "Voice"
         }
     }
 
@@ -565,7 +565,7 @@ struct NOCOQuickActionsWidget: Widget {
                 .containerBackground(.fill.tertiary, for: .widget)
         }
         .configurationDisplayName("NOCO Schnellaktionen")
-        .description("Speak, Bildideen und Agent direkt öffnen.")
+        .description("Voice AI, Bildideen und Agent direkt öffnen.")
         .supportedFamilies([.systemSmall, .systemMedium])
     }
 }
@@ -587,7 +587,7 @@ struct NOCOQuickActionsWidgetView: View {
 
             if family == .systemSmall {
                 Link(destination: URL(string: "nocoai://speak")!) {
-                    label("Speak", systemImage: "waveform")
+                    label("Voice", systemImage: "waveform")
                 }
                 Link(destination: URL(string: "nocoai://images")!) {
                     label("Bilder", systemImage: "paintbrush.pointed")
@@ -595,7 +595,7 @@ struct NOCOQuickActionsWidgetView: View {
             } else {
                 HStack(spacing: 8) {
                     Link(destination: URL(string: "nocoai://speak")!) {
-                        label("Speak", systemImage: "waveform")
+                        label("Voice", systemImage: "waveform")
                     }
                     Link(destination: URL(string: "nocoai://images")!) {
                         label("Bilder", systemImage: "paintbrush.pointed")

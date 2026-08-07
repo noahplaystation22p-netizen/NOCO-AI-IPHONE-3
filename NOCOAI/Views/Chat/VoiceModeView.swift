@@ -1,6 +1,6 @@
 import SwiftUI
 
-/// NOCO Speak — Apple Intelligence–inspired system assistant surface.
+/// NOCO Voice AI — Apple Intelligence–inspired system assistant surface.
 struct VoiceModeView: View {
     @EnvironmentObject private var connection: ConnectionStore
     @Environment(\.dismiss) private var dismiss
@@ -84,7 +84,7 @@ struct VoiceModeView: View {
             if !connection.isOnline {
                 speak.statusLine = "PC offline — Companion starten"
             } else if !speak.isRunning {
-                speak.statusLine = "Speak starten — dann natürlich sprechen"
+                speak.statusLine = "Voice AI starten — dann natürlich sprechen"
             }
         }
         .onChange(of: scenePhase) { _, phase in
@@ -352,8 +352,7 @@ struct VoiceModeView: View {
     private var primaryControl: some View {
         Button {
             if speak.isRunning {
-                HapticService.speakCue()
-                speak.stop()
+                speak.exitSpeakToChat()
             } else {
                 HapticService.send()
                 speak.start()
@@ -391,7 +390,7 @@ struct VoiceModeView: View {
         .buttonStyle(.plain)
         .disabled(!connection.isOnline && !speak.isRunning)
         .opacity(connection.isOnline || speak.isRunning ? 1 : 0.4)
-        .accessibilityLabel(speak.isRunning ? "Speak stoppen" : "Speak starten")
+        .accessibilityLabel(speak.isRunning ? "Voice AI stoppen" : "Voice AI starten")
     }
 
     private func confirmBanner(_ intent: SpeakIntent) -> some View {
@@ -457,7 +456,7 @@ struct VoiceModeView: View {
             case .listening: return "Hören + Sehen"
             case .processing: return "Verstehe Szene"
             case .speaking: return "NOCO antwortet"
-            default: return speak.isRunning ? "Vision bereit" : "Speak"
+            default: return speak.isRunning ? "Vision bereit" : "Voice AI"
             }
         }
         switch voice.phase {
@@ -465,7 +464,7 @@ struct VoiceModeView: View {
         case .processing: return "NOCO denkt…"
         case .speaking: return "NOCO antwortet"
         case .error: return "Fehler"
-        case .idle: return speak.isRunning ? "Bereit" : "NOCO Speak"
+        case .idle: return speak.isRunning ? "Bereit" : "NOCO Voice AI"
         }
     }
 
@@ -499,7 +498,7 @@ struct VoiceModeView: View {
             speak.visionCameraEnabled = false
             speak.visionFrameProvider = nil
             speak.pendingVisionJPEG = nil
-            speak.statusLine = speak.isRunning ? "Kamera aus" : "Speak bereit"
+            speak.statusLine = speak.isRunning ? "Kamera aus" : "Voice AI bereit"
             HapticService.soft()
             return
         }

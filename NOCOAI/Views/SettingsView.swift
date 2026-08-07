@@ -132,7 +132,7 @@ struct SettingsView: View {
                         Label("Stimme anhören", systemImage: "speaker.wave.2.fill")
                     }
                 } header: {
-                    Text("NOCO Speak")
+                    Text("NOCO Voice AI")
                 } footer: {
                     Text(speakFooter)
                 }
@@ -200,7 +200,7 @@ struct SettingsView: View {
                 } header: {
                     Text("Dein Profil")
                 } footer: {
-                    Text("Name, Persönlichkeit und Fakten gehen unsichtbar an die KI — bei Think & Intelligent. Nicht bei Blitz, Wissen oder Speak.")
+                    Text("Name, Persönlichkeit und Fakten gehen unsichtbar an die KI — bei Think & Intelligent. Nicht bei Blitz, Wissen oder Voice AI.")
                 }
 
                 Section {
@@ -303,20 +303,20 @@ struct SettingsView: View {
                 }
 
                 DisclosureGroup {
-                    Text("Kurzbefehl „Mit NOCO sprechen“ zum Home-Bildschirm. Link: nocoai://speak")
+                    Text("Kurzbefehl „NOCO Voice AI“ zum Action Button legen. Einmal starten, erneut beenden. Link: nocoai://speak")
                         .font(.footnote)
                         .foregroundStyle(.secondary)
-                    Button("Speak jetzt testen") {
+                    Button("Voice AI jetzt testen") {
                         HapticService.medium()
-                        connection.launchSpeakFromShortcut()
+                        connection.toggleVoiceAIFromShortcut()
                     }
                 } label: {
-                    Text("Speak-Kurzbefehl")
+                    Text("Voice-AI-Kurzbefehl")
                 }
 
                 Section("Info") {
                     Text(appVersionLabel)
-                    Text("Chat · Speak · Agent · Live Screen · Bilder")
+                    Text("Chat · Voice AI · Agent · Live Screen · Bilder")
                         .font(.footnote)
                         .foregroundStyle(NOCOAITheme.secondaryText(for: scheme))
                 }

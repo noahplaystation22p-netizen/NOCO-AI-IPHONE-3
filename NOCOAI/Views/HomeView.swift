@@ -144,7 +144,7 @@ struct HomeView: View {
                 if connection.isOnline {
                     ScrollView(.horizontal, showsIndicators: false) {
                         HStack(spacing: 8) {
-                            systemChip("Speak", "waveform") { connection.speak.openUI() }
+                            systemChip("Voice AI", "waveform") { connection.speak.openUI() }
                             systemChip("Agent", "cpu.fill") {
                                 connection.chat.setMode(.agent)
                                 connection.pendingTab = 0

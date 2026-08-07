@@ -105,7 +105,7 @@ struct ChatInputBar: View {
                 .buttonStyle(IntelligencePressStyle(haptic: { HapticService.soft() }))
                 .disabled(!connection.isOnline || connection.chat.isSending)
                 .opacity(connection.isOnline ? 1 : 0.4)
-                .accessibilityLabel("Speak")
+                .accessibilityLabel("Voice AI")
 
                 if connection.chat.isSending {
                     Button {

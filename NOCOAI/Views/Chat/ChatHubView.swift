@@ -310,7 +310,7 @@ struct ChatHubView: View {
                     .opacity(0.75)
 
                 HStack(spacing: 18) {
-                    emptyHint(icon: "waveform.circle.fill", title: "Speak")
+                    emptyHint(icon: "waveform.circle.fill", title: "Voice AI")
                     emptyHint(icon: "paintbrush.pointed.fill", title: "Bilder")
                     emptyHint(icon: "cpu.fill", title: "Agent")
                 }

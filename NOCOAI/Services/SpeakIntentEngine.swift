@@ -68,7 +68,7 @@ struct SpeakIntent: Equatable {
         case .conversation(let depth):
             return depth == .think ? "Ich denke kurz gründlicher nach." : ""
         case .screenMemory: return ""
-        case .endSpeak: return "Alles klar — zurück zum Chat."
+        case .endSpeak: return "Alles klar — Voice AI beendet."
         }
     }
 
@@ -82,10 +82,10 @@ struct SpeakIntent: Equatable {
         case .magicEraser: return "Magischer Radierer…"
         case .visionAnalyze: return "NOCO sieht…"
         case .summarize: return "Zusammenfassen…"
-        case .conversation(let depth):
-            return depth == .think ? "NOCO denkt…" : "NOCO denkt…"
+        case .conversation:
+            return "NOCO denkt…"
         case .screenMemory: return "Erinnerung…"
-        case .endSpeak: return "Speak beendet"
+        case .endSpeak: return "Voice AI beendet"
         }
     }
 
@@ -102,7 +102,7 @@ struct SpeakIntent: Equatable {
         case .conversation:
             return SpeakActivityPhase.thinking.title
         case .screenMemory: return "Erinnert sich"
-        case .endSpeak: return "Speak beendet"
+        case .endSpeak: return "Voice AI beendet"
         }
     }
 }
@@ -329,15 +329,21 @@ enum SpeakIntentEngine {
     }
 
     private static func isEndSpeak(_ t: String) -> Bool {
-        if t.contains("bedeutet") || t.contains("heisst") || t.contains("erklare") { return false }
-        if t.count > 64 { return false }
+        if t.contains("bedeutet") || t.contains("heisst") || t.contains("erklare") || t.contains("erkläre") {
+            return false
+        }
+        if t.count > 72 { return false }
         let phrases = [
-            "sprachmodus beenden", "beende sprachmodus", "stopp sprachmodus",
-            "zuruck zum chat", "back to chat", "end speak", "stop speak",
-            "speak beenden", "exit speak"
+            "sprachmodus verlassen", "sprachmodus beenden", "beende sprachmodus", "stopp sprachmodus",
+            "speak verlassen", "speak beenden", "end speak", "stop speak", "exit speak",
+            "voice verlassen", "voice beenden", "stop voice", "exit voice", "voice ai verlassen",
+            "voice ai beenden", "stop voice ai", "noco verlassen", "noco beenden",
+            "zuruck zum chat", "zurück zum chat", "back to chat",
+            "assistent beenden", "modus verlassen", "beenden"
         ]
         if phrases.contains(where: { t.contains($0) }) { return true }
-        return ["stopp", "stop"].contains(t)
+        // Exact short stops only
+        return ["stopp", "stop", "ende", "exit", "fertig"].contains(t)
     }
 
     private static func matches(_ text: String, _ pattern: String) -> Bool {

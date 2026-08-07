@@ -13,24 +13,39 @@ extension Notification.Name {
 /// Bridge between Shortcuts / Siri App Intents and the running SwiftUI app.
 enum SpeakLaunchBridge {
     private static let pendingKey = "nocoai.pendingSpeakStart"
+    private static let pendingToggleKey = "nocoai.pendingSpeakToggle"
 
     static var pendingStart: Bool {
         get { UserDefaults.standard.bool(forKey: pendingKey) }
         set { UserDefaults.standard.set(newValue, forKey: pendingKey) }
     }
 
+    static var pendingToggle: Bool {
+        get { UserDefaults.standard.bool(forKey: pendingToggleKey) }
+        set { UserDefaults.standard.set(newValue, forKey: pendingToggleKey) }
+    }
+
     static func requestStart() {
+        pendingToggle = false
         pendingStart = true
+        NotificationCenter.default.post(name: .nocoStartSpeak, object: nil)
+    }
+
+    static func requestToggle() {
+        pendingStart = false
+        pendingToggle = true
         NotificationCenter.default.post(name: .nocoStartSpeak, object: nil)
     }
 
     static func requestStop() {
         pendingStart = false
+        pendingToggle = false
         NotificationCenter.default.post(name: .nocoStopSpeak, object: nil)
     }
 
     static func clearPending() {
         pendingStart = false
+        pendingToggle = false
     }
 }
 
@@ -135,35 +150,60 @@ enum NOCOLaunchBridge {
     }
 }
 
-/// Opens NOCO AI and starts Speak — works from Shortcuts / Siri even if the app was closed.
-struct StartSpeakIntent: AppIntent {
-    static var title: LocalizedStringResource = "Mit NOCO sprechen"
+/// Opens / toggles NOCO Voice AI — primary Action Button / Shortcuts entry.
+struct ToggleVoiceAIIntent: AppIntent {
+    static var title: LocalizedStringResource = "NOCO Voice AI"
     static var description = IntentDescription(
-        "Startet den Sprachmodus. Die App kommt kurz in den Vordergrund (Mikrofon), Speak läuft danach über die Live Activity."
+        "Startet oder beendet NOCO Voice AI. Ideal für den Action Button: einmal an, einmal aus."
     )
     static var openAppWhenRun: Bool = true
 
     static var parameterSummary: some ParameterSummary {
-        Summary("Mit NOCO sprechen")
+        Summary("NOCO Voice AI")
+    }
+
+    @MainActor
+    func perform() async throws -> some IntentResult & ProvidesDialog {
+        if VoiceAISessionState.isActive {
+            SpeakLaunchBridge.requestStop()
+            try? await Task.sleep(nanoseconds: 250_000_000)
+            return .result(dialog: "NOCO Voice AI wird beendet.")
+        }
+        SpeakLaunchBridge.requestToggle()
+        try? await Task.sleep(nanoseconds: 350_000_000)
+        return .result(dialog: "NOCO Voice AI startet — sprich einfach.")
+    }
+}
+
+/// Opens NOCO AI and starts Voice AI — works from Shortcuts / Siri even if the app was closed.
+struct StartSpeakIntent: AppIntent {
+    static var title: LocalizedStringResource = "NOCO Voice AI starten"
+    static var description = IntentDescription(
+        "Startet NOCO Voice AI. Die App kommt kurz in den Vordergrund (Mikrofon), danach läuft die Session über die Dynamic Island."
+    )
+    static var openAppWhenRun: Bool = true
+
+    static var parameterSummary: some ParameterSummary {
+        Summary("NOCO Voice AI starten")
     }
 
     @MainActor
     func perform() async throws -> some IntentResult & ProvidesDialog {
         SpeakLaunchBridge.requestStart()
         try? await Task.sleep(nanoseconds: 350_000_000)
-        return .result(dialog: "Speak startet — sprich einfach.")
+        return .result(dialog: "NOCO Voice AI startet — sprich einfach.")
     }
 }
 
 struct StopSpeakIntent: AppIntent {
-    static var title: LocalizedStringResource = "NOCO Speak stoppen"
-    static var description = IntentDescription("Beendet den Sprachmodus.")
+    static var title: LocalizedStringResource = "NOCO Voice AI stoppen"
+    static var description = IntentDescription("Beendet NOCO Voice AI und kehrt zum Chat zurück.")
     static var openAppWhenRun: Bool = true
 
     @MainActor
     func perform() async throws -> some IntentResult & ProvidesDialog {
         SpeakLaunchBridge.requestStop()
-        return .result(dialog: "Speak gestoppt.")
+        return .result(dialog: "NOCO Voice AI beendet.")
     }
 }
 
@@ -234,26 +274,36 @@ struct AskNOCOIntent: AppIntent {
 struct NOCOAIAppShortcuts: AppShortcutsProvider {
     static var appShortcuts: [AppShortcut] {
         AppShortcut(
+            intent: ToggleVoiceAIIntent(),
+            phrases: [
+                "\(.applicationName) Voice AI",
+                "\(.applicationName) Voice",
+                "Hey \(.applicationName)",
+                "Mit \(.applicationName) sprechen",
+                "\(.applicationName) Sprachmodus",
+                "Toggle \(.applicationName) Voice"
+            ],
+            shortTitle: "Voice AI",
+            systemImageName: "waveform.circle.fill"
+        )
+        AppShortcut(
             intent: StartSpeakIntent(),
             phrases: [
-                "Mit \(.applicationName) sprechen",
-                "Sprich mit \(.applicationName)",
-                "\(.applicationName) Speak starten",
-                "\(.applicationName) Sprachmodus",
-                "Hey \(.applicationName)",
-                "Start \(.applicationName) Speak"
+                "\(.applicationName) Voice AI starten",
+                "Start \(.applicationName) Voice",
+                "Sprich mit \(.applicationName)"
             ],
-            shortTitle: "Speak starten",
-            systemImageName: "waveform.circle.fill"
+            shortTitle: "Voice starten",
+            systemImageName: "mic.circle.fill"
         )
         AppShortcut(
             intent: StopSpeakIntent(),
             phrases: [
-                "\(.applicationName) Speak stoppen",
-                "Stoppe \(.applicationName) Speak",
+                "\(.applicationName) Voice AI stoppen",
+                "Stoppe \(.applicationName) Voice",
                 "\(.applicationName) Sprachmodus beenden"
             ],
-            shortTitle: "Speak stoppen",
+            shortTitle: "Voice stoppen",
             systemImageName: "stop.circle.fill"
         )
         AppShortcut(

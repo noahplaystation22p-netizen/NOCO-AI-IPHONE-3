@@ -15,13 +15,13 @@ enum SpeakLiveActivityManager {
     }
 
     /// Fire-and-forget start (Speak start path).
-    static func start(sessionLabel: String = "NOCO Speak") {
+    static func start(sessionLabel: String = "NOCO Voice AI") {
         Task { _ = await startAndWait(sessionLabel: sessionLabel) }
     }
 
     /// Guaranteed attempt: end stale activities, then request a new one (retries).
     @discardableResult
-    static func startAndWait(sessionLabel: String = "NOCO Speak") async -> Bool {
+    static func startAndWait(sessionLabel: String = "NOCO Voice AI") async -> Bool {
         guard areActivitiesEnabled else { return false }
 
         // Clear stale activities so a fresh Lock Screen + Island banner appears
@@ -35,7 +35,7 @@ enum SpeakLiveActivityManager {
         let state = SpeakActivityAttributes.ContentState(
             phaseRaw: SpeakActivityPhase.listening.rawValue,
             title: SpeakActivityPhase.listening.title,
-            detail: "Rede natürlich — NOCO versteht Absichten",
+            detail: "NOCO Voice AI aktiviert — rede natürlich",
             level: 0.35,
             bars: [0.25, 0.45, 0.7, 0.95, 0.7, 0.45, 0.25],
             isOnline: true,

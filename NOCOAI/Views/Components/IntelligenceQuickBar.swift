@@ -9,7 +9,7 @@ struct IntelligenceQuickBar: View {
         ScrollView(.horizontal, showsIndicators: false) {
             HStack(spacing: 8) {
                 quickChip(
-                    title: connection.speak.isRunning ? "Speak Live" : "Speak",
+                    title: connection.speak.isRunning ? "Voice Live" : "Voice AI",
                     icon: "waveform",
                     accent: Color(red: 0.55, green: 0.45, blue: 1)
                 ) {
@@ -162,7 +162,7 @@ struct IntelligenceSuggestionChips: View {
                 Chip(id: "next", title: "Nächste Schritte") {
                     Task { await connection.chat.send("Was wäre jetzt die sinnvollste nächste Aktion?") }
                 },
-                Chip(id: "speak", title: "Speak") {
+                Chip(id: "speak", title: "Voice AI") {
                     connection.speak.openUI()
                 },
                 Chip(id: "agent", title: "Agent starten") {
@@ -186,7 +186,7 @@ struct IntelligenceSuggestionChips: View {
             Chip(id: "what", title: "Was kann NOCO?") {
                 Task {
                     await connection.chat.send(
-                        "Erkläre kurz Speak (mit optionaler Kamera), Agent, Live Screen, Chat und Bilder."
+                        "Erkläre kurz Voice AI (mit optionaler Kamera), Agent, Live Screen, Chat und Bilder."
                     )
                 }
             }

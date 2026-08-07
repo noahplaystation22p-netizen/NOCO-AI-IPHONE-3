@@ -22,7 +22,7 @@
 	<key>NSCameraUsageDescription</key>
 	<string>NOCO Vision Live und die QR-Kopplung nutzen die Kamera, damit NOCO deine Umgebung verstehen und helfen kann — nur nach deiner Zustimmung.</string>
 	<key>NSMicrophoneUsageDescription</key>
-	<string>NOCO AI benötigt das Mikrofon für Speak (Shortcuts/Siri und In-App-Sprachmodus über deinen PC).</string>
+	<string>NOCO AI benötigt das Mikrofon für NOCO Voice AI (Shortcuts/Siri und In-App-Sprachmodus über deinen PC).</string>
 	<key>NSSpeechRecognitionUsageDescription</key>
 	<string>NOCO AI wandelt deine Sprache in Text um und sendet ihn an deinen Windows-PC.</string>
 	<key>NSPhotoLibraryUsageDescription</key>
@@ -56,9 +56,9 @@
 			<key>UIApplicationShortcutItemType</key>
 			<string>de.noco.nocoai.speak</string>
 			<key>UIApplicationShortcutItemTitle</key>
-			<string>Sprachmodus starten</string>
+			<string>Voice AI starten</string>
 			<key>UIApplicationShortcutItemSubtitle</key>
-			<string>NOCO Speak</string>
+			<string>NOCO Voice AI</string>
 			<key>UIApplicationShortcutItemIconType</key>
 			<string>UIApplicationShortcutIconTypeAudio</string>
 		</dict>

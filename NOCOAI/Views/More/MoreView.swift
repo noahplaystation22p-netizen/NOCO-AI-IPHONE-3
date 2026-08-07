@@ -35,7 +35,7 @@ struct MoreView: View {
                             connection.speak.openUI()
                         } label: {
                             IntelligenceFeatureTile(
-                                title: "Speak",
+                                title: "Voice AI",
                                 subtitle: connection.speak.isRunning
                                     ? (connection.speak.visionCameraEnabled ? "Live · Kamera" : "Live aktiv")
                                     : "Sprache · optional Kamera",
@@ -105,7 +105,7 @@ struct MoreView: View {
                         } label: {
                             IntelligenceFeatureTile(
                                 title: "Einstellungen",
-                                subtitle: "Profil · Speak · Tastatur",
+                                subtitle: "Profil · Voice AI · Tastatur",
                                 systemImage: "gearshape.fill",
                                 accent: NOCOAITheme.glowAccent
                             )

@@ -56,7 +56,7 @@ struct PlusToolsPanel: View {
                             HapticService.open()
                             dismiss()
                         },
-                        .init("Speak / Vision", "waveform.circle.fill", Color(red: 0.45, green: 0.85, blue: 0.7)) {
+                        .init("Voice AI", "waveform.circle.fill", Color(red: 0.45, green: 0.85, blue: 0.7)) {
                             connection.speak.openUI()
                             dismiss()
                         },
@@ -140,7 +140,7 @@ struct PlusToolsPanel: View {
         VStack(alignment: .leading, spacing: 10) {
             Text("Denkmodus")
                 .font(.subheadline.weight(.bold))
-            Text("Nur für Chat & Speak — wählt Tiefe und Tempo, keine Extra-Tools.")
+            Text("Nur für Chat & Voice AI — wählt Tiefe und Tempo, keine Extra-Tools.")
                 .font(.caption)
                 .foregroundStyle(.secondary)
 

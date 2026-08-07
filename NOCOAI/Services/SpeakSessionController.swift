@@ -10,7 +10,7 @@ final class SpeakSessionController: ObservableObject {
 
     @Published var isRunning = false
     @Published var lastReply = ""
-    @Published var statusLine = "Speak bereit"
+    @Published var statusLine = "Voice AI bereit"
     @Published var showSpeakUI = false
     @Published var isMuted = false
     /// Camera preview may be on; Vision only runs on explicit snapshot / vision utterance.
@@ -35,6 +35,10 @@ final class SpeakSessionController: ObservableObject {
     private var pendingUtterance: String?
     private var consecutiveFailures = 0
     private var cancellables = Set<AnyCancellable>()
+    /// While true: never reopen the mic (reply TTS / farewell in progress).
+    private var holdMicForTTS = false
+    /// Set when shutting down Voice AI — skip resume-listening.
+    private var isExiting = false
 
     /// Live Screen / vision gate — true while Speak is busy or TTS is playing.
     var isBusyForVision: Bool {
@@ -58,12 +62,23 @@ final class SpeakSessionController: ObservableObject {
         }
         voice.onSpeakFinished = { [weak self] in
             guard let self else { return }
+            // Don't reopen mic while TTS hold / exit — watchdog owns the delayed resume
+            // so the last syllable isn't cut and the user can't barge in too early.
+            if self.isExiting || !self.isRunning {
+                self.holdMicForTTS = false
+                return
+            }
+            if self.holdMicForTTS {
+                // Keep holdMicForTTS until startSpeakWatchdog clears it after tail silence.
+                self.objectWillChange.send()
+                return
+            }
             self.connection?.liveScreen.suppressAutoVision = false
             self.connection?.liveScreen.resumeQueuedAnalysisIfNeeded()
-            self.scheduleResumeListening(after: 0.08)
-            // Process anything queued while we were speaking.
+            self.scheduleResumeListening(after: 0.28)
             Task { @MainActor in
-                try? await Task.sleep(nanoseconds: 120_000_000)
+                try? await Task.sleep(nanoseconds: 280_000_000)
+                guard self.isRunning, !self.holdMicForTTS, !self.isExiting else { return }
                 await self.drainPendingUtterance()
             }
             self.objectWillChange.send()
@@ -85,8 +100,10 @@ final class SpeakSessionController: ObservableObject {
     }
 
     private func startAsync(connection: ConnectionStore) async {
+        isExiting = false
+        holdMicForTTS = false
         // 1) Live Activity FIRST — Lock Screen banner + Dynamic Island
-        let liveOk = await SpeakLiveActivityManager.startAndWait()
+        let liveOk = await SpeakLiveActivityManager.startAndWait(sessionLabel: "NOCO Voice AI")
         do {
             try voice.activateBackgroundAudioSession()
             isRunning = true
@@ -94,35 +111,43 @@ final class SpeakSessionController: ObservableObject {
             isMuted = false
             voice.setMuted(false)
             voice.sessionActive = true
+            // Voice AI always speaks replies — that's the product.
+            voice.autoSpeakReplies = true
             beginBackgroundKeepAlive()
             try voice.startListening(autoEnd: true)
             HapticService.speakCue()
             assistantPhase = .listening
             statusLine = liveOk
-                ? "Rede natürlich — NOCO versteht Absichten"
+                ? "NOCO Voice AI aktiviert"
                 : (SpeakLiveActivityManager.areActivitiesEnabled
-                    ? "Zuhören aktiv · Live Activity prüfen (Einstellungen → NOCO AI)"
-                    : "Zuhören aktiv · Live Activities in iOS-Einstellungen aktivieren")
+                    ? "Zuhören aktiv · Live Activity prüfen"
+                    : "Zuhören aktiv · Live Activities aktivieren")
+            VoiceAISessionState.publish(active: true, micOn: true, islandOn: liveOk)
             pushLiveActivity(force: true)
             // Second ensure — some devices need a follow-up update
             try? await Task.sleep(nanoseconds: 200_000_000)
             if isRunning {
                 if !SpeakLiveActivityManager.isActive {
-                    _ = await SpeakLiveActivityManager.startAndWait()
+                    _ = await SpeakLiveActivityManager.startAndWait(sessionLabel: "NOCO Voice AI")
                 }
+                statusLine = "NOCO Voice AI aktiviert"
                 pushLiveActivity(force: true)
+                VoiceAISessionState.publish(active: true, micOn: true, islandOn: SpeakLiveActivityManager.isActive)
             }
         } catch {
             isRunning = false
             endBackgroundKeepAlive()
             voice.phase = .error(error.localizedDescription)
             statusLine = "Mikrofon-Fehler"
+            VoiceAISessionState.publish(active: false)
             SpeakLiveActivityManager.end()
         }
     }
 
     func stop(playCue: Bool = true) {
         if playCue { HapticService.speakCue() }
+        isExiting = true
+        holdMicForTTS = false
         resumeTask?.cancel()
         resumeTask = nil
         // Mute first so nothing else is captured/sent, then tear down
@@ -144,24 +169,61 @@ final class SpeakSessionController: ObservableObject {
         voice.setMuted(false)
         endBackgroundKeepAlive()
         SpeakLiveActivityManager.end()
-        // Only tear down Speak-owned vision Island — never kill Image gen / Agent / Eraser.
         ImageLiveActivityManager.end(immediate: true, onlyIfOwner: .speakVision)
         voice.phase = .idle
-        statusLine = "Speak gestoppt"
+        statusLine = "Voice AI beendet"
+        VoiceAISessionState.publish(active: false)
+        isExiting = false
     }
 
-    /// Full exit: stop mic/TTS, camera, Live Screen — return to Chat.
-    /// Only for active Speak sessions (voice commands).
+    /// Full exit: farewell → stop mic/TTS → close UI → Chat.
     func exitSpeakToChat() {
-        guard let connection else {
+        Task { @MainActor in
+            await exitVoiceAIGracefully()
+        }
+    }
+
+    /// Clean Voice AI shutdown used by voice commands + shortcuts.
+    func exitVoiceAIGracefully() async {
+        guard isRunning || showSpeakUI else {
             stop(playCue: true)
+            showSpeakUI = false
+            connection?.pendingTab = 0
+            return
+        }
+        isExiting = true
+        holdMicForTTS = true
+        resumeTask?.cancel()
+        voice.stopListening(cancel: true)
+        assistantPhase = .idle
+        statusLine = "Voice AI beendet"
+        SpeakLiveActivityManager.update(
+            phase: .idle,
+            detail: "Voice AI beendet",
+            level: 0.2,
+            bars: [0.2, 0.25, 0.3, 0.25, 0.2, 0.18, 0.15],
+            isOnline: connection?.isOnline ?? false,
+            isMuted: false,
+            force: true,
+            titleOverride: "Voice AI beendet"
+        )
+        // Brief spoken close — no mic reopen afterward.
+        if voice.autoSpeakReplies {
+            lastReply = "Alles klar — Voice AI beendet."
+            voice.speak(lastReply)
+            for _ in 0..<80 {
+                try? await Task.sleep(nanoseconds: 50_000_000)
+                if case .speaking = voice.phase { continue }
+                break
+            }
+            voice.stopSpeaking(notifyFinished: false)
+        }
+
+        guard let connection else {
+            stop(playCue: false)
             showSpeakUI = false
             return
         }
-        statusLine = "Sprachmodus beendet"
-        HapticService.speakCue()
-
-        // Stop any in-flight vision / live analysis noise
         connection.liveScreen.suppressAutoVision = true
         if connection.liveScreen.isActive || screenShareEnabled {
             connection.liveScreen.stopSession(offerSave: false, keepContext: true)
@@ -173,8 +235,8 @@ final class SpeakSessionController: ObservableObject {
 
         stop(playCue: false)
         showSpeakUI = false
-        // Tab 0 = Chat
         connection.pendingTab = 0
+        HapticService.speakCue()
     }
 
     func toggleMute() {
@@ -198,7 +260,7 @@ final class SpeakSessionController: ObservableObject {
 
     private func beginBackgroundKeepAlive() {
         endBackgroundKeepAlive()
-        bgTask = UIApplication.shared.beginBackgroundTask(withName: "NOCO Speak") { [weak self] in
+        bgTask = UIApplication.shared.beginBackgroundTask(withName: "NOCO Voice AI") { [weak self] in
             Task { @MainActor in
                 self?.endBackgroundKeepAlive()
             }
@@ -222,7 +284,7 @@ final class SpeakSessionController: ObservableObject {
         pushLiveActivity(force: true)
         statusLine = isMuted
             ? "Stumm · Live Activity aktiv"
-            : "Speak läuft · Sperrbildschirm / Island"
+            : "Voice AI · Sperrbildschirm / Island"
     }
 
     /// Reliable re-listen after TTS (debounce + settle delay).
@@ -238,11 +300,11 @@ final class SpeakSessionController: ObservableObject {
         }
     }
 
-    /// Poll until TTS leaves speaking, then resume mic.
+    /// Poll until TTS leaves speaking, then resume mic (only if still in session).
     private func startSpeakWatchdog() {
         resumeTask?.cancel()
         resumeTask = Task { [weak self] in
-            for _ in 0..<400 {
+            for _ in 0..<500 {
                 try? await Task.sleep(nanoseconds: 80_000_000)
                 guard let self, !Task.isCancelled else { return }
                 let speaking = await MainActor.run {
@@ -251,18 +313,28 @@ final class SpeakSessionController: ObservableObject {
                 }
                 if !speaking { break }
             }
-            try? await Task.sleep(nanoseconds: 40_000_000)
+            // Extra silence so the last syllable isn't cut and barge-in can't steal the turn.
+            try? await Task.sleep(nanoseconds: 420_000_000)
             guard !Task.isCancelled else { return }
             await MainActor.run {
-                self?.connection?.liveScreen.suppressAutoVision = false
-                self?.connection?.liveScreen.resumeQueuedAnalysisIfNeeded()
-                self?.resumeListening()
+                guard let self else { return }
+                if self.isExiting || !self.isRunning {
+                    self.holdMicForTTS = false
+                    return
+                }
+                self.holdMicForTTS = false
+                self.isBusy = false
+                self.connection?.liveScreen.suppressAutoVision = false
+                self.connection?.liveScreen.resumeQueuedAnalysisIfNeeded()
+                self.resumeListening()
+                Task { await self.drainPendingUtterance() }
             }
         }
     }
 
     private func resumeListening() {
         guard isRunning, connection?.isOnline == true else { return }
+        guard !isExiting, !holdMicForTTS else { return }
         guard !isMuted else {
             statusLine = "Stumm — tippe Mute aus zum Sprechen"
             voice.phase = .idle
@@ -270,18 +342,19 @@ final class SpeakSessionController: ObservableObject {
             return
         }
         guard !isBusy else {
-            scheduleResumeListening(after: 0.12)
+            scheduleResumeListening(after: 0.15)
             return
         }
         if case .speaking = voice.phase {
-            scheduleResumeListening(after: 0.08)
+            scheduleResumeListening(after: 0.2)
             return
         }
         do {
             try voice.activateListeningAfterTTS()
             try voice.startListening(autoEnd: true)
             assistantPhase = pendingToolConfirm == nil ? .listening : .awaitingConfirm
-            statusLine = pendingToolConfirm?.confirmationQuestion ?? "Wieder Zuhören…"
+            statusLine = pendingToolConfirm?.confirmationQuestion ?? "NOCO hört zu"
+            VoiceAISessionState.publish(active: true, micOn: true, islandOn: SpeakLiveActivityManager.isActive)
             pushLiveActivity(force: true)
             Task { await drainPendingUtterance() }
         } catch {
@@ -293,15 +366,18 @@ final class SpeakSessionController: ObservableObject {
     private func enqueueUtterance(_ text: String) async {
         let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty else { return }
+        // Never accept speech while Voice AI is talking or shutting down.
+        if isExiting || holdMicForTTS {
+            return
+        }
+        if case .speaking = voice.phase {
+            return
+        }
         // Only gate on real work — VoiceService sets .processing before callback,
         // which previously parked every utterance forever in pendingUtterance.
         if isBusy {
             pendingUtterance = trimmed
             statusLine = "Einen Moment…"
-            return
-        }
-        if case .speaking = voice.phase {
-            pendingUtterance = trimmed
             return
         }
         await handleUtterance(trimmed)
@@ -312,8 +388,8 @@ final class SpeakSessionController: ObservableObject {
     }
 
     private func handleUtterance(_ text: String) async {
-        guard isRunning, !isBusy, let connection else {
-            if isBusy {
+        guard isRunning, !isBusy, !holdMicForTTS, !isExiting, let connection else {
+            if isBusy && !holdMicForTTS && !isExiting {
                 pendingUtterance = text
             }
             return
@@ -351,7 +427,7 @@ final class SpeakSessionController: ObservableObject {
         )
 
         if case .endSpeak = intent.action {
-            exitSpeakToChat()
+            await exitVoiceAIGracefully()
             return
         }
 
@@ -389,7 +465,7 @@ final class SpeakSessionController: ObservableObject {
         switch intent.action {
         case .endSpeak:
             isBusy = false
-            exitSpeakToChat()
+            await exitVoiceAIGracefully()
             return
 
         case .screenMemory:
@@ -658,7 +734,8 @@ final class SpeakSessionController: ObservableObject {
                 voice.phase = .error(msg)
                 pushLiveActivity(force: true)
                 if voice.autoSpeakReplies, consecutiveFailures <= 2 {
-                    isBusy = false
+                    holdMicForTTS = true
+                    isBusy = true
                     assistantPhase = .speaking
                     voice.speak(msg)
                     startSpeakWatchdog()
@@ -677,24 +754,16 @@ final class SpeakSessionController: ObservableObject {
             lastReply = resolved
             try? await Task.sleep(nanoseconds: 100_000_000)
             guard isRunning else { isBusy = false; return }
-            if voice.autoSpeakReplies {
-                statusLine = SpeakActivityPhase.speaking.title
-                assistantPhase = .speaking
-                pushLiveActivity(force: true)
-                resumeTask?.cancel()
-                isBusy = false
-                connection.liveScreen.suppressAutoVision = true
-                voice.speak(resolved)
-                startSpeakWatchdog()
-            } else {
-                connection.liveScreen.suppressAutoVision = false
-                connection.liveScreen.resumeQueuedAnalysisIfNeeded()
-                voice.phase = .idle
-                assistantPhase = .listening
-                isBusy = false
-                scheduleResumeListening(after: 0.05)
-                await drainPendingUtterance()
-            }
+            // Always speak in Voice AI — hold mic until TTS fully finishes.
+            statusLine = SpeakActivityPhase.speaking.title
+            assistantPhase = .speaking
+            pushLiveActivity(force: true)
+            resumeTask?.cancel()
+            holdMicForTTS = true
+            isBusy = true
+            connection.liveScreen.suppressAutoVision = true
+            voice.speak(resolved)
+            startSpeakWatchdog()
         } else {
             isBusy = false
             assistantPhase = .listening
@@ -734,7 +803,8 @@ final class SpeakSessionController: ObservableObject {
         statusLine = text
         pushLiveActivity(force: true)
         if voice.autoSpeakReplies {
-            isBusy = false
+            holdMicForTTS = true
+            isBusy = true
             voice.speak(text)
             startSpeakWatchdog()
         } else {
@@ -826,7 +896,7 @@ final class SpeakSessionController: ObservableObject {
             live.autoAssistEnabled = true
             live.suppressAutoVision = false
         }
-        statusLine = isRunning ? "Bildschirm aus · nur Sprache" : "Speak bereit"
+        statusLine = isRunning ? "Bildschirm aus · nur Sprache" : "Voice AI bereit"
         HapticService.soft()
     }
 
@@ -902,7 +972,18 @@ final class SpeakSessionController: ObservableObject {
             isOnline: connection?.isOnline ?? false,
             isMuted: isMuted,
             force: force,
-            titleOverride: phase.title
+            titleOverride: islandTitle(for: phase)
         )
+    }
+
+    private func islandTitle(for phase: SpeakActivityPhase) -> String {
+        let s = statusLine.lowercased()
+        if s.contains("voice ai aktiviert") || s.contains("noco voice ai aktiviert") {
+            return "NOCO Voice AI aktiviert"
+        }
+        if s.contains("voice ai beendet") {
+            return "Voice AI beendet"
+        }
+        return phase.title
     }
 }

@@ -31,7 +31,7 @@ enum SpeakActivityPhase: String {
 
     var title: String {
         switch self {
-        case .idle: return "Speak bereit"
+        case .idle: return "Voice AI bereit"
         case .listening: return "NOCO hört zu"
         case .processing, .thinking: return "NOCO denkt…"
         case .webSearch: return "NOCO sucht im Internet…"

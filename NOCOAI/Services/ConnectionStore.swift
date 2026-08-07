@@ -365,9 +365,9 @@ final class ConnectionStore: ObservableObject {
             lastError = nil
             return
         }
-        if route == "speak" || route == "siri" || path.contains("speak") {
+        if route == "speak" || route == "siri" || route == "voice" || path.contains("speak") || path.contains("voice") {
             speak.openUI()
-            launchSpeakFromShortcut()
+            toggleVoiceAIFromShortcut()
             return
         }
         if route == "eraser" || route == "radierer" || path.contains("eraser") || path.contains("radierer") {
@@ -427,7 +427,7 @@ final class ConnectionStore: ObservableObject {
     func handleQuickAction(_ type: String) {
         switch type {
         case "de.noco.nocoai.speak":
-            launchSpeakFromShortcut()
+            toggleVoiceAIFromShortcut()
         case "de.noco.nocoai.images":
             launchImages(prompt: nil)
         case "de.noco.nocoai.agent":
@@ -478,24 +478,36 @@ final class ConnectionStore: ObservableObject {
         HapticService.soft()
     }
 
-    /// Shortcuts / Siri / `nocoai://speak` — works even after cold start.
+    /// Shortcuts / Siri / Action Button / `nocoai://speak`.
+    /// Honors `SpeakLaunchBridge.pendingToggle` for Action Button toggle semantics.
     func launchSpeakFromShortcut() {
+        let wantsToggle = SpeakLaunchBridge.pendingToggle
         SpeakLaunchBridge.pendingStart = true
-        // Don't present Speak sheet — Live Activity + audio keep session usable in background
         Task { @MainActor in
             for _ in 0..<40 {
                 if isPaired && isOnline { break }
                 try? await Task.sleep(nanoseconds: 250_000_000)
                 await refreshStatus(showLoading: false)
             }
-            guard SpeakLaunchBridge.pendingStart else { return }
+            guard SpeakLaunchBridge.pendingStart || SpeakLaunchBridge.pendingToggle else { return }
+            let toggle = wantsToggle || SpeakLaunchBridge.pendingToggle
             if isOnline {
-                if !speak.isRunning {
+                let active = speak.isRunning || VoiceAISessionState.isActive
+                if toggle, active {
+                    await speak.exitVoiceAIGracefully()
+                    SpeakLaunchBridge.clearPending()
+                    HapticService.soft()
+                } else if !active {
                     speak.start()
+                    SpeakLaunchBridge.clearPending()
+                    HapticService.success()
+                } else {
+                    // Start intent while already running — keep session
+                    SpeakLaunchBridge.clearPending()
+                    speak.ensureBackgroundPresence()
                 }
-                SpeakLaunchBridge.clearPending()
-                HapticService.success()
             } else {
+                SpeakLaunchBridge.clearPending()
                 speak.openUI()
                 speak.statusLine = "PC offline — Companion starten, dann nochmal Shortcut"
             }
@@ -504,12 +516,20 @@ final class ConnectionStore: ObservableObject {
 
     func stopSpeakFromShortcut() {
         SpeakLaunchBridge.clearPending()
-        speak.stop()
-        speak.showSpeakUI = false
+        Task { @MainActor in
+            await speak.exitVoiceAIGracefully()
+        }
+    }
+
+    /// Action Button / primary Shortcut: on ↔ off.
+    func toggleVoiceAIFromShortcut() {
+        SpeakLaunchBridge.pendingToggle = true
+        SpeakLaunchBridge.pendingStart = true
+        launchSpeakFromShortcut()
     }
 
     func consumePendingSpeakLaunchIfNeeded() {
-        guard SpeakLaunchBridge.pendingStart else { return }
+        guard SpeakLaunchBridge.pendingStart || SpeakLaunchBridge.pendingToggle else { return }
         launchSpeakFromShortcut()
     }
 

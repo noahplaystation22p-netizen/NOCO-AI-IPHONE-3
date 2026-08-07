@@ -318,13 +318,13 @@ final class KeyboardViewModel: ObservableObject {
 
     func openSpeak() {
         guard hasFullAccess else {
-            statusLine = "Vollzugriff nötig für Speak"
+            statusLine = "Vollzugriff nötig für Voice AI"
             notifyHaptic.notificationOccurred(.warning)
             return
         }
-        statusLine = "Speak startet…"
+        statusLine = "Voice AI startet…"
         selectHaptic.selectionChanged()
-        // Open host app Speak (Sprachmodus) via deep link
+        // Open host app Voice AI via deep link (toggle)
         controller?.openURL(URL(string: "nocoai://speak")!)
     }
 

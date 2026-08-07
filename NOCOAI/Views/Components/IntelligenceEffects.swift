@@ -16,37 +16,44 @@ struct IntelligenceAtmosphere: View {
             NOCOAITheme.intelligenceBackground(for: scheme)
 
             Circle()
-                .fill(NOCORainbow.blue.opacity(scheme == .dark ? 0.34 : 0.2))
-                .frame(width: 300, height: 300)
-                .blur(radius: 75)
+                .fill(NOCORainbow.blue.opacity(scheme == .dark ? 0.48 : 0.28))
+                .frame(width: 340, height: 340)
+                .blur(radius: 82)
                 .offset(x: phase ? 46 : -54, y: phase ? -90 : -36)
 
             Circle()
-                .fill(NOCORainbow.violet.opacity(scheme == .dark ? 0.26 : 0.14))
-                .frame(width: 260, height: 260)
-                .blur(radius: 65)
+                .fill(NOCORainbow.violet.opacity(scheme == .dark ? 0.4 : 0.22))
+                .frame(width: 300, height: 300)
+                .blur(radius: 72)
                 .offset(x: phase ? -70 : 78, y: phase ? 130 : 50)
 
             Circle()
-                .fill(NOCORainbow.teal.opacity(scheme == .dark ? 0.2 : 0.11))
-                .frame(width: 240, height: 240)
-                .blur(radius: 70)
+                .fill(NOCORainbow.teal.opacity(scheme == .dark ? 0.32 : 0.18))
+                .frame(width: 280, height: 280)
+                .blur(radius: 78)
                 .offset(x: phase ? 20 : -40, y: phase ? 90 : 20)
 
             Circle()
-                .fill(NOCORainbow.pink.opacity(scheme == .dark ? 0.12 : 0.07))
-                .frame(width: 180, height: 180)
-                .blur(radius: 55)
+                .fill(NOCORainbow.pink.opacity(scheme == .dark ? 0.24 : 0.14))
+                .frame(width: 220, height: 220)
+                .blur(radius: 62)
                 .offset(x: phase ? -30 : 50, y: phase ? -40 : 70)
 
+            Circle()
+                .fill(NOCORainbow.green.opacity(scheme == .dark ? 0.16 : 0.09))
+                .frame(width: 200, height: 200)
+                .blur(radius: 58)
+                .offset(x: phase ? 60 : -25, y: phase ? 40 : -55)
+
             AngularGradient(
-                colors: NOCORainbow.flow.map { $0.opacity(0.09) } + [.clear],
+                colors: NOCORainbow.flow.map { $0.opacity(0.16) } + [.clear],
                 center: .center
             )
-            .blur(radius: 52)
-            .opacity(phase ? 0.9 : 0.35)
-            .scaleEffect(1.45)
+            .blur(radius: 48)
+            .opacity(phase ? 1.0 : 0.5)
+            .scaleEffect(1.55)
             .rotationEffect(.degrees(spin ? 360 : 0))
+            .blendMode(.plusLighter)
         }
         .ignoresSafeArea()
         .onAppear {

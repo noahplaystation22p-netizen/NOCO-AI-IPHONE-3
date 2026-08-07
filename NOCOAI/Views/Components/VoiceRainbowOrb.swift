@@ -142,8 +142,8 @@ struct IntelligenceVoiceStage: View {
                     RadialGradient(
                         colors: [
                             (resolvedEnergy == .webSearch ? NOCORainbow.blue : NOCORainbow.blue)
-                                .opacity(0.38 * intensity),
-                            NOCORainbow.teal.opacity(0.16 * intensity),
+                                .opacity(0.55 * intensity),
+                            NOCORainbow.teal.opacity(0.28 * intensity),
                             .clear
                         ],
                         center: .center,
@@ -151,21 +151,30 @@ struct IntelligenceVoiceStage: View {
                         endRadius: 170
                     )
                 )
-                .frame(width: 350, height: 230)
-                .blur(radius: 30)
-                .scaleEffect(breathe ? 1.07 : 0.93)
+                .frame(width: 380, height: 250)
+                .blur(radius: 34)
+                .scaleEffect(breathe ? 1.1 : 0.92)
+                .blendMode(.plusLighter)
 
             Ellipse()
-                .fill((resolvedEnergy == .speaking ? NOCORainbow.pink : NOCORainbow.violet).opacity(0.14 * intensity))
-                .frame(width: 270, height: 150)
-                .blur(radius: 36)
+                .fill((resolvedEnergy == .speaking ? NOCORainbow.pink : NOCORainbow.violet).opacity(0.28 * intensity))
+                .frame(width: 300, height: 170)
+                .blur(radius: 40)
                 .offset(x: breathe ? 22 : -20, y: breathe ? -12 : 16)
+                .blendMode(.plusLighter)
 
             Ellipse()
-                .fill(NOCORainbow.green.opacity(0.12 * intensity))
-                .frame(width: 200, height: 120)
-                .blur(radius: 28)
+                .fill(NOCORainbow.green.opacity(0.22 * intensity))
+                .frame(width: 220, height: 140)
+                .blur(radius: 32)
                 .offset(x: breathe ? -20 : 18, y: 18)
+
+            Ellipse()
+                .fill(NOCORainbow.pink.opacity(0.16 * intensity))
+                .frame(width: 180, height: 110)
+                .blur(radius: 26)
+                .offset(x: breathe ? 10 : -14, y: breathe ? 24 : -8)
+                .blendMode(.plusLighter)
         }
     }
 
@@ -182,9 +191,11 @@ struct IntelligenceVoiceStage: View {
                     )
                     .frame(width: 168 + CGFloat(i) * 36, height: 168 + CGFloat(i) * 36)
                     .rotationEffect(.degrees((i % 2 == 0 ? 1 : -1) * (spin ? 360 : 0)))
-                    .opacity(0.28 + intensity * 0.3)
+                    .opacity(0.42 + intensity * 0.38)
                     .scaleEffect(1 + level * (phase == .listening ? 0.14 : 0.05))
                     .animation(.easeOut(duration: 0.05), value: level)
+                    .shadow(color: NOCORainbow.violet.opacity(0.22 * intensity), radius: 10)
+                    .blendMode(.plusLighter)
             }
         }
     }
@@ -378,17 +389,51 @@ struct VoiceLivingTranscript: View {
 
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var glow = false
+    @State private var shimmerPhase: CGFloat = -0.35
 
     var body: some View {
-        styledText
-            .multilineTextAlignment(.center)
-            .shadow(color: glowColor.opacity(glowOpacity), radius: glowRadius)
-            .scaleEffect(textScale)
-            .contentTransition(.opacity)
-            .animation(.easeOut(duration: 0.18), value: text)
-            .animation(.easeInOut(duration: 0.35), value: style)
-            .onAppear { armGlow() }
-            .onChange(of: style) { _, _ in armGlow() }
+        TimelineView(.animation(minimumInterval: reduceMotion ? 1.0 : 0.08, paused: reduceMotion)) { timeline in
+            let t = timeline.date.timeIntervalSinceReferenceDate
+            let breathe = reduceMotion ? 1.0 : (0.97 + 0.03 * abs(sin(t * (style == .thinking ? 3.2 : 1.7))))
+            styledText
+                .multilineTextAlignment(.center)
+                .shadow(color: glowColor.opacity(glowOpacity), radius: glowRadius)
+                .scaleEffect(textScale * breathe)
+                .overlay {
+                    if !reduceMotion, style == .speaking || style == .thinking {
+                        LinearGradient(
+                            colors: [
+                                .clear,
+                                Color.white.opacity(0.35),
+                                .clear
+                            ],
+                            startPoint: UnitPoint(x: shimmerPhase - 0.25, y: 0.5),
+                            endPoint: UnitPoint(x: shimmerPhase + 0.25, y: 0.5)
+                        )
+                        .blendMode(.softLight)
+                        .allowsHitTesting(false)
+                    }
+                }
+                .mask(styledText)
+                .contentTransition(.opacity)
+                .animation(.easeOut(duration: 0.22), value: text)
+                .animation(.easeInOut(duration: 0.35), value: style)
+                .opacity(reduceMotion ? 1 : (0.88 + 0.12 * abs(sin(t * 1.4))))
+        }
+        .onAppear {
+            armGlow()
+            armShimmer()
+        }
+        .onChange(of: style) { _, _ in
+            armGlow()
+            armShimmer()
+        }
+        .onChange(of: text) { _, _ in
+            guard !reduceMotion else { return }
+            withAnimation(.spring(response: 0.32, dampingFraction: 0.78)) {
+                glow = true
+            }
+        }
     }
 
     @ViewBuilder
@@ -441,18 +486,18 @@ struct VoiceLivingTranscript: View {
     private var glowOpacity: Double {
         if reduceMotion { return style == .speaking ? 0.2 : 0.08 }
         switch style {
-        case .speaking: return glow ? 0.42 : 0.18
-        case .listening: return 0.12 + Double(level) * 0.35
-        case .thinking: return glow ? 0.35 : 0.15
+        case .speaking: return glow ? 0.48 : 0.2
+        case .listening: return 0.14 + Double(level) * 0.4
+        case .thinking: return glow ? 0.4 : 0.18
         case .idle: return 0
         }
     }
 
     private var glowRadius: CGFloat {
         switch style {
-        case .speaking: return glow ? 12 : 6
-        case .listening: return 4 + level * 10
-        case .thinking: return 10
+        case .speaking: return glow ? 14 : 7
+        case .listening: return 4 + level * 12
+        case .thinking: return 12
         case .idle: return 0
         }
     }
@@ -460,8 +505,9 @@ struct VoiceLivingTranscript: View {
     private var textScale: CGFloat {
         guard !reduceMotion else { return 1 }
         switch style {
-        case .speaking: return glow ? 1.012 : 1
-        case .listening: return 1 + level * 0.012
+        case .speaking: return glow ? 1.018 : 1.004
+        case .listening: return 1 + level * 0.016
+        case .thinking: return glow ? 1.01 : 1
         default: return 1
         }
     }
@@ -469,9 +515,17 @@ struct VoiceLivingTranscript: View {
     private func armGlow() {
         guard !reduceMotion else { return }
         glow = false
-        let duration = style == .thinking ? 1.1 : 1.6
+        let duration = style == .thinking ? 0.9 : 1.35
         withAnimation(.easeInOut(duration: duration).repeatForever(autoreverses: true)) {
             glow = true
+        }
+    }
+
+    private func armShimmer() {
+        guard !reduceMotion else { return }
+        shimmerPhase = -0.4
+        withAnimation(.linear(duration: style == .thinking ? 1.4 : 2.2).repeatForever(autoreverses: false)) {
+            shimmerPhase = 1.4
         }
     }
 }

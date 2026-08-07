@@ -4,7 +4,7 @@ struct PairingView: View {
     @EnvironmentObject private var connection: ConnectionStore
     @Environment(\.colorScheme) private var scheme
 
-    @State private var showQRScanner = true
+    @State private var showQRScanner = false
     @State private var isPairingFromQR = false
     @State private var host = ""
     @State private var port = "4747"
@@ -18,32 +18,41 @@ struct PairingView: View {
     var body: some View {
         ZStack {
             IntelligenceAtmosphere()
-            FloatingIntelligenceDots(count: 4)
-                .opacity(0.35)
+            FloatingIntelligenceDots(count: 6)
+                .opacity(0.4)
 
-            VStack(spacing: 24) {
-                Spacer(minLength: 28)
+            VStack(spacing: 22) {
+                Spacer(minLength: 36)
 
                 ZStack {
-                    PixelSphereView(size: 200, intensity: 0.7, phase: isPairingFromQR ? .locking : .idle, pixelCount: 72)
+                    // Soft rainbow bloom behind logo
+                    Circle()
+                        .fill(
+                            AngularGradient(
+                                colors: NOCORainbow.flow.map { $0.opacity(0.55) },
+                                center: .center
+                            )
+                        )
+                        .frame(width: 160, height: 160)
+                        .blur(radius: 28)
                         .opacity(0.75)
-                    BrandLogo(size: 84)
+                    PixelSphereView(size: 180, intensity: 0.75, phase: isPairingFromQR ? .locking : .idle, pixelCount: 64)
+                        .opacity(0.7)
+                    BrandLogo(size: 80)
                         .scaleEffect(appear ? 1 : 0.88)
                 }
-                .frame(height: 200)
+                .frame(height: 180)
 
-                VStack(spacing: 10) {
+                VStack(spacing: 8) {
                     Text("NOCO AI")
-                        .font(.system(size: 36, weight: .semibold, design: .rounded))
-                    Text("Scanne den QR-Code auf deinem PC.\nPixel reagieren, sobald er erkannt wird.")
+                        .font(.system(size: 38, weight: .semibold, design: .rounded))
+                    Text("Scanne den QR-Code auf deinem PC")
                         .font(.body)
                         .foregroundStyle(.secondary)
                         .multilineTextAlignment(.center)
-                    PairingPulseSteps()
-                        .padding(.top, 6)
                 }
                 .opacity(appear ? 1 : 0)
-                .offset(y: appear ? 0 : 14)
+                .offset(y: appear ? 0 : 12)
 
                 Button {
                     HapticService.open()
@@ -51,17 +60,17 @@ struct PairingView: View {
                 } label: {
                     VStack(spacing: 12) {
                         Image(systemName: "qrcode.viewfinder")
-                            .font(.system(size: 44, weight: .light))
+                            .font(.system(size: 46, weight: .light))
                             .symbolEffect(.pulse, options: .repeating, isActive: !isPairingFromQR)
-                        Text(isPairingFromQR || connection.isRefreshing ? "Verbinde mit PC…" : "QR-Code scannen")
+                        Text(isPairingFromQR || connection.isRefreshing ? "Verbinde…" : "QR-Code scannen")
                             .font(.headline)
                     }
                     .frame(maxWidth: .infinity)
-                    .padding(.vertical, 34)
+                    .padding(.vertical, 36)
                     .background {
                         RoundedRectangle(cornerRadius: 30, style: .continuous)
                             .fill(.ultraThinMaterial)
-                            .shadow(color: NOCOAITheme.glowPrimary.opacity(0.35), radius: 28, y: 10)
+                            .shadow(color: NOCORainbow.violet.opacity(0.35), radius: 28, y: 10)
                     }
                     .intelligenceShimmerBorder()
                 }
@@ -73,11 +82,11 @@ struct PairingView: View {
                     HStack(spacing: 10) {
                         IntelligenceThinkingDots()
                             .scaleEffect(0.85)
-                        Text("NOCO Sync…")
+                        Text("Verbinde mit PC…")
                             .font(.footnote)
                             .foregroundStyle(.secondary)
                     }
-                    .transition(.opacity.combined(with: .move(edge: .bottom)))
+                    .transition(.opacity)
                 }
 
                 if let error = connection.lastError {
@@ -100,11 +109,6 @@ struct PairingView: View {
                 }
 
                 Spacer()
-
-                Text("PC · gleiches WLAN · NOCO AI X")
-                    .font(.caption)
-                    .foregroundStyle(.tertiary)
-                    .padding(.bottom, 22)
             }
             .padding(.horizontal, 24)
         }
@@ -137,7 +141,7 @@ struct PairingView: View {
 
     private var manualCard: some View {
         VStack(spacing: 12) {
-            TextField("IP — z. B. 192.168.178.197", text: $host)
+            TextField("IP — WLAN oder Tailscale 100.x", text: $host)
                 .textInputAutocapitalization(.never)
                 .autocorrectionDisabled()
                 .keyboardType(.numbersAndPunctuation)
@@ -175,6 +179,7 @@ struct PairingView: View {
         await connection.pairFromQR(code)
         if connection.isPaired {
             HapticService.success()
+            showQRScanner = false
         } else {
             HapticService.error()
             showQRScanner = true
@@ -187,7 +192,15 @@ struct PairingView: View {
         port = String(link.port)
         if let linkPin = link.pin, !linkPin.isEmpty {
             pin = linkPin
-            Task { await connection.pair(host: link.host, port: link.port, pin: linkPin) }
+            Task {
+                await connection.pair(
+                    host: link.host,
+                    port: link.port,
+                    pin: linkPin,
+                    remoteHint: link.remoteHost,
+                    lanHint: link.lanHost
+                )
+            }
         }
         connection.pendingDeepLink = nil
     }

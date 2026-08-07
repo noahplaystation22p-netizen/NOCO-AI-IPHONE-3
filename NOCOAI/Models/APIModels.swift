@@ -346,6 +346,7 @@ struct PairingDeepLink {
     let port: Int
     let pin: String?
     let remoteHost: String?
+    let lanHost: String?
 
     static func parse(from raw: String) -> PairingDeepLink? {
         let trimmed = raw.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -361,7 +362,8 @@ struct PairingDeepLink {
                 host: host,
                 port: Int(url.queryItem("port") ?? "4747") ?? 4747,
                 pin: url.queryItem("pin"),
-                remoteHost: url.queryItem("remoteHost") ?? url.queryItem("remote_host")
+                remoteHost: url.queryItem("remoteHost") ?? url.queryItem("remote_host"),
+                lanHost: url.queryItem("lanHost") ?? url.queryItem("lan_host")
             )
         }
         return nil
@@ -375,7 +377,8 @@ struct PairingDeepLink {
             host: host,
             port: Int(url.queryItem("port") ?? "4747") ?? 4747,
             pin: url.queryItem("pin"),
-            remoteHost: url.queryItem("remoteHost") ?? url.queryItem("remote_host")
+            remoteHost: url.queryItem("remoteHost") ?? url.queryItem("remote_host"),
+            lanHost: url.queryItem("lanHost") ?? url.queryItem("lan_host")
         )
     }
 
@@ -384,7 +387,8 @@ struct PairingDeepLink {
         let port = json["port"] as? Int ?? Int(json["port"] as? String ?? "4747") ?? 4747
         let pin = json["pin"] as? String
         let remote = json["remoteHost"] as? String ?? json["remote_host"] as? String
-        return PairingDeepLink(host: host, port: port, pin: pin, remoteHost: remote)
+        let lan = json["lanHost"] as? String ?? json["lan_host"] as? String
+        return PairingDeepLink(host: host, port: port, pin: pin, remoteHost: remote, lanHost: lan)
     }
 }
 

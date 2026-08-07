@@ -1,4 +1,4 @@
-// !$*UTF8*$!
+﻿// !$*UTF8*$!
 {
 	archiveVersion = 1;
 	classes = {
@@ -40,6 +40,7 @@
 		NA000001000000000000000B /* RootView.swift in Sources */ = {isa = PBXBuildFile; fileRef = NA000002000000000000000B /* RootView.swift */; };
 		NA000001000000000000000C /* MainTabView.swift in Sources */ = {isa = PBXBuildFile; fileRef = NA000002000000000000000C /* MainTabView.swift */; };
 		NA000001000000000000000D /* PairingView.swift in Sources */ = {isa = PBXBuildFile; fileRef = NA000002000000000000000D /* PairingView.swift */; };
+		NA00000100000000000000OB /* OnboardingWelcomeView.swift in Sources */ = {isa = PBXBuildFile; fileRef = NA00000200000000000000OB /* OnboardingWelcomeView.swift */; };
 		NA000001000000000000000E /* HomeView.swift in Sources */ = {isa = PBXBuildFile; fileRef = NA000002000000000000000E /* HomeView.swift */; };
 		NA0000010000000000000010 /* SettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = NA0000020000000000000010 /* SettingsView.swift */; };
 		NA0000010000000000000012 /* BrandLogo.swift in Sources */ = {isa = PBXBuildFile; fileRef = NA0000020000000000000014 /* BrandLogo.swift */; };
@@ -182,6 +183,7 @@
 		NA000002000000000000000B /* RootView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RootView.swift; sourceTree = "<group>"; };
 		NA000002000000000000000C /* MainTabView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MainTabView.swift; sourceTree = "<group>"; };
 		NA000002000000000000000D /* PairingView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PairingView.swift; sourceTree = "<group>"; };
+		NA00000200000000000000OB /* OnboardingWelcomeView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OnboardingWelcomeView.swift; sourceTree = "<group>"; };
 		NA000002000000000000000E /* HomeView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HomeView.swift; sourceTree = "<group>"; };
 		NA0000020000000000000010 /* SettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsView.swift; sourceTree = "<group>"; };
 		NA0000020000000000000017 /* LocalNetworkService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LocalNetworkService.swift; sourceTree = "<group>"; };
@@ -407,6 +409,7 @@
 				NA000002000000000000000B /* RootView.swift */,
 				NA000002000000000000000C /* MainTabView.swift */,
 				NA000002000000000000000D /* PairingView.swift */,
+				NA00000200000000000000OB /* OnboardingWelcomeView.swift */,
 				NA000002000000000000000E /* HomeView.swift */,
 				NA000005000000000000000A /* Chat */,
 				NA000005000000000000000B /* Images */,
@@ -799,6 +802,7 @@
 				NA000001000000000000000B /* RootView.swift in Sources */,
 				NA000001000000000000000C /* MainTabView.swift in Sources */,
 				NA000001000000000000000D /* PairingView.swift in Sources */,
+				NA00000100000000000000OB /* OnboardingWelcomeView.swift in Sources */,
 				NA000001000000000000000E /* HomeView.swift in Sources */,
 				NA0000010000000000000010 /* SettingsView.swift in Sources */,
 				NA0000010000000000000020 /* V2Models.swift in Sources */,
@@ -908,7 +912,7 @@
 				CODE_SIGNING_REQUIRED = NO;
 				CODE_SIGN_IDENTITY = "";
 				CODE_SIGNING_STYLE = Manual;
-				CURRENT_PROJECT_VERSION = 77;
+				CURRENT_PROJECT_VERSION = 78;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = NOCOAIKeyboard/Info.plist;
 				INFOPLIST_KEY_CFBundleDisplayName = "NOCO AI";
@@ -937,7 +941,7 @@
 				CODE_SIGNING_REQUIRED = NO;
 				CODE_SIGN_IDENTITY = "";
 				CODE_SIGNING_STYLE = Manual;
-				CURRENT_PROJECT_VERSION = 77;
+				CURRENT_PROJECT_VERSION = 78;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = NOCOAIKeyboard/Info.plist;
 				INFOPLIST_KEY_CFBundleDisplayName = "NOCO AI";
@@ -1002,7 +1006,7 @@
 				CODE_SIGN_ENTITLEMENTS = NOCOAI/NOCOAI.entitlements;
 				CODE_SIGNING_ALLOWED = NO;
 				CODE_SIGNING_REQUIRED = NO;
-				CURRENT_PROJECT_VERSION = 77;
+				CURRENT_PROJECT_VERSION = 78;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = NOCOAI/Info.plist;
@@ -1036,7 +1040,7 @@
 				CODE_SIGN_ENTITLEMENTS = NOCOAI/NOCOAI.entitlements;
 				CODE_SIGNING_ALLOWED = NO;
 				CODE_SIGNING_REQUIRED = NO;
-				CURRENT_PROJECT_VERSION = 77;
+				CURRENT_PROJECT_VERSION = 78;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = NOCOAI/Info.plist;
@@ -1069,7 +1073,7 @@
 				CODE_SIGN_ENTITLEMENTS = NOCOAISpeakWidget/NOCOAISpeakWidget.entitlements;
 				CODE_SIGNING_ALLOWED = NO;
 				CODE_SIGNING_REQUIRED = NO;
-				CURRENT_PROJECT_VERSION = 77;
+				CURRENT_PROJECT_VERSION = 78;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = NOCOAISpeakWidget/Info.plist;
 				INFOPLIST_KEY_CFBundleDisplayName = "NOCO Voice AI";
@@ -1097,7 +1101,7 @@
 				CODE_SIGN_ENTITLEMENTS = NOCOAISpeakWidget/NOCOAISpeakWidget.entitlements;
 				CODE_SIGNING_ALLOWED = NO;
 				CODE_SIGNING_REQUIRED = NO;
-				CURRENT_PROJECT_VERSION = 77;
+				CURRENT_PROJECT_VERSION = 78;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = NOCOAISpeakWidget/Info.plist;
 				INFOPLIST_KEY_CFBundleDisplayName = "NOCO Voice AI";
@@ -1129,7 +1133,7 @@
 				CODE_SIGNING_REQUIRED = NO;
 				CODE_SIGN_IDENTITY = "";
 				CODE_SIGNING_STYLE = Manual;
-				CURRENT_PROJECT_VERSION = 77;
+				CURRENT_PROJECT_VERSION = 78;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = NOCOAIBroadcast/Info.plist;
 				INFOPLIST_KEY_CFBundleDisplayName = "NOCO Live Screen";
@@ -1158,7 +1162,7 @@
 				CODE_SIGNING_REQUIRED = NO;
 				CODE_SIGN_IDENTITY = "";
 				CODE_SIGNING_STYLE = Manual;
-				CURRENT_PROJECT_VERSION = 77;
+				CURRENT_PROJECT_VERSION = 78;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = NOCOAIBroadcast/Info.plist;
 				INFOPLIST_KEY_CFBundleDisplayName = "NOCO Live Screen";

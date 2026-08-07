@@ -25,7 +25,7 @@ struct SpeakLiveActivityWidget: Widget {
             DynamicIsland {
                 DynamicIslandExpandedRegion(.leading) {
                     SpeakExpandedAuraCore(state: context.state)
-                        .frame(width: 52, height: 52)
+                        .frame(width: 44, height: 44)
                         .padding(.leading, 2)
                 }
                 DynamicIslandExpandedRegion(.trailing) {
@@ -37,7 +37,8 @@ struct SpeakLiveActivityWidget: Widget {
                 }
                 DynamicIslandExpandedRegion(.bottom) {
                     SpeakIslandExpandedGlassPanel(state: context.state)
-                        .padding(.top, 4)
+                        .padding(.horizontal, 2)
+                        .padding(.bottom, 2)
                 }
             } compactLeading: {
                 SpeakRainbowCore(state: context.state, diameter: 18)
@@ -224,18 +225,33 @@ struct SpeakExpandedAuraCore: View {
                     .fill(
                         AngularGradient(
                             colors: SpeakPhasePalette.gradientColors(for: state.phaseRaw, muted: state.isMuted)
-                                .map { $0.opacity(0.55) },
+                                .map { $0.opacity(0.75) },
                             center: .center,
                             angle: .degrees(spin)
                         )
                     )
-                    .frame(width: 52, height: 52)
-                    .blur(radius: 8)
-                    .opacity(0.85)
+                    .frame(width: 48, height: 48)
+                    .blur(radius: 7)
+                    .opacity(0.95)
                     .scaleEffect(pulse)
+                    .blendMode(.plusLighter)
 
-                SpeakRainbowCore(state: state, diameter: 30)
+                Circle()
+                    .fill(
+                        AngularGradient(
+                            colors: SpeakPhasePalette.gradientColors(for: state.phaseRaw, muted: state.isMuted),
+                            center: .center,
+                            angle: .degrees(-spin * 0.6)
+                        )
+                    )
+                    .frame(width: 34, height: 34)
+                    .blur(radius: 3.5)
+                    .opacity(0.7)
+
+                SpeakRainbowCore(state: state, diameter: 26)
             }
+            .frame(width: 44, height: 44)
+            .compositingGroup()
         }
     }
 }
@@ -270,24 +286,34 @@ struct SpeakIslandExpandedHeader: View {
     let state: SpeakActivityAttributes.ContentState
 
     var body: some View {
-        VStack(spacing: 3) {
-            Text(SpeakPhasePalette.statusHeadline(for: state))
-                .font(.system(.subheadline, design: .rounded).weight(.semibold))
-                .foregroundStyle(.white)
-                .lineLimit(1)
-                .minimumScaleFactor(0.85)
-                .multilineTextAlignment(.center)
-            Label {
-                Text(SpeakPhasePalette.shortLabel(for: state.phaseRaw))
-                    .font(.system(size: 10, weight: .medium, design: .rounded))
-            } icon: {
-                Image(systemName: SpeakPhasePalette.symbol(for: state.phaseRaw, muted: state.isMuted))
-                    .font(.system(size: 9, weight: .semibold))
+        TimelineView(.animation(minimumInterval: 0.35, paused: false)) { timeline in
+            let t = timeline.date.timeIntervalSinceReferenceDate
+            let breathe = 0.88 + 0.12 * abs(sin(t * 1.6))
+            VStack(spacing: 3) {
+                Text(SpeakPhasePalette.statusHeadline(for: state))
+                    .font(.system(.subheadline, design: .rounded).weight(.semibold))
+                    .foregroundStyle(.white)
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.85)
+                    .multilineTextAlignment(.center)
+                    .opacity(breathe)
+                    .contentTransition(.opacity)
+                    .animation(.easeInOut(duration: 0.35), value: state.title)
+                    .animation(.easeInOut(duration: 0.35), value: state.phaseRaw)
+                Label {
+                    Text(SpeakPhasePalette.shortLabel(for: state.phaseRaw))
+                        .font(.system(size: 10, weight: .medium, design: .rounded))
+                } icon: {
+                    Image(systemName: SpeakPhasePalette.symbol(for: state.phaseRaw, muted: state.isMuted))
+                        .font(.system(size: 9, weight: .semibold))
+                        .opacity(0.75 + 0.25 * abs(sin(t * 2.4)))
+                }
+                .foregroundStyle(.white.opacity(0.62 + 0.2 * abs(sin(t * 2.1))))
+                .labelStyle(.titleAndIcon)
+                .contentTransition(.opacity)
             }
-            .foregroundStyle(.white.opacity(0.62))
-            .labelStyle(.titleAndIcon)
+            .frame(maxWidth: .infinity)
         }
-        .frame(maxWidth: .infinity)
     }
 }
 
@@ -300,19 +326,23 @@ struct SpeakIslandExpandedGlassPanel: View {
         TimelineView(.animation(minimumInterval: 0.14, paused: false)) { timeline in
             let t = timeline.date.timeIntervalSinceReferenceDate
             let drift = (t.truncatingRemainder(dividingBy: 4.5) / 4.5)
-            VStack(spacing: 8) {
+            let textPulse = 0.78 + 0.18 * abs(sin(t * 1.9))
+            VStack(spacing: 6) {
                 Text(SpeakPhasePalette.statusDetail(for: state))
                     .font(.system(size: 11, weight: .medium, design: .rounded))
-                    .foregroundStyle(.white.opacity(0.78))
+                    .foregroundStyle(.white.opacity(textPulse))
                     .lineLimit(2)
                     .minimumScaleFactor(0.8)
                     .multilineTextAlignment(.center)
                     .frame(maxWidth: .infinity)
+                    .contentTransition(.opacity)
+                    .animation(.easeInOut(duration: 0.32), value: state.detail)
+                    .animation(.easeInOut(duration: 0.32), value: state.phaseRaw)
 
                 SpeakIslandWaveform(state: state)
-                    .frame(height: 28)
+                    .frame(height: 22)
 
-                // Soft moving light edge
+                // Soft moving light edge — kept inside bounds (no heavy outer shadow).
                 Capsule()
                     .fill(
                         LinearGradient(
@@ -329,13 +359,13 @@ struct SpeakIslandExpandedGlassPanel: View {
                     .frame(height: 2)
                     .opacity(0.9)
             }
-            .padding(.horizontal, 12)
-            .padding(.vertical, 10)
+            .padding(.horizontal, 10)
+            .padding(.vertical, 7)
             .background {
                 ZStack {
-                    RoundedRectangle(cornerRadius: 18, style: .continuous)
+                    RoundedRectangle(cornerRadius: 14, style: .continuous)
                         .fill(Color.white.opacity(0.07))
-                    RoundedRectangle(cornerRadius: 18, style: .continuous)
+                    RoundedRectangle(cornerRadius: 14, style: .continuous)
                         .fill(
                             LinearGradient(
                                 colors: [
@@ -347,7 +377,7 @@ struct SpeakIslandExpandedGlassPanel: View {
                                 endPoint: .bottomTrailing
                             )
                         )
-                    RoundedRectangle(cornerRadius: 18, style: .continuous)
+                    RoundedRectangle(cornerRadius: 14, style: .continuous)
                         .stroke(
                             LinearGradient(
                                 colors: colors.map { $0.opacity(0.55) },
@@ -356,10 +386,10 @@ struct SpeakIslandExpandedGlassPanel: View {
                             ),
                             lineWidth: 1
                         )
-                        .blur(radius: 0.2)
                 }
             }
-            .shadow(color: SpeakPhasePalette.accent(for: state.phaseRaw).opacity(0.28), radius: 10, y: 2)
+            .compositingGroup()
+            .clipped()
         }
     }
 }
@@ -386,9 +416,24 @@ struct SpeakRainbowCore: View {
                             angle: .degrees(spin)
                         )
                     )
-                    .frame(width: diameter + 8, height: diameter + 8)
-                    .blur(radius: diameter > 20 ? 2.4 : 1.1)
-                    .opacity(0.78)
+                    .frame(width: diameter + 10, height: diameter + 10)
+                    .blur(radius: diameter > 20 ? 3.2 : 2.0)
+                    .opacity(0.9)
+                    .scaleEffect(pulse)
+                    .blendMode(.plusLighter)
+
+                Circle()
+                    .fill(
+                        AngularGradient(
+                            colors: SpeakPhasePalette.gradientColors(for: state.phaseRaw, muted: state.isMuted)
+                                .map { $0.opacity(0.85) },
+                            center: .center,
+                            angle: .degrees(spin * 1.2)
+                        )
+                    )
+                    .frame(width: diameter + 4, height: diameter + 4)
+                    .blur(radius: diameter > 20 ? 1.4 : 0.7)
+                    .opacity(0.85)
                     .scaleEffect(pulse)
 
                 Circle()
@@ -398,13 +443,14 @@ struct SpeakRainbowCore: View {
                             center: .center,
                             angle: .degrees(-spin * 0.7)
                         ),
-                        lineWidth: max(1.0, diameter * 0.06)
+                        lineWidth: max(1.2, diameter * 0.08)
                     )
                     .frame(width: diameter + 2, height: diameter + 2)
-                    .opacity(0.92)
+                    .opacity(0.98)
+                    .shadow(color: SpeakPhasePalette.accent(for: state.phaseRaw).opacity(0.55), radius: 4)
 
                 Circle()
-                    .fill(Color.black.opacity(0.32))
+                    .fill(Color.black.opacity(0.28))
                     .frame(width: diameter * 0.72, height: diameter * 0.72)
 
                 if showSymbol {
@@ -421,10 +467,13 @@ struct SpeakRainbowCore: View {
                                 angle: .degrees(spin * 1.4)
                             )
                         )
-                        .frame(width: diameter * 0.35, height: diameter * 0.35)
+                        .frame(width: diameter * 0.38, height: diameter * 0.38)
+                        .blur(radius: 0.4)
                 }
             }
-            .shadow(color: SpeakPhasePalette.accent(for: state.phaseRaw).opacity(0.42), radius: diameter > 20 ? 6 : 3)
+            .frame(width: diameter + 6, height: diameter + 6)
+            .compositingGroup()
+            .shadow(color: SpeakPhasePalette.accent(for: state.phaseRaw).opacity(0.48), radius: diameter > 20 ? 5 : 3.5)
             .animation(.easeInOut(duration: 0.35), value: state.phaseRaw)
             .animation(.easeInOut(duration: 0.3), value: state.isMuted)
         }

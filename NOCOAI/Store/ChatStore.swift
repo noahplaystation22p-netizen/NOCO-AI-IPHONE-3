@@ -145,6 +145,21 @@ final class ChatStore: ObservableObject {
         }
     }
 
+    /// Clean empty thread — used on app enter / Speak shortcut.
+    /// Tries server create; always clears local messages for a fresh UI.
+    func beginCleanSession() async {
+        messages = []
+        pendingAgentIntake = nil
+        pendingAgentConfirm = nil
+        modeRecommendation = nil
+        reconnectHint = nil
+        if api != nil {
+            if await newConversation() != nil { return }
+        }
+        activeConversationId = nil
+        persistActiveConversation()
+    }
+
     func loadMessages(for id: String) async {
         guard let api else { return }
         do {

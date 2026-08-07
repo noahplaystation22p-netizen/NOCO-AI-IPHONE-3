@@ -74,6 +74,7 @@ final class ConnectionStore: ObservableObject {
     private var remoteSessionApproved = false
     private var lastLocalProbeAt: Date?
     private var remotePromptSuppressedUntil: Date?
+    private var lastFreshChatAt: Date?
 
     private enum Keys {
         static let host = "nocoai.host"
@@ -97,7 +98,13 @@ final class ConnectionStore: ObservableObject {
         token = KeychainService.load(account: Keys.token)
         localHost = HostSanitizer.hostOnly(UserDefaults.standard.string(forKey: Keys.localHost) ?? "")
         remoteHost = HostSanitizer.hostOnly(UserDefaults.standard.string(forKey: Keys.remoteHost) ?? "")
-        autoUseRemote = UserDefaults.standard.bool(forKey: Keys.autoUseRemote)
+        // Default ON: auto Tailscale when LAN is gone — simplest remote experience.
+        if UserDefaults.standard.object(forKey: Keys.autoUseRemote) == nil {
+            autoUseRemote = true
+            UserDefaults.standard.set(true, forKey: Keys.autoUseRemote)
+        } else {
+            autoUseRemote = UserDefaults.standard.bool(forKey: Keys.autoUseRemote)
+        }
         if UserDefaults.standard.object(forKey: Keys.autoSwitchToLocal) == nil {
             autoSwitchToLocal = true
         } else {
@@ -177,7 +184,20 @@ final class ConnectionStore: ObservableObject {
             chat.startSyncLoop()
             Task { await refreshStatus() }
         }
+        // Fresh empty chat whenever the user comes back into the app.
+        openFreshChatOnEnter()
         consumePendingSystemLaunches()
+    }
+
+    /// Clean chat on app enter (debounced) and Speak shortcut (forced).
+    func openFreshChatOnEnter(force: Bool = false) {
+        guard isPaired else { return }
+        let now = Date()
+        if !force, let last = lastFreshChatAt, now.timeIntervalSince(last) < 1.2 { return }
+        lastFreshChatAt = now
+        Task { @MainActor in
+            await chat.beginCleanSession()
+        }
     }
 
     func onBackground() {
@@ -341,16 +361,16 @@ final class ConnectionStore: ObservableObject {
         }
     }
 
-    func pair(host: String, port: Int, pin: String, remoteHint: String? = nil) async {
+    func pair(host: String, port: Int, pin: String, remoteHint: String? = nil, lanHint: String? = nil) async {
         guard let parsed = resolveHostPort(host: host, port: port) else {
-            lastError = "Ungültige IP — nur 192.168.x.x eingeben (ohne http://)"
+            lastError = "Ungültige Adresse — WLAN (192.168.x.x) oder Tailscale (100.x.x.x)"
             return
         }
 
         serverHost = parsed.host
         serverPort = parsed.port
         lastError = nil
-        rememberHosts(primary: parsed.host, remoteHint: remoteHint)
+        rememberHosts(primary: parsed.host, remoteHint: remoteHint, lanHint: lanHint)
         prepareLocalNetworkAccess(host: parsed.host, port: parsed.port)
         rebuildAPI()
 
@@ -560,6 +580,8 @@ final class ConnectionStore: ObservableObject {
                     SpeakLaunchBridge.clearPending()
                     HapticService.soft()
                 } else if !active {
+                    // Clean chat for Voice AI turns started from Shortcuts / Action Button.
+                    openFreshChatOnEnter(force: true)
                     speak.showSpeakUI = false
                     speak.start()
                     SpeakLaunchBridge.clearPending()
@@ -668,7 +690,13 @@ final class ConnectionStore: ObservableObject {
             return
         }
         lastError = nil
-        await pair(host: link.host, port: link.port, pin: pin, remoteHint: link.remoteHost)
+        await pair(
+            host: link.host,
+            port: link.port,
+            pin: pin,
+            remoteHint: link.remoteHost ?? (HostSanitizer.isTailscaleIP(link.host) ? link.host : nil),
+            lanHint: link.lanHost
+        )
     }
 
     func refreshStatus(showLoading: Bool = false) async {
@@ -714,6 +742,12 @@ final class ConnectionStore: ObservableObject {
             consecutiveFailures += 1
             if consecutiveFailures == 1 {
                 beginReconnectBanner()
+                // Immediate Tailscale try — don't wait for a second failure or a dialog.
+                if activePath == .local, !preferredRemoteHost.isEmpty {
+                    if await trySwitchToHost(preferredRemoteHost, path: .remote) {
+                        return
+                    }
+                }
             }
             if consecutiveFailures >= offlineFailureThreshold {
                 isOnline = false
@@ -786,16 +820,23 @@ final class ConnectionStore: ObservableObject {
         return remoteHost
     }
 
-    private func rememberHosts(primary: String, remoteHint: String? = nil) {
+    private func rememberHosts(primary: String, remoteHint: String? = nil, lanHint: String? = nil) {
         if HostSanitizer.isTailscaleIP(primary) {
             remoteHost = primary
             activePath = .remote
+            if let lan = lanHint?.trimmingCharacters(in: .whitespacesAndNewlines), !lan.isEmpty {
+                localHost = HostSanitizer.hostOnly(lan)
+            }
         } else {
             localHost = primary
             activePath = .local
         }
         if let hint = remoteHint?.trimmingCharacters(in: .whitespacesAndNewlines), !hint.isEmpty {
             remoteHost = HostSanitizer.hostOnly(hint)
+        }
+        if let lan = lanHint?.trimmingCharacters(in: .whitespacesAndNewlines), !lan.isEmpty,
+           HostSanitizer.isPrivateLanIP(lan) || !HostSanitizer.isTailscaleIP(lan) {
+            localHost = HostSanitizer.hostOnly(lan)
         }
         persistPathHosts()
     }
@@ -830,20 +871,16 @@ final class ConnectionStore: ObservableObject {
             }
         }
 
-        // 2) If on local and offline, consider remote — never auto without consent/setting.
+        // 2) Local offline → Tailscale automatically (simplest path).
         if activePath == .local, !preferredRemoteHost.isEmpty {
-            if autoUseRemote || remoteSessionApproved {
-                if await trySwitchToHost(preferredRemoteHost, path: .remote) {
-                    return
-                }
-            } else {
-                let suppressed = remotePromptSuppressedUntil.map { Date() < $0 } ?? false
-                if !suppressed {
-                    showRemotePrompt = true
-                    pathStatusLine = "NOCO PC nicht im lokalen Netzwerk gefunden."
-                    reconnectStatusLine = "NOCO PC nicht im lokalen Netzwerk gefunden."
-                }
+            remoteSessionApproved = true
+            showRemotePrompt = false
+            if await trySwitchToHost(preferredRemoteHost, path: .remote) {
+                pathStatusLine = "Remote (Tailscale)"
+                return
             }
+            pathStatusLine = "Nicht erreichbar — PC: Remote starten · iPhone: Tailscale an"
+            reconnectStatusLine = "Nicht erreichbar — PC: Remote starten · iPhone: Tailscale an"
         }
     }
 
@@ -912,7 +949,8 @@ final class ConnectionStore: ObservableObject {
         guard !cleaned.isEmpty,
               let url = URL(string: "http://\(cleaned):\(serverPort)/api/v1/ping") else { return false }
         var request = URLRequest(url: url)
-        request.timeoutInterval = 2.2
+        // Tailscale / mobile hops need more headroom than LAN.
+        request.timeoutInterval = HostSanitizer.isTailscaleIP(cleaned) ? 5.5 : 2.4
         do {
             let (data, response) = try await URLSession.shared.data(for: request)
             guard let http = response as? HTTPURLResponse else { return false }
@@ -971,6 +1009,7 @@ final class ConnectionStore: ObservableObject {
         pathStatusLine = nil
         KeychainService.delete(account: Keys.token)
         CompanionCredentials.clear()
+        UserDefaults.standard.set(false, forKey: "nocoai.onboardingDone")
         rebuildAPI()
     }
 

@@ -35,15 +35,15 @@ struct SettingsView: View {
                 }
 
                 Section {
-                    Toggle("Automatisch Remote verwenden", isOn: Binding(
+                    Toggle("Automatisch Tailscale", isOn: Binding(
                         get: { connection.autoUseRemote },
                         set: { connection.setAutoUseRemote($0) }
                     ))
-                    Toggle("Automatisch zu Lokal wechseln", isOn: Binding(
+                    Toggle("Zuhause zurück zu WLAN", isOn: Binding(
                         get: { connection.autoSwitchToLocal },
                         set: { connection.setAutoSwitchToLocal($0) }
                     ))
-                    if connection.isOnline == false, !connection.remoteHost.isEmpty {
+                    if !connection.remoteHost.isEmpty {
                         Button("Jetzt über Tailscale verbinden") {
                             Task { await connection.confirmRemoteConnection() }
                         }
@@ -51,7 +51,7 @@ struct SettingsView: View {
                 } header: {
                     Text("Remote (Tailscale)")
                 } footer: {
-                    Text("Zuhause immer zuerst lokal. Remote nur mit Bestätigung — außer „Automatisch Remote“ ist an. Auf dem PC muss „Remote Zugriff aktivieren“ eingeschaltet sein.")
+                    Text("Einfach: PC „Remote starten“, iPhone Tailscale VPN an. Die App wechselt automatisch, wenn WLAN fehlt. Zuhause wechselt sie zurück.")
                 }
 
                 Section {

@@ -80,9 +80,9 @@ enum NOCOIntelligenceCoreSize {
 
     var glow: CGFloat {
         switch self {
-        case .compact: return 10
-        case .medium: return 18
-        case .hero: return 42
+        case .compact: return 14
+        case .medium: return 24
+        case .hero: return 52
         }
     }
 }
@@ -116,28 +116,42 @@ struct NOCOIntelligenceCore: View {
 
     var body: some View {
         ZStack {
-            // Outer soft rainbow bloom
+            // Outer soft rainbow bloom (Apple Intelligence style)
             Circle()
                 .fill(
                     AngularGradient(colors: NOCORainbow.softFlow, center: .center)
                 )
-                .frame(width: d * 1.55, height: d * 1.55)
-                .blur(radius: size.glow)
-                .opacity(0.28 + activeIntensity * 0.35)
-                .scaleEffect(breathe ? 1.08 : 0.94)
+                .frame(width: d * 1.85, height: d * 1.85)
+                .blur(radius: size.glow * 1.35)
+                .opacity(0.42 + activeIntensity * 0.45)
+                .scaleEffect(breathe ? 1.12 : 0.92)
                 .rotationEffect(.degrees(spin ? 360 : 0))
+                .blendMode(.plusLighter)
+
+            Circle()
+                .fill(
+                    AngularGradient(
+                        colors: NOCORainbow.flow.map { $0.opacity(0.55) },
+                        center: .center
+                    )
+                )
+                .frame(width: d * 1.4, height: d * 1.4)
+                .blur(radius: size.glow * 0.75)
+                .opacity(0.35 + activeIntensity * 0.3)
+                .rotationEffect(.degrees(spin ? -180 : 0))
 
             // Mid glass halo
             Circle()
                 .stroke(
                     AngularGradient(colors: NOCORainbow.flow, center: .center),
-                    lineWidth: size == .compact ? 1.2 : 1.8
+                    lineWidth: size == .compact ? 1.4 : 2.2
                 )
-                .frame(width: d * 1.18, height: d * 1.18)
-                .blur(radius: 0.4)
-                .opacity(0.55 + activeIntensity * 0.3)
+                .frame(width: d * 1.22, height: d * 1.22)
+                .blur(radius: 0.5)
+                .opacity(0.7 + activeIntensity * 0.28)
                 .rotationEffect(.degrees(spin ? -360 : 0))
                 .scaleEffect(1 + level * 0.08)
+                .shadow(color: NOCORainbow.violet.opacity(0.35 + activeIntensity * 0.25), radius: size.glow * 0.35)
 
             // Core glass disc
             Circle()

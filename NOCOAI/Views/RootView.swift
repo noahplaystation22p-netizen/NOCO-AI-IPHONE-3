@@ -3,29 +3,26 @@ import SwiftUI
 struct RootView: View {
     @EnvironmentObject private var connection: ConnectionStore
     @Environment(\.scenePhase) private var scenePhase
+    @AppStorage("nocoai.onboardingDone") private var onboardingDone = false
 
     var body: some View {
         Group {
             if connection.isPaired {
-                MainTabView()
+                if onboardingDone {
+                    MainTabView()
+                } else {
+                    OnboardingWelcomeView {
+                        withAnimation(.spring(response: 0.5, dampingFraction: 0.82)) {
+                            onboardingDone = true
+                        }
+                    }
+                }
             } else {
                 PairingView()
             }
         }
         .animation(.spring(response: 0.5, dampingFraction: 0.82), value: connection.isPaired)
-        .alert(
-            "NOCO PC nicht im lokalen Netzwerk gefunden.",
-            isPresented: $connection.showRemotePrompt
-        ) {
-            Button("Ja") {
-                Task { await connection.confirmRemoteConnection() }
-            }
-            Button("Nein", role: .cancel) {
-                connection.declineRemoteConnection()
-            }
-        } message: {
-            Text("Remote Verbindung über Tailscale verwenden?\n\nVoraussetzung: Tailscale auf iPhone und PC mit demselben Konto, und auf dem PC „Remote Zugriff aktivieren“.")
-        }
+        .animation(.spring(response: 0.45, dampingFraction: 0.86), value: onboardingDone)
         .alert(
             "Lokale Verbindung verfügbar.",
             isPresented: $connection.showLocalAvailablePrompt

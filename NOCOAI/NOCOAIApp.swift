@@ -70,6 +70,7 @@ extension Notification.Name {
 struct NOCOAIApp: App {
     @UIApplicationDelegateAdaptor(AppDelegate.self) private var appDelegate
     @StateObject private var connection = ConnectionStore()
+    @Environment(\.scenePhase) private var scenePhase
 
     var body: some Scene {
         WindowGroup {
@@ -110,6 +111,14 @@ struct NOCOAIApp: App {
                 .onReceive(NotificationCenter.default.publisher(for: .nocoQuickAction)) { note in
                     if let type = note.object as? String {
                         connection.handleQuickAction(type)
+                    }
+                }
+                .onChange(of: scenePhase) { _, phase in
+                    if phase == .active {
+                        connection.consumePendingSpeakLaunchIfNeeded()
+                        if connection.speak.isRunning {
+                            connection.speak.ensureBackgroundPresence()
+                        }
                     }
                 }
                 .task {

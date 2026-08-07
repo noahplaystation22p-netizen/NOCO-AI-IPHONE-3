@@ -91,16 +91,16 @@ enum SpeakLiveActivityManager {
         }
 
         let now = Date()
-        if !force, phase == .listening || phase == .speaking {
-            if now.timeIntervalSince(lastLevelUpdate) < 0.2 { return }
+            if !force, phase == .listening || phase == .speaking {
+            if now.timeIntervalSince(lastLevelUpdate) < 0.14 { return }
         }
         lastLevelUpdate = now
 
         let title: String
         if isMuted && phase != .speaking {
-            title = "Stumm"
+            title = "Voice AI stumm"
         } else if let titleOverride, !titleOverride.isEmpty {
-            title = String(titleOverride.prefix(48))
+            title = String(titleOverride.prefix(40))
         } else {
             title = phase.title
         }
@@ -108,7 +108,7 @@ enum SpeakLiveActivityManager {
         let state = SpeakActivityAttributes.ContentState(
             phaseRaw: phase.rawValue,
             title: title,
-            detail: String(detail.prefix(100)),
+            detail: String(detail.prefix(80)),
             level: min(max(level, 0), 1),
             bars: bars.map { min(max($0, 0), 1) },
             isOnline: isOnline,

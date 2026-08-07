@@ -1,3 +1,4 @@
+import ActivityKit
 import AppIntents
 import Foundation
 
@@ -14,6 +15,8 @@ extension Notification.Name {
 enum SpeakLaunchBridge {
     private static let pendingKey = "nocoai.pendingSpeakStart"
     private static let pendingToggleKey = "nocoai.pendingSpeakToggle"
+    /// When true: start Voice AI without presenting the Speak sheet.
+    private static let backgroundOnlyKey = "nocoai.pendingSpeakBackgroundOnly"
 
     static var pendingStart: Bool {
         get { UserDefaults.standard.bool(forKey: pendingKey) }
@@ -25,14 +28,21 @@ enum SpeakLaunchBridge {
         set { UserDefaults.standard.set(newValue, forKey: pendingToggleKey) }
     }
 
-    static func requestStart() {
+    static var preferBackgroundOnly: Bool {
+        get { UserDefaults.standard.bool(forKey: backgroundOnlyKey) }
+        set { UserDefaults.standard.set(newValue, forKey: backgroundOnlyKey) }
+    }
+
+    static func requestStart(backgroundOnly: Bool = true) {
         pendingToggle = false
+        preferBackgroundOnly = backgroundOnly
         pendingStart = true
         NotificationCenter.default.post(name: .nocoStartSpeak, object: nil)
     }
 
-    static func requestToggle() {
+    static func requestToggle(backgroundOnly: Bool = true) {
         pendingStart = false
+        preferBackgroundOnly = backgroundOnly
         pendingToggle = true
         NotificationCenter.default.post(name: .nocoStartSpeak, object: nil)
     }
@@ -40,14 +50,31 @@ enum SpeakLaunchBridge {
     static func requestStop() {
         pendingStart = false
         pendingToggle = false
+        preferBackgroundOnly = true
         NotificationCenter.default.post(name: .nocoStopSpeak, object: nil)
     }
 
     static func clearPending() {
         pendingStart = false
         pendingToggle = false
+        preferBackgroundOnly = false
     }
 }
+
+/// Ends Voice AI from a Shortcut without requiring the Speak UI.
+@MainActor
+enum VoiceAIBackgroundControl {
+    static func stopSilently() async {
+        VoiceAISessionState.pendingStop = true
+        VoiceAISessionState.publish(active: false, micOn: false, islandOn: false)
+        let activities = Activity<SpeakActivityAttributes>.activities
+        for act in activities {
+            await act.end(nil, dismissalPolicy: .immediate)
+        }
+        SpeakLaunchBridge.requestStop()
+    }
+}
+
 
 /// Cold-start / Shortcut bridges for Images, Agent, Ask.
 enum NOCOLaunchBridge {
@@ -151,11 +178,13 @@ enum NOCOLaunchBridge {
 }
 
 /// Opens / toggles NOCO Voice AI — primary Action Button / Shortcuts entry.
+/// Start needs a brief app wake for the microphone (Apple requirement); Stop prefers background.
 struct ToggleVoiceAIIntent: AppIntent {
     static var title: LocalizedStringResource = "NOCO Voice AI"
     static var description = IntentDescription(
         "Startet oder beendet NOCO Voice AI. Ideal für den Action Button: einmal an, einmal aus."
     )
+    /// Mic start requires a short app activation; UI sheet stays closed.
     static var openAppWhenRun: Bool = true
 
     static var parameterSummary: some ParameterSummary {
@@ -165,12 +194,12 @@ struct ToggleVoiceAIIntent: AppIntent {
     @MainActor
     func perform() async throws -> some IntentResult & ProvidesDialog {
         if VoiceAISessionState.isActive || SpeakLaunchBridge.pendingStart {
-            SpeakLaunchBridge.requestStop()
-            try? await Task.sleep(nanoseconds: 80_000_000)
+            await VoiceAIBackgroundControl.stopSilently()
+            try? await Task.sleep(nanoseconds: 60_000_000)
             return .result(dialog: "NOCO Voice AI beendet.")
         }
-        SpeakLaunchBridge.requestToggle()
-        try? await Task.sleep(nanoseconds: 200_000_000)
+        SpeakLaunchBridge.requestToggle(backgroundOnly: true)
+        try? await Task.sleep(nanoseconds: 180_000_000)
         return .result(dialog: "NOCO Voice AI startet.")
     }
 }
@@ -179,7 +208,7 @@ struct ToggleVoiceAIIntent: AppIntent {
 struct StartSpeakIntent: AppIntent {
     static var title: LocalizedStringResource = "NOCO Voice AI starten"
     static var description = IntentDescription(
-        "Startet NOCO Voice AI. Die App kommt kurz in den Vordergrund (Mikrofon), danach läuft die Session über die Dynamic Island."
+        "Startet NOCO Voice AI im Hintergrund. Kurz App-Wake für Mikrofon, danach Dynamic Island."
     )
     static var openAppWhenRun: Bool = true
 
@@ -189,20 +218,21 @@ struct StartSpeakIntent: AppIntent {
 
     @MainActor
     func perform() async throws -> some IntentResult & ProvidesDialog {
-        SpeakLaunchBridge.requestStart()
-        try? await Task.sleep(nanoseconds: 350_000_000)
-        return .result(dialog: "NOCO Voice AI startet — sprich einfach.")
+        SpeakLaunchBridge.requestStart(backgroundOnly: true)
+        try? await Task.sleep(nanoseconds: 220_000_000)
+        return .result(dialog: "NOCO Voice AI startet.")
     }
 }
 
 struct StopSpeakIntent: AppIntent {
     static var title: LocalizedStringResource = "NOCO Voice AI stoppen"
-    static var description = IntentDescription("Beendet NOCO Voice AI und kehrt zum Chat zurück.")
-    static var openAppWhenRun: Bool = true
+    static var description = IntentDescription("Beendet NOCO Voice AI sofort — ohne Speak-UI.")
+    /// Prefer not forcing a full UI presentation when only stopping.
+    static var openAppWhenRun: Bool = false
 
     @MainActor
     func perform() async throws -> some IntentResult & ProvidesDialog {
-        SpeakLaunchBridge.requestStop()
+        await VoiceAIBackgroundControl.stopSilently()
         return .result(dialog: "NOCO Voice AI beendet.")
     }
 }

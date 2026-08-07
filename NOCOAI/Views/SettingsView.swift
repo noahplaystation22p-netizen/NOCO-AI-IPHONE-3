@@ -303,7 +303,7 @@ struct SettingsView: View {
                 }
 
                 DisclosureGroup {
-                    Text("Kurzbefehl „NOCO Voice AI“ zum Action Button legen. Einmal starten, erneut beenden. Link: nocoai://speak")
+                    Text("Kurzbefehl „NOCO Voice AI“ auf den Action Button legen. Start: Island + Zuhören (ohne Speak-Screen). Erneut: sofort beenden. Link: nocoai://speak")
                         .font(.footnote)
                         .foregroundStyle(.secondary)
                     Button("Voice AI jetzt testen") {

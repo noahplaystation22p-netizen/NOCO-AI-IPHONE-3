@@ -371,15 +371,22 @@ final class ConnectionStore: ObservableObject {
         var candidates: [String] = []
         let lanClean = HostSanitizer.hostOnly(lanHint ?? "")
         let remoteClean = HostSanitizer.hostOnly(remoteHint ?? "")
-        if HostSanitizer.isTailscaleIP(parsed.host), !lanClean.isEmpty, HostSanitizer.isPrivateLanIP(lanClean) {
-            candidates.append(lanClean)
+        func pushCandidate(_ value: String) {
+            let h = HostSanitizer.hostOnly(value)
+            guard HostSanitizer.isPairableHost(h), !candidates.contains(h) else { return }
+            candidates.append(h)
         }
-        candidates.append(parsed.host)
-        if !lanClean.isEmpty, !candidates.contains(lanClean) {
-            candidates.append(lanClean)
+        if HostSanitizer.isTailscaleIP(parsed.host), HostSanitizer.isPrivateLanIP(lanClean) {
+            pushCandidate(lanClean)
         }
-        if !remoteClean.isEmpty, !candidates.contains(remoteClean) {
-            candidates.append(remoteClean)
+        pushCandidate(parsed.host)
+        pushCandidate(lanClean)
+        pushCandidate(remoteClean)
+
+        guard !candidates.isEmpty else {
+            lastError = "Keine gültige WLAN-IP im QR — NOCO AI X am PC neu starten"
+            HapticService.error()
+            return
         }
 
         lastError = nil

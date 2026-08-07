@@ -54,7 +54,7 @@ struct QRScannerView: View {
             if foundBanner {
                 VStack {
                     Spacer()
-                    Label("Verbunden — Pixel synchronisieren…", systemImage: "checkmark.seal.fill")
+                    Label("QR erkannt — verbinde mit PC…", systemImage: "qrcode.viewfinder")
                         .font(.headline.weight(.semibold))
                         .foregroundStyle(.white)
                         .padding(.horizontal, 18)

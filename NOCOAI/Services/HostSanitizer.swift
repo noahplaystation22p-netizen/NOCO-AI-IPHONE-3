@@ -57,15 +57,28 @@ enum HostSanitizer {
         return parts[0] == 100 && parts[1] >= 64 && parts[1] <= 127
     }
 
-    /// RFC1918 + link-local
+    /// RFC1918 only (no APIPA 169.254 — not reachable for pairing).
     static func isPrivateLanIP(_ host: String) -> Bool {
         let parts = host.split(separator: ".").compactMap { Int($0) }
         guard parts.count == 4 else { return false }
         if parts[0] == 10 { return true }
         if parts[0] == 192 && parts[1] == 168 { return true }
         if parts[0] == 172 && parts[1] >= 16 && parts[1] <= 31 { return true }
-        if parts[0] == 169 && parts[1] == 254 { return true }
         return false
+    }
+
+    static func isLinkLocalIP(_ host: String) -> Bool {
+        let parts = host.split(separator: ".").compactMap { Int($0) }
+        guard parts.count == 4 else { return false }
+        return parts[0] == 169 && parts[1] == 254
+    }
+
+    /// Usable companion host for pairing / API calls.
+    static func isPairableHost(_ host: String) -> Bool {
+        let h = hostOnly(host)
+        guard !h.isEmpty else { return false }
+        if isLinkLocalIP(h) || h == "127.0.0.1" { return false }
+        return isPrivateLanIP(h) || isTailscaleIP(h)
     }
 
     static func classify(_ host: String) -> ConnectionPathKind {

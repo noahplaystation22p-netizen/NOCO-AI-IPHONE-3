@@ -35,7 +35,27 @@ struct SettingsView: View {
                 }
 
                 Section {
-                    Toggle("Automatisch Tailscale", isOn: Binding(
+                    HStack(spacing: 10) {
+                        pathButton(
+                            title: "Lokal",
+                            subtitle: connection.localHost.isEmpty ? "WLAN" : connection.localHost,
+                            selected: connection.activePath == .local,
+                            enabled: !connection.localHost.isEmpty || connection.activePath == .local
+                        ) {
+                            Task { await connection.confirmLocalConnection() }
+                        }
+                        pathButton(
+                            title: "Remote",
+                            subtitle: connection.remoteHost.isEmpty ? "Tailscale" : connection.remoteHost,
+                            selected: connection.activePath == .remote,
+                            enabled: !connection.remoteHost.isEmpty
+                        ) {
+                            Task { await connection.confirmRemoteConnection() }
+                        }
+                    }
+                    .listRowInsets(EdgeInsets(top: 10, leading: 14, bottom: 10, trailing: 14))
+
+                    Toggle("Automatisch Remote", isOn: Binding(
                         get: { connection.autoUseRemote },
                         set: { connection.setAutoUseRemote($0) }
                     ))
@@ -43,15 +63,10 @@ struct SettingsView: View {
                         get: { connection.autoSwitchToLocal },
                         set: { connection.setAutoSwitchToLocal($0) }
                     ))
-                    if !connection.remoteHost.isEmpty {
-                        Button("Jetzt über Tailscale verbinden") {
-                            Task { await connection.confirmRemoteConnection() }
-                        }
-                    }
                 } header: {
-                    Text("Remote (Tailscale)")
+                    Text("Verbindung")
                 } footer: {
-                    Text("Einfach: PC „Remote starten“, iPhone Tailscale VPN an. Die App wechselt automatisch, wenn WLAN fehlt. Zuhause wechselt sie zurück.")
+                    Text("QR koppelt immer über WLAN. Später: hier oder automatisch auf Remote (Tailscale) wechseln — ohne neuen QR. PC: „Remote starten“, iPhone: Tailscale VPN an.")
                 }
 
                 Section {
@@ -433,6 +448,48 @@ struct SettingsView: View {
         default: q = "Standard"
         }
         return "Voice \(index + 1) · \(voice.name) · \(q)"
+    }
+
+    private func pathButton(
+        title: String,
+        subtitle: String,
+        selected: Bool,
+        enabled: Bool,
+        action: @escaping () -> Void
+    ) -> some View {
+        Button(action: action) {
+            VStack(alignment: .leading, spacing: 4) {
+                Text(title)
+                    .font(.subheadline.weight(.semibold))
+                Text(subtitle)
+                    .font(.caption2)
+                    .foregroundStyle(selected ? Color.white.opacity(0.85) : Color.secondary)
+                    .lineLimit(1)
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .padding(.horizontal, 12)
+            .padding(.vertical, 12)
+            .background {
+                RoundedRectangle(cornerRadius: 14, style: .continuous)
+                    .fill(
+                        selected
+                            ? LinearGradient(
+                                colors: [NOCORainbow.blue, NOCORainbow.violet],
+                                startPoint: .topLeading,
+                                endPoint: .bottomTrailing
+                            )
+                            : LinearGradient(
+                                colors: [Color.primary.opacity(0.06), Color.primary.opacity(0.06)],
+                                startPoint: .topLeading,
+                                endPoint: .bottomTrailing
+                            )
+                    )
+            }
+            .foregroundStyle(selected ? Color.white : Color.primary)
+        }
+        .buttonStyle(.plain)
+        .disabled(!enabled)
+        .opacity(enabled ? 1 : 0.45)
     }
 
     private func qualityRank(_ voice: AVSpeechSynthesisVoice) -> Int {

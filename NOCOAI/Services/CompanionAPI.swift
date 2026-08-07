@@ -28,9 +28,19 @@ enum CompanionAPIError: LocalizedError {
         case .server(let msg):
             return msg
         case .network(let err):
-            return (err as? URLError)?.code == .timedOut
-                ? CompanionAPIError.unreachable.errorDescription
-                : err.localizedDescription
+            if let urlErr = err as? URLError {
+                switch urlErr.code {
+                case .timedOut:
+                    return CompanionAPIError.unreachable.errorDescription
+                case .secureConnectionFailed, .serverCertificateUntrusted, .clientCertificateRejected:
+                    return "Sichere Verbindung fehlgeschlagen — nutze die WLAN-IP (192.168.x.x) vom PC, nicht https://. Tailscale-VPN am iPhone prüfen, falls 100.x."
+                case .cannotConnectToHost, .networkConnectionLost, .notConnectedToInternet:
+                    return CompanionAPIError.unreachable.errorDescription
+                default:
+                    break
+                }
+            }
+            return err.localizedDescription
         case .decoding:
             return "Antwort konnte nicht gelesen werden"
         }
@@ -67,18 +77,26 @@ struct CompanionAPI {
 
     func ping() async throws {
         let url = baseURL.appendingPathComponent("ping")
-        let (data, response) = try await session.data(from: url)
-        try validate(response: response, data: data, isPairRequest: false)
-        if let ping = try? decoder.decode(PingResponse.self, from: data), !ping.isAlive {
-            throw CompanionAPIError.server("Server antwortet, aber Ping fehlgeschlagen")
+        do {
+            let (data, response) = try await session.data(from: url)
+            try validate(response: response, data: data, isPairRequest: false)
+            if let ping = try? decoder.decode(PingResponse.self, from: data), !ping.isAlive {
+                throw CompanionAPIError.server("Server antwortet, aber Ping fehlgeschlagen")
+            }
+        } catch {
+            throw mapNetworkError(error)
         }
     }
 
     func fetchPairing() async throws -> PairingInfo {
         let url = baseURL.appendingPathComponent("pairing")
-        let (data, response) = try await session.data(from: url)
-        try validate(response: response, data: data, isPairRequest: false)
-        return try decoder.decode(PairingInfo.self, from: data)
+        do {
+            let (data, response) = try await session.data(from: url)
+            try validate(response: response, data: data, isPairRequest: false)
+            return try decoder.decode(PairingInfo.self, from: data)
+        } catch {
+            throw mapNetworkError(error)
+        }
     }
 
     func pair(pin: String, deviceName: String) async throws -> PairResponse {
@@ -87,9 +105,13 @@ struct CompanionAPI {
         request.httpMethod = "POST"
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
         request.httpBody = try encoder.encode(PairRequest(pin: pin, deviceName: deviceName))
-        let (data, response) = try await session.data(for: request)
-        try validate(response: response, data: data, isPairRequest: true)
-        return try decoder.decode(PairResponse.self, from: data)
+        do {
+            let (data, response) = try await session.data(for: request)
+            try validate(response: response, data: data, isPairRequest: true)
+            return try decoder.decode(PairResponse.self, from: data)
+        } catch {
+            throw mapNetworkError(error)
+        }
     }
 
     func fetchStatus() async throws -> ServerStatus {
@@ -199,12 +221,17 @@ struct CompanionAPI {
 
     func mapNetworkError(_ error: Error) -> Error {
         if let api = error as? CompanionAPIError { return api }
-        if let urlError = error as? URLError,
-           urlError.code == .cannotConnectToHost || urlError.code == .timedOut || urlError.code == .networkConnectionLost {
-            return CompanionAPIError.unreachable
-        }
-        if let urlError = error as? URLError, urlError.code == .cannotFindHost {
-            return CompanionAPIError.badHost
+        if let urlError = error as? URLError {
+            switch urlError.code {
+            case .cannotConnectToHost, .timedOut, .networkConnectionLost:
+                return CompanionAPIError.unreachable
+            case .cannotFindHost:
+                return CompanionAPIError.badHost
+            case .secureConnectionFailed, .serverCertificateUntrusted:
+                return CompanionAPIError.network(urlError)
+            default:
+                break
+            }
         }
         let ns = error as NSError
         // Darwin / CFNetwork: POSIX EHOSTDOWN = 64 ("Host is down")

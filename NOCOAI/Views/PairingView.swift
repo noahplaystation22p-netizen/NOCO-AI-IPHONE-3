@@ -175,10 +175,10 @@ struct PairingView: View {
     private func pairFromQR(_ code: String) async {
         isPairingFromQR = true
         defer { isPairingFromQR = false }
-        HapticService.pairSuccess()
+        HapticService.light()
         await connection.pairFromQR(code)
         if connection.isPaired {
-            HapticService.success()
+            HapticService.pairSuccess()
             showQRScanner = false
         } else {
             HapticService.error()

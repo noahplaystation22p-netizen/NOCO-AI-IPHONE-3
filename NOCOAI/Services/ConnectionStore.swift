@@ -367,47 +367,78 @@ final class ConnectionStore: ObservableObject {
             return
         }
 
-        serverHost = parsed.host
-        serverPort = parsed.port
-        lastError = nil
-        rememberHosts(primary: parsed.host, remoteHint: remoteHint, lanHint: lanHint)
-        prepareLocalNetworkAccess(host: parsed.host, port: parsed.port)
-        rebuildAPI()
-
-        guard let url = URL(string: baseURLString) else {
-            lastError = "Ungültige Adresse"
-            return
+        // Prefer LAN for first contact when QR pointed at Tailscale (same Wi‑Fi, no VPN yet).
+        var candidates: [String] = []
+        let lanClean = HostSanitizer.hostOnly(lanHint ?? "")
+        let remoteClean = HostSanitizer.hostOnly(remoteHint ?? "")
+        if HostSanitizer.isTailscaleIP(parsed.host), !lanClean.isEmpty, HostSanitizer.isPrivateLanIP(lanClean) {
+            candidates.append(lanClean)
+        }
+        candidates.append(parsed.host)
+        if !lanClean.isEmpty, !candidates.contains(lanClean) {
+            candidates.append(lanClean)
+        }
+        if !remoteClean.isEmpty, !candidates.contains(remoteClean) {
+            candidates.append(remoteClean)
         }
 
+        lastError = nil
+        rememberHosts(primary: parsed.host, remoteHint: remoteHint, lanHint: lanHint)
         isRefreshing = true
         defer { isRefreshing = false }
 
-        do {
-            let client = CompanionAPI(baseURL: url, token: nil)
-            try await client.ping()
-            let response = try await client.pair(pin: pin, deviceName: deviceName)
-            token = response.token
-            KeychainService.save(response.token, account: Keys.token)
-            UserDefaults.standard.set(serverHost, forKey: Keys.host)
-            UserDefaults.standard.set(serverPort, forKey: Keys.port)
-            UserDefaults.standard.set(deviceName, forKey: Keys.device)
-            CompanionCredentials.sync(
-                host: serverHost,
-                port: serverPort,
-                token: response.token,
-                deviceName: deviceName
-            )
-            isPaired = true
-            consecutiveFailures = 0
+        var lastFailure: Error?
+        for candidate in candidates {
+            prepareLocalNetworkAccess(host: candidate, port: parsed.port)
+            serverHost = candidate
+            serverPort = parsed.port
+            if HostSanitizer.isTailscaleIP(candidate) {
+                activePath = .remote
+                remoteHost = candidate
+            } else if HostSanitizer.isPrivateLanIP(candidate) {
+                activePath = .local
+                localHost = candidate
+            }
+            persistPathHosts()
             rebuildAPI()
-            HapticService.success()
-            await refreshStatus()
-            startPolling()
-            await bootstrapAfterPair()
-        } catch {
-            lastError = (error as? LocalizedError)?.errorDescription ?? error.localizedDescription
-            HapticService.error()
+
+            guard let url = URL(string: baseURLString) else {
+                lastFailure = CompanionAPIError.invalidURL
+                continue
+            }
+
+            do {
+                let client = CompanionAPI(baseURL: url, token: nil)
+                try await client.ping()
+                let response = try await client.pair(pin: pin, deviceName: deviceName)
+                token = response.token
+                KeychainService.save(response.token, account: Keys.token)
+                UserDefaults.standard.set(serverHost, forKey: Keys.host)
+                UserDefaults.standard.set(serverPort, forKey: Keys.port)
+                UserDefaults.standard.set(deviceName, forKey: Keys.device)
+                CompanionCredentials.sync(
+                    host: serverHost,
+                    port: serverPort,
+                    token: response.token,
+                    deviceName: deviceName
+                )
+                isPaired = true
+                consecutiveFailures = 0
+                rebuildAPI()
+                HapticService.success()
+                await refreshStatus()
+                startPolling()
+                await bootstrapAfterPair()
+                return
+            } catch {
+                lastFailure = error
+            }
         }
+
+        lastError = (lastFailure as? LocalizedError)?.errorDescription
+            ?? lastFailure?.localizedDescription
+            ?? "Kopplung fehlgeschlagen — WLAN-IP prüfen, Port 4747, Lokales Netzwerk erlauben"
+        HapticService.error()
     }
 
     func applyDeepLink(_ link: PairingDeepLink) {

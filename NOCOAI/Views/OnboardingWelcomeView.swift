@@ -81,7 +81,7 @@ struct OnboardingWelcomeView: View {
                             onFinished()
                         }
                     } label: {
-                        Text(page < pages.count - 1 ? "Weiter" : "Los geht’s")
+                        Text(page < pages.count - 1 ? "Weiter" : "Zum Chat")
                             .font(.headline.weight(.semibold))
                             .frame(maxWidth: .infinity)
                             .padding(.vertical, 16)

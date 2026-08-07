@@ -76,12 +76,25 @@ enum LiveKnowledgeRouting {
     static func likelyNeedsWeb(_ text: String) -> Bool {
         let t = text.lowercased()
         let needles = [
-            "aktuell", "heute", "gestern", "morgen", "nachrichten", "news", "wetter", "temperatur",
-            "preis", "kostet", "spielstand", "ergebnis", "gewonnen", "bundesliga", "bitcoin", "aktie",
-            "kurs", "release", "schau nach", "recherchier", "suche im internet", "google", "im web",
-            "live", "wer hat gewonnen", "wie viel kostet", "neueste", "schlagzeile", "was gibt es neues",
-            "zug", "bahn", "fahrplan", "abfahrt", "ankunft", "verkehr", "stau", "wahl", "ergebnis der"
+            "aktuell", "nachrichten", "news", "wetter", "temperatur",
+            "vorhersage", "preis", "kostet", "spielstand", "ergebnis", "gewonnen", "bundesliga",
+            "champions league", "bitcoin", "aktie", "kurs", "release", "schau nach", "recherchier",
+            "suche im internet", "google", "im web", "online nach", "live", "wer hat gewonnen",
+            "wie viel kostet", "neueste", "schlagzeile", "was gibt es neues", "was ist passiert",
+            "zug", "bahn", "fahrplan", "abfahrt", "ankunft", "verkehr", "stau", "wahl",
+            "wer spielt", "spielt heute", "heutige spiele", "spielplan", "formel 1", "f1 ",
+            "iphone neu", "neuerscheinung", "ticker", "apple news", "dieser woche", "dieses jahr"
         ]
+        // Writing / planning without live intent stays local (avoid "morgen" alone firing web).
+        let localOnly = [
+            "schreib", "gedicht", "geschichte", "übersetze", "ubersetze", "refaktor",
+            "erkläre mir einfach", "erklare mir einfach", "formulier", "mach mir einen plan"
+        ]
+        if localOnly.contains(where: { t.contains($0) }) {
+            let stillLive = needles.contains(where: { t.contains($0) })
+                || t.contains("wetter") || t.contains("nachrichten") || t.contains("preis")
+            if !stillLive { return false }
+        }
         return needles.contains(where: { t.contains($0) })
     }
 

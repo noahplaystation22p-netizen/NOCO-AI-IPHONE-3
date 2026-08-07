@@ -10,6 +10,7 @@
 
 		KBD0000010000000000000001 /* KeyboardViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = KBD0000020000000000000001 /* KeyboardViewController.swift */; };
 		KBD0000010000000000000002 /* KeyboardViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = KBD0000020000000000000002 /* KeyboardViewModel.swift */; };
+		KBD000001000000000000000B /* KeyboardVoiceTyping.swift in Sources */ = {isa = PBXBuildFile; fileRef = KBD000002000000000000001B /* KeyboardVoiceTyping.swift */; };
 		KBD0000010000000000000003 /* KeyboardRootView.swift in Sources */ = {isa = PBXBuildFile; fileRef = KBD0000020000000000000003 /* KeyboardRootView.swift */; };
 		KBD0000010000000000000004 /* KeyboardLayoutView.swift in Sources */ = {isa = PBXBuildFile; fileRef = KBD0000020000000000000004 /* KeyboardLayoutView.swift */; };
 		KBD0000010000000000000005 /* CompanionCredentials.swift in Sources */ = {isa = PBXBuildFile; fileRef = KBD0000020000000000000010 /* CompanionCredentials.swift */; };
@@ -152,6 +153,7 @@
 
 		KBD0000020000000000000001 /* KeyboardViewController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = KeyboardViewController.swift; sourceTree = "<group>"; };
 		KBD0000020000000000000002 /* KeyboardViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = KeyboardViewModel.swift; sourceTree = "<group>"; };
+		KBD000002000000000000001B /* KeyboardVoiceTyping.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = KeyboardVoiceTyping.swift; sourceTree = "<group>"; };
 		KBD0000020000000000000003 /* KeyboardRootView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = KeyboardRootView.swift; sourceTree = "<group>"; };
 		KBD0000020000000000000004 /* KeyboardLayoutView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = KeyboardLayoutView.swift; sourceTree = "<group>"; };
 		KBD0000020000000000000005 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
@@ -553,6 +555,7 @@
 			children = (
 				KBD0000020000000000000001 /* KeyboardViewController.swift */,
 				KBD0000020000000000000002 /* KeyboardViewModel.swift */,
+				KBD000002000000000000001B /* KeyboardVoiceTyping.swift */,
 				KBD0000020000000000000003 /* KeyboardRootView.swift */,
 				KBD0000020000000000000004 /* KeyboardLayoutView.swift */,
 				KBD0000020000000000000005 /* Info.plist */,
@@ -759,6 +762,7 @@
 			files = (
 				KBD0000010000000000000001 /* KeyboardViewController.swift in Sources */,
 				KBD0000010000000000000002 /* KeyboardViewModel.swift in Sources */,
+				KBD000001000000000000000B /* KeyboardVoiceTyping.swift in Sources */,
 				KBD0000010000000000000003 /* KeyboardRootView.swift in Sources */,
 				KBD0000010000000000000004 /* KeyboardLayoutView.swift in Sources */,
 				KBD0000010000000000000005 /* CompanionCredentials.swift in Sources */,
@@ -904,7 +908,7 @@
 				CODE_SIGNING_REQUIRED = NO;
 				CODE_SIGN_IDENTITY = "";
 				CODE_SIGNING_STYLE = Manual;
-				CURRENT_PROJECT_VERSION = 74;
+				CURRENT_PROJECT_VERSION = 75;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = NOCOAIKeyboard/Info.plist;
 				INFOPLIST_KEY_CFBundleDisplayName = "NOCO AI";
@@ -933,7 +937,7 @@
 				CODE_SIGNING_REQUIRED = NO;
 				CODE_SIGN_IDENTITY = "";
 				CODE_SIGNING_STYLE = Manual;
-				CURRENT_PROJECT_VERSION = 74;
+				CURRENT_PROJECT_VERSION = 75;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = NOCOAIKeyboard/Info.plist;
 				INFOPLIST_KEY_CFBundleDisplayName = "NOCO AI";
@@ -998,7 +1002,7 @@
 				CODE_SIGN_ENTITLEMENTS = NOCOAI/NOCOAI.entitlements;
 				CODE_SIGNING_ALLOWED = NO;
 				CODE_SIGNING_REQUIRED = NO;
-				CURRENT_PROJECT_VERSION = 74;
+				CURRENT_PROJECT_VERSION = 75;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = NOCOAI/Info.plist;
@@ -1032,7 +1036,7 @@
 				CODE_SIGN_ENTITLEMENTS = NOCOAI/NOCOAI.entitlements;
 				CODE_SIGNING_ALLOWED = NO;
 				CODE_SIGNING_REQUIRED = NO;
-				CURRENT_PROJECT_VERSION = 74;
+				CURRENT_PROJECT_VERSION = 75;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = NOCOAI/Info.plist;
@@ -1065,7 +1069,7 @@
 				CODE_SIGN_ENTITLEMENTS = NOCOAISpeakWidget/NOCOAISpeakWidget.entitlements;
 				CODE_SIGNING_ALLOWED = NO;
 				CODE_SIGNING_REQUIRED = NO;
-				CURRENT_PROJECT_VERSION = 74;
+				CURRENT_PROJECT_VERSION = 75;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = NOCOAISpeakWidget/Info.plist;
 				INFOPLIST_KEY_CFBundleDisplayName = "NOCO Voice AI";
@@ -1093,7 +1097,7 @@
 				CODE_SIGN_ENTITLEMENTS = NOCOAISpeakWidget/NOCOAISpeakWidget.entitlements;
 				CODE_SIGNING_ALLOWED = NO;
 				CODE_SIGNING_REQUIRED = NO;
-				CURRENT_PROJECT_VERSION = 74;
+				CURRENT_PROJECT_VERSION = 75;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = NOCOAISpeakWidget/Info.plist;
 				INFOPLIST_KEY_CFBundleDisplayName = "NOCO Voice AI";
@@ -1125,7 +1129,7 @@
 				CODE_SIGNING_REQUIRED = NO;
 				CODE_SIGN_IDENTITY = "";
 				CODE_SIGNING_STYLE = Manual;
-				CURRENT_PROJECT_VERSION = 74;
+				CURRENT_PROJECT_VERSION = 75;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = NOCOAIBroadcast/Info.plist;
 				INFOPLIST_KEY_CFBundleDisplayName = "NOCO Live Screen";
@@ -1154,7 +1158,7 @@
 				CODE_SIGNING_REQUIRED = NO;
 				CODE_SIGN_IDENTITY = "";
 				CODE_SIGNING_STYLE = Manual;
-				CURRENT_PROJECT_VERSION = 74;
+				CURRENT_PROJECT_VERSION = 75;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = NOCOAIBroadcast/Info.plist;
 				INFOPLIST_KEY_CFBundleDisplayName = "NOCO Live Screen";

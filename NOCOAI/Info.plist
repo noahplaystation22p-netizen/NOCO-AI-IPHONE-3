@@ -22,9 +22,9 @@
 	<key>NSCameraUsageDescription</key>
 	<string>NOCO Vision Live und die QR-Kopplung nutzen die Kamera, damit NOCO deine Umgebung verstehen und helfen kann — nur nach deiner Zustimmung.</string>
 	<key>NSMicrophoneUsageDescription</key>
-	<string>NOCO AI benötigt das Mikrofon für NOCO Voice AI (Shortcuts/Siri und In-App-Sprachmodus über deinen PC).</string>
+	<string>NOCO AI benötigt das Mikrofon für NOCO Voice AI und NOCO AI Diktat auf der Tastatur.</string>
 	<key>NSSpeechRecognitionUsageDescription</key>
-	<string>NOCO AI wandelt deine Sprache in Text um und sendet ihn an deinen Windows-PC.</string>
+	<string>NOCO AI wandelt deine Sprache in Text um — für Voice AI und KI-Diktat auf der Tastatur.</string>
 	<key>NSPhotoLibraryUsageDescription</key>
 	<string>NOCO AI benötigt Fotos und Screenshots für Bild-Uploads und NOCO Live Screen (Bildschirmhilfe) an deinen PC.</string>
 	<key>NSPhotoLibraryAddUsageDescription</key>

@@ -238,12 +238,17 @@ final class ChatStore: ObservableObject {
         if speak {
             webWire = LiveKnowledgeRouting.resolveSpeakWire(once: liveKnowledgeOnce)
         } else {
-            webWire = LiveKnowledgeRouting.resolveWire(once: liveKnowledgeOnce)
+            var wire = LiveKnowledgeRouting.resolveWire(once: liveKnowledgeOnce)
+            // Auto + current-events → force Companion web path (no silent local skip).
+            if wire == "auto", LiveKnowledgeRouting.likelyNeedsWeb(visibleAsk) {
+                wire = "on"
+            }
+            webWire = wire
         }
         liveKnowledgeOnce = nil
         let armedWeb = webWire == "on" || (webWire == "auto" && LiveKnowledgeRouting.likelyNeedsWeb(visibleAsk))
-        if speak, armedWeb {
-            // Speak path shows status via SpeakSessionController; keep chat quiet.
+        if !speak, armedWeb {
+            reconnectHint = "NOCO sucht im Internet…"
         }
 
         // Agent clarifying answers → continue previous goal
@@ -318,9 +323,11 @@ final class ChatStore: ObservableObject {
                 try? await Task.sleep(nanoseconds: 450_000_000)
                 guard !Task.isCancelled, let self else { return }
                 if self.workPhase == .understanding { self.workPhase = .analyzing }
+                if armedWeb { self.reconnectHint = "NOCO sucht im Internet…" }
                 try? await Task.sleep(nanoseconds: 900_000_000)
                 guard !Task.isCancelled else { return }
                 if self.workPhase == .analyzing { self.workPhase = .executing }
+                if armedWeb { self.reconnectHint = "NOCO verarbeitet Ergebnisse…" }
             }
 
             var sawContent = false
@@ -353,6 +360,9 @@ final class ChatStore: ObservableObject {
                                 sawContent = true
                                 phaseAdvance.cancel()
                                 workPhase = .executing
+                                reconnectHint = nil
+                            } else if reconnectHint?.contains("Internet") == true
+                                        || reconnectHint?.contains("Ergebnisse") == true {
                                 reconnectHint = nil
                             }
                             if let idx = messages.firstIndex(where: { $0.id == assistantID }) {

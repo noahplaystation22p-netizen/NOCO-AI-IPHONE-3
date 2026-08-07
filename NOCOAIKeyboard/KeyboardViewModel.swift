@@ -20,6 +20,13 @@ final class KeyboardViewModel: ObservableObject {
     @Published var askReply = ""
     @Published var isAsking = false
 
+    // MARK: NOCO AI Diktat
+    @Published var isDictating = false
+    @Published var isDictationPolishing = false
+    @Published var dictationLiveText = ""
+    @Published var dictationLevel: CGFloat = 0
+    @Published var dictationStyle: KeyboardDictationStyle = .current
+
     enum AnimationPhase: Equatable {
         case idle, thinking, writing, success
     }
@@ -39,6 +46,9 @@ final class KeyboardViewModel: ObservableObject {
     private let selectHaptic = UISelectionFeedbackGenerator()
     private let notifyHaptic = UINotificationFeedbackGenerator()
     private let heavyHaptic = UIImpactFeedbackGenerator(style: .heavy)
+    private let voiceTyping = KeyboardVoiceTyping()
+    private var dictationTickTask: Task<Void, Never>?
+    private var dictationFinishing = false
 
     func bind(controller: KeyboardViewController) {
         self.controller = controller
@@ -54,6 +64,7 @@ final class KeyboardViewModel: ObservableObject {
         toolbarChips = KeyboardChipPreferences.resolvedChips()
         hasFullAccess = controller?.hasFullAccess == true
         isConfigured = CompanionCredentials.isConfigured
+        dictationStyle = .current
         if !hasFullAccess {
             statusLine = "Vollzugriff in iPhone-Einstellungen aktivieren"
         } else if !isConfigured {
@@ -326,6 +337,158 @@ final class KeyboardViewModel: ObservableObject {
         selectHaptic.selectionChanged()
         // Open host app Voice AI via deep link (toggle)
         controller?.openURL(URL(string: "nocoai://speak")!)
+    }
+
+    /// Cycle Schnell → Intelligent → Professionell.
+    func cycleDictationStyle() {
+        dictationStyle = dictationStyle.next()
+        KeyboardDictationStyle.current = dictationStyle
+        statusLine = "Diktat: \(dictationStyle.title) — \(dictationStyle.subtitle)"
+        selectHaptic.selectionChanged()
+    }
+
+    /// Toggle NOCO AI Voice Typing: speak → instant text → KI polish.
+    func toggleDictation() {
+        if isDictating {
+            finishDictation()
+            return
+        }
+        guard hasFullAccess else {
+            statusLine = "Vollzugriff nötig für Diktat"
+            notifyHaptic.notificationOccurred(.warning)
+            return
+        }
+        guard !isProcessing, !isAsking, !isDictationPolishing else { return }
+
+        runTask?.cancel()
+        Task { @MainActor in
+            if !voiceTyping.hasPermission {
+                let ok = await voiceTyping.requestPermissions()
+                guard ok else {
+                    statusLine = voiceTyping.lastError ?? "Mikrofon / Spracherkennung erlauben"
+                    notifyHaptic.notificationOccurred(.warning)
+                    return
+                }
+            }
+            do {
+                try voiceTyping.start { [weak self] in
+                    self?.finishDictation()
+                }
+                isDictating = true
+                dictationLiveText = ""
+                statusLine = "Sprich jetzt… (\(dictationStyle.title))"
+                heavyHaptic.impactOccurred(intensity: 0.85)
+                startDictationTicker()
+            } catch {
+                statusLine = error.localizedDescription
+                notifyHaptic.notificationOccurred(.error)
+            }
+        }
+    }
+
+    private func startDictationTicker() {
+        dictationTickTask?.cancel()
+        dictationTickTask = Task { @MainActor in
+            while !Task.isCancelled, isDictating {
+                dictationLiveText = voiceTyping.liveTranscript
+                dictationLevel = voiceTyping.level
+                if !dictationLiveText.isEmpty {
+                    statusLine = dictationLiveText
+                }
+                try? await Task.sleep(nanoseconds: 80_000_000)
+            }
+        }
+    }
+
+    private func finishDictation() {
+        guard !dictationFinishing else { return }
+        guard isDictating else { return }
+        dictationFinishing = true
+        defer { dictationFinishing = false }
+
+        dictationTickTask?.cancel()
+        dictationTickTask = nil
+        let raw = voiceTyping.stop(cancel: false)
+        isDictating = false
+        dictationLevel = 0
+        guard !raw.isEmpty else {
+            statusLine = "Nichts gehört — nochmal tippen"
+            notifyHaptic.notificationOccurred(.warning)
+            return
+        }
+
+        // Instant: show spoken text immediately, then polish in background.
+        if showAskPanel {
+            askDraft += (askDraft.isEmpty ? "" : " ") + raw
+            statusLine = "Diktat im Fragefeld"
+            notifyHaptic.notificationOccurred(.success)
+            return
+        }
+
+        controller?.textDocumentProxy.insertText(raw)
+        syncDocumentSnapshot()
+
+        guard isConfigured else {
+            statusLine = "Text übernommen — App koppeln für KI-Politur"
+            notifyHaptic.notificationOccurred(.success)
+            return
+        }
+
+        statusLine = "KI formt Text…"
+        isDictationPolishing = true
+        isProcessing = true
+        showIntelligenceBurst = true
+        animationPhase = .thinking
+        overlayTitle = "NOCO AI Diktat…"
+        selectHaptic.selectionChanged()
+
+        let style = dictationStyle
+        let inserted = raw
+        runTask?.cancel()
+        runTask = Task { @MainActor in
+            defer {
+                isDictationPolishing = false
+                isProcessing = false
+            }
+            do {
+                let polished = try await KeyboardAIClient.rewrite(
+                    action: style.polishAction,
+                    text: inserted
+                )
+                if Task.isCancelled { return }
+                let final = polished.trimmingCharacters(in: .whitespacesAndNewlines)
+                guard !final.isEmpty, final != inserted else {
+                    animationPhase = .success
+                    overlayTitle = ""
+                    statusLine = "Fertig"
+                    try? await Task.sleep(nanoseconds: 350_000_000)
+                    withAnimation(.easeOut(duration: 0.28)) {
+                        showIntelligenceBurst = false
+                        animationPhase = .idle
+                    }
+                    return
+                }
+                animationPhase = .writing
+                overlayTitle = ""
+                clearCharacters(inserted.count)
+                await typewriterInsert(final)
+                animationPhase = .success
+                statusLine = "Fertig · \(style.title)"
+                notifyHaptic.notificationOccurred(.success)
+                syncDocumentSnapshot()
+                try? await Task.sleep(nanoseconds: 420_000_000)
+                withAnimation(.easeOut(duration: 0.28)) {
+                    showIntelligenceBurst = false
+                    animationPhase = .idle
+                }
+            } catch {
+                if Task.isCancelled { return }
+                showIntelligenceBurst = false
+                animationPhase = .idle
+                statusLine = "Text übernommen (KI kurz offline)"
+                notifyHaptic.notificationOccurred(.warning)
+            }
+        }
     }
 
     func openAppForSync() {

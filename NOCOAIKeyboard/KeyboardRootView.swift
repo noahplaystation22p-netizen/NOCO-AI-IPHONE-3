@@ -20,7 +20,7 @@ struct KeyboardRootView: View {
         .padding(.top, 4)
         .background(keyboardBackground)
         .overlay {
-            if model.isProcessing || model.showIntelligenceBurst || model.isAsking {
+            if model.isProcessing || model.showIntelligenceBurst || model.isAsking || model.isDictationPolishing {
                 IntelligenceRewriteOverlay(
                     phase: model.animationPhase,
                     title: model.overlayTitle
@@ -35,6 +35,8 @@ struct KeyboardRootView: View {
         .animation(.spring(response: 0.45, dampingFraction: 0.8), value: model.showIntelligenceBurst)
         .animation(.spring(response: 0.38, dampingFraction: 0.86), value: model.showAskPanel)
         .animation(.easeInOut(duration: 0.22), value: model.animationPhase)
+        .animation(.easeInOut(duration: 0.15), value: model.isDictating)
+        .animation(.easeOut(duration: 0.12), value: model.dictationLevel)
     }
 
     // MARK: - Header
@@ -77,15 +79,78 @@ struct KeyboardRootView: View {
 
             Spacer(minLength: 0)
 
-            if model.isProcessing {
-                Text("arbeitet…")
+            if model.isProcessing && !model.isDictating {
+                Text(model.isDictationPolishing ? "formt…" : "arbeitet…")
                     .font(.system(size: 10, weight: .medium, design: .rounded))
                     .foregroundStyle(.secondary)
                     .transition(.opacity)
             }
+
+            dictationMicButton
         }
         .padding(.horizontal, 14)
         .padding(.bottom, 2)
+    }
+
+    private var dictationMicButton: some View {
+        Button {
+            model.toggleDictation()
+        } label: {
+            ZStack {
+                if model.isDictating || model.isDictationPolishing {
+                    Circle()
+                        .stroke(
+                            AngularGradient(
+                                colors: [
+                                    Color(red: 1.0, green: 0.45, blue: 0.55),
+                                    Color(red: 1.0, green: 0.75, blue: 0.35),
+                                    Color(red: 0.45, green: 0.9, blue: 0.55),
+                                    Color(red: 0.4, green: 0.75, blue: 1.0),
+                                    Color(red: 0.7, green: 0.5, blue: 1.0),
+                                    Color(red: 1.0, green: 0.45, blue: 0.55)
+                                ],
+                                center: .center
+                            ),
+                            lineWidth: 2.2
+                        )
+                        .frame(width: 34, height: 34)
+                        .scaleEffect(model.isDictating ? 1.0 + model.dictationLevel * 0.18 : 1.05)
+                        .opacity(0.95)
+                }
+
+                Circle()
+                    .fill(
+                        model.isDictating
+                        ? Color(red: 0.95, green: 0.28, blue: 0.32)
+                        : Color.white.opacity(0.12)
+                    )
+                    .frame(width: 30, height: 30)
+
+                Image(systemName: model.isDictating ? "waveform" : "mic.fill")
+                    .font(.system(size: 13, weight: .semibold))
+                    .foregroundStyle(model.isDictating ? Color.white : Color.white.opacity(0.92))
+                    .symbolEffect(.pulse, options: .repeating, isActive: model.isDictating)
+            }
+            .frame(width: 36, height: 36)
+            .contentShape(Circle())
+        }
+        .buttonStyle(SoftPressStyle())
+        .contextMenu {
+            ForEach(KeyboardDictationStyle.allCases) { style in
+                Button {
+                    model.dictationStyle = style
+                    KeyboardDictationStyle.current = style
+                    model.statusLine = "Diktat: \(style.title)"
+                } label: {
+                    Label(style.title, systemImage: style == model.dictationStyle ? "checkmark" : "mic")
+                    Text(style.subtitle)
+                }
+            }
+        }
+        .disabled(model.isAsking || (model.isProcessing && !model.isDictating && !model.isDictationPolishing))
+        .opacity(model.isAsking ? 0.45 : 1)
+        .accessibilityLabel("NOCO AI Diktat")
+        .accessibilityHint("Tippen zum Diktieren. Lange drücken für Schnell, Intelligent oder Professionell.")
     }
 
     // MARK: - Toolbar chips

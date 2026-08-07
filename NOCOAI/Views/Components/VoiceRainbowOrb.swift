@@ -338,22 +338,28 @@ struct SpeakVoiceMiniMeter: View {
     var bands: [CGFloat]
 
     var body: some View {
-        HStack(alignment: .center, spacing: 3) {
-            ForEach(0..<min(9, max(bands.count, 5)), id: \.self) { i in
-                let v = i < bands.count ? bands[i] : level
-                Capsule()
-                    .fill(
-                        LinearGradient(
-                            colors: [NOCORainbow.blue, NOCORainbow.violet, NOCORainbow.mint],
-                            startPoint: .bottom,
-                            endPoint: .top
-                        )
-                    )
-                    .frame(width: 3, height: max(4, CGFloat(v) * 16 + level * 4))
-                    .opacity(0.5 + Double(v) * 0.5)
+        let count = min(9, max(bands.count, 5))
+        return HStack(alignment: .center, spacing: 3) {
+            ForEach(0..<count, id: \.self) { i in
+                meterBar(at: i)
             }
         }
         .animation(.easeOut(duration: 0.08), value: level)
+    }
+
+    private func meterBar(at i: Int) -> some View {
+        let v: CGFloat = i < bands.count ? bands[i] : level
+        let height = max(4, v * 16 + level * 4)
+        return Capsule()
+            .fill(
+                LinearGradient(
+                    colors: [NOCORainbow.blue, NOCORainbow.violet],
+                    startPoint: .bottom,
+                    endPoint: .top
+                )
+            )
+            .frame(width: 3, height: height)
+            .opacity(0.5 + Double(v) * 0.5)
     }
 }
 
@@ -374,12 +380,10 @@ struct VoiceLivingTranscript: View {
     @State private var glow = false
 
     var body: some View {
-        Text(text)
-            .font(.body.weight(style == .speaking ? .medium : .regular))
+        styledText
             .multilineTextAlignment(.center)
-            .foregroundStyle(foreground)
             .shadow(color: glowColor.opacity(glowOpacity), radius: glowRadius)
-            .scaleEffect(scale)
+            .scaleEffect(textScale)
             .contentTransition(.opacity)
             .animation(.easeOut(duration: 0.18), value: text)
             .animation(.easeInOut(duration: 0.35), value: style)
@@ -387,32 +391,41 @@ struct VoiceLivingTranscript: View {
             .onChange(of: style) { _, _ in armGlow() }
     }
 
-    private var foreground: some ShapeStyle {
+    @ViewBuilder
+    private var styledText: some View {
         switch style {
         case .speaking:
-            return AnyShapeStyle(
-                LinearGradient(
-                    colors: [
-                        Color.primary.opacity(0.95),
-                        NOCORainbow.violet.opacity(0.9),
-                        NOCORainbow.blue.opacity(0.85)
-                    ],
-                    startPoint: .topLeading,
-                    endPoint: .bottomTrailing
+            Text(text)
+                .font(.body.weight(.medium))
+                .foregroundStyle(
+                    LinearGradient(
+                        colors: [
+                            Color.primary.opacity(0.95),
+                            NOCORainbow.violet.opacity(0.88),
+                            NOCORainbow.blue.opacity(0.82)
+                        ],
+                        startPoint: .topLeading,
+                        endPoint: .bottomTrailing
+                    )
                 )
-            )
-        case .listening:
-            return AnyShapeStyle(Color.primary.opacity(0.92))
         case .thinking:
-            return AnyShapeStyle(
-                LinearGradient(
-                    colors: [NOCORainbow.blue, NOCORainbow.violet, NOCORainbow.pink],
-                    startPoint: .leading,
-                    endPoint: .trailing
+            Text(text)
+                .font(.body.weight(.medium))
+                .foregroundStyle(
+                    LinearGradient(
+                        colors: [NOCORainbow.blue, NOCORainbow.violet, NOCORainbow.pink],
+                        startPoint: .leading,
+                        endPoint: .trailing
+                    )
                 )
-            )
+        case .listening:
+            Text(text)
+                .font(.body)
+                .foregroundStyle(Color.primary.opacity(0.92))
         case .idle:
-            return AnyShapeStyle(Color.primary.opacity(0.78))
+            Text(text)
+                .font(.body)
+                .foregroundStyle(Color.primary.opacity(0.78))
         }
     }
 
@@ -444,7 +457,7 @@ struct VoiceLivingTranscript: View {
         }
     }
 
-    private var scale: CGFloat {
+    private var textScale: CGFloat {
         guard !reduceMotion else { return 1 }
         switch style {
         case .speaking: return glow ? 1.012 : 1
@@ -456,7 +469,8 @@ struct VoiceLivingTranscript: View {
     private func armGlow() {
         guard !reduceMotion else { return }
         glow = false
-        withAnimation(.easeInOut(duration: style == .thinking ? 1.1 : 1.6).repeatForever(autoreverses: true)) {
+        let duration = style == .thinking ? 1.1 : 1.6
+        withAnimation(.easeInOut(duration: duration).repeatForever(autoreverses: true)) {
             glow = true
         }
     }

@@ -15,9 +15,9 @@ struct KeyboardRootView: View {
             statusBar
             KeyboardLayoutView(model: model)
                 .padding(.horizontal, 2)
-                .padding(.bottom, 4)
+                .padding(.bottom, 10)
         }
-        .padding(.top, 4)
+        .padding(.top, 8)
         .background(keyboardBackground)
         .overlay {
             if model.isProcessing || model.showIntelligenceBurst || model.isAsking || model.isDictationPolishing {

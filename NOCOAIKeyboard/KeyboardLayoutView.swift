@@ -14,9 +14,9 @@ struct KeyboardLayoutView: View {
     private let num3 = Array(".,?!ß'")
 
     /// Match stock iOS key rhythm (familiar muscle memory).
-    private let rowSpacing: CGFloat = 11
+    private let rowSpacing: CGFloat = 10
     private let keySpacing: CGFloat = 6
-    private let keyHeight: CGFloat = 42
+    private let keyHeight: CGFloat = 44
 
     var body: some View {
         VStack(spacing: rowSpacing) {
@@ -26,9 +26,9 @@ struct KeyboardLayoutView: View {
                 lettersLayout
             }
         }
-        .padding(.horizontal, 3)
-        .padding(.top, 4)
-        .padding(.bottom, 2)
+        .padding(.horizontal, 4)
+        .padding(.top, 8)
+        .padding(.bottom, 8)
         .animation(.easeOut(duration: 0.15), value: model.showingNumbers)
     }
 
@@ -216,7 +216,7 @@ private struct LetterKey: View {
 
     var body: some View {
         Text(label)
-            .font(.system(size: 22.5, weight: .regular, design: .rounded))
+            .font(.system(size: letterSize, weight: isUppercaseLetter ? .medium : .regular, design: .rounded))
             .foregroundStyle(.white)
             .frame(maxWidth: .infinity)
             .frame(height: height)
@@ -243,13 +243,22 @@ private struct LetterKey: View {
             }
             .zIndex(pressed ? 40 : 0)
             // Slightly taller hitbox than visible key for fast typing accuracy
-            .padding(.vertical, 2)
+            .padding(.vertical, 3)
             .contentShape(Rectangle())
             .gesture(
                 DragGesture(minimumDistance: 0)
                     .onChanged(handleChanged)
                     .onEnded(handleEnded)
             )
+    }
+
+    private var isUppercaseLetter: Bool {
+        guard let c = label.first, c.isLetter else { return false }
+        return label == label.uppercased() && label != label.lowercased()
+    }
+
+    private var letterSize: CGFloat {
+        isUppercaseLetter ? 26 : 23
     }
 
     @ViewBuilder

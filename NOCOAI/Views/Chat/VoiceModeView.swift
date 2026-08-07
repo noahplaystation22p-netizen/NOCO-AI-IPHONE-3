@@ -300,13 +300,12 @@ struct VoiceModeView: View {
                     RoundedRectangle(cornerRadius: 28, style: .continuous)
                         .fill(.ultraThinMaterial)
                     RoundedRectangle(cornerRadius: 28, style: .continuous)
+                        .fill(Color.primary.opacity(0.04))
+                    RoundedRectangle(cornerRadius: 28, style: .continuous)
                         .fill(
                             LinearGradient(
                                 colors: [
-                                    Color.white.opacity(0.14),
-                                    transcriptStyle == .speaking
-                                        ? NOCORainbow.violet.opacity(0.08)
-                                        : NOCORainbow.blue.opacity(0.05),
+                                    Color.white.opacity(0.16),
                                     Color.clear
                                 ],
                                 startPoint: .topLeading,

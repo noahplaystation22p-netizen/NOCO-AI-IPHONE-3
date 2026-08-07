@@ -666,9 +666,17 @@ private struct MessageActionRow: View {
                 }
             } label: {
                 Image(systemName: "ellipsis")
-                    .font(.system(size: 13, weight: .semibold))
-                    .foregroundStyle(.tertiary)
-                    .frame(width: 30, height: 30)
+                    .font(.system(size: 15, weight: .bold))
+                    .foregroundStyle(Color.primary.opacity(0.72))
+                    .frame(width: 34, height: 34)
+                    .background(
+                        Circle()
+                            .fill(Color.primary.opacity(0.08))
+                    )
+                    .overlay(
+                        Circle()
+                            .stroke(Color.primary.opacity(0.14), lineWidth: 0.8)
+                    )
             }
             .accessibilityLabel("Mehr")
         }

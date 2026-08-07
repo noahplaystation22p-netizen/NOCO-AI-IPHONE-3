@@ -374,15 +374,15 @@ struct NOCOThinkingChip: View {
         .frame(minWidth: 220, alignment: .leading)
         .background {
             RoundedRectangle(cornerRadius: 22, style: .continuous)
-                .fill(.ultraThinMaterial)
+                .fill(.regularMaterial)
                 .overlay(
                     RoundedRectangle(cornerRadius: 22, style: .continuous)
                         .fill(
                             LinearGradient(
                                 colors: [
-                                    NOCORainbow.violet.opacity(0.1),
+                                    NOCORainbow.violet.opacity(0.16),
                                     Color.clear,
-                                    NOCORainbow.blue.opacity(0.08)
+                                    NOCORainbow.blue.opacity(0.12)
                                 ],
                                 startPoint: .topLeading,
                                 endPoint: .bottomTrailing
@@ -392,11 +392,11 @@ struct NOCOThinkingChip: View {
                 .overlay(
                     RoundedRectangle(cornerRadius: 22, style: .continuous)
                         .stroke(
-                            AngularGradient(colors: NOCORainbow.flow.map { $0.opacity(0.5) }, center: .center),
-                            lineWidth: 1.15
+                            AngularGradient(colors: NOCORainbow.flow.map { $0.opacity(0.7) }, center: .center),
+                            lineWidth: 1.4
                         )
                 )
-                .shadow(color: NOCORainbow.violet.opacity(0.22), radius: 16, y: 4)
+                .shadow(color: NOCORainbow.violet.opacity(0.35), radius: 18, y: 5)
         }
         .task {
             while !Task.isCancelled {

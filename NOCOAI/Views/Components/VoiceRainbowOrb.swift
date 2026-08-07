@@ -387,95 +387,37 @@ struct VoiceLivingTranscript: View {
     var style: VoiceTranscriptStyle
     var level: CGFloat = 0
 
-    @Environment(\.accessibilityReduceMotion) private var reduceMotion
-
     var body: some View {
-        styledText
+        Text(text)
+            .font(readableFont)
+            .fontWeight(style == .speaking || style == .thinking ? .semibold : .regular)
+            .foregroundStyle(readableColor)
             .multilineTextAlignment(.center)
-            .shadow(color: glowColor.opacity(glowOpacity), radius: glowRadius)
-            .overlay {
-                if !reduceMotion, style == .speaking || style == .thinking {
-                    TimelineView(.animation(minimumInterval: 0.14, paused: false)) { timeline in
-                        let t = timeline.date.timeIntervalSinceReferenceDate
-                        let phase = t.truncatingRemainder(dividingBy: 2.6) / 2.6
-                        LinearGradient(
-                            colors: [.clear, Color.white.opacity(0.2), .clear],
-                            startPoint: UnitPoint(x: phase - 0.2, y: 0.5),
-                            endPoint: UnitPoint(x: phase + 0.2, y: 0.5)
-                        )
-                        .blendMode(.softLight)
-                        .allowsHitTesting(false)
-                    }
-                }
-            }
-            .mask(styledText)
+            .lineSpacing(3)
+            .shadow(color: Color.black.opacity(0.18), radius: 0.5, y: 0.5)
             .contentTransition(.opacity)
-            .animation(.easeOut(duration: 0.2), value: text)
-            .animation(.easeInOut(duration: 0.28), value: style)
+            .animation(.easeOut(duration: 0.18), value: text)
     }
 
-    @ViewBuilder
-    private var styledText: some View {
+    private var readableFont: Font {
+        switch style {
+        case .speaking, .thinking:
+            return .system(.body, design: .rounded)
+        default:
+            return .body
+        }
+    }
+
+    private var readableColor: Color {
         switch style {
         case .speaking:
-            Text(text)
-                .font(.body.weight(.medium))
-                .foregroundStyle(
-                    LinearGradient(
-                        colors: [
-                            Color.primary.opacity(0.95),
-                            NOCORainbow.violet.opacity(0.88),
-                            NOCORainbow.blue.opacity(0.82)
-                        ],
-                        startPoint: .topLeading,
-                        endPoint: .bottomTrailing
-                    )
-                )
+            return Color.primary.opacity(0.96)
         case .thinking:
-            Text(text)
-                .font(.body.weight(.medium))
-                .foregroundStyle(
-                    LinearGradient(
-                        colors: [NOCORainbow.blue, NOCORainbow.violet, NOCORainbow.pink],
-                        startPoint: .leading,
-                        endPoint: .trailing
-                    )
-                )
+            return Color.primary.opacity(0.9)
         case .listening:
-            Text(text)
-                .font(.body)
-                .foregroundStyle(Color.primary.opacity(0.92))
+            return Color.primary.opacity(0.92)
         case .idle:
-            Text(text)
-                .font(.body)
-                .foregroundStyle(Color.primary.opacity(0.78))
-        }
-    }
-
-    private var glowColor: Color {
-        switch style {
-        case .speaking: return NOCORainbow.violet
-        case .listening: return NOCORainbow.blue
-        case .thinking: return NOCORainbow.pink
-        case .idle: return .clear
-        }
-    }
-
-    private var glowOpacity: Double {
-        switch style {
-        case .speaking: return 0.2
-        case .listening: return 0.1 + Double(min(level, 1)) * 0.16
-        case .thinking: return 0.16
-        case .idle: return 0
-        }
-    }
-
-    private var glowRadius: CGFloat {
-        switch style {
-        case .speaking: return 8
-        case .listening: return 4
-        case .thinking: return 7
-        case .idle: return 0
+            return Color.primary.opacity(0.78)
         }
     }
 }

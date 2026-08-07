@@ -24,7 +24,7 @@ struct IntelligenceVoiceStage: View {
         case .thinking, .webSearch: return 0.82
         case .speaking: return 0.85 + Double(level) * 0.15
         case .working, .vision: return 0.8
-        case .error, .idle, .success: return 0.35
+        case .idle, .success: return 0.35
         }
     }
 

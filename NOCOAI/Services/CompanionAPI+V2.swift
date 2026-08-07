@@ -439,6 +439,11 @@ extension CompanionAPI {
                 var request = try authorizedRequest(path: path, method: "POST")
                 request.setValue("application/json", forHTTPHeaderField: "Content-Type")
                 request.timeoutInterval = 480
+                request.httpBody = try encoder.encode(body)
+                let (data, response) = try await session.data(for: request)
+                try validate(response: response, data: data, isPairRequest: false)
+                return try decoder.decode(ImageGenerateResponse.self, from: data)
+            } catch {
                 lastError = error
                 let msg = (error as? LocalizedError)?.errorDescription?.lowercased() ?? ""
                 if msg.contains("unbekannte") || msg.contains("route") || msg.contains("404") {

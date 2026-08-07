@@ -469,7 +469,7 @@ final class VoiceService: NSObject, ObservableObject {
     }
 
     /// If amplified TTS stalls (chunk counters never reach 0), force-finish so mic can reopen.
-    func forceFinishIfSpeakingStuck(maxDuration: TimeInterval = 40) {
+    func forceFinishIfSpeakingStuck(maxDuration: TimeInterval = 90) {
         guard case .speaking = phase else { return }
         let started = speakingStartedAt ?? .distantPast
         guard Date().timeIntervalSince(started) >= maxDuration else { return }
@@ -813,8 +813,8 @@ final class VoiceService: NSObject, ObservableObject {
         let quietFor = now.timeIntervalSince(lastActivity)
         let spokenLongEnough = speechStartAt.map { now.timeIntervalSince($0) >= 0.55 } ?? false
         let stable = lastTranscriptChangeAt.map { now.timeIntervalSince($0) >= 0.45 } ?? false
-        // Need clear user speech + short pause so we don't cut mid-user-word either.
-        guard spokenLongEnough, stable, quietFor >= 0.35 else { return }
+        // Need clear user speech + a solid pause so we don't cut TTS mid-sentence.
+        guard spokenLongEnough, stable, quietFor >= 0.55 else { return }
 
         autoFinishArmed = false
         bargeInArmed = false
@@ -829,8 +829,8 @@ final class VoiceService: NSObject, ObservableObject {
     private func scheduleBargeInArming() {
         bargeInTask?.cancel()
         bargeInTask = Task { [weak self] in
-            // Let the first phrase settle so we don't interrupt ourselves.
-            try? await Task.sleep(nanoseconds: 750_000_000)
+            // Longer settle so TTS is not clipped by echo / partial self-hearing.
+            try? await Task.sleep(nanoseconds: 1_450_000_000)
             guard let self, !Task.isCancelled else { return }
             await MainActor.run {
                 guard case .speaking = self.phase, self.bargeInArmed else { return }

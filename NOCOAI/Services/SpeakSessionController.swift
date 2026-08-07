@@ -1,4 +1,4 @@
-import Foundation
+﻿import Foundation
 import SwiftUI
 import UIKit
 import Combine
@@ -42,10 +42,10 @@ final class SpeakSessionController: ObservableObject {
     private var cancellables = Set<AnyCancellable>()
     /// While true: never reopen the mic (reply TTS / farewell in progress).
     private var holdMicForTTS = false
-    /// Set when shutting down Voice AI — skip resume-listening.
+    /// Set when shutting down Voice AI â€” skip resume-listening.
     private var isExiting = false
 
-    /// Live Screen / vision gate — true while Speak is busy or TTS is playing.
+    /// Live Screen / vision gate â€” true while Speak is busy or TTS is playing.
     var isBusyForVision: Bool {
         if isBusy { return true }
         if case .speaking = voice.phase { return true }
@@ -100,7 +100,7 @@ final class SpeakSessionController: ObservableObject {
         }
         voice.onSpeakFinished = { [weak self] in
             guard let self else { return }
-            // Don't reopen mic while TTS hold / exit — watchdog owns the delayed resume
+            // Don't reopen mic while TTS hold / exit â€” watchdog owns the delayed resume
             // so the last syllable isn't cut and the user can't barge in too early.
             if self.isExiting || !self.isRunning {
                 self.holdMicForTTS = false
@@ -129,7 +129,7 @@ final class SpeakSessionController: ObservableObject {
 
     func start() {
         guard let connection, connection.isOnline else {
-            statusLine = "PC offline — erst verbinden"
+            statusLine = "PC offline â€” erst verbinden"
             return
         }
         Task { @MainActor in
@@ -140,7 +140,7 @@ final class SpeakSessionController: ObservableObject {
     private func startAsync(connection: ConnectionStore) async {
         isExiting = false
         holdMicForTTS = false
-        // 1) Live Activity FIRST — Lock Screen banner + Dynamic Island
+        // 1) Live Activity FIRST â€” Lock Screen banner + Dynamic Island
         let liveOk = await SpeakLiveActivityManager.startAndWait(sessionLabel: "NOCO Voice AI")
         do {
             try voice.activateBackgroundAudioSession()
@@ -149,7 +149,7 @@ final class SpeakSessionController: ObservableObject {
             isMuted = false
             voice.setMuted(false)
             voice.sessionActive = true
-            // Voice AI always speaks replies — that's the product.
+            // Voice AI always speaks replies â€” that's the product.
             voice.autoSpeakReplies = true
             beginBackgroundKeepAlive()
             startBackgroundRenewLoop()
@@ -160,11 +160,11 @@ final class SpeakSessionController: ObservableObject {
             statusLine = liveOk
                 ? "NOCO Voice AI aktiviert"
                 : (SpeakLiveActivityManager.areActivitiesEnabled
-                    ? "Zuhören aktiv · Live Activity prüfen"
-                    : "Zuhören aktiv · Live Activities aktivieren")
+                    ? "ZuhÃ¶ren aktiv Â· Live Activity prÃ¼fen"
+                    : "ZuhÃ¶ren aktiv Â· Live Activities aktivieren")
             VoiceAISessionState.publish(active: true, micOn: true, islandOn: liveOk)
             pushLiveActivity(force: true)
-            // Second ensure — some devices need a follow-up update
+            // Second ensure â€” some devices need a follow-up update
             try? await Task.sleep(nanoseconds: 200_000_000)
             if isRunning {
                 if !SpeakLiveActivityManager.isActive {
@@ -229,7 +229,7 @@ final class SpeakSessionController: ObservableObject {
         isExiting = false
     }
 
-    /// Stop button / Shortcut / Action Button — instant, silent, no farewell.
+    /// Stop button / Shortcut / Action Button â€” instant, silent, no farewell.
     func exitVoiceAISilent() {
         isExiting = true
         holdMicForTTS = false
@@ -267,12 +267,12 @@ final class SpeakSessionController: ObservableObject {
         connection?.pendingTab = 0
     }
 
-    /// UI Stop button — silent immediate exit back to Chat.
+    /// UI Stop button â€” silent immediate exit back to Chat.
     func exitSpeakToChat() {
         exitVoiceAISilent()
     }
 
-    /// Spoken farewell exit — only for voice commands like "Voice AI beenden".
+    /// Spoken farewell exit â€” only for voice commands like "Voice AI beenden".
     func exitVoiceAIGracefully() async {
         await exitVoiceAI(spokenFarewell: true)
     }
@@ -304,7 +304,7 @@ final class SpeakSessionController: ObservableObject {
             force: true,
             titleOverride: "Voice AI beendet"
         )
-        // Brief spoken close — no mic reopen afterward.
+        // Brief spoken close â€” no mic reopen afterward.
         if voice.autoSpeakReplies {
             lastReply = "Alles klar, Voice AI beendet."
             voice.speak(lastReply, allowBargeIn: false)
@@ -342,11 +342,11 @@ final class SpeakSessionController: ObservableObject {
         voice.setMuted(muted)
         if muted {
             resumeTask?.cancel()
-            statusLine = "Stumm — Antwort wird vorgelesen, Mic aus"
+            statusLine = "Stumm â€” Antwort wird vorgelesen, Mic aus"
             pushLiveActivity(force: true)
             HapticService.soft()
         } else if isRunning {
-            statusLine = "Mic an — sprich, kurze Pause sendet"
+            statusLine = "Mic an â€” sprich, kurze Pause sendet"
             scheduleResumeListening(after: 0.2)
             HapticService.medium()
         }
@@ -356,7 +356,7 @@ final class SpeakSessionController: ObservableObject {
         endBackgroundKeepAlive()
         bgTask = UIApplication.shared.beginBackgroundTask(withName: "NOCO Voice AI") { [weak self] in
             Task { @MainActor in
-                // Renew instead of dying — continuous audio needs a fresh BG task.
+                // Renew instead of dying â€” continuous audio needs a fresh BG task.
                 self?.beginBackgroundKeepAlive()
             }
         }
@@ -402,26 +402,26 @@ final class SpeakSessionController: ObservableObject {
     private func ensureListeningHealthy() {
         guard isRunning, !isExiting, !isMuted else { return }
 
-        // Stuck busy without TTS → recover so the next question can send.
+        // Stuck busy without TTS â†’ recover so the next question can send.
         if isBusy, holdMicForTTS == false,
            let since = busySince,
            Date().timeIntervalSince(since) > 48 {
             if case .speaking = voice.phase {
-                voice.forceFinishIfSpeakingStuck(maxDuration: 38)
+                voice.forceFinishIfSpeakingStuck(maxDuration: 90)
                 return
             }
             setBusy(false)
             holdMicForTTS = false
             invalidateTurn()
             connection?.chat.cancelSpeakSend()
-            statusLine = "NOCO hört wieder zu…"
+            statusLine = "NOCO hÃ¶rt wieder zuâ€¦"
             scheduleResumeListening(after: 0.1)
             return
         }
 
-        // TTS hold stuck forever → force end and reopen mic.
+        // TTS hold stuck forever â†’ force end and reopen mic.
         if holdMicForTTS, case .speaking = voice.phase {
-            voice.forceFinishIfSpeakingStuck(maxDuration: 38)
+            voice.forceFinishIfSpeakingStuck(maxDuration: 90)
         }
 
         guard !holdMicForTTS, !isBusy else { return }
@@ -431,8 +431,8 @@ final class SpeakSessionController: ObservableObject {
             voice.refreshRecognitionIfStale(maxAge: 45)
             return
         }
-        // Idle / error / dead recognition → reopen mic (common after background TTS).
-        statusLine = "NOCO hört wieder zu…"
+        // Idle / error / dead recognition â†’ reopen mic (common after background TTS).
+        statusLine = "NOCO hÃ¶rt wieder zuâ€¦"
         scheduleResumeListening(after: 0.05)
     }
 
@@ -446,16 +446,16 @@ final class SpeakSessionController: ObservableObject {
             SpeakLiveActivityManager.start()
         }
         pushLiveActivity(force: true)
-        // Critical: reopen mic if TTS→listen failed while app was backgrounded.
+        // Critical: reopen mic if TTSâ†’listen failed while app was backgrounded.
         if !isMuted, !holdMicForTTS, !isBusy, !voice.isActivelyListening {
             if case .speaking = voice.phase { return }
             scheduleResumeListening(after: 0.15)
         }
         statusLine = isMuted
-            ? "Stumm · Live Activity aktiv"
+            ? "Stumm Â· Live Activity aktiv"
             : (voice.isActivelyListening
-                ? "Voice AI · Sperrbildschirm / Island"
-                : "NOCO hört zu…")
+                ? "Voice AI Â· Sperrbildschirm / Island"
+                : "NOCO hÃ¶rt zuâ€¦")
     }
 
     /// Reliable re-listen after TTS (debounce + settle delay). Longer in background.
@@ -480,7 +480,7 @@ final class SpeakSessionController: ObservableObject {
                 try? await Task.sleep(nanoseconds: 80_000_000)
                 guard let self, !Task.isCancelled else { return }
                 let speaking = await MainActor.run { () -> Bool in
-                    self.voice.forceFinishIfSpeakingStuck(maxDuration: 38)
+                    self.voice.forceFinishIfSpeakingStuck(maxDuration: 90)
                     if case .speaking = self.voice.phase { return true }
                     return false
                 }
@@ -507,7 +507,7 @@ final class SpeakSessionController: ObservableObject {
                 self.listenRetryCount = 0
                 self.connection?.liveScreen.suppressAutoVision = false
                 self.connection?.liveScreen.resumeQueuedAnalysisIfNeeded()
-                // Re-assert audio before mic — background route after TTS is fragile.
+                // Re-assert audio before mic â€” background route after TTS is fragile.
                 try? self.voice.activateListeningAfterTTS()
                 self.resumeListening()
                 Task { await self.drainPendingUtterance() }
@@ -516,11 +516,11 @@ final class SpeakSessionController: ObservableObject {
     }
 
     private func resumeListening() {
-        // Allow mic reopen even during brief PC blips — utterance send handles offline.
+        // Allow mic reopen even during brief PC blips â€” utterance send handles offline.
         guard isRunning else { return }
         guard !isExiting, !holdMicForTTS else { return }
         guard !isMuted else {
-            statusLine = "Stumm — tippe Mute aus zum Sprechen"
+            statusLine = "Stumm â€” tippe Mute aus zum Sprechen"
             voice.phase = .idle
             pushLiveActivity(force: true)
             return
@@ -543,15 +543,15 @@ final class SpeakSessionController: ObservableObject {
             try voice.startListening(autoEnd: true)
             listenRetryCount = 0
             assistantPhase = pendingToolConfirm == nil ? .listening : .awaitingConfirm
-            statusLine = pendingToolConfirm?.confirmationQuestion ?? "NOCO hört zu"
+            statusLine = pendingToolConfirm?.confirmationQuestion ?? "NOCO hÃ¶rt zu"
             VoiceAISessionState.publish(active: true, micOn: true, islandOn: SpeakLiveActivityManager.isActive)
             pushLiveActivity(force: true)
             Task { await drainPendingUtterance() }
         } catch {
             listenRetryCount += 1
             statusLine = listenRetryCount <= 2
-                ? "Zuhören unterbrochen — nochmal…"
-                : "NOCO hört wieder zu…"
+                ? "ZuhÃ¶ren unterbrochen â€” nochmalâ€¦"
+                : "NOCO hÃ¶rt wieder zuâ€¦"
             let backoff = min(1.2, 0.2 + Double(listenRetryCount) * 0.18)
             scheduleResumeListening(after: backoff)
         }
@@ -583,11 +583,11 @@ final class SpeakSessionController: ObservableObject {
         if case .speaking = voice.phase {
             return
         }
-        // Only gate on real work — VoiceService sets .processing before callback,
+        // Only gate on real work â€” VoiceService sets .processing before callback,
         // which previously parked every utterance forever in pendingUtterance.
         if isBusy {
             pendingUtterance = trimmed
-            statusLine = "Einen Moment…"
+            statusLine = "Einen Momentâ€¦"
             return
         }
         await handleUtterance(trimmed)
@@ -597,10 +597,10 @@ final class SpeakSessionController: ObservableObject {
         }
     }
 
-    /// User spoke over the assistant — soft-stop reply, prioritize their turn.
+    /// User spoke over the assistant â€” soft-stop reply, prioritize their turn.
     private func handleBargeIn(_ text: String) async {
         guard isRunning, !isExiting else { return }
-        statusLine = "Ich höre zu…"
+        statusLine = "Ich hÃ¶re zuâ€¦"
         assistantPhase = .listening
         pushLiveActivity(force: true)
 
@@ -641,7 +641,7 @@ final class SpeakSessionController: ObservableObject {
             if SpeakIntentEngine.isDenial(text) {
                 pendingToolConfirm = nil
                 pendingToolOriginal = nil
-                await speakBrief("Alles klar — ich starte nichts.", connection: connection)
+                await speakBrief("Alles klar â€” ich starte nichts.", connection: connection)
                 return
             }
             // New request replaces pending confirm.
@@ -792,7 +792,7 @@ final class SpeakSessionController: ObservableObject {
         let spoken = reply?.trimmingCharacters(in: .whitespacesAndNewlines)
         let final = (spoken?.isEmpty == false)
             ? spoken!
-            : "Das Bild ist fertig — du findest es im Chat."
+            : "Das Bild ist fertig â€” du findest es im Chat."
         await finishWithReply(final, connection: connection, turn: turn)
     }
 
@@ -816,7 +816,7 @@ final class SpeakSessionController: ObservableObject {
         if let reply, !reply.isEmpty {
             spoken = String(reply.prefix(900))
         } else {
-            spoken = "Die Aufgabe läuft im Chat weiter. Schau dort kurz nach."
+            spoken = "Die Aufgabe lÃ¤uft im Chat weiter. Schau dort kurz nach."
         }
         await finishWithReply(spoken, connection: connection, turn: turn)
     }
@@ -824,21 +824,21 @@ final class SpeakSessionController: ObservableObject {
     private func handleMagicEraser(ack: String, connection: ConnectionStore, turn: UInt64) async {
         guard turnIsLive(turn) else { setBusy(false); return }
         assistantPhase = .thinking
-        statusLine = "🪄 Öffne Magischen Radierer…"
+        statusLine = "ðŸª„ Ã–ffne Magischen Radiererâ€¦"
         pushLiveActivity(force: true)
         connection.pendingOpenEraser = true
         connection.pendingTab = 1
         showSpeakUI = false
-        await finishWithReply(ack.isEmpty ? "Ich öffne den Magischen Radierer." : ack, connection: connection, turn: turn)
+        await finishWithReply(ack.isEmpty ? "Ich Ã¶ffne den Magischen Radierer." : ack, connection: connection, turn: turn)
     }
 
     private func handleSummarize(originalText: String, style: SpeakStyleHints, connection: ConnectionStore, turn: UInt64) async {
         guard turnIsLive(turn) else { setBusy(false); return }
         assistantPhase = .thinking
         let prompt = """
-        [NOCO SPEAK · ZUSAMMENFASSUNG]
+        [NOCO SPEAK Â· ZUSAMMENFASSUNG]
         Erstelle eine klare, gesprochene Zusammenfassung auf Deutsch.
-        \(style.shorter ? "Besonders knapp." : "Präzise, aber gut hörbar.")
+        \(style.shorter ? "Besonders knapp." : "PrÃ¤zise, aber gut hÃ¶rbar.")
         Auftrag: \(originalText)
         """
         let reply = await connection.chat.sendAndReturnReply(
@@ -862,7 +862,7 @@ final class SpeakSessionController: ObservableObject {
 
         var jpeg = pendingVisionJPEG
         pendingVisionJPEG = nil
-        // Prefer a fresh frame when camera/screen is live — seamless Vision.
+        // Prefer a fresh frame when camera/screen is live â€” seamless Vision.
         if jpeg == nil, let image = visionFrameProvider?() {
             jpeg = image.jpegData(compressionQuality: 0.78)
         }
@@ -877,20 +877,20 @@ final class SpeakSessionController: ObservableObject {
 
         guard let jpeg else {
             let tip = visionCameraEnabled || screenShareEnabled
-                ? "Ich brauche noch ein klares Bild — tippe kurz auf Snapshot."
+                ? "Ich brauche noch ein klares Bild â€” tippe kurz auf Snapshot."
                 : "Aktiviere Kamera oder Bildschirm, dann frag nochmal."
             await finishWithReply(tip, connection: connection, turn: turn)
             return
         }
 
-        statusLine = screenShareEnabled ? "👁 Analysiere Bildschirm…" : "👁 Analysiere Bild…"
+        statusLine = screenShareEnabled ? "ðŸ‘ Analysiere Bildschirmâ€¦" : "ðŸ‘ Analysiere Bildâ€¦"
         ImageLiveActivityManager.start(
-            prompt: screenShareEnabled ? "Live Screen · Speak" : "Vision · Speak",
+            prompt: screenShareEnabled ? "Live Screen Â· Speak" : "Vision Â· Speak",
             owner: .speakVision
         )
         ImageLiveActivityManager.update(
             progress: 0.35,
-            status: "Analysiere…",
+            status: "Analysiereâ€¦",
             insight: String(originalText.prefix(60)),
             etaSeconds: 8,
             phase: .rendering,
@@ -971,7 +971,7 @@ final class SpeakSessionController: ObservableObject {
         var resolved = reply.trimmingCharacters(in: .whitespacesAndNewlines)
         if resolved.isEmpty, let allowRetry {
             consecutiveFailures += 1
-            statusLine = "Verbindung wird wiederhergestellt…"
+            statusLine = "Verbindung wird wiederhergestelltâ€¦"
             assistantPhase = .thinking
             voice.phase = .processing
             pushLiveActivity(force: true)
@@ -1013,7 +1013,7 @@ final class SpeakSessionController: ObservableObject {
             lastReply = resolved
             try? await Task.sleep(nanoseconds: 100_000_000)
             guard turnIsLive(turn) else { setBusy(false); return }
-            // Always speak in Voice AI — hold mic until TTS fully finishes.
+            // Always speak in Voice AI â€” hold mic until TTS fully finishes.
             statusLine = SpeakActivityPhase.speaking.title
             assistantPhase = .speaking
             pushLiveActivity(force: true)
@@ -1031,7 +1031,7 @@ final class SpeakSessionController: ObservableObject {
         }
     }
 
-    /// Short spoken bridge while work continues — does not resume the mic.
+    /// Short spoken bridge while work continues â€” does not resume the mic.
     private func speakFillerPhrase(_ text: String, turn: UInt64? = nil) async {
         let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty, voice.autoSpeakReplies else { return }
@@ -1041,7 +1041,7 @@ final class SpeakSessionController: ObservableObject {
         lastReply = trimmed
         statusLine = trimmed
         pushLiveActivity(force: true)
-        // Short ack — no barge-in (avoids racing the in-flight turn).
+        // Short ack â€” no barge-in (avoids racing the in-flight turn).
         voice.speak(trimmed, allowBargeIn: false)
         for _ in 0..<100 {
             try? await Task.sleep(nanoseconds: 50_000_000)
@@ -1056,7 +1056,7 @@ final class SpeakSessionController: ObservableObject {
         if case .speaking = voice.phase {
             voice.stopSpeaking(notifyFinished: false)
         }
-        // Keep busy; do not startSpeakWatchdog — caller continues the task.
+        // Keep busy; do not startSpeakWatchdog â€” caller continues the task.
         try? await Task.sleep(nanoseconds: 60_000_000)
     }
 
@@ -1079,7 +1079,7 @@ final class SpeakSessionController: ObservableObject {
         }
     }
 
-    // Legacy path removed — intent engine owns routing.
+    // Legacy path removed â€” intent engine owns routing.
 
     private func drainPendingUtterance() async {
         guard let next = pendingUtterance, isRunning, !isBusy else { return }
@@ -1092,12 +1092,12 @@ final class SpeakSessionController: ObservableObject {
         if low.contains("offline") || low.contains("unreachable") || low.contains("nicht erreichbar")
             || low.contains("timed out") || low.contains("timeout") || low.contains("network")
             || low.contains("verbindung") || low.contains("host is down") || low.contains("error 64") {
-            return "Verbindung wird wiederhergestellt… Sprich einfach weiter, wenn du bereit bist."
+            return "Verbindung wird wiederhergestelltâ€¦ Sprich einfach weiter, wenn du bereit bist."
         }
         if raw.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
             return "Die Antwort ist nicht angekommen. Bitte wiederhole kurz, was du gesagt hast."
         }
-        return "Kurz gestört — ich bin wieder bereit. Sag es gerne noch einmal."
+        return "Kurz gestÃ¶rt â€” ich bin wieder bereit. Sag es gerne noch einmal."
     }
 
     /// Capture one still for the next vision-aware utterance (no continuous upload).
@@ -1119,7 +1119,7 @@ final class SpeakSessionController: ObservableObject {
         }
         guard let image = visionFrameProvider?(),
               let jpeg = image.jpegData(compressionQuality: 0.8) else {
-            statusLine = "Kein Bild — Kamera oder Bildschirm prüfen"
+            statusLine = "Kein Bild â€” Kamera oder Bildschirm prÃ¼fen"
             HapticService.error()
             return
         }
@@ -1133,7 +1133,7 @@ final class SpeakSessionController: ObservableObject {
         guard let connection else { return }
         let live = connection.liveScreen
         if !live.hasConsent {
-            statusLine = "Live Screen Zustimmung nötig — öffne Studio → Live Screen"
+            statusLine = "Live Screen Zustimmung nÃ¶tig â€” Ã¶ffne Studio â†’ Live Screen"
             HapticService.error()
             connection.pendingOpenLiveScreen = true
             connection.pendingTab = 2
@@ -1146,7 +1146,7 @@ final class SpeakSessionController: ObservableObject {
             // Speak-driven: don't auto-spam vision; only on questions / snapshots
             live.autoAssistEnabled = false
             screenShareEnabled = true
-            statusLine = "🖥 Bildschirm — tippe rot „Übertragen“ falls noch nicht aktiv"
+            statusLine = "ðŸ–¥ Bildschirm â€” tippe rot â€žÃœbertragenâ€œ falls noch nicht aktiv"
             HapticService.success()
         } catch {
             statusLine = (error as? LocalizedError)?.errorDescription ?? "Live Screen Start fehlgeschlagen"
@@ -1161,7 +1161,7 @@ final class SpeakSessionController: ObservableObject {
             live.autoAssistEnabled = true
             live.suppressAutoVision = false
         }
-        statusLine = isRunning ? "Bildschirm aus · nur Sprache" : "Voice AI bereit"
+        statusLine = isRunning ? "Bildschirm aus Â· nur Sprache" : "Voice AI bereit"
         HapticService.soft()
     }
 
@@ -1194,33 +1194,33 @@ final class SpeakSessionController: ObservableObject {
         let detail: String
         if isMuted {
             switch voice.phase {
-            case .speaking: detail = lastReply.isEmpty ? "Stumm · Wiedergabe…" : lastReply
-            default: detail = "Mic stumm — Mute aus zum Sprechen"
+            case .speaking: detail = lastReply.isEmpty ? "Stumm Â· Wiedergabeâ€¦" : lastReply
+            default: detail = "Mic stumm â€” Mute aus zum Sprechen"
             }
         } else if pendingToolConfirm != nil {
-            detail = pendingToolConfirm?.confirmationQuestion ?? "Bestätigung nötig"
+            detail = pendingToolConfirm?.confirmationQuestion ?? "BestÃ¤tigung nÃ¶tig"
         } else {
             switch phase {
             case .listening:
-                detail = voice.liveTranscript.isEmpty ? "Rede natürlich…" : voice.liveTranscript
+                detail = voice.liveTranscript.isEmpty ? "Rede natÃ¼rlichâ€¦" : voice.liveTranscript
             case .speaking:
                 detail = lastReply
             case .thinking, .processing:
                 detail = statusLine.isEmpty ? SpeakActivityPhase.thinking.title : statusLine
             case .webSearch:
-                detail = statusLine.isEmpty ? "Live Knowledge · Quellen werden gelesen…" : statusLine
+                detail = statusLine.isEmpty ? "Live Knowledge Â· Quellen werden gelesenâ€¦" : statusLine
             case .creatingImage:
-                detail = "Bildmodell arbeitet…"
+                detail = "Bildmodell arbeitetâ€¦"
             case .agentWorking:
-                detail = "Plant, recherchiert und führt aus…"
+                detail = "Plant, recherchiert und fÃ¼hrt ausâ€¦"
             case .vision:
-                detail = "Vision versteht die Szene…"
+                detail = "Vision versteht die Szeneâ€¦"
             case .awaitingConfirm:
                 detail = "Ja oder Nein sagen"
             case .error:
                 if case .error(let m) = voice.phase { detail = m } else { detail = statusLine }
             case .idle:
-                detail = SpeakFullAccess.isEnabled ? "Vollzugriff · Assistent bereit" : "Bereit"
+                detail = SpeakFullAccess.isEnabled ? "Vollzugriff Â· Assistent bereit" : "Bereit"
             }
         }
         let step = max(voice.bands.count / 7, 1)
@@ -1244,11 +1244,13 @@ final class SpeakSessionController: ObservableObject {
     private func islandTitle(for phase: SpeakActivityPhase) -> String {
         let s = statusLine.lowercased()
         if s.contains("voice ai aktiviert") || s.contains("noco voice ai aktiviert") {
-            return "NOCO Voice AI aktiviert"
+            return "NOCO Voice AI"
         }
         if s.contains("voice ai beendet") {
             return "Voice AI beendet"
         }
+        // Prefer live phase titles â€” avoid stale "NOCO spricht" while already listening again.
         return phase.title
     }
 }
+

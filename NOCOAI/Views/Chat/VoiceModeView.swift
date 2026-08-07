@@ -333,9 +333,8 @@ struct VoiceModeView: View {
             }
             .animation(.easeInOut(duration: 0.35), value: transcriptStyle)
             .onChange(of: displayText) { _, _ in
-                withAnimation(.easeOut(duration: 0.18)) {
-                    proxy.scrollTo("speakBottom", anchor: .bottom)
-                }
+                // Soft scroll — no layout jump / zoom fight with transcript text.
+                proxy.scrollTo("speakBottom", anchor: .bottom)
             }
         }
     }

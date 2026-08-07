@@ -47,7 +47,7 @@ enum SpeakActivityPhase: String {
     var symbolName: String {
         switch self {
         case .idle: return "mic.fill"
-        case .listening: return "ear.fill"
+        case .listening: return "mic.fill"
         case .processing, .thinking: return "sparkles"
         case .webSearch: return "globe"
         case .creatingImage: return "paintbrush.pointed.fill"

@@ -41,7 +41,9 @@ struct SpeakLiveActivityWidget: Widget {
                         .padding(.bottom, 2)
                 }
             } compactLeading: {
-                SpeakRainbowCore(state: context.state, diameter: 18)
+                SpeakRainbowCore(state: context.state, diameter: 14, showSymbol: true)
+                    .frame(width: 20, height: 20)
+                    .padding(.leading, 1)
                     .contentTransition(.opacity)
             } compactTrailing: {
                 SpeakMiniVisualizer(
@@ -177,7 +179,7 @@ enum SpeakPhasePalette {
     static func symbol(for phaseRaw: String, muted: Bool) -> String {
         if muted { return "mic.slash.fill" }
         switch phaseRaw {
-        case "listening": return "ear.fill"
+        case "listening": return "mic.fill"
         case "processing", "thinking": return "sparkles"
         case "webSearch": return "globe"
         case "creatingImage": return "paintbrush.pointed.fill"
@@ -455,7 +457,7 @@ struct SpeakRainbowCore: View {
 
                 if showSymbol {
                     Image(systemName: SpeakPhasePalette.symbol(for: state.phaseRaw, muted: state.isMuted))
-                        .font(.system(size: diameter * 0.38, weight: .semibold))
+                        .font(.system(size: max(8, diameter * 0.34), weight: .semibold))
                         .foregroundStyle(.white)
                         .contentTransition(.opacity)
                 } else {
@@ -471,9 +473,12 @@ struct SpeakRainbowCore: View {
                         .blur(radius: 0.4)
                 }
             }
-            .frame(width: diameter + 6, height: diameter + 6)
+            .frame(width: diameter + (diameter <= 15 ? 2 : 6), height: diameter + (diameter <= 15 ? 2 : 6))
             .compositingGroup()
-            .shadow(color: SpeakPhasePalette.accent(for: state.phaseRaw).opacity(0.48), radius: diameter > 20 ? 5 : 3.5)
+            .shadow(
+                color: SpeakPhasePalette.accent(for: state.phaseRaw).opacity(diameter <= 15 ? 0.28 : 0.48),
+                radius: diameter <= 15 ? 1.5 : (diameter > 20 ? 5 : 3.5)
+            )
             .animation(.easeInOut(duration: 0.35), value: state.phaseRaw)
             .animation(.easeInOut(duration: 0.3), value: state.isMuted)
         }

@@ -1,6 +1,7 @@
 import Foundation
 import UIKit
 import Combine
+import Network
 
 @MainActor
 final class ConnectionStore: ObservableObject {
@@ -74,7 +75,11 @@ final class ConnectionStore: ObservableObject {
     private var remoteSessionApproved = false
     private var lastLocalProbeAt: Date?
     private var remotePromptSuppressedUntil: Date?
-    private var lastFreshChatAt: Date?
+    /// Process-lifetime flag: fresh chat only once after cold start.
+    private var didColdLaunchFreshChat = false
+    /// Prefer remote while the phone has no Wi‑Fi (cellular / expensive path).
+    private var prefersRemotePath = false
+    private var pathMonitor: NWPathMonitor?
 
     private enum Keys {
         static let host = "nocoai.host"
@@ -90,6 +95,7 @@ final class ConnectionStore: ObservableObject {
 
     init() {
         forwardStoreChanges()
+        startNetworkPathMonitor()
         let storedHost = UserDefaults.standard.string(forKey: Keys.host) ?? ""
         serverHost = HostSanitizer.hostOnly(storedHost)
         serverPort = UserDefaults.standard.integer(forKey: Keys.port)
@@ -184,20 +190,29 @@ final class ConnectionStore: ObservableObject {
             chat.startSyncLoop()
             Task { await refreshStatus() }
         }
-        // Fresh empty chat whenever the user comes back into the app.
-        openFreshChatOnEnter()
+        // Fresh chat only on cold launch — not every time the app returns to foreground.
+        openFreshChatOnColdLaunchIfNeeded()
         consumePendingSystemLaunches()
     }
 
-    /// Clean chat on app enter (debounced) and Speak shortcut (forced).
-    func openFreshChatOnEnter(force: Bool = false) {
+    /// New empty chat when the process starts. Skip if already empty. Never on mere foreground.
+    func openFreshChatOnColdLaunchIfNeeded() {
         guard isPaired else { return }
-        let now = Date()
-        if !force, let last = lastFreshChatAt, now.timeIntervalSince(last) < 1.2 { return }
-        lastFreshChatAt = now
+        guard !didColdLaunchFreshChat else { return }
+        didColdLaunchFreshChat = true
         Task { @MainActor in
+            // Empty thread already — keep it.
+            if chat.messages.isEmpty { return }
             await chat.beginCleanSession()
         }
+    }
+
+    /// Legacy helper — Speak shortcut must NOT wipe the chat.
+    func openFreshChatOnEnter(force: Bool = false) {
+        // Intentionally no-op for force Speak launches.
+        // Cold launch uses `openFreshChatOnColdLaunchIfNeeded()`.
+        if force { return }
+        openFreshChatOnColdLaunchIfNeeded()
     }
 
     func onBackground() {
@@ -618,8 +633,7 @@ final class ConnectionStore: ObservableObject {
                     SpeakLaunchBridge.clearPending()
                     HapticService.soft()
                 } else if !active {
-                    // Clean chat for Voice AI turns started from Shortcuts / Action Button.
-                    openFreshChatOnEnter(force: true)
+                    // Keep current chat — Speak shortcut must not wipe the thread.
                     speak.showSpeakUI = false
                     speak.start()
                     SpeakLaunchBridge.clearPending()
@@ -922,8 +936,32 @@ final class ConnectionStore: ObservableObject {
         }
     }
 
+    private func startNetworkPathMonitor() {
+        let monitor = NWPathMonitor()
+        pathMonitor = monitor
+        monitor.pathUpdateHandler = { [weak self] path in
+            Task { @MainActor in
+                guard let self else { return }
+                // No Wi‑Fi → prefer Tailscale remote automatically.
+                let wifi = path.usesInterfaceType(.wifi)
+                let expensive = path.isExpensive || path.isConstrained || path.usesInterfaceType(.cellular)
+                self.prefersRemotePath = !wifi && (expensive || path.usesInterfaceType(.other))
+                if self.prefersRemotePath,
+                   self.isPaired,
+                   self.activePath == .local,
+                   !self.preferredRemoteHost.isEmpty {
+                    self.remoteSessionApproved = true
+                    _ = await self.trySwitchToHost(self.preferredRemoteHost, path: .remote)
+                }
+            }
+        }
+        monitor.start(queue: DispatchQueue(label: "nocoai.path", qos: .utility))
+    }
+
     private func maybeOfferOrSwitchToLocal() async {
         guard !preferredLocalHost.isEmpty else { return }
+        // On cellular / no Wi‑Fi keep Tailscale — don't flip back to LAN IP.
+        if prefersRemotePath { return }
         let now = Date()
         if let last = lastLocalProbeAt, now.timeIntervalSince(last) < 8 { return }
         lastLocalProbeAt = now

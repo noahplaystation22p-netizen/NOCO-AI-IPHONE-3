@@ -388,52 +388,30 @@ struct VoiceLivingTranscript: View {
     var level: CGFloat = 0
 
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
-    @State private var glow = false
-    @State private var shimmerPhase: CGFloat = -0.35
 
     var body: some View {
-        TimelineView(.animation(minimumInterval: reduceMotion ? 1.0 : 0.08, paused: reduceMotion)) { timeline in
-            let t = timeline.date.timeIntervalSinceReferenceDate
-            let breathe = reduceMotion ? 1.0 : (0.97 + 0.03 * abs(sin(t * (style == .thinking ? 3.2 : 1.7))))
-            styledText
-                .multilineTextAlignment(.center)
-                .shadow(color: glowColor.opacity(glowOpacity), radius: glowRadius)
-                .scaleEffect(textScale * breathe)
-                .overlay {
-                    if !reduceMotion, style == .speaking || style == .thinking {
+        styledText
+            .multilineTextAlignment(.center)
+            .shadow(color: glowColor.opacity(glowOpacity), radius: glowRadius)
+            .overlay {
+                if !reduceMotion, style == .speaking || style == .thinking {
+                    TimelineView(.animation(minimumInterval: 0.14, paused: false)) { timeline in
+                        let t = timeline.date.timeIntervalSinceReferenceDate
+                        let phase = t.truncatingRemainder(dividingBy: 2.6) / 2.6
                         LinearGradient(
-                            colors: [
-                                .clear,
-                                Color.white.opacity(0.35),
-                                .clear
-                            ],
-                            startPoint: UnitPoint(x: shimmerPhase - 0.25, y: 0.5),
-                            endPoint: UnitPoint(x: shimmerPhase + 0.25, y: 0.5)
+                            colors: [.clear, Color.white.opacity(0.2), .clear],
+                            startPoint: UnitPoint(x: phase - 0.2, y: 0.5),
+                            endPoint: UnitPoint(x: phase + 0.2, y: 0.5)
                         )
                         .blendMode(.softLight)
                         .allowsHitTesting(false)
                     }
                 }
-                .mask(styledText)
-                .contentTransition(.opacity)
-                .animation(.easeOut(duration: 0.22), value: text)
-                .animation(.easeInOut(duration: 0.35), value: style)
-                .opacity(reduceMotion ? 1 : (0.88 + 0.12 * abs(sin(t * 1.4))))
-        }
-        .onAppear {
-            armGlow()
-            armShimmer()
-        }
-        .onChange(of: style) { _, _ in
-            armGlow()
-            armShimmer()
-        }
-        .onChange(of: text) { _, _ in
-            guard !reduceMotion else { return }
-            withAnimation(.spring(response: 0.32, dampingFraction: 0.78)) {
-                glow = true
             }
-        }
+            .mask(styledText)
+            .contentTransition(.opacity)
+            .animation(.easeOut(duration: 0.2), value: text)
+            .animation(.easeInOut(duration: 0.28), value: style)
     }
 
     @ViewBuilder
@@ -484,48 +462,20 @@ struct VoiceLivingTranscript: View {
     }
 
     private var glowOpacity: Double {
-        if reduceMotion { return style == .speaking ? 0.2 : 0.08 }
         switch style {
-        case .speaking: return glow ? 0.48 : 0.2
-        case .listening: return 0.14 + Double(level) * 0.4
-        case .thinking: return glow ? 0.4 : 0.18
+        case .speaking: return 0.2
+        case .listening: return 0.1 + Double(min(level, 1)) * 0.16
+        case .thinking: return 0.16
         case .idle: return 0
         }
     }
 
     private var glowRadius: CGFloat {
         switch style {
-        case .speaking: return glow ? 14 : 7
-        case .listening: return 4 + level * 12
-        case .thinking: return 12
+        case .speaking: return 8
+        case .listening: return 4
+        case .thinking: return 7
         case .idle: return 0
-        }
-    }
-
-    private var textScale: CGFloat {
-        guard !reduceMotion else { return 1 }
-        switch style {
-        case .speaking: return glow ? 1.018 : 1.004
-        case .listening: return 1 + level * 0.016
-        case .thinking: return glow ? 1.01 : 1
-        default: return 1
-        }
-    }
-
-    private func armGlow() {
-        guard !reduceMotion else { return }
-        glow = false
-        let duration = style == .thinking ? 0.9 : 1.35
-        withAnimation(.easeInOut(duration: duration).repeatForever(autoreverses: true)) {
-            glow = true
-        }
-    }
-
-    private func armShimmer() {
-        guard !reduceMotion else { return }
-        shimmerPhase = -0.4
-        withAnimation(.linear(duration: style == .thinking ? 1.4 : 2.2).repeatForever(autoreverses: false)) {
-            shimmerPhase = 1.4
         }
     }
 }

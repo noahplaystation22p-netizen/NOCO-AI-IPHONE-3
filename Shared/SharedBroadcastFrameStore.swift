@@ -37,6 +37,8 @@ enum SharedBroadcastFrameStore {
     static func writeJPEG(_ data: Data, width: Int, height: Int, hash: UInt64 = 0) -> Bool {
         guard let jpegURL, let metaURL else { return false }
         do {
+            // Write JPEG first, then meta with matching bytes/time so the app never
+            // sees a new image paired with stale meta (or vice versa).
             try data.write(to: jpegURL, options: .atomic)
             let meta: [String: Any] = [
                 "active": true,

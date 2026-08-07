@@ -1163,7 +1163,8 @@ enum MaskAutoSelect {
         }
 
         let seed = sample(sx, sy)
-        let tol = 38
+        // Tighter first pass, then slight expand for cleaner edges.
+        let tol = 32
         var visited = [UInt8](repeating: 0, count: w * h)
         var stack = [(sx, sy)]
         visited[sy * w + sx] = 1
@@ -1176,9 +1177,12 @@ enum MaskAutoSelect {
             let dr = abs(c.r - seed.r)
             let dg = abs(c.g - seed.g)
             let db = abs(c.b - seed.b)
-            guard dr + dg + db <= tol * 3 else { continue }
+            // Weighted RGB distance — edges stay sharper than flat sum.
+            let dist = dr * 2 + dg * 3 + db
+            guard dist <= tol * 5 else { continue }
             filled.append((x, y))
-            let n = [(x + 1, y), (x - 1, y), (x, y + 1), (x, y - 1)]
+            let n = [(x + 1, y), (x - 1, y), (x, y + 1), (x, y - 1),
+                     (x + 1, y + 1), (x - 1, y - 1), (x + 1, y - 1), (x - 1, y + 1)]
             for (nx, ny) in n {
                 guard nx >= 0, ny >= 0, nx < w, ny < h else { continue }
                 let i = ny * w + nx
@@ -1189,8 +1193,23 @@ enum MaskAutoSelect {
             }
         }
 
+        // Morphological expand 1px for smoother outline
+        var expanded = filled
+        for (x, y) in filled {
+            for (dx, dy) in [(1, 0), (-1, 0), (0, 1), (0, -1)] {
+                let nx = x + dx, ny = y + dy
+                guard nx >= 0, ny >= 0, nx < w, ny < h else { continue }
+                let i = ny * w + nx
+                if visited[i] == 0 {
+                    visited[i] = 1
+                    expanded.append((nx, ny))
+                }
+            }
+        }
+        filled = expanded
+
         // Soft circle bias around tap so thin objects still get coverage
-        let rPix = max(3, Int((radiusHint / imageRectInView.width) * CGFloat(w) * 0.55))
+        let rPix = max(3, Int((radiusHint / imageRectInView.width) * CGFloat(w) * 0.5))
         for dy in -rPix...rPix {
             for dx in -rPix...rPix where dx * dx + dy * dy <= rPix * rPix {
                 let x = sx + dx, y = sy + dy

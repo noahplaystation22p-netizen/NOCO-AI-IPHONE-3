@@ -88,7 +88,11 @@ final class LiveScreenBroadcastCapture: LiveScreenCaptureProviding {
     var onWaitingStatus: ((String) -> Void)?
 
     func prepare() async throws {
-        stop()
+        // Cancel any previous poller synchronously — deferred stop() raced and killed new tasks.
+        pollTask?.cancel()
+        pollTask = nil
+        lastUpdatedAt = 0
+        lastBytes = -1
         onWaitingStatus?("Tippe den roten Übertragen-Button und wähle „NOCO Live Screen“")
         pollTask = Task { [weak self] in
             var ticks = 0
@@ -112,11 +116,11 @@ final class LiveScreenBroadcastCapture: LiveScreenCaptureProviding {
     }
 
     nonisolated func stop() {
-        Task { @MainActor in
-            self.pollTask?.cancel()
-            self.pollTask = nil
-            self.lastUpdatedAt = 0
-            self.lastBytes = -1
+        Task { @MainActor [weak self] in
+            self?.pollTask?.cancel()
+            self?.pollTask = nil
+            self?.lastUpdatedAt = 0
+            self?.lastBytes = -1
         }
     }
 }

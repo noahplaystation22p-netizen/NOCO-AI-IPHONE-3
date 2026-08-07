@@ -57,9 +57,9 @@ final class VoiceService: NSObject, ObservableObject {
     private let endConfirmGrace: TimeInterval = 0.35
     private let speechLevelFactor: CGFloat = 2.5
 
-    /// Calm, clear TTS — slightly under system default.
-    private let speakRate: Float = AVSpeechUtteranceDefaultSpeechRate * 0.89
-    private let preReplyPause: TimeInterval = 0.28
+    /// Calm, clear TTS — slightly under system default for a premium feel.
+    private let speakRate: Float = AVSpeechUtteranceDefaultSpeechRate * 0.82
+    private let preReplyPause: TimeInterval = 0.18
 
     private var pendingEndCandidateAt: Date?
 
@@ -323,10 +323,10 @@ final class VoiceService: NSObject, ObservableObject {
             let utterance = AVSpeechUtterance(string: chunk)
             utterance.voice = bestGermanVoice()
             utterance.rate = speakRate
-            utterance.pitchMultiplier = 0.98
+            utterance.pitchMultiplier = 1.02
             utterance.volume = 1.0
-            utterance.preUtteranceDelay = index == 0 ? preReplyPause : 0.04
-            utterance.postUtteranceDelay = 0.02
+            utterance.preUtteranceDelay = index == 0 ? preReplyPause : 0.08
+            utterance.postUtteranceDelay = 0.06
 
             synthesizer.write(utterance) { [weak self] buffer in
                 guard let self else { return }
@@ -398,10 +398,10 @@ final class VoiceService: NSObject, ObservableObject {
             let utterance = AVSpeechUtterance(string: chunk)
             utterance.voice = bestGermanVoice()
             utterance.rate = speakRate
-            utterance.pitchMultiplier = 0.98
+            utterance.pitchMultiplier = 1.02
             utterance.volume = 1.0
-            utterance.preUtteranceDelay = index == 0 ? preReplyPause : 0.04
-            utterance.postUtteranceDelay = 0.02
+            utterance.preUtteranceDelay = index == 0 ? preReplyPause : 0.08
+            utterance.postUtteranceDelay = 0.06
             synthesizer.speak(utterance)
         }
     }
@@ -604,15 +604,8 @@ final class VoiceService: NSObject, ObservableObject {
            let preferred = voices.first(where: { $0.identifier == preferredVoiceIdentifier }) {
             return preferred
         }
-        let deDE = voices.filter { $0.language.lowercased().hasPrefix("de-de") }
-        let pool = deDE.isEmpty ? voices : deDE
-        if let premium = pool.first(where: { $0.quality == .premium }) { return premium }
-        if let enhanced = pool.first(where: { $0.quality == .enhanced }) { return enhanced }
-        let preferredNames = ["anna", "helena", "martin", "petra", "yannick", "viktoria", "markus", "katja"]
-        if let named = pool.first(where: { v in preferredNames.contains(where: { v.name.lowercased().contains($0) }) }) {
-            return named
-        }
-        return pool.first ?? AVSpeechSynthesisVoice(language: "de-DE")
+        let ranked = voices.sorted { voiceScore($0) > voiceScore($1) }
+        return ranked.first ?? AVSpeechSynthesisVoice(language: "de-DE")
     }
 
     private func voiceScore(_ voice: AVSpeechSynthesisVoice) -> Int {

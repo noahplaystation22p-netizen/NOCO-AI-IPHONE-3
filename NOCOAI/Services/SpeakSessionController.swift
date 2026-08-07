@@ -47,13 +47,21 @@ final class SpeakSessionController: ObservableObject {
             self?.objectWillChange.send()
         }.store(in: &cancellables)
         voice.onAutoUtterance = { [weak self] text in
-            Task { await self?.enqueueUtterance(text) }
+            Task { @MainActor in
+                await self?.enqueueUtterance(text)
+            }
         }
         voice.onSpeakFinished = { [weak self] in
-            self?.connection?.liveScreen.suppressAutoVision = false
-            self?.connection?.liveScreen.resumeQueuedAnalysisIfNeeded()
-            self?.scheduleResumeListening(after: 0.05)
-            self?.objectWillChange.send()
+            guard let self else { return }
+            self.connection?.liveScreen.suppressAutoVision = false
+            self.connection?.liveScreen.resumeQueuedAnalysisIfNeeded()
+            self.scheduleResumeListening(after: 0.08)
+            // Process anything queued while we were speaking.
+            Task { @MainActor in
+                try? await Task.sleep(nanoseconds: 120_000_000)
+                await self.drainPendingUtterance()
+            }
+            self.objectWillChange.send()
         }
     }
 
@@ -85,7 +93,7 @@ final class SpeakSessionController: ObservableObject {
             try voice.startListening(autoEnd: true)
             HapticService.speakCue()
             statusLine = liveOk
-                ? "Live Activity an · kurze Pause sendet"
+                ? "Zuhören — Pause sendet an NOCO"
                 : "Zuhören aktiv · Live Activity prüfen (Einstellungen → NOCO AI)"
             pushLiveActivity(force: true)
             // Second ensure — some devices need a follow-up update
@@ -262,6 +270,7 @@ final class SpeakSessionController: ObservableObject {
             try voice.startListening(autoEnd: true)
             statusLine = "Wieder Zuhören…"
             pushLiveActivity(force: true)
+            Task { await drainPendingUtterance() }
         } catch {
             statusLine = "Zuhören unterbrochen — nochmal…"
             scheduleResumeListening(after: 0.25)
@@ -271,10 +280,11 @@ final class SpeakSessionController: ObservableObject {
     private func enqueueUtterance(_ text: String) async {
         let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty else { return }
-        if isBusy || (voice.phase == .processing) {
-            // Keep latest user intent while busy — don't drop speech.
+        // Only gate on real work — VoiceService sets .processing before callback,
+        // which previously parked every utterance forever in pendingUtterance.
+        if isBusy {
             pendingUtterance = trimmed
-            statusLine = "Einen Moment — ich höre dich noch…"
+            statusLine = "Einen Moment…"
             return
         }
         if case .speaking = voice.phase {
@@ -350,7 +360,9 @@ final class SpeakSessionController: ObservableObject {
 
         var reply: String?
         let wantsVision = (visionCameraEnabled || screenShareEnabled) && (
-            pendingVisionJPEG != nil || Self.asksForVision(text)
+            pendingVisionJPEG != nil
+                || screenShareEnabled
+                || Self.asksForVision(text)
         )
         if wantsVision {
             // Freeze Live Screen auto-uploads for this whole vision turn (incl. TTS).
@@ -361,17 +373,17 @@ final class SpeakSessionController: ObservableObject {
 
             var jpeg = pendingVisionJPEG
             pendingVisionJPEG = nil
+            // Prefer live preview when screen share is on (latestJPEG can go stale).
+            if jpeg == nil, screenShareEnabled,
+               let preview = connection.liveScreen.latestPreview,
+               let data = preview.jpegData(compressionQuality: 0.78) {
+                jpeg = data
+            }
             if jpeg == nil, screenShareEnabled, let screenJPEG = connection.liveScreen.latestJPEG {
                 jpeg = screenJPEG
             }
             if jpeg == nil, let image = visionFrameProvider?() {
                 jpeg = image.jpegData(compressionQuality: 0.78)
-            }
-            // Refresh from live screen if share is on (prefer freshest)
-            if jpeg == nil, screenShareEnabled,
-               let preview = connection.liveScreen.latestPreview,
-               let data = preview.jpegData(compressionQuality: 0.78) {
-                jpeg = data
             }
 
             if let jpeg {
@@ -467,8 +479,8 @@ final class SpeakSessionController: ObservableObject {
         consecutiveFailures = 0
         if let reply, !reply.isEmpty {
             lastReply = reply
-            // Natural beat before speaking — feels less abrupt
-            try? await Task.sleep(nanoseconds: 280_000_000)
+            // Short natural beat before TTS
+            try? await Task.sleep(nanoseconds: 120_000_000)
             guard isRunning else {
                 isBusy = false
                 return
@@ -517,11 +529,20 @@ final class SpeakSessionController: ObservableObject {
 
     /// Capture one still for the next vision-aware utterance (no continuous upload).
     func captureVisionSnapshot() {
-        if screenShareEnabled, let jpeg = connection?.liveScreen.latestJPEG {
-            pendingVisionJPEG = jpeg
-            statusLine = "Bildschirm-Moment bereit — frag z. B. „Was soll ich tippen?“"
-            HapticService.imageSnap()
-            return
+        if screenShareEnabled {
+            if let preview = connection?.liveScreen.latestPreview,
+               let jpeg = preview.jpegData(compressionQuality: 0.8) {
+                pendingVisionJPEG = jpeg
+                statusLine = "Bildschirm-Moment bereit"
+                HapticService.imageSnap()
+                return
+            }
+            if let jpeg = connection?.liveScreen.latestJPEG {
+                pendingVisionJPEG = jpeg
+                statusLine = "Bildschirm-Moment bereit"
+                HapticService.imageSnap()
+                return
+            }
         }
         guard let image = visionFrameProvider?(),
               let jpeg = image.jpegData(compressionQuality: 0.8) else {
@@ -530,7 +551,7 @@ final class SpeakSessionController: ObservableObject {
             return
         }
         pendingVisionJPEG = jpeg
-        statusLine = "Momentaufnahme bereit — frag z. B. „Was ist das?“"
+        statusLine = "Momentaufnahme bereit"
         HapticService.imageSnap()
     }
 

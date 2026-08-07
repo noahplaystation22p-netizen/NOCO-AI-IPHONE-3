@@ -9,15 +9,26 @@ struct ModeStatusTheater: View {
 
     var body: some View {
         if phase != .idle {
-            HStack(spacing: 10) {
-                Image(systemName: phase.symbol)
-                    .font(.system(size: 14, weight: .semibold))
-                    .foregroundStyle(mode.accentColor)
-                    .symbolEffect(.pulse, options: .repeating, isActive: phase != .done && !reduceMotion)
+            HStack(spacing: 12) {
+                ZStack {
+                    Circle()
+                        .fill(mode.accentColor.opacity(0.16))
+                        .frame(width: 34, height: 34)
+                    Text(phase.emoji)
+                        .font(.system(size: 15))
+                        .scaleEffect(phase != .done && !reduceMotion ? 1.05 : 1)
+                        .animation(
+                            reduceMotion ? nil : .easeInOut(duration: 0.9).repeatForever(autoreverses: true),
+                            value: phase
+                        )
+                }
+                .animation(.spring(response: 0.4, dampingFraction: 0.78), value: phase)
 
                 VStack(alignment: .leading, spacing: 4) {
                     Text(statusTitle)
                         .font(.caption.weight(.semibold))
+                        .contentTransition(.opacity)
+                        .animation(.easeInOut(duration: 0.28), value: phase)
                     Text(mode.label)
                         .font(.caption2)
                         .foregroundStyle(.secondary)
@@ -28,27 +39,44 @@ struct ModeStatusTheater: View {
                             ZStack(alignment: .leading) {
                                 Capsule().fill(Color.primary.opacity(0.08))
                                 Capsule()
-                                    .fill(mode.accentColor.opacity(0.75))
+                                    .fill(
+                                        LinearGradient(
+                                            colors: [mode.accentColor.opacity(0.55), mode.accentColor],
+                                            startPoint: .leading,
+                                            endPoint: .trailing
+                                        )
+                                    )
                                     .frame(width: max(10, geo.size.width * progress))
                             }
                         }
-                        .frame(height: 2)
+                        .frame(height: 3)
                     }
                 }
 
                 Spacer(minLength: 0)
             }
             .padding(.horizontal, 12)
-            .padding(.vertical, 9)
+            .padding(.vertical, 10)
             .background {
-                RoundedRectangle(cornerRadius: 14, style: .continuous)
+                RoundedRectangle(cornerRadius: 16, style: .continuous)
                     .fill(.ultraThinMaterial)
                     .overlay(
-                        RoundedRectangle(cornerRadius: 14, style: .continuous)
-                            .stroke(mode.accentColor.opacity(0.22), lineWidth: 1)
+                        RoundedRectangle(cornerRadius: 16, style: .continuous)
+                            .stroke(
+                                AngularGradient(
+                                    colors: [
+                                        mode.accentColor.opacity(0.45),
+                                        mode.accentColor.opacity(0.08),
+                                        mode.accentColor.opacity(0.3),
+                                        mode.accentColor.opacity(0.45)
+                                    ],
+                                    center: .center
+                                ),
+                                lineWidth: 1
+                            )
                     )
             }
-            .transition(.opacity.combined(with: .move(edge: .bottom)))
+            .transition(.opacity.combined(with: .move(edge: .bottom)).combined(with: .scale(scale: 0.98)))
             .onAppear { updateProgress() }
             .onChange(of: phase) { _, _ in updateProgress() }
         }
@@ -57,8 +85,8 @@ struct ModeStatusTheater: View {
     private var statusTitle: String {
         if mode.isImageCompose {
             switch phase {
-            case .understanding, .analyzing: return "Formuliere Prompt…"
-            case .executing: return "Erstellt Bild…"
+            case .understanding, .analyzing: return "Formuliere Prompt"
+            case .executing: return "Erstellt Bild"
             case .done: return "Fertig"
             case .idle: return phase.title
             }

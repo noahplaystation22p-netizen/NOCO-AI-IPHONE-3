@@ -63,13 +63,13 @@ struct PlusToolsPanel: View {
                 }
                 .padding(18)
                 .opacity(appear ? 1 : 0)
-                .offset(y: appear ? 0 : 36)
-                .scaleEffect(appear ? 1 : 0.96)
+                .offset(y: appear ? 0 : 28)
+                .scaleEffect(appear ? 1 : 0.97)
             }
             .nocoBackground()
             .overlay {
-                FloatingIntelligenceDots(count: 8)
-                    .opacity(0.16)
+                FloatingIntelligenceDots(count: 6)
+                    .opacity(0.14)
                     .allowsHitTesting(false)
             }
             .navigationTitle("Werkzeuge")
@@ -92,13 +92,13 @@ struct PlusToolsPanel: View {
         .presentationCornerRadius(28)
         .presentationBackground {
             ZStack {
-                Color.black.opacity(0.25)
+                Color.black.opacity(0.22)
                 IntelligenceAtmosphere()
-                    .opacity(0.45)
+                    .opacity(0.4)
             }
         }
         .onAppear {
-            withAnimation(reduceMotion ? .easeOut(duration: 0.18) : .spring(response: 0.42, dampingFraction: 0.86)) {
+            withAnimation(reduceMotion ? .easeOut(duration: 0.18) : .spring(response: 0.45, dampingFraction: 0.86)) {
                 appear = true
             }
         }

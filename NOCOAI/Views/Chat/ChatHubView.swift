@@ -248,21 +248,50 @@ struct ChatHubView: View {
 
     private var emptyState: some View {
         ZStack {
-            FloatingIntelligenceDots(count: 10)
-                .opacity(0.2)
-                .frame(height: 280)
-            VStack(spacing: 14) {
+            IntelligenceBreathingAura()
+                .opacity(0.55)
+                .allowsHitTesting(false)
+            FloatingIntelligenceDots(count: 8)
+                .opacity(0.22)
+                .frame(height: 320)
+            VStack(spacing: 16) {
                 ZStack {
-                    IntelligenceOrbitRings(size: 96)
-                        .opacity(0.55)
+                    IntelligenceOrbitRings(size: 118)
+                        .opacity(0.6)
+                    Circle()
+                        .fill(
+                            RadialGradient(
+                                colors: [
+                                    NOCOAITheme.glowPrimary.opacity(0.35),
+                                    .clear
+                                ],
+                                center: .center,
+                                startRadius: 4,
+                                endRadius: 56
+                            )
+                        )
+                        .frame(width: 110, height: 110)
+                        .blur(radius: 8)
                     Image(systemName: "sparkles")
-                        .font(.system(size: 34, weight: .light))
+                        .font(.system(size: 36, weight: .light))
                         .foregroundStyle(NOCOAITheme.accent)
                         .symbolEffect(.variableColor.iterative, options: .repeating)
                 }
-                .padding(.top, 48)
+                .padding(.top, 40)
+
+                Text("NOCO AI")
+                    .font(.system(size: 28, weight: .bold, design: .rounded))
+                    .foregroundStyle(
+                        LinearGradient(
+                            colors: [NOCOAITheme.glowPrimary, NOCOAITheme.glowSecondary, NOCOAITheme.glowAccent],
+                            startPoint: .leading,
+                            endPoint: .trailing
+                        )
+                    )
+
                 Text("Frag NOCO")
                     .font(.title3.weight(.semibold))
+
                 Text(connection.isOnline
                     ? "Tippe unten — oder öffne + für Kamera, Agent und mehr."
                     : "Zuerst Companion verbinden.")
@@ -270,13 +299,35 @@ struct ChatHubView: View {
                     .multilineTextAlignment(.center)
                     .foregroundStyle(NOCOAITheme.secondaryText(for: scheme))
                     .padding(.horizontal, 32)
+
                 IntelligenceWaveRibbon()
-                    .frame(height: 22)
-                    .padding(.horizontal, 40)
-                    .opacity(0.7)
+                    .frame(height: 24)
+                    .padding(.horizontal, 36)
+                    .opacity(0.75)
+
+                HStack(spacing: 18) {
+                    emptyHint(icon: "waveform.circle.fill", title: "Speak")
+                    emptyHint(icon: "paintbrush.pointed.fill", title: "Bilder")
+                    emptyHint(icon: "cpu.fill", title: "Agent")
+                }
+                .padding(.top, 8)
             }
         }
         .frame(maxWidth: .infinity)
+        .padding(.bottom, 24)
+    }
+
+    private func emptyHint(icon: String, title: String) -> some View {
+        VStack(spacing: 6) {
+            Image(systemName: icon)
+                .font(.system(size: 18, weight: .semibold))
+                .foregroundStyle(NOCOAITheme.accent)
+                .symbolEffect(.pulse, options: .repeating.speed(0.4))
+            Text(title)
+                .font(.caption2.weight(.semibold))
+                .foregroundStyle(.secondary)
+        }
+        .frame(width: 72)
     }
 
     private func scrollToBottom(_ proxy: ScrollViewProxy) {

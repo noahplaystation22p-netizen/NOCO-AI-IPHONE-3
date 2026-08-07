@@ -12,10 +12,20 @@ enum ModeWorkPhase: String, Equatable {
     var title: String {
         switch self {
         case .idle: return "Bereit"
-        case .understanding: return "Versteht…"
-        case .analyzing: return "Denkt…"
-        case .executing: return "Antwortet…"
+        case .understanding: return "Verstehe Anfrage"
+        case .analyzing: return "Denke nach"
+        case .executing: return "Verarbeite"
         case .done: return "Fertig"
+        }
+    }
+
+    var emoji: String {
+        switch self {
+        case .idle: return "✨"
+        case .understanding: return "🧠"
+        case .analyzing: return "✨"
+        case .executing: return "⚙️"
+        case .done: return "✅"
         }
     }
 
@@ -23,7 +33,7 @@ enum ModeWorkPhase: String, Equatable {
         switch self {
         case .idle: return "sparkles"
         case .understanding: return "brain.head.profile"
-        case .analyzing: return "magnifyingglass"
+        case .analyzing: return "sparkles"
         case .executing: return "gearshape.2.fill"
         case .done: return "checkmark.circle.fill"
         }

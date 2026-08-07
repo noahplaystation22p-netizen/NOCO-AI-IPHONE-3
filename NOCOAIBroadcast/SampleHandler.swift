@@ -30,6 +30,8 @@ final class SampleHandler: RPBroadcastSampleHandler {
         guard sampleBufferType == .video else { return }
         let now = Date()
         guard now.timeIntervalSince(lastWrite) >= minInterval else { return }
+        // Always advance throttle clock — static screens must not re-encode every 0.85s.
+        lastWrite = now
 
         guard let pixelBuffer = CMSampleBufferGetImageBuffer(sampleBuffer) else { return }
         let ciImage = CIImage(cvPixelBuffer: pixelBuffer)
@@ -42,7 +44,6 @@ final class SampleHandler: RPBroadcastSampleHandler {
         let changed = lastHash == 0 || SharedBroadcastFrameStore.hamming64(lastHash, hash) >= 6
         guard changed else { return }
 
-        lastWrite = now
         lastHash = hash
         _ = SharedBroadcastFrameStore.writeJPEG(packed.0, width: packed.1, height: packed.2, hash: hash)
     }

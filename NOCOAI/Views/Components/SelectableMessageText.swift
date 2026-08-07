@@ -1,8 +1,8 @@
 import SwiftUI
 import UIKit
 
-/// Native selectable text — long-press marks words; system Copy uses the selection only.
-/// Whole-message copy is only via the copy icon in the action row.
+/// Native selectable text — long-press opens iOS selection (cursor, grips, words).
+/// Action row still offers whole-message Copy / Share / Speak.
 struct SelectableMessageText: UIViewRepresentable {
     let text: String
     var textColor: UIColor
@@ -16,14 +16,18 @@ struct SelectableMessageText: UIViewRepresentable {
         tv.isEditable = false
         tv.isSelectable = true
         tv.isScrollEnabled = false
+        tv.isUserInteractionEnabled = true
         tv.textContainerInset = .zero
         tv.textContainer.lineFragmentPadding = 0
         tv.setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
+        tv.setContentHuggingPriority(.defaultHigh, for: .vertical)
         tv.dataDetectorTypes = []
         tv.font = font
         tv.textColor = textColor
         tv.text = text
         tv.delegate = context.coordinator
+        // Native edit menu: Copy / Select / Select All / Share…
+        tv.allowsEditingTextAttributes = false
         return tv
     }
 
@@ -31,7 +35,8 @@ struct SelectableMessageText: UIViewRepresentable {
         if uiView.text != text {
             let selected = uiView.selectedRange
             uiView.text = text
-            if selected.length > 0, NSMaxRange(selected) <= (text as NSString).length {
+            let maxLen = (text as NSString).length
+            if selected.length > 0, NSMaxRange(selected) <= maxLen {
                 uiView.selectedRange = selected
             }
         }
@@ -45,23 +50,26 @@ struct SelectableMessageText: UIViewRepresentable {
         return CGSize(width: width, height: ceil(size.height))
     }
 
-    final class Coordinator: NSObject, UITextViewDelegate {}
+    final class Coordinator: NSObject, UITextViewDelegate {
+        func textViewDidChangeSelection(_ textView: UITextView) {
+            // Keep selection visible; no-op otherwise.
+        }
+    }
 }
 
-/// Long-press selects the word under the finger — never auto-selects the whole bubble.
+/// Forwards long-press to the system text selection UI (grips + cursor).
 private final class MessageSelectTextView: UITextView {
+    override var canBecomeFirstResponder: Bool { true }
+
     override func point(inside point: CGPoint, with event: UIEvent?) -> Bool {
         bounds.contains(point)
     }
 
-    override func canPerformAction(_ action: Selector, withSender sender: Any?) -> Bool {
-        if action == #selector(selectAll(_:)) {
-            return false
+    override func touchesEnded(_ touches: Set<UITouch>, with event: UIEvent?) {
+        super.touchesEnded(touches, with: event)
+        // Ensure we can present the edit menu after a selection gesture.
+        if !isFirstResponder {
+            _ = becomeFirstResponder()
         }
-        return super.canPerformAction(action, withSender: sender)
-    }
-
-    override func selectAll(_ sender: Any?) {
-        // Disabled — whole message is only via the copy icon.
     }
 }

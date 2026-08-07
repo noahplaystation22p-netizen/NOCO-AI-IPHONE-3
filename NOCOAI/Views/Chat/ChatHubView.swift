@@ -554,13 +554,6 @@ private struct ChatBubble: View {
         .intelligenceStreaming(message.isStreaming && message.role == .assistant)
         .animation(.easeOut(duration: 0.14), value: message.text)
         .animation(.spring(response: 0.36, dampingFraction: 0.82), value: message.isStreaming)
-        .contextMenu {
-            Button {
-                copyWholeMessage()
-            } label: {
-                Label("Alles kopieren", systemImage: "doc.on.doc")
-            }
-        }
     }
 
     private func copyWholeMessage() {

@@ -690,7 +690,8 @@ final class SpeakSessionController: ObservableObject {
         let reply = await connection.chat.sendAndReturnReply(
             prompt,
             modeOverride: style.prefersDepth ? .think : .writing,
-            speak: true
+            speak: true,
+            displayText: originalText
         )
         await finishWithReply(reply ?? "", connection: connection, allowRetry: originalText)
     }
@@ -789,7 +790,8 @@ final class SpeakSessionController: ObservableObject {
         let reply = await connection.chat.sendAndReturnReply(
             prompt,
             modeOverride: depth,
-            speak: true
+            speak: true,
+            displayText: originalText
         )
         await finishWithReply(reply ?? "", connection: connection, allowRetry: originalText)
     }
@@ -814,7 +816,12 @@ final class SpeakSessionController: ObservableObject {
             try? await Task.sleep(nanoseconds: 450_000_000)
             guard isRunning else { isBusy = false; return }
             let prompt = VoiceService.speakPrompt(allowRetry, depth: .flash, style: SpeakStyleHints())
-            resolved = (await connection.chat.sendAndReturnReply(prompt, modeOverride: .flash, speak: true) ?? "")
+            resolved = (await connection.chat.sendAndReturnReply(
+                prompt,
+                modeOverride: .flash,
+                speak: true,
+                displayText: allowRetry
+            ) ?? "")
                 .trimmingCharacters(in: .whitespacesAndNewlines)
             if resolved.isEmpty {
                 let msg = Self.friendlySpeakError(connection.chat.lastError ?? "")

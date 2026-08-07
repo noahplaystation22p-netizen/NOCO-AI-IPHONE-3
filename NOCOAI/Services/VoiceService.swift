@@ -270,7 +270,7 @@ final class VoiceService: NSObject, ObservableObject {
         let natural = NOCOSpeakVoiceSettings.usesNaturalPipeline
         let cleaned = natural
             ? Self.naturalizeForSpeech(Self.cleanForSpeech(text))
-            : Self.cleanForSpeech(text)
+            : Self.applyVoiceAIPronunciation(Self.cleanForSpeech(text))
         guard !cleaned.isEmpty else {
             phase = .idle
             notifySpeakFinishedOnce()
@@ -894,8 +894,33 @@ final class VoiceService: NSObject, ObservableObject {
         s = s.replacingOccurrences(of: " etc.", with: " und so weiter", options: .caseInsensitive)
         // Gentle breath after commas / dashes without inventing words.
         s = s.replacingOccurrences(of: #"\s+[–—-]\s+"#, with: ", ", options: .regularExpression)
+        // English product name — German TTS should say "Voice A I", not "Voiz Ei".
+        s = applyVoiceAIPronunciation(s)
         s = s.replacingOccurrences(of: #"\s{2,}"#, with: " ", options: .regularExpression)
         return s.trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+
+    /// Force English-style letter pronunciation for "Voice AI" inside German TTS.
+    static func applyVoiceAIPronunciation(_ text: String) -> String {
+        var s = text
+        let replacements: [(String, String)] = [
+            ("NOCO Voice AI", "NOCO Voice A I"),
+            ("noco voice ai", "NOCO Voice A I"),
+            ("Voice AI", "Voice A I"),
+            ("voice ai", "Voice A I"),
+            ("Voice-AI", "Voice A I"),
+            ("voice-ai", "Voice A I")
+        ]
+        for (from, to) in replacements {
+            s = s.replacingOccurrences(of: from, with: to, options: from.first?.isUppercase == true ? [] : .caseInsensitive)
+        }
+        // Catch remaining case variants via regex.
+        s = s.replacingOccurrences(
+            of: #"(?i)\bvoice[\s\-]?ai\b"#,
+            with: "Voice A I",
+            options: .regularExpression
+        )
+        return s
     }
 
     /// Slightly shorter phrases than default → more natural pauses, still quick to start.

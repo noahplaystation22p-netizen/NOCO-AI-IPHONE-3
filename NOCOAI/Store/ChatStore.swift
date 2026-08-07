@@ -180,8 +180,16 @@ final class ChatStore: ObservableObject {
     }
 
     /// Sends a chat message and returns the final assistant text (for voice TTS).
+    /// - Parameters:
+    ///   - text: Wire prompt sent to the Companion (may include Speak / mode instructions).
+    ///   - displayText: What the user sees in chat. Defaults to a sanitized form of `text`.
     @discardableResult
-    func sendAndReturnReply(_ text: String, modeOverride: AIMode? = nil, speak: Bool = false) async -> String? {
+    func sendAndReturnReply(
+        _ text: String,
+        modeOverride: AIMode? = nil,
+        speak: Bool = false,
+        displayText: String? = nil
+    ) async -> String? {
         let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty, let api else { return nil }
 
@@ -208,16 +216,17 @@ final class ChatStore: ObservableObject {
         var effectiveMode = uiMode
 
         // Soft intelligence: Auto only picks depth (Think/Flash). Never auto-activates Vision/Agent/tools.
+        let visibleAsk = ChatUserFacingText.visibleUserText(wire: trimmed, display: displayText)
         if !speak, uiMode == .auto {
-            if let depth = ModeIntelligence.recommendDepth(text: trimmed) {
+            if let depth = ModeIntelligence.recommendDepth(text: visibleAsk) {
                 effectiveMode = depth.mode
             }
             if !suppressRecommendationUntilEmpty,
-               let rec = ModeIntelligence.recommend(text: trimmed),
+               let rec = ModeIntelligence.recommend(text: visibleAsk),
                rec.mode == .agent {
                 modeRecommendation = ModeRecommendation(mode: rec.mode, reason: rec.reason)
             }
-        } else if !speak, let rec = ModeIntelligence.recommend(text: trimmed), rec.mode != uiMode {
+        } else if !speak, let rec = ModeIntelligence.recommend(text: visibleAsk), rec.mode != uiMode {
             if !suppressRecommendationUntilEmpty, rec.mode == .agent {
                 modeRecommendation = ModeRecommendation(mode: rec.mode, reason: rec.reason)
             }
@@ -232,7 +241,7 @@ final class ChatStore: ObservableObject {
             webWire = LiveKnowledgeRouting.resolveWire(once: liveKnowledgeOnce)
         }
         liveKnowledgeOnce = nil
-        let armedWeb = webWire == "on" || (webWire == "auto" && LiveKnowledgeRouting.likelyNeedsWeb(trimmed))
+        let armedWeb = webWire == "on" || (webWire == "auto" && LiveKnowledgeRouting.likelyNeedsWeb(visibleAsk))
         if speak, armedWeb {
             // Speak path shows status via SpeakSessionController; keep chat quiet.
         }
@@ -244,13 +253,15 @@ final class ChatStore: ObservableObject {
             Ursprüngliches Ziel: \(intake.originalGoal)
 
             Nutzerantworten auf Rückfragen:
-            \(trimmed)
+            \(visibleAsk)
             """
             pendingAgentIntake = nil
         }
 
-        let userMessage = ChatMessage(role: .user, text: trimmed)
-        messages.append(userMessage)
+        // Never store empty — fall back to a short clean ask if sanitizer wiped everything.
+        let storedUserText = visibleAsk.isEmpty ? String(trimmed.prefix(200)) : visibleAsk
+        let storedUser = ChatMessage(role: .user, text: storedUserText)
+        messages.append(storedUser)
         let assistant = ChatMessage(role: .assistant, text: "", isStreaming: true, modelLabel: effectiveMode.modelHint)
         messages.append(assistant)
         let assistantID = assistant.id
@@ -267,7 +278,7 @@ final class ChatStore: ObservableObject {
                 assistantID: assistantID,
                 conversationId: conversationId,
                 isStartingNewChat: isStartingNewChat,
-                displayGoal: trimmed
+                displayGoal: storedUserText
             )
             if pendingAgentConfirm == nil, pendingAgentIntake == nil {
                 workPhase = .done
@@ -282,7 +293,7 @@ final class ChatStore: ObservableObject {
         if effectiveMode.isImageCompose, !speak {
             workPhase = .understanding
             let imageReply = await runImageCreateInChat(
-                trimmed,
+                storedUserText,
                 assistantID: assistantID,
                 conversationId: conversationId,
                 isStartingNewChat: isStartingNewChat
@@ -296,7 +307,11 @@ final class ChatStore: ObservableObject {
 
         do {
             workPhase = .understanding
-            let outbound = effectiveMode.specialtyPrompt(for: trimmed) ?? trimmed
+            // Wire may include Speak/mode wrappers; UI already stored the clean ask.
+            let outbound: String = {
+                if speak { return trimmed }
+                return effectiveMode.specialtyPrompt(for: storedUserText) ?? storedUserText
+            }()
 
             // Soft phase theater in-chat while waiting for first tokens.
             let phaseAdvance = Task { @MainActor [weak self] in
@@ -1761,11 +1776,13 @@ final class ChatStore: ObservableObject {
     }
 
     private func mapMessage(_ dto: ConversationMessageDTO) -> ChatMessage {
-        ChatMessage(
+        let raw = dto.content
+        let text = dto.isUser ? ChatUserFacingText.sanitize(raw) : VoiceService.stripSpeakEcho(raw)
+        return ChatMessage(
             id: stableUUID(dto.id),
             serverId: dto.id,
             role: dto.isUser ? .user : .assistant,
-            text: dto.content,
+            text: text.isEmpty ? raw : text,
             imageURL: media?.url(for: dto.resolvedMediaPath)
         )
     }

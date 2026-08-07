@@ -28,6 +28,7 @@
 		NA0000010000000000000001 /* NOCOAIApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = NA0000020000000000000001 /* NOCOAIApp.swift */; };
 		NA0000010000000000000002 /* APIModels.swift in Sources */ = {isa = PBXBuildFile; fileRef = NA0000020000000000000002 /* APIModels.swift */; };
 		NA0000010000000000000003 /* ChatMessage.swift in Sources */ = {isa = PBXBuildFile; fileRef = NA0000020000000000000003 /* ChatMessage.swift */; };
+		CU0000010000000000000001 /* ChatUserFacingText.swift in Sources */ = {isa = PBXBuildFile; fileRef = CU0000020000000000000001 /* ChatUserFacingText.swift */; };
 		NA0000010000000000000004 /* KeychainService.swift in Sources */ = {isa = PBXBuildFile; fileRef = NA0000020000000000000004 /* KeychainService.swift */; };
 		NA0000010000000000000005 /* HapticService.swift in Sources */ = {isa = PBXBuildFile; fileRef = NA0000020000000000000005 /* HapticService.swift */; };
 		NA0000010000000000000006 /* CompanionAPI.swift in Sources */ = {isa = PBXBuildFile; fileRef = NA0000020000000000000006 /* CompanionAPI.swift */; };
@@ -168,6 +169,7 @@
 		NA0000020000000000000001 /* NOCOAIApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NOCOAIApp.swift; sourceTree = "<group>"; };
 		NA0000020000000000000002 /* APIModels.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = APIModels.swift; sourceTree = "<group>"; };
 		NA0000020000000000000003 /* ChatMessage.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ChatMessage.swift; sourceTree = "<group>"; };
+		CU0000020000000000000001 /* ChatUserFacingText.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ChatUserFacingText.swift; sourceTree = "<group>"; };
 		NA0000020000000000000004 /* KeychainService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = KeychainService.swift; sourceTree = "<group>"; };
 		NA0000020000000000000005 /* HapticService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HapticService.swift; sourceTree = "<group>"; };
 		NA0000020000000000000006 /* CompanionAPI.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CompanionAPI.swift; sourceTree = "<group>"; };
@@ -330,6 +332,7 @@
 			children = (
 				NA0000020000000000000002 /* APIModels.swift */,
 				NA0000020000000000000003 /* ChatMessage.swift */,
+				CU0000020000000000000001 /* ChatUserFacingText.swift */,
 				NA0000020000000000000020 /* V2Models.swift */,
 				LK0000020000000000000001 /* LiveKnowledgeSettings.swift */,
 				NA0000020000000000000031 /* IntelligenceTools.swift */,
@@ -773,6 +776,7 @@
 				NA0000010000000000000001 /* NOCOAIApp.swift in Sources */,
 				NA0000010000000000000002 /* APIModels.swift in Sources */,
 				NA0000010000000000000003 /* ChatMessage.swift in Sources */,
+				CU0000010000000000000001 /* ChatUserFacingText.swift in Sources */,
 				NA0000010000000000000004 /* KeychainService.swift in Sources */,
 				NA0000010000000000000060 /* CompanionCredentials.swift in Sources */,
 				BC0000010000000000000003 /* SharedBroadcastFrameStore.swift in Sources */,
@@ -900,7 +904,7 @@
 				CODE_SIGNING_REQUIRED = NO;
 				CODE_SIGN_IDENTITY = "";
 				CODE_SIGNING_STYLE = Manual;
-				CURRENT_PROJECT_VERSION = 73;
+				CURRENT_PROJECT_VERSION = 74;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = NOCOAIKeyboard/Info.plist;
 				INFOPLIST_KEY_CFBundleDisplayName = "NOCO AI";
@@ -929,7 +933,7 @@
 				CODE_SIGNING_REQUIRED = NO;
 				CODE_SIGN_IDENTITY = "";
 				CODE_SIGNING_STYLE = Manual;
-				CURRENT_PROJECT_VERSION = 73;
+				CURRENT_PROJECT_VERSION = 74;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = NOCOAIKeyboard/Info.plist;
 				INFOPLIST_KEY_CFBundleDisplayName = "NOCO AI";
@@ -994,7 +998,7 @@
 				CODE_SIGN_ENTITLEMENTS = NOCOAI/NOCOAI.entitlements;
 				CODE_SIGNING_ALLOWED = NO;
 				CODE_SIGNING_REQUIRED = NO;
-				CURRENT_PROJECT_VERSION = 73;
+				CURRENT_PROJECT_VERSION = 74;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = NOCOAI/Info.plist;
@@ -1028,7 +1032,7 @@
 				CODE_SIGN_ENTITLEMENTS = NOCOAI/NOCOAI.entitlements;
 				CODE_SIGNING_ALLOWED = NO;
 				CODE_SIGNING_REQUIRED = NO;
-				CURRENT_PROJECT_VERSION = 73;
+				CURRENT_PROJECT_VERSION = 74;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = NOCOAI/Info.plist;
@@ -1061,7 +1065,7 @@
 				CODE_SIGN_ENTITLEMENTS = NOCOAISpeakWidget/NOCOAISpeakWidget.entitlements;
 				CODE_SIGNING_ALLOWED = NO;
 				CODE_SIGNING_REQUIRED = NO;
-				CURRENT_PROJECT_VERSION = 73;
+				CURRENT_PROJECT_VERSION = 74;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = NOCOAISpeakWidget/Info.plist;
 				INFOPLIST_KEY_CFBundleDisplayName = "NOCO Voice AI";
@@ -1089,7 +1093,7 @@
 				CODE_SIGN_ENTITLEMENTS = NOCOAISpeakWidget/NOCOAISpeakWidget.entitlements;
 				CODE_SIGNING_ALLOWED = NO;
 				CODE_SIGNING_REQUIRED = NO;
-				CURRENT_PROJECT_VERSION = 73;
+				CURRENT_PROJECT_VERSION = 74;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = NOCOAISpeakWidget/Info.plist;
 				INFOPLIST_KEY_CFBundleDisplayName = "NOCO Voice AI";
@@ -1121,7 +1125,7 @@
 				CODE_SIGNING_REQUIRED = NO;
 				CODE_SIGN_IDENTITY = "";
 				CODE_SIGNING_STYLE = Manual;
-				CURRENT_PROJECT_VERSION = 73;
+				CURRENT_PROJECT_VERSION = 74;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = NOCOAIBroadcast/Info.plist;
 				INFOPLIST_KEY_CFBundleDisplayName = "NOCO Live Screen";
@@ -1150,7 +1154,7 @@
 				CODE_SIGNING_REQUIRED = NO;
 				CODE_SIGN_IDENTITY = "";
 				CODE_SIGNING_STYLE = Manual;
-				CURRENT_PROJECT_VERSION = 73;
+				CURRENT_PROJECT_VERSION = 74;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = NOCOAIBroadcast/Info.plist;
 				INFOPLIST_KEY_CFBundleDisplayName = "NOCO Live Screen";

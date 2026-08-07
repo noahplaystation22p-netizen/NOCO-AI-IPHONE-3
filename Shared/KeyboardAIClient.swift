@@ -19,6 +19,7 @@ enum KeyboardAIClient {
         case empty
         case decode
         case cancelled
+        case timedOut
 
         var errorDescription: String? {
             switch self {
@@ -28,31 +29,33 @@ enum KeyboardAIClient {
             case .empty: return "Keine Antwort"
             case .decode: return "Antwort unlesbar"
             case .cancelled: return "Abgebrochen"
+            case .timedOut: return "Zeitüberschreitung — nochmal tippen"
             }
         }
     }
 
     private static let session: URLSession = {
         let config = URLSessionConfiguration.ephemeral
-        config.timeoutIntervalForRequest = 55
-        config.timeoutIntervalForResource = 75
-        config.waitsForConnectivity = true
+        // Hard UX ceiling — keyboard extensions get jetsam'd on long hangs.
+        config.timeoutIntervalForRequest = 18
+        config.timeoutIntervalForResource = 22
+        config.waitsForConnectivity = false
         config.requestCachePolicy = .reloadIgnoringLocalCacheData
         config.httpMaximumConnectionsPerHost = 2
         return URLSession(configuration: config)
     }()
 
-    /// Longer dictation needs more time on the PC.
+    /// Cap per-call wait so the keyboard never feels frozen.
     private static func timeout(for text: String, base: TimeInterval) -> TimeInterval {
         let n = text.count
-        if n > 2500 { return max(base, 55) }
-        if n > 900 { return max(base, 42) }
-        return base
+        if n > 2500 { return min(20, max(base, 18)) }
+        if n > 900 { return min(18, max(base, 16)) }
+        return min(16, base)
     }
 
     /// Preferred path: single flash response, sanitized — logs into ⌨️ Tastatur channel.
     static func rewrite(action: KeyboardAIAction, text: String, shortenLevel: Int = 1) async throws -> String {
-        let base: TimeInterval = action.isAnswer ? 45 : (action.isPrimary ? 40 : 32)
+        let base: TimeInterval = action.isAnswer ? 16 : (action.isPrimary ? 15 : 12)
         let reply = try await post(
             message: action.prompt(for: text, shortenLevel: shortenLevel),
             display: action.displayLabel(for: text),
@@ -68,7 +71,7 @@ enum KeyboardAIClient {
         let reply = try await post(
             message: shortcut.fullPrompt(for: text),
             display: shortcut.displayLabel(for: text),
-            timeout: timeout(for: text, base: 42)
+            timeout: timeout(for: text, base: 15)
         )
         let clean = sanitizeCustom(reply)
         guard !clean.isEmpty else { throw ClientError.empty }
@@ -88,7 +91,7 @@ enum KeyboardAIClient {
         let reply = try await post(
             message: message,
             display: "Frage: \(q.prefix(72))",
-            timeout: 36
+            timeout: 16
         )
         let clean = sanitizeCustom(reply)
         guard !clean.isEmpty else { throw ClientError.empty }
@@ -96,6 +99,7 @@ enum KeyboardAIClient {
     }
 
     private static func post(message: String, display: String, timeout: TimeInterval) async throws -> String {
+        try Task.checkCancellation()
         CompanionCredentials.refreshFromDisk()
         KeyboardChipPreferences.refreshFromDisk()
         guard CompanionCredentials.isConfigured,
@@ -121,11 +125,23 @@ enum KeyboardAIClient {
             )
         )
 
-        let (data, response) = try await session.data(for: request)
-        let code = (response as? HTTPURLResponse)?.statusCode ?? 0
-        guard (200..<300).contains(code) else { throw ClientError.http(code) }
-        guard let reply = extractReply(from: data) else { throw ClientError.decode }
-        return reply
+        do {
+            let (data, response) = try await session.data(for: request)
+            try Task.checkCancellation()
+            let code = (response as? HTTPURLResponse)?.statusCode ?? 0
+            guard (200..<300).contains(code) else { throw ClientError.http(code) }
+            guard let reply = extractReply(from: data) else { throw ClientError.decode }
+            return reply
+        } catch is CancellationError {
+            throw ClientError.cancelled
+        } catch let urlError as URLError where urlError.code == .timedOut || urlError.code == .cancelled {
+            throw ClientError.timedOut
+        } catch let error as ClientError {
+            throw error
+        } catch {
+            if Task.isCancelled { throw ClientError.cancelled }
+            throw error
+        }
     }
 
     private static func sanitizeCustom(_ raw: String) -> String {

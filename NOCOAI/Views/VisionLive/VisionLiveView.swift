@@ -29,6 +29,7 @@ struct VisionLiveView: View {
             RadialGradient(
                 colors: [
                     session.phase.color.opacity(session.isAnalyzing ? 0.35 : 0.12),
+                    NOCORainbow.violet.opacity(session.isAnalyzing ? 0.12 : 0.04),
                     .clear
                 ],
                 center: .center,
@@ -38,6 +39,29 @@ struct VisionLiveView: View {
             .ignoresSafeArea()
             .allowsHitTesting(false)
             .animation(.easeInOut(duration: 0.45), value: session.phase)
+
+            if session.isAnalyzing {
+                NOCOVisionScanBeam()
+                    .padding(.horizontal, 28)
+                    .padding(.vertical, 120)
+                    .transition(.opacity)
+            }
+
+            if session.isLive {
+                // Soft KI lens ring
+                Circle()
+                    .stroke(
+                        AngularGradient(
+                            colors: NOCORainbow.flow.map { $0.opacity(session.isAnalyzing ? 0.55 : 0.22) },
+                            center: .center
+                        ),
+                        lineWidth: 1.4
+                    )
+                    .frame(width: 220, height: 220)
+                    .blur(radius: 0.3)
+                    .opacity(appear ? 1 : 0)
+                    .allowsHitTesting(false)
+            }
 
             VStack(spacing: 0) {
                 topChrome
@@ -55,10 +79,28 @@ struct VisionLiveView: View {
 
                 Spacer(minLength: 0)
 
+                if session.isAnalyzing {
+                    HStack(spacing: 10) {
+                        NOCOIntelligenceCore(energy: .vision, size: .compact, systemImage: "eye")
+                            .frame(width: 36, height: 36)
+                        Text("Analysiere Szene…")
+                            .font(.caption.weight(.semibold))
+                            .foregroundStyle(.white.opacity(0.9))
+                        Spacer(minLength: 0)
+                    }
+                    .padding(.horizontal, 16)
+                    .padding(.vertical, 10)
+                    .background(.ultraThinMaterial, in: Capsule())
+                    .padding(.horizontal, 18)
+                    .padding(.bottom, 8)
+                    .transition(.move(edge: .bottom).combined(with: .opacity))
+                }
+
                 bottomStack
                     .padding(.horizontal, 14)
                     .padding(.bottom, 12)
             }
+            .animation(.spring(response: 0.4, dampingFraction: 0.86), value: session.isAnalyzing)
         }
         .navigationBarHidden(true)
         .onAppear {

@@ -58,6 +58,7 @@ struct MagischerRadiererView: View {
     @State private var maskReady = false
     @State private var errorAlert: String?
     @State private var isAutoSelecting = false
+    @State private var appear = false
     @FocusState private var promptFocused: Bool
 
     var body: some View {
@@ -85,8 +86,18 @@ struct MagischerRadiererView: View {
                 }
             }
             .padding(.bottom, 16)
+            .opacity(appear ? 1 : 0)
+            .offset(y: appear ? 0 : 18)
+            .scaleEffect(appear ? 1 : 0.98)
         }
         .nocoBackground()
+        .overlay {
+            if appear {
+                FloatingIntelligenceDots(count: 5)
+                    .opacity(0.1)
+                    .allowsHitTesting(false)
+            }
+        }
         .safeAreaInset(edge: .bottom, spacing: 0) {
             actionButtons
                 .padding(.horizontal, 16)
@@ -95,6 +106,10 @@ struct MagischerRadiererView: View {
                 .background {
                     Rectangle()
                         .fill(.ultraThinMaterial)
+                        .overlay(alignment: .top) {
+                            NOCORainbowFlowLine(height: 1)
+                                .opacity(0.45)
+                        }
                         .ignoresSafeArea(edges: .bottom)
                         .shadow(color: .black.opacity(0.12), radius: 12, y: -4)
                 }
@@ -109,7 +124,15 @@ struct MagischerRadiererView: View {
         .navigationTitle("Magischer Radierer")
         .navigationBarTitleDisplayMode(.inline)
         .toolbar(.hidden, for: .tabBar)
-        .onAppear { connection.hideMainTabBar = true }
+        .onAppear {
+            connection.hideMainTabBar = true
+            withAnimation(.spring(response: 0.5, dampingFraction: 0.86)) {
+                appear = true
+            }
+            withAnimation(.easeInOut(duration: 1.2).repeatForever(autoreverses: true)) {
+                maskPulse = true
+            }
+        }
         .onDisappear { connection.hideMainTabBar = false }
         .photosPicker(isPresented: $showLibrary, selection: $photoItem, matching: .images)
         .onChange(of: photoItem) { item in
@@ -132,11 +155,6 @@ struct MagischerRadiererView: View {
             Button("OK", role: .cancel) {}
         } message: {
             Text(errorAlert ?? "")
-        }
-        .onAppear {
-            withAnimation(.easeInOut(duration: 1.2).repeatForever(autoreverses: true)) {
-                maskPulse = true
-            }
         }
     }
 
@@ -181,11 +199,26 @@ struct MagischerRadiererView: View {
                     .clipShape(RoundedRectangle(cornerRadius: 20, style: .continuous))
                     .padding(8)
                     .overlay {
+                        if isAutoSelecting {
+                            ZStack {
+                                RoundedRectangle(cornerRadius: 20, style: .continuous)
+                                    .fill(Color.black.opacity(0.18))
+                                NOCOVisionScanBeam()
+                                    .padding(20)
+                                NOCOIntelligenceCore(energy: .vision, size: .compact, systemImage: "eye")
+                                    .frame(width: 44, height: 44)
+                            }
+                            .padding(8)
+                            .allowsHitTesting(false)
+                            .transition(.opacity)
+                        }
+                    }
+                    .overlay {
                         if maskReady {
                             RoundedRectangle(cornerRadius: 20, style: .continuous)
                                 .stroke(
                                     AngularGradient(
-                                        colors: rainbowColors.map { $0.opacity(maskPulse ? 0.85 : 0.45) },
+                                        colors: NOCORainbow.flow.map { $0.opacity(maskPulse ? 0.85 : 0.45) },
                                         center: .center
                                     ),
                                     lineWidth: 2.5
@@ -196,9 +229,8 @@ struct MagischerRadiererView: View {
                     }
             } else {
                 VStack(spacing: 14) {
-                    Image(systemName: "photo.on.rectangle.angled")
-                        .font(.system(size: 40, weight: .light))
-                        .foregroundStyle(NOCOAITheme.accent)
+                    NOCOIntelligenceCore(energy: .idle, size: .medium, systemImage: "photo.on.rectangle.angled")
+                        .frame(height: 90)
                     Text("Foto wählen")
                         .font(.subheadline.weight(.semibold))
                     Text("Dann den Bereich bemalen, den du ändern willst.")
@@ -211,8 +243,10 @@ struct MagischerRadiererView: View {
                     } label: {
                         Label("Galerie", systemImage: "photo.on.rectangle")
                             .font(.subheadline.weight(.semibold))
+                            .padding(.horizontal, 16)
+                            .padding(.vertical, 10)
                     }
-                    .buttonStyle(.borderedProminent)
+                    .buttonStyle(IntelligencePrimaryPressStyle())
                 }
                 .padding(36)
             }
@@ -220,8 +254,15 @@ struct MagischerRadiererView: View {
         .frame(minHeight: 340)
         .overlay(
             RoundedRectangle(cornerRadius: 22, style: .continuous)
-                .stroke(NOCOAITheme.glowPrimary.opacity(0.28), lineWidth: 1)
+                .stroke(
+                    AngularGradient(
+                        colors: NOCORainbow.flow.map { $0.opacity(0.35) },
+                        center: .center
+                    ),
+                    lineWidth: 1
+                )
         )
+        .shadow(color: NOCORainbow.violet.opacity(0.12), radius: 18, y: 8)
     }
 
     private var toolBar: some View {
@@ -278,8 +319,9 @@ struct MagischerRadiererView: View {
                         .font(.subheadline.weight(.semibold))
                         .frame(maxWidth: .infinity)
                         .padding(.vertical, 11)
+                        .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
                 }
-                .buttonStyle(.bordered)
+                .buttonStyle(IntelligencePressStyle())
 
                 Button {
                     HapticService.soft()
@@ -291,8 +333,9 @@ struct MagischerRadiererView: View {
                         .font(.subheadline.weight(.semibold))
                         .frame(maxWidth: .infinity)
                         .padding(.vertical, 11)
+                        .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
                 }
-                .buttonStyle(.bordered)
+                .buttonStyle(IntelligencePressStyle())
                 .disabled(sourceImage == nil || isWorking || isAutoSelecting)
             }
         }
@@ -334,31 +377,21 @@ struct MagischerRadiererView: View {
             .padding(.vertical, 15)
             .background(
                 LinearGradient(
-                    colors: rainbowColors.dropLast(),
+                    colors: Array(NOCORainbow.flow.prefix(5)),
                     startPoint: .leading,
                     endPoint: .trailing
                 ),
                 in: RoundedRectangle(cornerRadius: 16, style: .continuous)
             )
             .foregroundStyle(.white)
-            .shadow(color: Color(red: 0.45, green: 0.4, blue: 1).opacity(0.4), radius: 14, y: 5)
         }
+        .buttonStyle(IntelligencePrimaryPressStyle(haptic: { HapticService.medium() }))
         .disabled(isWorking || sourceImage == nil || effectivePrompt.isEmpty || !maskReady)
         .opacity(sourceImage == nil || !maskReady ? 0.5 : 1)
     }
 
     private var effectivePrompt: String {
         instruction.trimmingCharacters(in: .whitespacesAndNewlines)
-    }
-
-    private var rainbowColors: [Color] {
-        [
-            Color(red: 0.35, green: 0.75, blue: 1),
-            Color(red: 0.45, green: 0.5, blue: 1),
-            Color(red: 0.75, green: 0.4, blue: 0.95),
-            Color(red: 0.95, green: 0.45, blue: 0.7),
-            Color(red: 0.4, green: 0.9, blue: 0.85)
-        ]
     }
 
     private func resultCard(_ image: UIImage) -> some View {
@@ -369,9 +402,18 @@ struct MagischerRadiererView: View {
                 .resizable()
                 .scaledToFit()
                 .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
-                .shadow(color: NOCOAITheme.glowPrimary.opacity(0.28), radius: 14)
-                .scaleEffect(revealResult ? 1 : 0.94)
+                .overlay(
+                    RoundedRectangle(cornerRadius: 16, style: .continuous)
+                        .stroke(
+                            AngularGradient(colors: NOCORainbow.flow.map { $0.opacity(0.4) }, center: .center),
+                            lineWidth: 1
+                        )
+                )
+                .shadow(color: NOCORainbow.violet.opacity(0.28), radius: 14)
+                .scaleEffect(revealResult ? 1 : 0.92)
                 .opacity(revealResult ? 1 : 0)
+                .blur(radius: revealResult ? 0 : 12)
+                .animation(.spring(response: 0.6, dampingFraction: 0.8), value: revealResult)
 
             HStack(spacing: 10) {
                 Button {
@@ -390,7 +432,7 @@ struct MagischerRadiererView: View {
                         .frame(maxWidth: .infinity)
                         .padding(.vertical, 11)
                 }
-                .buttonStyle(.bordered)
+                .buttonStyle(IntelligencePressStyle())
 
                 Button {
                     UIImageWriteToSavedPhotosAlbum(image, nil, nil, nil)
@@ -402,9 +444,11 @@ struct MagischerRadiererView: View {
                         .frame(maxWidth: .infinity)
                         .padding(.vertical, 11)
                 }
-                .buttonStyle(.borderedProminent)
+                .buttonStyle(IntelligencePressStyle())
             }
         }
+        .padding(14)
+        .nocoGlass(cornerRadius: 18)
     }
 
     private func loadPhoto(_ item: PhotosPickerItem) async {
@@ -480,7 +524,7 @@ struct MagischerRadiererView: View {
 
         _ = await AppNotificationService.requestAuthorizationIfNeeded()
         ImageBackgroundKeeper.shared.begin(reason: "NOCO Magischer Radierer")
-        ImageLiveActivityManager.start(prompt: "🪄 \(prompt)")
+        ImageLiveActivityManager.start(prompt: "🪄 \(prompt)", owner: .eraser)
         ImageLiveActivityManager.update(
             progress: 0.08,
             status: "Radierer startet…",
@@ -635,169 +679,66 @@ private struct MagicEraserTheater: View {
     var progress: Double
     var status: String
 
-    @State private var spin = false
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var pulse = false
-    @State private var spark = false
-    @State private var ripple = false
-    @State private var hue = false
 
     private var pct: Int { Int((min(max(progress, 0), 1) * 100).rounded()) }
 
-    private let rainbow: [Color] = [
-        Color(red: 0.35, green: 0.8, blue: 1),
-        Color(red: 0.45, green: 0.45, blue: 1),
-        Color(red: 0.85, green: 0.4, blue: 1),
-        Color(red: 0.95, green: 0.45, blue: 0.7),
-        Color(red: 1.0, green: 0.7, blue: 0.35),
-        Color(red: 0.4, green: 0.95, blue: 0.7),
-        Color(red: 0.35, green: 0.8, blue: 1)
-    ]
-
     var body: some View {
-        GeometryReader { geo in
-            let w = max(geo.size.width, 1)
-            let h = max(geo.size.height, 1)
-            ZStack {
-                // Opaque full-bleed veil — photo silhouette must not show through
-                Color.black.opacity(0.94)
-                    .frame(width: w * 1.2, height: h * 1.2)
-                    .position(x: w / 2, y: h / 2)
-                    .ignoresSafeArea()
+        ZStack {
+            Color.black.opacity(0.92).ignoresSafeArea()
 
-                // Extra soft vignette so edges stay solid black
-                RadialGradient(
-                    colors: [.clear, .black.opacity(0.55)],
-                    center: .center,
-                    startRadius: min(w, h) * 0.2,
-                    endRadius: max(w, h) * 0.85
-                )
-                .frame(width: w * 1.15, height: h * 1.15)
-                .position(x: w / 2, y: h / 2)
+            AngularGradient(colors: NOCORainbow.flow.map { $0.opacity(0.35) }, center: .center)
+                .blur(radius: 70)
+                .opacity(pulse ? 0.7 : 0.35)
+                .scaleEffect(pulse ? 1.12 : 0.96)
+                .ignoresSafeArea()
                 .allowsHitTesting(false)
 
-                // Wide aurora — fills the screen so you don't see a round cutout
-                AngularGradient(colors: rainbow, center: .center)
-                    .frame(width: w * 1.85, height: h * 1.85)
-                    .blur(radius: 78)
-                    .opacity(pulse ? 0.62 : 0.32)
-                    .scaleEffect(pulse ? 1.18 : 1.02)
-                    .rotationEffect(.degrees(spin ? 360 : 0))
-                    .blendMode(.plusLighter)
-                    .position(x: w / 2, y: h / 2)
-
-                Capsule()
-                    .fill(LinearGradient(
-                        colors: [.clear, .white.opacity(0.7), rainbow[2].opacity(0.5), .clear],
-                        startPoint: .leading, endPoint: .trailing
-                    ))
-                    .frame(width: min(w * 1.2, 560), height: 110)
-                    .rotationEffect(.degrees(-18))
-                    .offset(x: hue ? w * 0.38 : -w * 0.38, y: -h * 0.12)
-                    .blur(radius: 16)
-                    .blendMode(.plusLighter)
-
-                VStack(spacing: 22) {
-                    ZStack {
-                        AngularGradient(colors: rainbow, center: .center)
-                            .frame(width: min(w * 0.82, 360), height: min(w * 0.82, 360))
-                            .blur(radius: 56)
-                            .opacity(pulse ? 0.8 : 0.42)
-                            .scaleEffect(pulse ? 1.14 : 0.94)
-                            .rotationEffect(.degrees(spin ? 360 : 0))
-                            .blendMode(.plusLighter)
-
-                        ForEach(0..<4, id: \.self) { i in
-                            Circle()
-                                .stroke(rainbow[i].opacity(ripple ? 0.05 : 0.42 - Double(i) * 0.08), lineWidth: 2.4)
-                                .frame(
-                                    width: min(w * 0.44, 168) + CGFloat(i * 44),
-                                    height: min(w * 0.44, 168) + CGFloat(i * 44)
-                                )
-                                .scaleEffect(ripple ? 1.38 : 0.92)
-                        }
-
-                        Circle()
-                            .stroke(AngularGradient(colors: rainbow, center: .center), lineWidth: 8)
-                            .frame(width: min(w * 0.38, 158), height: min(w * 0.38, 158))
-                            .rotationEffect(.degrees(spin ? 360 : 0))
-                            .shadow(color: Color(red: 0.7, green: 0.4, blue: 1).opacity(0.9), radius: 28)
-
-                        Circle()
-                            .trim(from: 0, to: max(0.04, min(progress, 1)))
-                            .stroke(
-                                AngularGradient(colors: [.white, rainbow[0], rainbow[5]], center: .center),
-                                style: StrokeStyle(lineWidth: 5, lineCap: .round)
-                            )
-                            .frame(width: min(w * 0.32, 132), height: min(w * 0.32, 132))
-                            .rotationEffect(.degrees(-90))
-                            .animation(.easeOut(duration: 0.3), value: progress)
-
-                        Image(systemName: "wand.and.stars")
-                            .font(.system(size: 36, weight: .bold))
-                            .foregroundStyle(.white)
-                            .symbolEffect(.pulse, options: .repeating)
-                            .symbolEffect(.bounce, value: pct / 5)
-                            .scaleEffect(pulse ? 1.12 : 0.94)
-
-                        ForEach(0..<16, id: \.self) { i in
-                            Image(systemName: "sparkle")
-                                .font(.system(size: CGFloat(5 + i % 5 * 2), weight: .bold))
-                                .foregroundStyle(rainbow[i % (rainbow.count - 1)].opacity(spark ? 1 : 0.12))
-                                .offset(
-                                    x: cos(Double(i) / 16 * .pi * 2) * (spark ? min(w * 0.3, 118) : min(w * 0.22, 88)),
-                                    y: sin(Double(i) / 16 * .pi * 2) * (spark ? min(w * 0.3, 118) : min(w * 0.22, 88))
-                                )
-                                .scaleEffect(spark ? 1.3 : 0.45)
-                        }
-                    }
-                    .frame(height: min(w * 0.74, 310))
-                    .hueRotation(.degrees(hue ? 36 : -18))
-
-                    VStack(spacing: 8) {
-                        Text("Magischer Radierer")
-                            .font(.caption.weight(.semibold))
-                            .foregroundStyle(.white.opacity(0.55))
-                            .textCase(.uppercase)
-                            .tracking(1.2)
-                        Text("\(pct)%")
-                            .font(.system(size: 38, weight: .bold, design: .rounded).monospacedDigit())
-                            .foregroundStyle(.white)
-                            .contentTransition(.numericText())
-                            .shadow(color: rainbow[2].opacity(0.6), radius: 14)
-                        Text(status)
-                            .font(.subheadline.weight(.semibold))
-                            .foregroundStyle(.white.opacity(0.95))
-                            .multilineTextAlignment(.center)
-                            .padding(.horizontal, 12)
-                        Text(pct >= 88 ? "Normal — PC / Stable Diffusion arbeitet noch" : "Apple Intelligence · nur die Maske")
-                            .font(.caption.weight(.medium))
-                            .foregroundStyle(.white.opacity(0.55))
-                    }
-                    .padding(.horizontal, 28)
-                    .padding(.vertical, 20)
-                    .frame(maxWidth: min(w - 28, 380))
-                    .background(
-                        RoundedRectangle(cornerRadius: 24, style: .continuous)
-                            .fill(.ultraThinMaterial.opacity(0.95))
-                            .overlay(
-                                RoundedRectangle(cornerRadius: 24, style: .continuous)
-                                    .stroke(AngularGradient(colors: rainbow, center: .center), lineWidth: 1.8)
-                            )
-                            .shadow(color: rainbow[2].opacity(0.45), radius: 26, y: 10)
+            VStack(spacing: 20) {
+                ZStack {
+                    NOCOIntelligenceCore(
+                        energy: .working,
+                        size: .hero,
+                        progress: progress,
+                        systemImage: "wand.and.stars"
                     )
+                    Text("\(pct)%")
+                        .font(.title2.weight(.bold).monospacedDigit())
+                        .foregroundStyle(.white)
+                        .offset(y: 72)
+                        .contentTransition(.numericText())
                 }
-                .frame(maxWidth: .infinity, maxHeight: .infinity)
+                .frame(height: 220)
+
+                VStack(spacing: 8) {
+                    Text("Magischer Radierer")
+                        .font(.caption.weight(.semibold))
+                        .foregroundStyle(.white.opacity(0.55))
+                        .textCase(.uppercase)
+                        .tracking(1.1)
+                    Text(status)
+                        .font(.subheadline.weight(.semibold))
+                        .foregroundStyle(.white.opacity(0.95))
+                        .multilineTextAlignment(.center)
+                    NOCORainbowFlowLine(height: 2)
+                        .frame(maxWidth: 180)
+                        .padding(.top, 4)
+                }
+                .padding(.horizontal, 28)
+                .padding(.vertical, 18)
+                .background(.ultraThinMaterial.opacity(0.95), in: RoundedRectangle(cornerRadius: 22, style: .continuous))
+                .overlay(
+                    RoundedRectangle(cornerRadius: 22, style: .continuous)
+                        .stroke(AngularGradient(colors: NOCORainbow.flow, center: .center), lineWidth: 1.2)
+                )
             }
-            .frame(width: w, height: h)
+            .padding(24)
         }
         .ignoresSafeArea()
-        .allowsHitTesting(true)
         .onAppear {
-            withAnimation(.linear(duration: 1.9).repeatForever(autoreverses: false)) { spin = true }
-            withAnimation(.easeInOut(duration: 0.85).repeatForever(autoreverses: true)) { pulse = true }
-            withAnimation(.easeInOut(duration: 0.55).repeatForever(autoreverses: true)) { spark = true }
-            withAnimation(.easeOut(duration: 1.15).repeatForever(autoreverses: false)) { ripple = true }
-            withAnimation(.easeInOut(duration: 1.8).repeatForever(autoreverses: true)) { hue = true }
+            guard !reduceMotion else { return }
+            withAnimation(.easeInOut(duration: 1.4).repeatForever(autoreverses: true)) { pulse = true }
             HapticService.medium()
         }
     }
@@ -1126,7 +1067,7 @@ final class MaskDrawView: UIView {
     }
 }
 
-/// Ultra-fast local object pick: color flood-fill on a tiny preview + soft radius bias.
+/// Local object pick: adaptive flood-fill + edge expand for cleaner contours.
 enum MaskAutoSelect {
     static func fastRegion(
         image: UIImage,
@@ -1141,7 +1082,7 @@ enum MaskAutoSelect {
         let iy = (viewPoint.y - imageRectInView.minY) / imageRectInView.height
         guard ix >= 0, ix <= 1, iy >= 0, iy <= 1 else { return nil }
 
-        let maxSide = 160
+        let maxSide = 200
         let srcW = cg.width
         let srcH = cg.height
         let scale = min(CGFloat(maxSide) / CGFloat(srcW), CGFloat(maxSide) / CGFloat(srcH), 1)
@@ -1163,13 +1104,26 @@ enum MaskAutoSelect {
         }
 
         let seed = sample(sx, sy)
-        // Tighter first pass, then slight expand for cleaner edges.
-        let tol = 32
+        // Local variance → adaptive tolerance (busy textures get a bit more slack).
+        var varSum = 0
+        var varCount = 0
+        for dy in -2...2 {
+            for dx in -2...2 {
+                let x = sx + dx, y = sy + dy
+                guard x >= 0, y >= 0, x < w, y < h else { continue }
+                let c = sample(x, y)
+                varSum += abs(c.r - seed.r) + abs(c.g - seed.g) + abs(c.b - seed.b)
+                varCount += 1
+            }
+        }
+        let localVar = varCount > 0 ? varSum / varCount : 20
+        let tol = min(48, max(24, localVar + 18))
+
         var visited = [UInt8](repeating: 0, count: w * h)
         var stack = [(sx, sy)]
         visited[sy * w + sx] = 1
         var filled = [(Int, Int)]()
-        filled.reserveCapacity(2048)
+        filled.reserveCapacity(4096)
         let maxPixels = w * h / 2
 
         while let (x, y) = stack.popLast(), filled.count < maxPixels {
@@ -1177,8 +1131,8 @@ enum MaskAutoSelect {
             let dr = abs(c.r - seed.r)
             let dg = abs(c.g - seed.g)
             let db = abs(c.b - seed.b)
-            // Weighted RGB distance — edges stay sharper than flat sum.
-            let dist = dr * 2 + dg * 3 + db
+            // Weighted RGB — green/luma edges stay sharper.
+            let dist = dr * 2 + dg * 4 + db
             guard dist <= tol * 5 else { continue }
             filled.append((x, y))
             let n = [(x + 1, y), (x - 1, y), (x, y + 1), (x, y - 1),
@@ -1193,23 +1147,25 @@ enum MaskAutoSelect {
             }
         }
 
-        // Morphological expand 1px for smoother outline
-        var expanded = filled
+        // Morphological close: expand then lightly keep interior (smoother edges).
+        var mask = [UInt8](repeating: 0, count: w * h)
+        for (x, y) in filled { mask[y * w + x] = 1 }
+        var dilated = mask
         for (x, y) in filled {
-            for (dx, dy) in [(1, 0), (-1, 0), (0, 1), (0, -1)] {
+            for (dx, dy) in [(1, 0), (-1, 0), (0, 1), (0, -1), (1, 1), (-1, -1), (1, -1), (-1, 1)] {
                 let nx = x + dx, ny = y + dy
                 guard nx >= 0, ny >= 0, nx < w, ny < h else { continue }
-                let i = ny * w + nx
-                if visited[i] == 0 {
-                    visited[i] = 1
-                    expanded.append((nx, ny))
-                }
+                dilated[ny * w + nx] = 1
             }
         }
-        filled = expanded
+        filled = []
+        for y in 0..<h {
+            for x in 0..<w where dilated[y * w + x] == 1 {
+                filled.append((x, y))
+            }
+        }
 
-        // Soft circle bias around tap so thin objects still get coverage
-        let rPix = max(3, Int((radiusHint / imageRectInView.width) * CGFloat(w) * 0.5))
+        let rPix = max(2, Int((radiusHint / imageRectInView.width) * CGFloat(w) * 0.42))
         for dy in -rPix...rPix {
             for dx in -rPix...rPix where dx * dx + dy * dy <= rPix * rPix {
                 let x = sx + dx, y = sy + dy
@@ -1227,7 +1183,7 @@ enum MaskAutoSelect {
         let path = UIBezierPath()
         let cellW = imageRectInView.width / CGFloat(w)
         let cellH = imageRectInView.height / CGFloat(h)
-        let stamp = max(cellW, cellH) * 1.15
+        let stamp = max(cellW, cellH) * 1.12
         for (x, y) in filled {
             let cx = imageRectInView.minX + (CGFloat(x) + 0.5) * cellW
             let cy = imageRectInView.minY + (CGFloat(y) + 0.5) * cellH
@@ -1252,7 +1208,7 @@ enum MaskAutoSelect {
             space: colorSpace,
             bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue
         ) else { return nil }
-        ctx.interpolationQuality = .low
+        ctx.interpolationQuality = .medium
         ctx.draw(image, in: CGRect(x: 0, y: 0, width: width, height: height))
         return ctx.makeImage()
     }

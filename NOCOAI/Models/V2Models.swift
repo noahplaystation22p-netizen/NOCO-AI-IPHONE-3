@@ -205,6 +205,8 @@ struct ChatRequestV2: Encodable {
     let speak: Bool?
     /// Marks ultra Agent power requests for Companion (optional; ignored if unknown).
     let agent: Bool?
+    /// Live Knowledge: auto | off | on
+    let web: String?
 }
 
 struct SyncEventsResponse: Decodable {
@@ -316,7 +318,8 @@ enum ImageGenMode: String, CaseIterable, Identifiable, Codable {
         let wantFast = ["schnell", "lustig", "meme", "skizze", "witzig", "schnell mal", "kurz", "draft", "idea"]
         let wantQuality = [
             "logo", "professionell", "detail", "hochwertig", "qualität", "quality",
-            "fotorealist", "präzise", "genau", "album", "cover", "branding"
+            "fotorealist", "präzise", "genau", "album", "cover", "branding",
+            "cinematic", "fotoreal", "4k", "ultra"
         ]
         if wantQuality.contains(where: { t.contains($0) }) { return .think }
         if wantFast.contains(where: { t.contains($0) }) { return .flash }

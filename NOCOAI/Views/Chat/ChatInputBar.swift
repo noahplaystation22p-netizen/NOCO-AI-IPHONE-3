@@ -31,14 +31,30 @@ struct ChatInputBar: View {
 
     var body: some View {
         VStack(spacing: 8) {
-            if connection.chat.workPhase != .idle {
-                ModeStatusTheater(phase: connection.chat.workPhase, mode: connection.chat.mode)
-                    .transition(.opacity.combined(with: .move(edge: .bottom)))
-            }
-
-            if let intake = connection.chat.pendingAgentIntake {
-                AgentIntakeHint(questions: intake.questions)
-                    .transition(.opacity.combined(with: .move(edge: .bottom)))
+            if let once = connection.chat.liveKnowledgeOnce {
+                HStack(spacing: 8) {
+                    Image(systemName: once == .web ? "globe" : "lock.laptopcomputer")
+                        .font(.caption.weight(.semibold))
+                    Text(once == .web
+                         ? "🌐 Nächste Antwort: Internet"
+                         : "Nur lokal für nächste Antwort")
+                        .font(.caption.weight(.semibold))
+                    Spacer(minLength: 0)
+                    Button("Abbrechen") {
+                        connection.chat.clearLiveKnowledgeArm()
+                        HapticService.soft()
+                    }
+                    .font(.caption.weight(.semibold))
+                }
+                .foregroundStyle(once == .web ? Color(red: 0.25, green: 0.55, blue: 0.95) : .secondary)
+                .padding(.horizontal, 12)
+                .padding(.vertical, 8)
+                .background(
+                    Capsule(style: .continuous)
+                        .fill(Color.primary.opacity(0.06))
+                )
+                .padding(.horizontal, 4)
+                .transition(.opacity.combined(with: .move(edge: .bottom)))
             }
 
             HStack(alignment: .bottom, spacing: 10) {
@@ -145,8 +161,7 @@ struct ChatInputBar: View {
             )
             .environmentObject(connection)
         }
-        .animation(.spring(response: 0.35, dampingFraction: 0.84), value: connection.chat.workPhase)
-        .animation(.spring(response: 0.35, dampingFraction: 0.84), value: connection.chat.pendingAgentIntake != nil)
+        .animation(.spring(response: 0.35, dampingFraction: 0.84), value: showPlus)
         .photosPicker(isPresented: $showLibrary, selection: $photoItem, matching: .images)
         .onChange(of: photoItem) { _, item in
             guard let item else { return }
@@ -280,6 +295,8 @@ struct ChatInputBar: View {
             showCamera = true
         case .vision:
             onVoice?()
+        case .liveWeb:
+            connection.chat.armLiveKnowledge(.web)
         case .agent:
             connection.chat.setMode(.agent)
         case .createImage:
@@ -312,21 +329,17 @@ struct ChatInputBar: View {
                     .stroke(
                         focused || connection.chat.isSending
                             ? AngularGradient(
-                                colors: [NOCOAITheme.glowPrimary, NOCOAITheme.glowSecondary, NOCOAITheme.glowAccent, NOCOAITheme.glowPrimary],
+                                colors: NOCORainbow.flow,
                                 center: .center
                             )
                             : AngularGradient(
-                                colors: [
-                                    NOCOAITheme.glowPrimary.opacity(0.22),
-                                    Color.primary.opacity(0.08),
-                                    NOCOAITheme.glowSecondary.opacity(0.18)
-                                ],
+                                colors: NOCORainbow.flow.map { $0.opacity(0.22) },
                                 center: .center
                             ),
                         lineWidth: focused || connection.chat.isSending ? 1.4 : 1
                     )
             )
-            .shadow(color: NOCOAITheme.glowPrimary.opacity(focused ? 0.28 : 0.08), radius: focused ? 14 : 6, y: 2)
+            .shadow(color: NOCORainbow.blue.opacity(focused ? 0.28 : 0.08), radius: focused ? 14 : 6, y: 2)
     }
 
     private func send() {
@@ -374,25 +387,5 @@ private struct PlusAnchorKey: PreferenceKey {
     static var defaultValue: CGPoint = .zero
     static func reduce(value: inout CGPoint, nextValue: () -> CGPoint) {
         value = nextValue()
-    }
-}
-
-private struct AgentIntakeHint: View {
-    let questions: [String]
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: 6) {
-            Text("Agent wartet auf deine Antworten")
-                .font(.caption.weight(.bold))
-                .foregroundStyle(Color(red: 0.35, green: 0.78, blue: 0.72))
-            ForEach(questions, id: \.self) { q in
-                Text("• \(q)")
-                    .font(.caption2)
-                    .foregroundStyle(.secondary)
-            }
-        }
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .padding(12)
-        .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
     }
 }

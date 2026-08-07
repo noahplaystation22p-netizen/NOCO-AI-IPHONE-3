@@ -1,24 +1,32 @@
 import SwiftUI
 
-/// Animated intelligence wave — color encodes Live Screen phase.
+/// Animated intelligence wave — rainbow flow + phase accent.
 struct LiveScreenIntelligenceWave: View {
     var phase: LiveScreenPhase
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var shift = false
 
     var body: some View {
         GeometryReader { geo in
             ZStack {
                 Capsule()
-                    .fill(phase.color.opacity(0.25))
+                    .fill(
+                        LinearGradient(
+                            colors: NOCORainbow.flow.map { $0.opacity(0.18) },
+                            startPoint: .leading,
+                            endPoint: .trailing
+                        )
+                    )
                     .frame(height: 4)
                     .offset(x: shift ? 12 : -12)
                 Capsule()
                     .fill(
                         LinearGradient(
                             colors: [
-                                phase.color.opacity(0.2),
-                                phase.color,
-                                Color(red: 1, green: 0.7, blue: 0.85).opacity(0.8)
+                                phase.color.opacity(0.25),
+                                NOCORainbow.violet.opacity(0.85),
+                                NOCORainbow.pink.opacity(0.75),
+                                phase.color
                             ],
                             startPoint: .leading,
                             endPoint: .trailing
@@ -32,6 +40,7 @@ struct LiveScreenIntelligenceWave: View {
         }
         .frame(height: 36)
         .onAppear {
+            guard !reduceMotion else { return }
             withAnimation(.easeInOut(duration: phase == .understanding ? 0.9 : 1.4).repeatForever(autoreverses: true)) {
                 shift = true
             }
@@ -44,7 +53,6 @@ struct LiveScreenIntelligenceWave: View {
 struct LiveScreenStatusTheater: View {
     var phase: LiveScreenPhase
     var status: String
-    @State private var spin = false
     @State private var pulse = false
 
     var body: some View {
@@ -65,47 +73,18 @@ struct LiveScreenStatusTheater: View {
         .frame(maxWidth: .infinity)
         .background { statusBackground }
         .onAppear {
-            withAnimation(.linear(duration: 5.5).repeatForever(autoreverses: false)) { spin = true }
             withAnimation(.easeInOut(duration: 1.15).repeatForever(autoreverses: true)) { pulse = true }
         }
         .animation(.easeInOut(duration: 0.4), value: phase)
     }
 
     private var statusOrb: some View {
-        ZStack {
-            Circle()
-                .fill(
-                    AngularGradient(
-                        colors: [
-                            phase.color,
-                            Color(red: 0.45, green: 0.85, blue: 1.0),
-                            Color(red: 0.85, green: 0.45, blue: 0.95),
-                            Color(red: 1.0, green: 0.75, blue: 0.45),
-                            phase.color
-                        ],
-                        center: .center
-                    )
-                )
-                .frame(width: 64, height: 64)
-                .blur(radius: 10)
-                .opacity(pulse ? 0.9 : 0.55)
-                .rotationEffect(.degrees(spin ? 360 : 0))
-
-            Circle()
-                .fill(.ultraThinMaterial)
-                .frame(width: 48, height: 48)
-                .overlay(
-                    Circle()
-                        .stroke(
-                            LinearGradient(
-                                colors: [.white.opacity(0.55), phase.color.opacity(0.4), .clear],
-                                startPoint: .topLeading,
-                                endPoint: .bottomTrailing
-                            ),
-                            lineWidth: 1.2
-                        )
-                )
-
+        NOCOIntelligenceCore(
+            energy: phase == .idle ? .idle : .vision,
+            size: .medium,
+            systemImage: nil
+        )
+        .overlay {
             Text(phase.emoji)
                 .font(.system(size: 22))
                 .scaleEffect(pulse ? 1.06 : 0.94)
@@ -133,62 +112,34 @@ struct LiveScreenStatusTheater: View {
     }
 }
 
-/// Living agent core — rainbow/glass identity orb with phase colors.
+/// Living agent core — shared Dynamic Intelligence KI orb.
 struct AgentCoreOrb: View {
     var isActive: Bool
     var progress: Double
     var phaseColor: Color = Color(red: 0.45, green: 0.72, blue: 1.0)
-    @State private var spin = false
+
+    private var energy: NOCOIntelligenceEnergy {
+        if progress >= 99.5 { return .success }
+        if isActive { return .working }
+        return .idle
+    }
 
     var body: some View {
-        ZStack {
+        NOCOIntelligenceCore(
+            energy: energy,
+            size: .medium,
+            progress: (isActive || progress > 1) ? max(0.04, min(progress / 100, 1)) : nil,
+            systemImage: "cpu.fill"
+        )
+        .overlay {
+            // Keep phase tint as a soft identity wash without fighting the rainbow core.
             Circle()
-                .fill(
-                    AngularGradient(
-                        colors: [
-                            phaseColor,
-                            Color(red: 0.45, green: 0.55, blue: 1.0),
-                            Color(red: 0.85, green: 0.45, blue: 0.95),
-                            Color(red: 1.0, green: 0.7, blue: 0.45),
-                            phaseColor
-                        ],
-                        center: .center
-                    )
-                )
-                .frame(width: 72, height: 72)
-                .blur(radius: isActive ? 12 : 6)
-                .opacity(0.9)
-                .rotationEffect(.degrees(spin ? 360 : 0))
-                .animation(.linear(duration: isActive ? 4.5 : 14).repeatForever(autoreverses: false), value: spin)
-                .animation(.easeInOut(duration: 0.45), value: phaseColor)
-
-            Circle()
-                .fill(.ultraThinMaterial)
+                .fill(phaseColor.opacity(isActive ? 0.12 : 0.05))
                 .frame(width: 54, height: 54)
-                .overlay(
-                    Circle()
-                        .stroke(
-                            LinearGradient(
-                                colors: [.white.opacity(0.55), .clear, phaseColor.opacity(0.45)],
-                                startPoint: .topLeading,
-                                endPoint: .bottomTrailing
-                            ),
-                            lineWidth: 1.2
-                        )
-                )
-
-            Image(systemName: "cpu.fill")
-                .font(.system(size: 20, weight: .semibold))
-                .foregroundStyle(phaseColor)
-                .symbolEffect(.pulse, options: .repeating, isActive: isActive)
-
-            Circle()
-                .trim(from: 0, to: max(0.04, progress / 100))
-                .stroke(phaseColor, style: StrokeStyle(lineWidth: 3, lineCap: .round))
-                .frame(width: 64, height: 64)
-                .rotationEffect(.degrees(-90))
-                .animation(.spring(response: 0.5, dampingFraction: 0.85), value: progress)
+                .blur(radius: 8)
+                .allowsHitTesting(false)
         }
-        .onAppear { spin = true }
+        .animation(.easeInOut(duration: 0.4), value: phaseColor)
+        .animation(.easeInOut(duration: 0.35), value: isActive)
     }
 }

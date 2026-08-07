@@ -258,15 +258,33 @@ struct ChatStreamChunk: Decodable {
     let conversationId: String?
     let messageId: String?
     let imageUrl: String?
+    let webUsed: Bool?
+    let sources: [ChatWebSource]?
 
-    init(content: String? = nil, done: Bool? = nil, error: String? = nil, conversationId: String? = nil, messageId: String? = nil, imageUrl: String? = nil) {
+    init(
+        content: String? = nil,
+        done: Bool? = nil,
+        error: String? = nil,
+        conversationId: String? = nil,
+        messageId: String? = nil,
+        imageUrl: String? = nil,
+        webUsed: Bool? = nil,
+        sources: [ChatWebSource]? = nil
+    ) {
         self.content = content
         self.done = done
         self.error = error
         self.conversationId = conversationId
         self.messageId = messageId
         self.imageUrl = imageUrl
+        self.webUsed = webUsed
+        self.sources = sources
     }
+}
+
+struct ChatWebSource: Codable, Equatable, Hashable {
+    let title: String?
+    let url: String?
 }
 
 struct PairingDeepLink {

@@ -47,7 +47,6 @@ final class VoiceService: NSObject, ObservableObject {
     private var ttsEngineReady = false
     private var ttsUseAmplified = false
     private var ttsPendingBuffers = 0
-    private let ttsGain: Float = 2.6
 
     /// Wait for a clear end of speech — finish mid-thought, then Flash answers fast.
     private let silenceToEnd: TimeInterval = 1.85
@@ -57,15 +56,11 @@ final class VoiceService: NSObject, ObservableObject {
     private let endConfirmGrace: TimeInterval = 0.35
     private let speechLevelFactor: CGFloat = 2.5
 
-    /// Calm, clear TTS — slightly under system default for a premium feel.
-    private let speakRate: Float = AVSpeechUtteranceDefaultSpeechRate * 0.82
-    private let preReplyPause: TimeInterval = 0.18
-
     private var pendingEndCandidateAt: Date?
 
     var preferredVoiceIdentifier: String {
-        get { UserDefaults.standard.string(forKey: "nocoai.voiceId") ?? "" }
-        set { UserDefaults.standard.set(newValue, forKey: "nocoai.voiceId") }
+        get { NOCOSpeakVoiceSettings.voiceIdentifier }
+        set { NOCOSpeakVoiceSettings.voiceIdentifier = newValue }
     }
 
     var autoSpeakReplies: Bool {
@@ -80,6 +75,7 @@ final class VoiceService: NSObject, ObservableObject {
         super.init()
         synthesizer.delegate = self
         synthesizer.usesApplicationAudioSession = true
+        NOCOSpeakVoiceSettings.ensureDefaults()
     }
 
     func requestPermissions() async -> Bool {
@@ -265,7 +261,10 @@ final class VoiceService: NSObject, ObservableObject {
     }
 
     func speak(_ text: String) {
-        let cleaned = Self.cleanForSpeech(text)
+        let natural = NOCOSpeakVoiceSettings.usesNaturalPipeline
+        let cleaned = natural
+            ? Self.naturalizeForSpeech(Self.cleanForSpeech(text))
+            : Self.cleanForSpeech(text)
         guard !cleaned.isEmpty else {
             phase = .idle
             notifySpeakFinishedOnce()
@@ -281,7 +280,9 @@ final class VoiceService: NSObject, ObservableObject {
             try? activateBackgroundAudioSession()
         }
 
-        let chunks = Self.speechChunks(from: cleaned)
+        let chunks = natural
+            ? Self.naturalSpeechChunks(from: cleaned)
+            : Self.speechChunks(from: cleaned)
         pendingSpeakChunks = chunks.count
         speakFinishedNotified = false
         ttsUseAmplified = true
@@ -292,7 +293,7 @@ final class VoiceService: NSObject, ObservableObject {
         Task { await animateSpeakingBands() }
 
         // Amplified path: write PCM → gain → AVAudioEngine (utterance.volume alone is capped at 1.0)
-        speakAmplified(chunks: chunks)
+        speakAmplified(chunks: chunks, natural: natural)
     }
 
     /// Start reading, or stop if already speaking (second tap).
@@ -310,7 +311,7 @@ final class VoiceService: NSObject, ObservableObject {
         return false
     }
 
-    private func speakAmplified(chunks: [String]) {
+    private func speakAmplified(chunks: [String], natural: Bool) {
         guard !chunks.isEmpty else {
             phase = .idle
             notifySpeakFinishedOnce()
@@ -318,15 +319,22 @@ final class VoiceService: NSObject, ObservableObject {
         }
 
         pendingSpeakChunks = chunks.count
+        let rate = NOCOSpeakVoiceSettings.resolvedRate(naturalBase: natural)
+        let pitch = NOCOSpeakVoiceSettings.resolvedPitch(naturalBase: natural)
+        let pre = NOCOSpeakVoiceSettings.resolvedPrePause(naturalBase: natural)
+        let post = NOCOSpeakVoiceSettings.resolvedPostPause(naturalBase: natural)
+        let inter = NOCOSpeakVoiceSettings.resolvedInterChunkPause(naturalBase: natural)
+        let gain = NOCOSpeakVoiceSettings.resolvedGain(naturalBase: natural)
+        let voice = bestGermanVoice(preferNatural: natural)
 
         for (index, chunk) in chunks.enumerated() {
             let utterance = AVSpeechUtterance(string: chunk)
-            utterance.voice = bestGermanVoice()
-            utterance.rate = speakRate
-            utterance.pitchMultiplier = 1.02
+            utterance.voice = voice
+            utterance.rate = rate
+            utterance.pitchMultiplier = pitch
             utterance.volume = 1.0
-            utterance.preUtteranceDelay = index == 0 ? preReplyPause : 0.08
-            utterance.postUtteranceDelay = 0.06
+            utterance.preUtteranceDelay = index == 0 ? pre : inter
+            utterance.postUtteranceDelay = post
 
             synthesizer.write(utterance) { [weak self] buffer in
                 guard let self else { return }
@@ -342,7 +350,7 @@ final class VoiceService: NSObject, ObservableObject {
                 }
 
                 guard let copy = Self.copyPCM(pcm) else { return }
-                Self.amplifyPCM(copy, gain: self.ttsGain)
+                Self.amplifyPCM(copy, gain: gain, soft: natural)
 
                 Task { @MainActor in
                     do {
@@ -360,7 +368,7 @@ final class VoiceService: NSObject, ObservableObject {
                         })
                     } catch {
                         self.ttsUseAmplified = false
-                        self.fallbackSpeak(chunks: chunks)
+                        self.fallbackSpeak(chunks: chunks, natural: natural)
                     }
                 }
             }
@@ -391,17 +399,23 @@ final class VoiceService: NSObject, ObservableObject {
         return copy
     }
 
-    private func fallbackSpeak(chunks: [String]) {
+    private func fallbackSpeak(chunks: [String], natural: Bool) {
         stopTTSEngine()
         pendingSpeakChunks = chunks.count
+        let rate = NOCOSpeakVoiceSettings.resolvedRate(naturalBase: natural)
+        let pitch = NOCOSpeakVoiceSettings.resolvedPitch(naturalBase: natural)
+        let pre = NOCOSpeakVoiceSettings.resolvedPrePause(naturalBase: natural)
+        let post = NOCOSpeakVoiceSettings.resolvedPostPause(naturalBase: natural)
+        let inter = NOCOSpeakVoiceSettings.resolvedInterChunkPause(naturalBase: natural)
+        let voice = bestGermanVoice(preferNatural: natural)
         for (index, chunk) in chunks.enumerated() {
             let utterance = AVSpeechUtterance(string: chunk)
-            utterance.voice = bestGermanVoice()
-            utterance.rate = speakRate
-            utterance.pitchMultiplier = 1.02
+            utterance.voice = voice
+            utterance.rate = rate
+            utterance.pitchMultiplier = pitch
             utterance.volume = 1.0
-            utterance.preUtteranceDelay = index == 0 ? preReplyPause : 0.08
-            utterance.postUtteranceDelay = 0.06
+            utterance.preUtteranceDelay = index == 0 ? pre : inter
+            utterance.postUtteranceDelay = post
             synthesizer.speak(utterance)
         }
     }
@@ -430,16 +444,17 @@ final class VoiceService: NSObject, ObservableObject {
         ttsPendingBuffers = 0
     }
 
-    private static func amplifyPCM(_ buffer: AVAudioPCMBuffer, gain: Float) {
+    private static func amplifyPCM(_ buffer: AVAudioPCMBuffer, gain: Float, soft: Bool = false) {
         guard let channels = buffer.floatChannelData else { return }
         let channelCount = Int(buffer.format.channelCount)
         let frames = Int(buffer.frameLength)
+        // Soft curve = warmer, less “robot clip”; still loud enough for Speak.
+        let curve: Float = soft ? 0.62 : 0.72
         for ch in 0..<channelCount {
             let samples = channels[ch]
             for i in 0..<frames {
-                // Soft saturation keeps it loud without harsh digital clip
                 let boosted = samples[i] * gain
-                samples[i] = tanh(boosted * 0.72)
+                samples[i] = tanh(boosted * curve)
             }
         }
     }
@@ -598,30 +613,48 @@ final class VoiceService: NSObject, ObservableObject {
         }
     }
 
-    private func bestGermanVoice() -> AVSpeechSynthesisVoice? {
+    private func bestGermanVoice(preferNatural: Bool = false) -> AVSpeechSynthesisVoice? {
         let voices = availableGermanVoices()
-        if !preferredVoiceIdentifier.isEmpty,
-           let preferred = voices.first(where: { $0.identifier == preferredVoiceIdentifier }) {
+        let id = preferredVoiceIdentifier
+
+        // Explicit system voice (not Natural / Automatic).
+        if id != NOCOSpeakVoiceID.natural,
+           !id.isEmpty,
+           let preferred = voices.first(where: { $0.identifier == id }) {
             return preferred
         }
-        let ranked = voices.sorted { voiceScore($0) > voiceScore($1) }
+
+        // NOCO Natural Voice / Automatic: pick best on-device neural/premium German voice.
+        let ranked = voices.sorted {
+            naturalVoiceScore($0, boostNatural: preferNatural || id == NOCOSpeakVoiceID.natural)
+                > naturalVoiceScore($1, boostNatural: preferNatural || id == NOCOSpeakVoiceID.natural)
+        }
         return ranked.first ?? AVSpeechSynthesisVoice(language: "de-DE")
     }
 
     private func voiceScore(_ voice: AVSpeechSynthesisVoice) -> Int {
+        naturalVoiceScore(voice, boostNatural: false)
+    }
+
+    private func naturalVoiceScore(_ voice: AVSpeechSynthesisVoice, boostNatural: Bool) -> Int {
         var score = 0
         switch voice.quality {
-        case .premium: score += 8
-        case .enhanced: score += 5
+        case .premium: score += boostNatural ? 14 : 8
+        case .enhanced: score += boostNatural ? 9 : 5
         default: score += 1
         }
         if voice.language.lowercased().hasPrefix("de-de") { score += 3 }
         let name = voice.name.lowercased()
-        if ["anna", "helena", "martin", "petra", "yannick", "viktoria", "markus", "katja"].contains(where: { name.contains($0) }) {
-            score += 2
+        // Prefer warm, modern German neural names when available on device.
+        if ["anna", "helena", "martin", "petra", "yannick", "viktoria", "markus", "katja", "shelley", "sandy"].contains(where: { name.contains($0) }) {
+            score += boostNatural ? 4 : 2
         }
-        if name.contains("neural") || name.contains("siri") || name.contains("premium") {
-            score += 2
+        if name.contains("neural") || name.contains("siri") || name.contains("premium") || name.contains("enhanced") {
+            score += boostNatural ? 5 : 2
+        }
+        // Compact/default voices sound more robotic — deprioritize for Natural.
+        if boostNatural, voice.quality == .default {
+            score -= 3
         }
         return score
     }
@@ -660,13 +693,77 @@ final class VoiceService: NSObject, ObservableObject {
         return result
     }
 
-    static func voiceOnlyPrompt(_ userText: String) -> String {
+    /// Light prosody prep — keeps latency low (no network / no heavy models).
+    static func naturalizeForSpeech(_ text: String) -> String {
+        var s = text
+        // Soften list markers into spoken rhythm.
+        s = s.replacingOccurrences(of: #"^\s*\d+\.\s+"#, with: "", options: .regularExpression)
+        s = s.replacingOccurrences(of: " z.B. ", with: " zum Beispiel ", options: .caseInsensitive)
+        s = s.replacingOccurrences(of: " z. B. ", with: " zum Beispiel ", options: .caseInsensitive)
+        s = s.replacingOccurrences(of: " usw.", with: " und so weiter", options: .caseInsensitive)
+        s = s.replacingOccurrences(of: " etc.", with: " und so weiter", options: .caseInsensitive)
+        // Gentle breath after commas / dashes without inventing words.
+        s = s.replacingOccurrences(of: #"\s+[–—-]\s+"#, with: ", ", options: .regularExpression)
+        s = s.replacingOccurrences(of: #"\s{2,}"#, with: " ", options: .regularExpression)
+        return s.trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+
+    /// Slightly shorter phrases than default → more natural pauses, still quick to start.
+    static func naturalSpeechChunks(from text: String) -> [String] {
+        let rough = text
+            .replacingOccurrences(of: ";", with: ".")
+            .replacingOccurrences(of: ":", with: ",")
+        let sentenceParts = rough.components(separatedBy: CharacterSet(charactersIn: ".!?\n"))
+            .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
+            .filter { !$0.isEmpty }
+        if sentenceParts.isEmpty { return speechChunks(from: text) }
+
+        var result: [String] = []
+        for sentence in sentenceParts {
+            let commas = sentence.components(separatedBy: ",")
+                .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
+                .filter { !$0.isEmpty }
+            if commas.count <= 1 || sentence.count < 90 {
+                let ended = sentence.hasSuffix(".") ? sentence : sentence + "."
+                result.append(ended)
+                continue
+            }
+            var current = ""
+            for (i, part) in commas.enumerated() {
+                let piece = current.isEmpty ? part : current + ", " + part
+                if piece.count > 110, !current.isEmpty {
+                    result.append(current + ",")
+                    current = part
+                } else {
+                    current = piece
+                }
+                if i == commas.count - 1, !current.isEmpty {
+                    result.append(current.hasSuffix(".") ? current : current + ".")
+                }
+            }
+        }
+        return result.isEmpty ? speechChunks(from: text) : result
+    }
+
+    static func speakPrompt(_ userText: String, depth: AIMode = .flash, style: SpeakStyleHints = SpeakStyleHints()) -> String {
         let trimmed = userText.trimmingCharacters(in: .whitespacesAndNewlines)
-        return """
-        [NOCO SPEAK · FLASH]
-        Kurze gesprochene Antwort auf Deutsch. Direkt, klar, 1–4 Sätze. Keine Meta-Kommentare.
-        Nutzer: \(trimmed)
-        """
+        var lines: [String] = ["[NOCO SPEAK]"]
+        if depth == .think || style.prefersDepth {
+            lines.append("Gründliche, klare gesprochene Antwort auf Deutsch. Strukturiert, aber noch gut hörbar — keine endlosen Aufsätze.")
+        } else {
+            lines.append("Kurze gesprochene Antwort auf Deutsch. Direkt, klar, 1–4 Sätze. Keine Meta-Kommentare.")
+        }
+        if style.shorter { lines.append("Halte dich besonders kurz.") }
+        if style.longer { lines.append("Erkläre etwas ausführlicher, bleib aber sprechbar.") }
+        if style.creative { lines.append("Sei kreativ und originell.") }
+        if style.professional { lines.append("Ton: professionell, präzise, ohne Floskeln.") }
+        if style.highQuality { lines.append("Priorisiere Qualität und Klarheit.") }
+        lines.append("Nutzer: \(trimmed)")
+        return lines.joined(separator: "\n")
+    }
+
+    static func voiceOnlyPrompt(_ userText: String) -> String {
+        speakPrompt(userText, depth: .flash)
     }
 
     static func stripSpeakEcho(_ reply: String) -> String {

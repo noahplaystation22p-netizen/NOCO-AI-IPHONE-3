@@ -93,11 +93,13 @@ extension CompanionAPI {
         conversationId: String?,
         mode: AIMode,
         speak: Bool = false,
-        agentPower: Bool = false
+        agentPower: Bool = false,
+        web: String? = nil
     ) -> AsyncThrowingStream<ChatStreamChunk, Error> {
         let modeValue: String?
         if speak {
-            modeValue = "flash"
+            // Speak can request Think for complex spoken answers.
+            modeValue = mode.wireModeValue ?? "flash"
         } else if agentPower {
             modeValue = "think"
         } else {
@@ -111,7 +113,8 @@ extension CompanionAPI {
                 stream: true,
                 mode: modeValue,
                 speak: speak ? true : nil,
-                agent: agentPower ? true : nil
+                agent: agentPower ? true : nil,
+                web: web
             )
         )
     }
@@ -328,22 +331,50 @@ extension CompanionAPI {
         height: Int = 384,
         steps: Int = 6
     ) async throws -> ImageGenerateResponse {
-        var request = try authorizedRequest(path: "images/txt2img", method: "POST")
-        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
-        // SD on CPU can take several minutes — must outlive default 20s request timeout
-        request.timeoutInterval = 360
-        request.httpBody = try encoder.encode(
-            ImageGenerateRequest(
-                prompt: prompt,
-                conversationId: conversationId,
-                width: width,
-                height: height,
-                steps: steps
-            )
-        )
-        let (data, response) = try await session.data(for: request)
-        try validate(response: response, data: data, isPairRequest: false)
-        return try decoder.decode(ImageGenerateResponse.self, from: data)
+        // Think (more steps/res) can run 5–8+ min on CPU — keep connection alive.
+        let longJob = steps >= 12 || width >= 512 || height >= 512
+        let maxAttempts = longJob ? 2 : 3
+        var lastError: Error?
+        for attempt in 0..<maxAttempts {
+            do {
+                var request = try authorizedRequest(path: "images/txt2img", method: "POST")
+                request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+                request.timeoutInterval = longJob ? 540 : 420
+                request.httpBody = try encoder.encode(
+                    ImageGenerateRequest(
+                        prompt: prompt,
+                        conversationId: conversationId,
+                        width: width,
+                        height: height,
+                        steps: steps
+                    )
+                )
+                let (data, response) = try await session.data(for: request)
+                try validate(response: response, data: data, isPairRequest: false)
+                return try decoder.decode(ImageGenerateResponse.self, from: data)
+            } catch {
+                let mapped = mapNetworkError(error)
+                lastError = mapped
+                let retryable: Bool
+                if longJob {
+                    // Avoid re-queueing a finished-but-timed-out Think job; only heal drops.
+                    if let url = error as? URLError {
+                        retryable = [
+                            .networkConnectionLost,
+                            .cannotConnectToHost,
+                            .notConnectedToInternet
+                        ].contains(url.code)
+                    } else {
+                        retryable = false
+                    }
+                } else {
+                    retryable = Self.isTransient(mapped)
+                }
+                guard retryable, attempt + 1 < maxAttempts else { throw mapped }
+                try? await Task.sleep(nanoseconds: UInt64(attempt + 1) * 1_400_000_000)
+            }
+        }
+        throw lastError ?? CompanionAPIError.unreachable
     }
 
     /// Edit an existing photo with Stable Diffusion img2img (remove object, recolor hair, etc.).
@@ -355,7 +386,7 @@ extension CompanionAPI {
     ) async throws -> ImageGenerateResponse {
         var request = try authorizedRequest(path: "images/img2img", method: "POST")
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
-        request.timeoutInterval = 360
+        request.timeoutInterval = 480
         request.httpBody = try encoder.encode(
             ImageEditRequest(
                 prompt: prompt,
@@ -407,12 +438,7 @@ extension CompanionAPI {
             do {
                 var request = try authorizedRequest(path: path, method: "POST")
                 request.setValue("application/json", forHTTPHeaderField: "Content-Type")
-                request.timeoutInterval = 420
-                request.httpBody = try encoder.encode(body)
-                let (data, response) = try await session.data(for: request)
-                try validate(response: response, data: data, isPairRequest: false)
-                return try decoder.decode(ImageGenerateResponse.self, from: data)
-            } catch {
+                request.timeoutInterval = 480
                 lastError = error
                 let msg = (error as? LocalizedError)?.errorDescription?.lowercased() ?? ""
                 if msg.contains("unbekannte") || msg.contains("route") || msg.contains("404") {
@@ -579,6 +605,8 @@ extension CompanionAPI {
                     var request = try authorizedRequest(path: path, method: "POST")
                     request.setValue("application/json", forHTTPHeaderField: "Content-Type")
                     request.setValue("text/event-stream", forHTTPHeaderField: "Accept")
+                    // Idle gaps between tokens must not abort long Think/agent streams.
+                    request.timeoutInterval = 600
                     request.httpBody = try encoder.encode(body)
 
                     let (bytes, response) = try await session.bytes(for: request)
@@ -617,7 +645,7 @@ extension CompanionAPI {
         let trimmed = line.trimmingCharacters(in: .whitespacesAndNewlines)
         guard trimmed.hasPrefix("data:") else { return nil }
         let payload = trimmed.dropFirst(5).trimmingCharacters(in: .whitespaces)
-        if payload == "[DONE]" { return ChatStreamChunk(content: nil, done: true, error: nil, conversationId: nil, messageId: nil, imageUrl: nil) }
+        if payload == "[DONE]" { return ChatStreamChunk(content: nil, done: true, error: nil, conversationId: nil, messageId: nil, imageUrl: nil, webUsed: nil, sources: nil) }
         guard let data = payload.data(using: .utf8),
               let chunk = try? decoder.decode(ChatStreamChunk.self, from: data) else { return nil }
         if let error = chunk.error, !error.isEmpty { throw CompanionAPIError.server(error) }
@@ -631,6 +659,7 @@ extension CompanionAPI {
                     var request = try authorizedRequest(path: path, method: "POST")
                     request.setValue("application/json", forHTTPHeaderField: "Content-Type")
                     request.setValue("text/event-stream", forHTTPHeaderField: "Accept")
+                    request.timeoutInterval = 600
                     request.httpBody = try encoder.encode(body)
 
                     let (bytes, response) = try await session.bytes(for: request)

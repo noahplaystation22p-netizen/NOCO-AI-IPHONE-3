@@ -10,17 +10,15 @@ struct ModeStatusTheater: View {
     var body: some View {
         if phase != .idle {
             HStack(spacing: 12) {
-                ZStack {
-                    Circle()
-                        .fill(mode.accentColor.opacity(0.16))
-                        .frame(width: 34, height: 34)
+                NOCOIntelligenceCore(
+                    energy: phase == .done ? .success : .thinking,
+                    size: .compact,
+                    systemImage: nil
+                )
+                .frame(width: 40, height: 40)
+                .overlay {
                     Text(phase.emoji)
-                        .font(.system(size: 15))
-                        .scaleEffect(phase != .done && !reduceMotion ? 1.05 : 1)
-                        .animation(
-                            reduceMotion ? nil : .easeInOut(duration: 0.9).repeatForever(autoreverses: true),
-                            value: phase
-                        )
+                        .font(.system(size: 13))
                 }
                 .animation(.spring(response: 0.4, dampingFraction: 0.78), value: phase)
 
@@ -41,7 +39,7 @@ struct ModeStatusTheater: View {
                                 Capsule()
                                     .fill(
                                         LinearGradient(
-                                            colors: [mode.accentColor.opacity(0.55), mode.accentColor],
+                                            colors: Array(NOCORainbow.flow.prefix(4)),
                                             startPoint: .leading,
                                             endPoint: .trailing
                                         )
@@ -64,12 +62,7 @@ struct ModeStatusTheater: View {
                         RoundedRectangle(cornerRadius: 16, style: .continuous)
                             .stroke(
                                 AngularGradient(
-                                    colors: [
-                                        mode.accentColor.opacity(0.45),
-                                        mode.accentColor.opacity(0.08),
-                                        mode.accentColor.opacity(0.3),
-                                        mode.accentColor.opacity(0.45)
-                                    ],
+                                    colors: NOCORainbow.flow.map { $0.opacity(0.35) },
                                     center: .center
                                 ),
                                 lineWidth: 1

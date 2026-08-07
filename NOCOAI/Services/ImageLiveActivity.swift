@@ -1,17 +1,34 @@
 import ActivityKit
 import Foundation
 
+/// Who currently owns the Image Live Activity — prevents Speak/Agent from killing unrelated work.
+enum ImageLiveActivityOwner: String {
+    case generation
+    case eraser
+    case speakVision
+}
+
 @MainActor
 enum ImageLiveActivityManager {
     private static var activity: Activity<ImageActivityAttributes>?
     private static var lastUpdate: Date = .distantPast
+    private static var owner: ImageLiveActivityOwner?
 
-    static var isActive: Bool { activity != nil }
+    static var isActive: Bool {
+        activity != nil || !Activity<ImageActivityAttributes>.activities.isEmpty
+    }
 
-    static func start(prompt: String) {
-        guard ActivityAuthorizationInfo().areActivitiesEnabled else { return }
+    static var currentOwner: ImageLiveActivityOwner? { owner }
+
+    static var areActivitiesEnabled: Bool {
+        ActivityAuthorizationInfo().areActivitiesEnabled
+    }
+
+    static func start(prompt: String, owner newOwner: ImageLiveActivityOwner = .generation) {
+        guard areActivitiesEnabled else { return }
         end(immediate: true)
 
+        owner = newOwner
         let attributes = ImageActivityAttributes(prompt: String(prompt.prefix(80)))
         let state = ImageActivityAttributes.ContentState(
             progress: 0.02,
@@ -30,7 +47,7 @@ enum ImageLiveActivityManager {
                 pushType: nil
             )
         } catch {
-            activity = nil
+            activity = Activity<ImageActivityAttributes>.activities.first
         }
     }
 
@@ -42,6 +59,9 @@ enum ImageLiveActivityManager {
         phase: ImageActivityPhase,
         force: Bool = false
     ) {
+        if activity == nil {
+            activity = Activity<ImageActivityAttributes>.activities.first
+        }
         guard let activity else { return }
         let now = Date()
         if !force, now.timeIntervalSince(lastUpdate) < 0.8 { return }
@@ -75,7 +95,11 @@ enum ImageLiveActivityManager {
     }
 
     static func complete(prompt: String) {
-        guard let activity else { return }
+        adoptIfNeeded()
+        guard let activity else {
+            owner = nil
+            return
+        }
         let state = ImageActivityAttributes.ContentState(
             progress: 1,
             percentLabel: "100%",
@@ -92,10 +116,15 @@ enum ImageLiveActivityManager {
             )
         }
         self.activity = nil
+        owner = nil
     }
 
     static func fail(_ message: String) {
-        guard let activity else { return }
+        adoptIfNeeded()
+        guard let activity else {
+            owner = nil
+            return
+        }
         let state = ImageActivityAttributes.ContentState(
             progress: 0,
             percentLabel: "—",
@@ -112,25 +141,27 @@ enum ImageLiveActivityManager {
             )
         }
         self.activity = nil
+        owner = nil
     }
 
-    static func end(immediate: Bool = false) {
-        guard let activity else { return }
-        let state = ImageActivityAttributes.ContentState(
-            progress: 0,
-            percentLabel: "",
-            status: "",
-            insight: "",
-            etaLabel: "",
-            phaseRaw: ImageActivityPhase.preparing.rawValue,
-            isDone: false
-        )
-        Task {
-            await activity.end(
-                .init(state: state, staleDate: nil),
-                dismissalPolicy: immediate ? .immediate : .default
-            )
+    /// Ends image activities. Pass `onlyIfOwner` to avoid wiping another feature's Island.
+    static func end(immediate: Bool = false, onlyIfOwner: ImageLiveActivityOwner? = nil) {
+        if let onlyIfOwner, owner != onlyIfOwner {
+            return
         }
-        self.activity = nil
+        let activities = Activity<ImageActivityAttributes>.activities
+        activity = nil
+        owner = nil
+        Task {
+            for act in activities {
+                await act.end(nil, dismissalPolicy: immediate ? .immediate : .default)
+            }
+        }
+    }
+
+    private static func adoptIfNeeded() {
+        if activity == nil {
+            activity = Activity<ImageActivityAttributes>.activities.first
+        }
     }
 }

@@ -14,8 +14,8 @@ struct KeyboardRootView: View {
             }
             statusBar
             KeyboardLayoutView(model: model)
-                .padding(.horizontal, 4)
-                .padding(.bottom, 6)
+                .padding(.horizontal, 2)
+                .padding(.bottom, 4)
         }
         .padding(.top, 4)
         .background(keyboardBackground)

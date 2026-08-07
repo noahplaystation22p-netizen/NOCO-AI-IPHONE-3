@@ -50,5 +50,48 @@
 			</array>
 		</dict>
 	</array>
+	<key>UIApplicationShortcutItems</key>
+	<array>
+		<dict>
+			<key>UIApplicationShortcutItemType</key>
+			<string>de.noco.nocoai.speak</string>
+			<key>UIApplicationShortcutItemTitle</key>
+			<string>Sprachmodus starten</string>
+			<key>UIApplicationShortcutItemSubtitle</key>
+			<string>NOCO Speak</string>
+			<key>UIApplicationShortcutItemIconType</key>
+			<string>UIApplicationShortcutIconTypeAudio</string>
+		</dict>
+		<dict>
+			<key>UIApplicationShortcutItemType</key>
+			<string>de.noco.nocoai.images</string>
+			<key>UIApplicationShortcutItemTitle</key>
+			<string>Bild erstellen</string>
+			<key>UIApplicationShortcutItemSubtitle</key>
+			<string>Bildideen</string>
+			<key>UIApplicationShortcutItemIconType</key>
+			<string>UIApplicationShortcutIconTypeCompose</string>
+		</dict>
+		<dict>
+			<key>UIApplicationShortcutItemType</key>
+			<string>de.noco.nocoai.agent</string>
+			<key>UIApplicationShortcutItemTitle</key>
+			<string>Agent starten</string>
+			<key>UIApplicationShortcutItemSubtitle</key>
+			<string>NOCO Agent</string>
+			<key>UIApplicationShortcutItemIconType</key>
+			<string>UIApplicationShortcutIconTypeTask</string>
+		</dict>
+		<dict>
+			<key>UIApplicationShortcutItemType</key>
+			<string>de.noco.nocoai.vision</string>
+			<key>UIApplicationShortcutItemTitle</key>
+			<string>Kamera öffnen</string>
+			<key>UIApplicationShortcutItemSubtitle</key>
+			<string>Vision Live</string>
+			<key>UIApplicationShortcutItemIconType</key>
+			<string>UIApplicationShortcutIconTypeCapturePhoto</string>
+		</dict>
+	</array>
 </dict>
 </plist>

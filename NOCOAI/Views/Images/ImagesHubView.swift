@@ -351,21 +351,18 @@ struct ImagesHubView: View {
                         .overlay(
                             RoundedRectangle(cornerRadius: 18, style: .continuous)
                                 .stroke(
-                                    LinearGradient(
-                                        colors: [
-                                            NOCOAITheme.glowPrimary.opacity(0.5),
-                                            NOCOAITheme.glowAccent.opacity(0.3)
-                                        ],
-                                        startPoint: .topLeading,
-                                        endPoint: .bottomTrailing
+                                    AngularGradient(
+                                        colors: NOCORainbow.flow.map { $0.opacity(reveal ? 0.55 : 0.2) },
+                                        center: .center
                                     ),
                                     lineWidth: 1.2
                                 )
                         )
-                        .shadow(color: NOCOAITheme.glowPrimary.opacity(0.3), radius: 16, y: 6)
-                        .scaleEffect(reveal ? 1 : 0.94)
-                        .opacity(reveal ? 1 : 0.4)
-                        .blur(radius: reveal ? 0 : 8)
+                        .shadow(color: NOCORainbow.violet.opacity(reveal ? 0.28 : 0.1), radius: 16, y: 6)
+                        .scaleEffect(reveal ? 1 : 0.92)
+                        .opacity(reveal ? 1 : 0)
+                        .blur(radius: reveal ? 0 : 14)
+                        .animation(.spring(response: 0.55, dampingFraction: 0.82), value: reveal)
 
                     if !connection.images.lastPrompt.isEmpty {
                         Text(connection.images.lastPrompt)
@@ -607,45 +604,59 @@ private struct ImageInspirationStrip: View {
     private let items: [ImageInspirationItem] = [
         .init(
             id: "cine",
-            title: "Cinematic",
-            prompt: "Neon-Stadt bei Regen, cinematic lighting, wide shot",
+            title: "Kino",
+            prompt: "Erstelle ein cineastisches Nachtfoto einer regenassen Großstadt mit Neonlicht, Spiegelungen auf dem Asphalt und dramatischer Weitwinkel-Atmosphäre.",
             symbol: "film",
             colors: [Color(red: 0.12, green: 0.18, blue: 0.42), Color(red: 0.55, green: 0.25, blue: 0.75)]
         ),
         .init(
             id: "portrait",
-            title: "Portrait",
-            prompt: "Soft portrait, studio light, shallow depth of field",
+            title: "Porträt",
+            prompt: "Erstelle ein weiches Premium-Porträt mit natürlichem Studio-Licht, sanfter Unschärfe im Hintergrund und warmer, ruhiger Stimmung.",
             symbol: "person.crop.rectangle",
             colors: [Color(red: 0.45, green: 0.32, blue: 0.28), Color(red: 0.85, green: 0.65, blue: 0.5)]
         ),
         .init(
             id: "nature",
-            title: "Nature",
-            prompt: "Fantasy forest, golden hour, volumetric light",
+            title: "Natur",
+            prompt: "Erstelle eine magische Waldszene im goldenen Abendlicht mit Nebelschwaden, weichen Lichtstrahlen und ruhiger Fantasie-Atmosphäre.",
             symbol: "leaf.fill",
             colors: [Color(red: 0.12, green: 0.38, blue: 0.28), Color(red: 0.55, green: 0.75, blue: 0.35)]
         ),
         .init(
             id: "product",
-            title: "Product",
-            prompt: "Minimal product shot on white, soft shadows",
+            title: "Produktdesign",
+            prompt: "Erstelle ein modernes Premium-Produktfoto eines minimalistischen Kopfhörers mit Studio-Beleuchtung und eleganter Atmosphäre.",
             symbol: "cube.transparent",
             colors: [Color(red: 0.22, green: 0.24, blue: 0.28), Color(red: 0.55, green: 0.58, blue: 0.65)]
         ),
         .init(
             id: "abstract",
-            title: "Abstract",
-            prompt: "Abstract fluid shapes, soft gradients, modern art",
+            title: "Abstrakt",
+            prompt: "Erstelle eine abstrakte Komposition aus fließenden Formen und sanften Farbverläufen, modern und hochwertig wie ein Kunstdruck.",
             symbol: "waveform",
             colors: [Color(red: 0.2, green: 0.45, blue: 0.7), Color(red: 0.9, green: 0.45, blue: 0.55)]
         ),
         .init(
             id: "arch",
-            title: "Architecture",
-            prompt: "Modern architecture, clean lines, dusk sky",
+            title: "Architektur",
+            prompt: "Erstelle eine klare Architekturaufnahme eines modernen Gebäudes mit klaren Linien, Dämmerungslicht und ruhiger, geordneter Bildsprache.",
             symbol: "building.2.fill",
             colors: [Color(red: 0.18, green: 0.22, blue: 0.35), Color(red: 0.4, green: 0.55, blue: 0.75)]
+        ),
+        .init(
+            id: "food",
+            title: "Food",
+            prompt: "Erstelle ein appetitliches Food-Foto eines handwerklich angerichteten Gerichts mit weichem Seitenlicht und natürlicher, einladender Atmosphäre.",
+            symbol: "fork.knife",
+            colors: [Color(red: 0.42, green: 0.22, blue: 0.16), Color(red: 0.85, green: 0.55, blue: 0.35)]
+        ),
+        .init(
+            id: "fashion",
+            title: "Mode",
+            prompt: "Erstelle ein stilvolles Modefoto mit klarer Silhouette, hochwertiger Stoffstruktur und zurückhaltender Premium-Beleuchtung.",
+            symbol: "tshirt.fill",
+            colors: [Color(red: 0.18, green: 0.18, blue: 0.22), Color(red: 0.72, green: 0.55, blue: 0.78)]
         )
     ]
 
@@ -659,6 +670,7 @@ private struct ImageInspirationStrip: View {
                 HStack(spacing: 12) {
                     ForEach(Array(items.enumerated()), id: \.element.id) { index, item in
                         Button {
+                            HapticService.selection()
                             onPick(item.prompt)
                         } label: {
                             ZStack(alignment: .bottomLeading) {
@@ -684,12 +696,22 @@ private struct ImageInspirationStrip: View {
                                         )
                                         .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
                                     )
+                                    .overlay(
+                                        RoundedRectangle(cornerRadius: 16, style: .continuous)
+                                            .stroke(
+                                                AngularGradient(
+                                                    colors: NOCORainbow.flow.map { $0.opacity(0.35) },
+                                                    center: .center
+                                                ),
+                                                lineWidth: 1
+                                            )
+                                    )
 
                                 VStack(alignment: .leading, spacing: 2) {
                                     Text(item.title)
                                         .font(.caption.weight(.bold))
                                         .foregroundStyle(.white)
-                                    Text("Tippen zum ?bernehmen")
+                                    Text("Tippen zum Übernehmen")
                                         .font(.caption2)
                                         .foregroundStyle(.white.opacity(0.7))
                                 }
@@ -705,7 +727,7 @@ private struct ImageInspirationStrip: View {
                                 value: glow
                             )
                         }
-                        .buttonStyle(.plain)
+                        .buttonStyle(IntelligencePressStyle(haptic: { HapticService.soft() }))
                     }
                 }
                 .padding(.vertical, 2)

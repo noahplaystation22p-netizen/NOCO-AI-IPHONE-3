@@ -148,8 +148,12 @@ struct ChatHubView: View {
                         }
                         StatusBadge(
                             online: connection.isOnline,
-                            label: connection.isOnline ? "Online" : "Offline",
-                            detail: connection.isOnline ? connection.onlineBadgeDetail : nil
+                            label: connection.isReconnecting
+                                ? "Verbindung…"
+                                : (connection.isOnline ? "Online" : "Offline"),
+                            detail: connection.isReconnecting
+                                ? "wird wiederhergestellt"
+                                : (connection.isOnline ? connection.onlineBadgeDetail : nil)
                         )
                     }
                 }
@@ -446,13 +450,36 @@ private struct ChatBubble: View {
                 }
                 if !message.text.isEmpty || message.isStreaming {
                     if message.isStreaming && message.text.isEmpty {
-                        IntelligenceThinkingStatus()
+                        IntelligenceThinkingStatus(
+                            mode: statusMode(for: message),
+                            phase: connection.chat.workPhase == .idle
+                                ? .understanding
+                                : connection.chat.workPhase,
+                            isFile: lastUserLooksLikeFile,
+                            statusOverride: connection.reconnectStatusLine ?? connection.chat.reconnectHint
+                        )
                     } else {
                         bubbleText
                     }
                 }
 
                 if !message.isStreaming, !message.text.isEmpty {
+                    if message.webUsed {
+                        HStack(spacing: 6) {
+                            Image(systemName: "globe")
+                                .font(.caption2.weight(.bold))
+                            Text("Web verwendet")
+                                .font(.caption2.weight(.semibold))
+                            if !message.webSourceTitles.isEmpty {
+                                Text("· \(message.webSourceTitles.prefix(2).joined(separator: ", "))")
+                                    .font(.caption2)
+                                    .foregroundStyle(.secondary)
+                                    .lineLimit(1)
+                            }
+                        }
+                        .foregroundStyle(Color(red: 0.3, green: 0.55, blue: 0.95))
+                        .padding(.top, 2)
+                    }
                     MessageActionRow(
                         message: message,
                         copiedFlash: copiedFlash,
@@ -471,6 +498,24 @@ private struct ChatBubble: View {
             }
             if message.role == .assistant { Spacer(minLength: 48) }
         }
+    }
+
+    private var lastUserLooksLikeFile: Bool {
+        guard let text = connection.chat.messages.last(where: { $0.role == .user })?.text else { return false }
+        return text.hasPrefix("Dokument „") || text.hasPrefix("Dokument \"")
+    }
+
+    private func statusMode(for message: ChatMessage) -> AIMode {
+        let label = (message.modelLabel ?? "").lowercased()
+        if label.contains("vision") { return .vision }
+        if label.contains("bild") || label.contains("image") { return .image }
+        if label.contains("agent") { return .agent }
+        if label.contains("schreib") || label.contains("writing") { return .writing }
+        if connection.chat.messages.last(where: { $0.role == .user })?.localImageData != nil,
+           connection.chat.mode != .agent, connection.chat.mode != .image {
+            return .vision
+        }
+        return connection.chat.mode
     }
 
     @ViewBuilder

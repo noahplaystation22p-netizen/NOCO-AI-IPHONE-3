@@ -67,11 +67,11 @@ final class ImageStore: ObservableObject {
     ]
 
     private let thinkInsights = [
-        "Höhere Qualität, mehr Schritte…",
-        "Details entstehen…",
-        "Braucht etwas länger — das ist normal…",
-        "Feinschliff…",
-        "Noch einen Moment…",
+        "🎨 Think-Modell arbeitet an deinem Bild…",
+        "🧠 Analysiert Details…",
+        "✨ Optimiert Ergebnis…",
+        "Höhere Qualität braucht etwas länger — ganz normal…",
+        "Feinschliff der Lichter & Texturen…",
         "Gleich fertig…"
     ]
 
@@ -145,10 +145,10 @@ final class ImageStore: ObservableObject {
         lastResolvedMode = resolved
         let params = resolved.engineParams
         statusText = resolved == .think
-            ? "Erstelle Bild in hoher Qualität…"
+            ? "🎨 Think-Modell arbeitet an deinem Bild…"
             : "Erstelle Bild…"
         insightText = resolved == .think ? thinkInsights[0] : insights[0]
-        etaSeconds = resolved == .think ? 420 : 200
+        etaSeconds = resolved == .think ? 480 : 200
         startedAt = .now
         sawRealProgress = false
         lastHapticBucket = -1
@@ -159,7 +159,7 @@ final class ImageStore: ObservableObject {
 
         _ = await AppNotificationService.requestAuthorizationIfNeeded()
         ImageBackgroundKeeper.shared.begin()
-        ImageLiveActivityManager.start(prompt: "\(resolved.emoji) \(trimmed)")
+        ImageLiveActivityManager.start(prompt: "\(resolved.emoji) \(trimmed)", owner: .generation)
         startInsightLoop()
         startProgressPolling()
 
@@ -233,7 +233,10 @@ final class ImageStore: ObservableObject {
         guard isGenerating else { return }
         ImageBackgroundKeeper.shared.begin()
         if !ImageLiveActivityManager.isActive {
-            ImageLiveActivityManager.start(prompt: lastPrompt.isEmpty ? prompt : lastPrompt)
+            ImageLiveActivityManager.start(
+                prompt: lastPrompt.isEmpty ? prompt : lastPrompt,
+                owner: .generation
+            )
         }
         pushImageLiveActivity(force: true)
     }
@@ -417,9 +420,10 @@ final class ImageStore: ObservableObject {
             if next > progress + 0.012 {
                 progress = next
             } else if !sawRealProgress {
-                // Soft time-based fill while SD cold-starts (up to ~70% over 3 min)
+                // Soft time-based fill while SD cold-starts
                 let elapsed = Date().timeIntervalSince(startedAt ?? .now)
-                let soft = min(0.7, elapsed / 180.0)
+                let span = lastResolvedMode == .think ? 360.0 : 180.0
+                let soft = min(0.7, elapsed / span)
                 progress = max(progress, soft)
                 phase = elapsed < 25 ? .preparing : .rendering
             }
@@ -434,17 +438,20 @@ final class ImageStore: ObservableObject {
                 etaSeconds = Int(eta.rounded())
             } else if let step = prog.state?.samplingStep, let steps = prog.state?.samplingSteps, steps > 0, step < steps {
                 let remaining = steps - step
-                etaSeconds = remaining * 18
+                let perStep = lastResolvedMode == .think ? 22 : 16
+                etaSeconds = remaining * perStep
             } else if !sawRealProgress {
                 let elapsed = Date().timeIntervalSince(startedAt ?? .now)
-                etaSeconds = max(30, Int(240 - elapsed))
+                let budget = lastResolvedMode == .think ? 480.0 : 240.0
+                etaSeconds = max(30, Int(budget - elapsed))
             }
 
             statusText = Self.friendlyProgressStatus(
                 progress: prog,
                 phase: phase,
                 percent: Int(progress * 100),
-                isThink: lastResolvedMode == .think
+                isThink: lastResolvedMode == .think,
+                elapsed: Date().timeIntervalSince(startedAt ?? .now)
             )
             pushImageLiveActivity(force: false)
         } catch {
@@ -457,8 +464,21 @@ final class ImageStore: ObservableObject {
         progress prog: ImageProgressResponse,
         phase: Phase,
         percent: Int,
-        isThink _: Bool
+        isThink: Bool,
+        elapsed: TimeInterval = 0
     ) -> String {
+        if isThink {
+            if let step = prog.state?.samplingStep, let steps = prog.state?.samplingSteps, steps > 0 {
+                if Double(step) / Double(steps) < 0.35 {
+                    return "🧠 Analysiert Details… \(step)/\(steps)"
+                }
+                if Double(step) / Double(steps) < 0.75 {
+                    return "✨ Optimiert Ergebnis… \(step)/\(steps)"
+                }
+                return "🎨 Think-Modell · Feinschliff \(step)/\(steps)"
+            }
+            return thinkPhaseStatus(elapsed: elapsed)
+        }
         if let step = prog.state?.samplingStep, let steps = prog.state?.samplingSteps, steps > 0 {
             return "Erstellt Bild… Schritt \(step)/\(steps)"
         }
@@ -478,13 +498,25 @@ final class ImageStore: ObservableObject {
         return "Erstellt Bild… \(percent)%"
     }
 
+    static func thinkPhaseStatus(elapsed: TimeInterval) -> String {
+        if elapsed < 14 { return "🎨 Think-Modell arbeitet an deinem Bild…" }
+        if elapsed < 55 { return "🧠 Analysiert Details…" }
+        if elapsed < 140 { return "✨ Optimiert Ergebnis…" }
+        return "🎨 Think-Modell · Feinschliff…"
+    }
+
     /// Shared progress copy for in-chat image generation.
-    static func chatFriendlyProgress(_ prog: ImageProgressResponse) -> String {
+    static func chatFriendlyProgress(
+        _ prog: ImageProgressResponse,
+        isThink: Bool = false,
+        elapsed: TimeInterval = 0
+    ) -> String {
         friendlyProgressStatus(
             progress: prog,
             phase: .rendering,
             percent: Int(prog.normalizedProgress * 100),
-            isThink: false
+            isThink: isThink,
+            elapsed: elapsed
         )
     }
 

@@ -7,9 +7,12 @@ enum NOCOAITheme {
     static let success = Color(red: 0.22, green: 0.80, blue: 0.52)
     static let danger = Color(red: 0.95, green: 0.32, blue: 0.36)
 
-    static let glowPrimary = Color(red: 0.42, green: 0.68, blue: 1.0)
-    static let glowSecondary = Color(red: 0.45, green: 0.88, blue: 0.82)
-    static let glowAccent = Color(red: 0.78, green: 0.72, blue: 0.98)
+    /// Rainbow Intelligence accents (aligned with NOCORainbow).
+    static let glowPrimary = Color(red: 0.32, green: 0.72, blue: 1.0)   // blue
+    static let glowSecondary = Color(red: 0.28, green: 0.88, blue: 0.86) // teal
+    static let glowAccent = Color(red: 0.58, green: 0.42, blue: 1.0)     // violet
+    static let glowPink = Color(red: 0.95, green: 0.42, blue: 0.78)
+    static let glowGreen = Color(red: 0.35, green: 0.92, blue: 0.62)
 
     static func intelligenceBackground(for scheme: ColorScheme) -> LinearGradient {
         if scheme == .dark {

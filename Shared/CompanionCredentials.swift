@@ -259,8 +259,11 @@ enum CompanionCredentials {
         pb.items = []
         pb.setData(data, forPasteboardType: "public.data")
         pb.string = encoded
-        // Extra bridge for SideStore when named pasteboards get isolated
-        UIPasteboard.general.string = encoded
+        // Prefer named pasteboard only. General pasteboard only if App Group is unavailable.
+        let suiteOK = UserDefaults(suiteName: appGroupId)?.string(forKey: Keys.host)?.isEmpty == false
+        if !suiteOK {
+            UIPasteboard.general.string = encoded
+        }
     }
 
     private static func readPasteboard() -> DiskPayload? {

@@ -10,6 +10,10 @@ enum SpeakLiveActivityManager {
         activity != nil || !Activity<SpeakActivityAttributes>.activities.isEmpty
     }
 
+    static var areActivitiesEnabled: Bool {
+        ActivityAuthorizationInfo().areActivitiesEnabled
+    }
+
     /// Fire-and-forget start (Speak start path).
     static func start(sessionLabel: String = "NOCO Speak") {
         Task { _ = await startAndWait(sessionLabel: sessionLabel) }
@@ -18,6 +22,8 @@ enum SpeakLiveActivityManager {
     /// Guaranteed attempt: end stale activities, then request a new one (retries).
     @discardableResult
     static func startAndWait(sessionLabel: String = "NOCO Speak") async -> Bool {
+        guard areActivitiesEnabled else { return false }
+
         // Clear stale activities so a fresh Lock Screen + Island banner appears
         let stale = Activity<SpeakActivityAttributes>.activities
         activity = nil
@@ -28,8 +34,8 @@ enum SpeakLiveActivityManager {
         let attributes = SpeakActivityAttributes(sessionLabel: sessionLabel)
         let state = SpeakActivityAttributes.ContentState(
             phaseRaw: SpeakActivityPhase.listening.rawValue,
-            title: "Zuhören…",
-            detail: "Sprich — Pause sendet sofort",
+            title: SpeakActivityPhase.listening.title,
+            detail: "Rede natürlich — NOCO versteht Absichten",
             level: 0.35,
             bars: [0.25, 0.45, 0.7, 0.95, 0.7, 0.45, 0.25],
             isOnline: true,
@@ -72,7 +78,8 @@ enum SpeakLiveActivityManager {
         bars: [Double],
         isOnline: Bool,
         isMuted: Bool = false,
-        force: Bool = false
+        force: Bool = false,
+        titleOverride: String? = nil
     ) {
         if activity == nil {
             activity = Activity<SpeakActivityAttributes>.activities.first
@@ -92,6 +99,8 @@ enum SpeakLiveActivityManager {
         let title: String
         if isMuted && phase != .speaking {
             title = "Stumm"
+        } else if let titleOverride, !titleOverride.isEmpty {
+            title = String(titleOverride.prefix(48))
         } else {
             title = phase.title
         }

@@ -83,7 +83,9 @@
 		NA000001000000000000002B /* MoreView.swift in Sources */ = {isa = PBXBuildFile; fileRef = NA000002000000000000002B /* MoreView.swift */; };
 		NA000001000000000000002C /* CodeStudioView.swift in Sources */ = {isa = PBXBuildFile; fileRef = NA000002000000000000002C /* CodeStudioView.swift */; };
 		NA000001000000000000002D /* IntelligenceEffects.swift in Sources */ = {isa = PBXBuildFile; fileRef = NA000002000000000000002D /* IntelligenceEffects.swift */; };
+		NA00000100000000000000D1 /* NOCODynamicIntelligence.swift in Sources */ = {isa = PBXBuildFile; fileRef = NA00000200000000000000D1 /* NOCODynamicIntelligence.swift */; };
 		NA000001000000000000002E /* VoiceService.swift in Sources */ = {isa = PBXBuildFile; fileRef = NA000002000000000000002E /* VoiceService.swift */; };
+		SV0000010000000000000001 /* NOCOSpeakVoiceSettings.swift in Sources */ = {isa = PBXBuildFile; fileRef = SV0000020000000000000001 /* NOCOSpeakVoiceSettings.swift */; };
 		NA000001000000000000002F /* VoiceRainbowOrb.swift in Sources */ = {isa = PBXBuildFile; fileRef = NA000002000000000000002F /* VoiceRainbowOrb.swift */; };
 		NA0000010000000000000030 /* VoiceModeView.swift in Sources */ = {isa = PBXBuildFile; fileRef = NA0000020000000000000030 /* VoiceModeView.swift */; };
 		NA0000010000000000000031 /* IntelligenceTools.swift in Sources */ = {isa = PBXBuildFile; fileRef = NA0000020000000000000031 /* IntelligenceTools.swift */; };
@@ -92,6 +94,7 @@
 
 		NA0000010000000000000033 /* SpeakLiveActivity.swift in Sources */ = {isa = PBXBuildFile; fileRef = NA0000020000000000000033 /* SpeakLiveActivity.swift */; };
 		NA0000010000000000000034 /* SpeakSessionController.swift in Sources */ = {isa = PBXBuildFile; fileRef = NA0000020000000000000034 /* SpeakSessionController.swift */; };
+		SI0000010000000000000001 /* SpeakIntentEngine.swift in Sources */ = {isa = PBXBuildFile; fileRef = SI0000020000000000000001 /* SpeakIntentEngine.swift */; };
 		NA0000010000000000000035 /* SpeakActivityAttributes.swift in Sources */ = {isa = PBXBuildFile; fileRef = NA0000020000000000000035 /* SpeakActivityAttributes.swift */; };
 		NA0000010000000000000036 /* NotificationService.swift in Sources */ = {isa = PBXBuildFile; fileRef = NA0000020000000000000036 /* NotificationService.swift */; };
 		NA00000100000000000000C1 /* MessageClipboard.swift in Sources */ = {isa = PBXBuildFile; fileRef = NA00000200000000000000C1 /* MessageClipboard.swift */; };
@@ -101,6 +104,11 @@
 		WDG0000010000000000000001 /* SpeakLiveActivityWidget.swift in Sources */ = {isa = PBXBuildFile; fileRef = WDG0000020000000000000001 /* SpeakLiveActivityWidget.swift */; };
 		WDG0000010000000000000002 /* SpeakActivityAttributes.swift in Sources */ = {isa = PBXBuildFile; fileRef = NA0000020000000000000035 /* SpeakActivityAttributes.swift */; };
 		WDG0000010000000000000004 /* ImageActivityAttributes.swift in Sources */ = {isa = PBXBuildFile; fileRef = NA0000020000000000000037 /* ImageActivityAttributes.swift */; };
+		LK0000010000000000000001 /* LiveKnowledgeSettings.swift in Sources */ = {isa = PBXBuildFile; fileRef = LK0000020000000000000001 /* LiveKnowledgeSettings.swift */; };
+		AA0000010000000000000001 /* AgentActivityAttributes.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA0000020000000000000001 /* AgentActivityAttributes.swift */; };
+		AA0000010000000000000002 /* AgentLiveActivity.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA0000020000000000000002 /* AgentLiveActivity.swift */; };
+		AA0000010000000000000003 /* WidgetCenterReloader.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA0000020000000000000003 /* WidgetCenterReloader.swift */; };
+		WDG0000010000000000000005 /* AgentActivityAttributes.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA0000020000000000000001 /* AgentActivityAttributes.swift */; };
 		WDG0000010000000000000003 /* NOCOAISpeakWidget.appex in Embed Foundation Extensions */ = {isa = PBXBuildFile; fileRef = WDG0000030000000000000001 /* NOCOAISpeakWidget.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
 		BC0000010000000000000001 /* SampleHandler.swift in Sources */ = {isa = PBXBuildFile; fileRef = BC0000020000000000000001 /* SampleHandler.swift */; };
 		BC0000010000000000000002 /* SharedBroadcastFrameStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = BC0000020000000000000002 /* SharedBroadcastFrameStore.swift */; };
@@ -217,7 +225,9 @@
 		NA000002000000000000002B /* MoreView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MoreView.swift; sourceTree = "<group>"; };
 		NA000002000000000000002C /* CodeStudioView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CodeStudioView.swift; sourceTree = "<group>"; };
 		NA000002000000000000002D /* IntelligenceEffects.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = IntelligenceEffects.swift; sourceTree = "<group>"; };
+		NA00000200000000000000D1 /* NOCODynamicIntelligence.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NOCODynamicIntelligence.swift; sourceTree = "<group>"; };
 		NA000002000000000000002E /* VoiceService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VoiceService.swift; sourceTree = "<group>"; };
+		SV0000020000000000000001 /* NOCOSpeakVoiceSettings.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NOCOSpeakVoiceSettings.swift; sourceTree = "<group>"; };
 		NA000002000000000000002F /* VoiceRainbowOrb.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VoiceRainbowOrb.swift; sourceTree = "<group>"; };
 		NA0000020000000000000030 /* VoiceModeView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VoiceModeView.swift; sourceTree = "<group>"; };
 		NA0000020000000000000031 /* IntelligenceTools.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = IntelligenceTools.swift; sourceTree = "<group>"; };
@@ -225,12 +235,17 @@
 
 		NA0000020000000000000033 /* SpeakLiveActivity.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SpeakLiveActivity.swift; sourceTree = "<group>"; };
 		NA0000020000000000000034 /* SpeakSessionController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SpeakSessionController.swift; sourceTree = "<group>"; };
+		SI0000020000000000000001 /* SpeakIntentEngine.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SpeakIntentEngine.swift; sourceTree = "<group>"; };
 		NA0000020000000000000035 /* SpeakActivityAttributes.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SpeakActivityAttributes.swift; sourceTree = "<group>"; };
 		NA0000020000000000000036 /* NotificationService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NotificationService.swift; sourceTree = "<group>"; };
 		NA00000200000000000000C1 /* MessageClipboard.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MessageClipboard.swift; sourceTree = "<group>"; };
 		NA0000020000000000000037 /* ImageActivityAttributes.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ImageActivityAttributes.swift; sourceTree = "<group>"; };
 		NA0000020000000000000038 /* ImageLiveActivity.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ImageLiveActivity.swift; sourceTree = "<group>"; };
 		NA0000020000000000000039 /* SpeakAppIntents.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SpeakAppIntents.swift; sourceTree = "<group>"; };
+		LK0000020000000000000001 /* LiveKnowledgeSettings.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LiveKnowledgeSettings.swift; sourceTree = "<group>"; };
+		AA0000020000000000000001 /* AgentActivityAttributes.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AgentActivityAttributes.swift; sourceTree = "<group>"; };
+		AA0000020000000000000002 /* AgentLiveActivity.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AgentLiveActivity.swift; sourceTree = "<group>"; };
+		AA0000020000000000000003 /* WidgetCenterReloader.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WidgetCenterReloader.swift; sourceTree = "<group>"; };
 		WDG0000020000000000000001 /* SpeakLiveActivityWidget.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SpeakLiveActivityWidget.swift; sourceTree = "<group>"; };
 		WDG0000020000000000000002 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
 		WDG0000020000000000000003 /* NOCOAISpeakWidget.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = NOCOAISpeakWidget.entitlements; sourceTree = "<group>"; };
@@ -314,6 +329,7 @@
 				NA0000020000000000000002 /* APIModels.swift */,
 				NA0000020000000000000003 /* ChatMessage.swift */,
 				NA0000020000000000000020 /* V2Models.swift */,
+				LK0000020000000000000001 /* LiveKnowledgeSettings.swift */,
 				NA0000020000000000000031 /* IntelligenceTools.swift */,
 				NA00000200000000000000L1 /* LiveScreenModels.swift */,
 				NA00000200000000000000A1 /* AgentModels.swift */,
@@ -348,9 +364,13 @@
 				NA0000020000000000000016 /* HostSanitizer.swift */,
 				NA0000020000000000000017 /* LocalNetworkService.swift */,
 				NA000002000000000000002E /* VoiceService.swift */,
+				SV0000020000000000000001 /* NOCOSpeakVoiceSettings.swift */,
 				NA0000020000000000000033 /* SpeakLiveActivity.swift */,
 				NA0000020000000000000038 /* ImageLiveActivity.swift */,
+				AA0000020000000000000002 /* AgentLiveActivity.swift */,
+				AA0000020000000000000003 /* WidgetCenterReloader.swift */,
 				NA0000020000000000000034 /* SpeakSessionController.swift */,
+				SI0000020000000000000001 /* SpeakIntentEngine.swift */,
 				NA0000020000000000000036 /* NotificationService.swift */,
 				NA00000200000000000000C1 /* MessageClipboard.swift */,
 				NA0000020000000000000039 /* SpeakAppIntents.swift */,
@@ -408,6 +428,7 @@
 				MI0000000000000000000003 /* ModeStatusTheater.swift */,
 				NA0000020000000000000026 /* SyncBadge.swift */,
 				NA000002000000000000002D /* IntelligenceEffects.swift */,
+				NA00000200000000000000D1 /* NOCODynamicIntelligence.swift */,
 				NA00000200000000000000A4 /* NOCOIntelligenceVisuals.swift */,
 				NA00000200000000000000Q1 /* IntelligenceQuickBar.swift */,
 				CM0000020000000000000001 /* ChatMediaHelpers.swift */,
@@ -511,6 +532,7 @@
 			children = (
 				NA0000020000000000000035 /* SpeakActivityAttributes.swift */,
 				NA0000020000000000000037 /* ImageActivityAttributes.swift */,
+				AA0000020000000000000001 /* AgentActivityAttributes.swift */,
 				KBD0000020000000000000010 /* CompanionCredentials.swift */,
 				BC0000020000000000000002 /* SharedBroadcastFrameStore.swift */,
 				KBD0000020000000000000011 /* KeyboardAIAction.swift */,
@@ -769,6 +791,7 @@
 				NA000001000000000000000E /* HomeView.swift in Sources */,
 				NA0000010000000000000010 /* SettingsView.swift in Sources */,
 				NA0000010000000000000020 /* V2Models.swift in Sources */,
+				LK0000010000000000000001 /* LiveKnowledgeSettings.swift in Sources */,
 				NA00000100000000000000L1 /* LiveScreenModels.swift in Sources */,
 				NA00000100000000000000L2 /* LiveScreenImagePipeline.swift in Sources */,
 				NA00000100000000000000L3 /* LiveScreenCapture.swift in Sources */,
@@ -807,13 +830,19 @@
 				NA000001000000000000002B /* MoreView.swift in Sources */,
 				NA000001000000000000002C /* CodeStudioView.swift in Sources */,
 				NA000001000000000000002D /* IntelligenceEffects.swift in Sources */,
+				NA00000100000000000000D1 /* NOCODynamicIntelligence.swift in Sources */,
 				NA000001000000000000002E /* VoiceService.swift in Sources */,
 				NA0000010000000000000033 /* SpeakLiveActivity.swift in Sources */,
 				NA0000010000000000000038 /* ImageLiveActivity.swift in Sources */,
+				AA0000010000000000000002 /* AgentLiveActivity.swift in Sources */,
+				AA0000010000000000000003 /* WidgetCenterReloader.swift in Sources */,
 				NA0000010000000000000034 /* SpeakSessionController.swift in Sources */,
+				SI0000010000000000000001 /* SpeakIntentEngine.swift in Sources */,
+				SV0000010000000000000001 /* NOCOSpeakVoiceSettings.swift in Sources */,
 				NA0000010000000000000039 /* SpeakAppIntents.swift in Sources */,
 				NA0000010000000000000035 /* SpeakActivityAttributes.swift in Sources */,
 				NA0000010000000000000037 /* ImageActivityAttributes.swift in Sources */,
+				AA0000010000000000000001 /* AgentActivityAttributes.swift in Sources */,
 				NA0000010000000000000036 /* NotificationService.swift in Sources */,
 				NA00000100000000000000C1 /* MessageClipboard.swift in Sources */,
 				NA000001000000000000002F /* VoiceRainbowOrb.swift in Sources */,
@@ -835,6 +864,7 @@
 				WDG0000010000000000000001 /* SpeakLiveActivityWidget.swift in Sources */,
 				WDG0000010000000000000002 /* SpeakActivityAttributes.swift in Sources */,
 				WDG0000010000000000000004 /* ImageActivityAttributes.swift in Sources */,
+				WDG0000010000000000000005 /* AgentActivityAttributes.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

@@ -12,9 +12,9 @@ enum ModeWorkPhase: String, Equatable {
     var title: String {
         switch self {
         case .idle: return "Bereit"
-        case .understanding: return "Verstehe Anfrage"
-        case .analyzing: return "Denke nach"
-        case .executing: return "Verarbeite"
+        case .understanding: return "Versteht Anfrage"
+        case .analyzing: return "Denkt nach"
+        case .executing: return "Erstellt Antwort"
         case .done: return "Fertig"
         }
     }

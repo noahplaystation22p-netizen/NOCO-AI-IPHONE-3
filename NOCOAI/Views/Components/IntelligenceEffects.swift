@@ -1,51 +1,61 @@
 import SwiftUI
 
-/// Soft Apple-Intelligence atmosphere: drifting glow orbs + shimmer.
+/// Soft Apple-Intelligence atmosphere: drifting rainbow light + glass energy.
 struct IntelligenceAtmosphere: View {
     @Environment(\.colorScheme) private var scheme
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var phase = false
+    @State private var spin = false
+
+    private var allowMotion: Bool {
+        !reduceMotion && !ProcessInfo.processInfo.isLowPowerModeEnabled
+    }
 
     var body: some View {
         ZStack {
             NOCOAITheme.intelligenceBackground(for: scheme)
 
             Circle()
-                .fill(NOCOAITheme.glowPrimary.opacity(scheme == .dark ? 0.38 : 0.24))
+                .fill(NOCORainbow.blue.opacity(scheme == .dark ? 0.34 : 0.2))
                 .frame(width: 300, height: 300)
                 .blur(radius: 75)
                 .offset(x: phase ? 46 : -54, y: phase ? -90 : -36)
 
             Circle()
-                .fill(NOCOAITheme.glowSecondary.opacity(scheme == .dark ? 0.3 : 0.18))
+                .fill(NOCORainbow.violet.opacity(scheme == .dark ? 0.26 : 0.14))
                 .frame(width: 260, height: 260)
                 .blur(radius: 65)
                 .offset(x: phase ? -70 : 78, y: phase ? 130 : 50)
 
             Circle()
-                .fill(NOCOAITheme.glowAccent.opacity(scheme == .dark ? 0.18 : 0.10))
+                .fill(NOCORainbow.teal.opacity(scheme == .dark ? 0.2 : 0.11))
                 .frame(width: 240, height: 240)
                 .blur(radius: 70)
                 .offset(x: phase ? 20 : -40, y: phase ? 90 : 20)
 
+            Circle()
+                .fill(NOCORainbow.pink.opacity(scheme == .dark ? 0.12 : 0.07))
+                .frame(width: 180, height: 180)
+                .blur(radius: 55)
+                .offset(x: phase ? -30 : 50, y: phase ? -40 : 70)
+
             AngularGradient(
-                colors: [
-                    NOCOAITheme.glowPrimary.opacity(0.1),
-                    .clear,
-                    NOCOAITheme.glowSecondary.opacity(0.08),
-                    .clear,
-                    NOCOAITheme.glowAccent.opacity(0.09),
-                    .clear
-                ],
+                colors: NOCORainbow.flow.map { $0.opacity(0.09) } + [.clear],
                 center: .center
             )
-            .blur(radius: 48)
-            .opacity(phase ? 0.95 : 0.4)
+            .blur(radius: 52)
+            .opacity(phase ? 0.9 : 0.35)
             .scaleEffect(1.45)
+            .rotationEffect(.degrees(spin ? 360 : 0))
         }
         .ignoresSafeArea()
         .onAppear {
-            withAnimation(.easeInOut(duration: 14).repeatForever(autoreverses: true)) {
+            guard allowMotion else { return }
+            withAnimation(.easeInOut(duration: 16).repeatForever(autoreverses: true)) {
                 phase = true
+            }
+            withAnimation(.linear(duration: 48).repeatForever(autoreverses: false)) {
+                spin = true
             }
         }
     }
@@ -93,11 +103,7 @@ struct FloatingIntelligenceDots: View {
     }
 
     private func dotColor(_ i: Int) -> Color {
-        switch i % 3 {
-        case 0: return NOCOAITheme.glowPrimary
-        case 1: return NOCOAITheme.glowSecondary
-        default: return NOCOAITheme.glowAccent
-        }
+        NOCORainbow.flow[i % (NOCORainbow.flow.count - 1)]
     }
 }
 
@@ -290,50 +296,20 @@ struct IntelligenceThinkingDots: View {
     }
 }
 
-/// Soft thinking indicator — calm, minimal.
+/// Living chat thinking chip — floating KI core + rainbow energy stages.
 struct IntelligenceThinkingStatus: View {
-    @State private var startedAt = Date()
-    @State private var elapsed: TimeInterval = 0
-    @State private var pulse = false
+    var mode: AIMode = .auto
+    var phase: ModeWorkPhase = .understanding
+    var isFile: Bool = false
+    var statusOverride: String? = nil
 
     var body: some View {
-        HStack(spacing: 10) {
-            Circle()
-                .fill(NOCOAITheme.glowPrimary.opacity(pulse ? 0.85 : 0.4))
-                .frame(width: 8, height: 8)
-                .animation(.easeInOut(duration: 0.9).repeatForever(autoreverses: true), value: pulse)
-
-            Text("Denkt nach…")
-                .font(.subheadline.weight(.medium))
-                .foregroundStyle(.primary.opacity(0.85))
-
-            Spacer(minLength: 0)
-
-            Text(elapsedLabel)
-                .font(.caption2.monospacedDigit())
-                .foregroundStyle(.secondary)
-        }
-        .padding(.horizontal, 14)
-        .padding(.vertical, 12)
-        .frame(minWidth: 160, alignment: .leading)
-        .background(GlowBubbleBackground(isUser: false))
-        .onAppear { pulse = true }
-        .task {
-            while !Task.isCancelled {
-                try? await Task.sleep(nanoseconds: 1_000_000_000)
-                elapsed = Date().timeIntervalSince(startedAt)
-            }
-        }
-    }
-
-    private var elapsedLabel: String {
-        let s = Int(elapsed)
-        if s < 60 { return "\(s)s" }
-        return String(format: "%d:%02d", s / 60, s % 60)
+        NOCOThinkingChip(mode: mode, phase: phase, isFile: isFile, statusOverride: statusOverride)
     }
 }
 
 struct IntelligenceShimmerBorder: ViewModifier {
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var spin = false
     var cornerRadius: CGFloat = 30
 
@@ -343,21 +319,21 @@ struct IntelligenceShimmerBorder: ViewModifier {
                 RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
                     .stroke(
                         AngularGradient(
-                            colors: [
-                                NOCOAITheme.glowPrimary.opacity(0.8),
-                                NOCOAITheme.glowSecondary.opacity(0.35),
-                                NOCOAITheme.glowAccent.opacity(0.55),
-                                NOCOAITheme.glowPrimary.opacity(0.2),
-                                NOCOAITheme.glowPrimary.opacity(0.8)
-                            ],
+                            colors: NOCORainbow.flow.map { $0.opacity(0.75) },
                             center: .center,
                             angle: .degrees(spin ? 360 : 0)
                         ),
                         lineWidth: 1.4
                     )
-                    .animation(.linear(duration: 5).repeatForever(autoreverses: false), value: spin)
+                    .animation(
+                        reduceMotion ? nil : .linear(duration: 5).repeatForever(autoreverses: false),
+                        value: spin
+                    )
             )
-            .onAppear { spin = true }
+            .onAppear {
+                guard !reduceMotion else { return }
+                spin = true
+            }
     }
 }
 
@@ -610,18 +586,16 @@ struct IntelligenceGeneratingOverlay: View {
     }
 }
 
-/// Full Apple-Intelligence theater for long SD waits (~4 min on CPU).
+/// Full Dynamic Intelligence theater for image creation — living KI core, not a plain bar.
 struct ImageCreationTheater: View {
     var progress: Double
     var status: String
     var insight: String
     var etaSeconds: Int?
 
-    @State private var spin = false
-    @State private var breathe = false
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var sweep = false
     @State private var particlePhase = false
-    @State private var hueShift = false
 
     private var pct: Int { Int((min(max(progress, 0), 1) * 100).rounded()) }
 
@@ -631,68 +605,29 @@ struct ImageCreationTheater: View {
         return "~\(eta)s"
     }
 
-    private let rainbow: [Color] = [
-        Color(red: 0.3, green: 0.85, blue: 1),
-        Color(red: 0.45, green: 0.5, blue: 1),
-        Color(red: 0.8, green: 0.4, blue: 1),
-        Color(red: 0.95, green: 0.45, blue: 0.7),
-        Color(red: 1.0, green: 0.7, blue: 0.35),
-        Color(red: 0.4, green: 0.95, blue: 0.7),
-        Color(red: 0.3, green: 0.85, blue: 1)
-    ]
+    private var energy: NOCOIntelligenceEnergy {
+        progress >= 0.98 ? .success : .working
+    }
 
     var body: some View {
         VStack(spacing: 18) {
             ZStack {
-                AngularGradient(colors: rainbow, center: .center)
-                    .frame(width: 230, height: 230)
-                    .blur(radius: 40)
-                    .opacity(breathe ? 0.55 : 0.28)
-                    .scaleEffect(breathe ? 1.1 : 0.92)
-                    .rotationEffect(.degrees(spin ? 360 : 0))
-                    .hueRotation(.degrees(hueShift ? 20 : -14))
-                    .blendMode(.plusLighter)
-
-                // Soft aurora
-                Circle()
-                    .fill(NOCOAITheme.glowPrimary.opacity(breathe ? 0.28 : 0.12))
-                    .frame(width: 210, height: 210)
-                    .blur(radius: 36)
-                    .scaleEffect(breathe ? 1.08 : 0.92)
-
-                Circle()
-                    .fill(NOCOAITheme.glowAccent.opacity(breathe ? 0.18 : 0.08))
-                    .frame(width: 160, height: 160)
-                    .blur(radius: 28)
-                    .offset(x: breathe ? 12 : -10, y: breathe ? -8 : 10)
-
-                IntelligenceOrbitRings(size: 150)
-                    .opacity(0.55)
-
-                // Progress ring
-                Circle()
-                    .stroke(Color.primary.opacity(0.08), lineWidth: 10)
-                    .frame(width: 118, height: 118)
-
-                Circle()
-                    .trim(from: 0, to: max(0.04, min(progress, 1)))
-                    .stroke(
-                        AngularGradient(
-                            colors: rainbow,
-                            center: .center,
-                            angle: .degrees(spin ? 360 : 0)
-                        ),
-                        style: StrokeStyle(lineWidth: 10, lineCap: .round)
-                    )
-                    .frame(width: 118, height: 118)
-                    .rotationEffect(.degrees(-90))
-                    .shadow(color: NOCOAITheme.glowPrimary.opacity(0.45), radius: 10)
-                    .animation(.easeInOut(duration: 0.55), value: progress)
+                NOCOIntelligenceCore(
+                    energy: energy,
+                    size: .hero,
+                    progress: progress
+                )
 
                 VStack(spacing: 2) {
                     Text("\(pct)%")
                         .font(.title2.weight(.bold).monospacedDigit())
-                        .foregroundStyle(NOCOAITheme.accent)
+                        .foregroundStyle(
+                            LinearGradient(
+                                colors: [NOCORainbow.blue, NOCORainbow.violet],
+                                startPoint: .leading,
+                                endPoint: .trailing
+                            )
+                        )
                         .contentTransition(.numericText())
                     if let etaLabel {
                         Text(etaLabel)
@@ -701,23 +636,20 @@ struct ImageCreationTheater: View {
                     }
                 }
 
-                // Floating particles
                 ForEach(0..<6, id: \.self) { i in
                     Circle()
-                        .fill(dotColor(i))
+                        .fill(NOCORainbow.flow[i % (NOCORainbow.flow.count - 1)])
                         .frame(width: 4, height: 4)
                         .offset(
-                            x: cos(Double(i) / 6 * .pi * 2) * (particlePhase ? 72 : 56),
-                            y: sin(Double(i) / 6 * .pi * 2) * (particlePhase ? 72 : 56)
+                            x: cos(Double(i) / 6 * .pi * 2) * (particlePhase ? 78 : 58),
+                            y: sin(Double(i) / 6 * .pi * 2) * (particlePhase ? 78 : 58)
                         )
-                        .opacity(particlePhase ? 0.95 : 0.35)
-                        .blur(radius: 0.4)
+                        .opacity(particlePhase ? 0.9 : 0.3)
                 }
             }
-            .frame(height: 200)
-            .drawingGroup() // Flatten layers — much smoother during SD wait
+            .frame(height: 210)
+            .drawingGroup()
 
-            // Sweeping shimmer bar
             GeometryReader { geo in
                 ZStack(alignment: .leading) {
                     Capsule()
@@ -726,13 +658,13 @@ struct ImageCreationTheater: View {
                     Capsule()
                         .fill(
                             LinearGradient(
-                                colors: Array(rainbow.prefix(5)),
+                                colors: Array(NOCORainbow.flow.prefix(5)),
                                 startPoint: .leading,
                                 endPoint: .trailing
                             )
                         )
                         .frame(width: max(18, geo.size.width * min(max(progress, 0.04), 1)), height: 8)
-                        .shadow(color: NOCOAITheme.glowPrimary.opacity(0.5), radius: 6)
+                        .shadow(color: NOCORainbow.blue.opacity(0.5), radius: 6)
                         .animation(.spring(response: 0.5, dampingFraction: 0.85), value: progress)
 
                     Capsule()
@@ -757,7 +689,7 @@ struct ImageCreationTheater: View {
                         .id(insight)
                         .transition(.opacity.combined(with: .move(edge: .bottom)))
                 }
-                Text("Dein PC rechnet — das kann ein paar Minuten dauern.")
+                Text("NOCO formt dein Bild — das kann ein paar Minuten dauern.")
                     .font(.caption2)
                     .foregroundStyle(.tertiary)
                     .multilineTextAlignment(.center)
@@ -773,20 +705,14 @@ struct ImageCreationTheater: View {
             RoundedRectangle(cornerRadius: 26, style: .continuous)
                 .fill(.ultraThinMaterial)
                 .intelligenceShimmerBorder(cornerRadius: 26)
-                .shadow(color: NOCOAITheme.glowPrimary.opacity(0.2), radius: 20, y: 8)
+                .shadow(color: NOCORainbow.violet.opacity(0.2), radius: 20, y: 8)
         )
         .onAppear {
-            withAnimation(.linear(duration: 10).repeatForever(autoreverses: false)) { spin = true }
-            withAnimation(.easeInOut(duration: 3.2).repeatForever(autoreverses: true)) { breathe = true }
+            guard !reduceMotion else { return }
             withAnimation(.easeInOut(duration: 2.2).repeatForever(autoreverses: true)) { particlePhase = true }
             withAnimation(.easeInOut(duration: 2.4).repeatForever(autoreverses: true)) { sweep = true }
-            withAnimation(.easeInOut(duration: 4.5).repeatForever(autoreverses: true)) { hueShift = true }
             HapticService.medium()
         }
-    }
-
-    private func dotColor(_ i: Int) -> Color {
-        rainbow[i % (rainbow.count - 1)]
     }
 }
 

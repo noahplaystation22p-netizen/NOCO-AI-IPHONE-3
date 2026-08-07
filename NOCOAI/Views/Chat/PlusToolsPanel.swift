@@ -20,6 +20,7 @@ struct PlusToolsPanel: View {
         NavigationStack {
             ScrollView {
                 VStack(alignment: .leading, spacing: 18) {
+                    intelligenceHeader
                     depthSection
                     groupSection("Erstellen", tiles: [
                         .init("Bild", "paintbrush.pointed.fill", Color(red: 0.95, green: 0.55, blue: 0.78)) {
@@ -45,6 +46,16 @@ struct PlusToolsPanel: View {
                         }
                     ])
                     groupSection("KI-Werkzeuge", tiles: [
+                        .init("Internet", "globe", Color(red: 0.35, green: 0.65, blue: 0.95)) {
+                            connection.chat.armLiveKnowledge(.web)
+                            HapticService.open()
+                            dismiss()
+                        },
+                        .init("Nur lokal", "lock.laptopcomputer", Color(red: 0.55, green: 0.55, blue: 0.62)) {
+                            connection.chat.armLiveKnowledge(.local)
+                            HapticService.open()
+                            dismiss()
+                        },
                         .init("Agent", "cpu.fill", Color(red: 0.35, green: 0.78, blue: 0.72)) {
                             connection.chat.setMode(.agent)
                             HapticService.open()
@@ -87,14 +98,18 @@ struct PlusToolsPanel: View {
                 }
             }
         }
-        .presentationDetents([.height(560), .medium])
+        .presentationDetents([.height(680), .medium, .large])
         .presentationDragIndicator(.visible)
         .presentationCornerRadius(28)
         .presentationBackground {
             ZStack {
-                Color.black.opacity(0.22)
+                Color.black.opacity(0.28)
                 IntelligenceAtmosphere()
-                    .opacity(0.4)
+                    .opacity(0.55)
+                NOCORainbowFlowLine(height: 1.5)
+                    .padding(.horizontal, 40)
+                    .offset(y: -180)
+                    .opacity(0.35)
             }
         }
         .onAppear {
@@ -105,6 +120,25 @@ struct PlusToolsPanel: View {
         .onDisappear {
             appear = false
         }
+    }
+
+    private var intelligenceHeader: some View {
+        HStack(spacing: 12) {
+            NOCOIntelligenceCore(energy: .idle, size: .compact, systemImage: "sparkles")
+                .frame(width: 42, height: 42)
+            VStack(alignment: .leading, spacing: 4) {
+                Text("NOCO Intelligence")
+                    .font(.subheadline.weight(.bold))
+                Text("Werkzeuge mit lebendiger KI verbinden")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                NOCORainbowFlowLine(height: 2)
+                    .frame(maxWidth: 160)
+            }
+            Spacer(minLength: 0)
+        }
+        .padding(12)
+        .nocoGlass(cornerRadius: 18)
     }
 
     private var depthSection: some View {
@@ -186,8 +220,20 @@ struct PlusToolsPanel: View {
                                 .fill(.ultraThinMaterial)
                                 .overlay(
                                     RoundedRectangle(cornerRadius: 16, style: .continuous)
-                                        .stroke(tile.accent.opacity(0.22), lineWidth: 1)
+                                        .stroke(
+                                            AngularGradient(
+                                                colors: [
+                                                    tile.accent.opacity(0.55),
+                                                    NOCORainbow.violet.opacity(0.25),
+                                                    tile.accent.opacity(0.15),
+                                                    NOCORainbow.blue.opacity(0.3)
+                                                ],
+                                                center: .center
+                                            ),
+                                            lineWidth: 1
+                                        )
                                 )
+                                .shadow(color: tile.accent.opacity(0.12), radius: 10, y: 4)
                         )
                     }
                     .buttonStyle(IntelligencePressStyle(haptic: { HapticService.soft() }))

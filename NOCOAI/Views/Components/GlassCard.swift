@@ -21,7 +21,8 @@ struct GlassCard<Content: View>: View {
                             .fill(
                                 LinearGradient(
                                     colors: [
-                                        Color.white.opacity(scheme == .dark ? 0.06 : 0.35),
+                                        Color.white.opacity(scheme == .dark ? 0.08 : 0.38),
+                                        NOCORainbow.violet.opacity(scheme == .dark ? 0.04 : 0.03),
                                         .clear
                                     ],
                                     startPoint: .topLeading,
@@ -32,20 +33,19 @@ struct GlassCard<Content: View>: View {
                     .overlay(
                         RoundedRectangle(cornerRadius: 26, style: .continuous)
                             .stroke(
-                                LinearGradient(
-                                    colors: [
-                                        NOCOAITheme.glowPrimary.opacity(scheme == .dark ? (shimmer ? 0.38 : 0.22) : (shimmer ? 0.26 : 0.16)),
-                                        NOCOAITheme.glowAccent.opacity(0.14),
-                                        NOCOAITheme.glowSecondary.opacity(0.12),
-                                        NOCOAITheme.cardStroke(for: scheme)
-                                    ],
-                                    startPoint: shimmer ? .topLeading : .bottomTrailing,
-                                    endPoint: shimmer ? .bottomTrailing : .topLeading
+                                AngularGradient(
+                                    colors: NOCORainbow.flow.map {
+                                        $0.opacity(scheme == .dark
+                                                   ? (shimmer ? 0.42 : 0.2)
+                                                   : (shimmer ? 0.3 : 0.14))
+                                    },
+                                    center: .center
                                 ),
                                 lineWidth: 1
                             )
                     )
-                    .shadow(color: NOCOAITheme.glowPrimary.opacity(shimmer ? 0.14 : 0.08), radius: 18, y: 8)
+                    .shadow(color: NOCORainbow.blue.opacity(shimmer ? 0.16 : 0.08), radius: 18, y: 8)
+                    .shadow(color: NOCORainbow.violet.opacity(0.06), radius: 28, y: 12)
             )
             .onAppear {
                 guard !reduceMotion else { return }

@@ -16,6 +16,9 @@ final class ConnectionStore: ObservableObject {
     @Published var isPinging = false
     @Published var pingMessage: String?
     @Published var lastError: String?
+    /// Brief drops: keep UI calm and auto-retry instead of hard abort.
+    @Published var isReconnecting = false
+    @Published var reconnectStatusLine: String?
     @Published var pendingDeepLink: PairingDeepLink?
     @Published var localNetworkHint: String?
     @Published var features: FeaturesResponse?
@@ -128,7 +131,7 @@ final class ConnectionStore: ObservableObject {
             chat.startSyncLoop()
             Task { await refreshStatus() }
         }
-        consumePendingSpeakLaunchIfNeeded()
+        consumePendingSystemLaunches()
     }
 
     func onBackground() {
@@ -347,9 +350,12 @@ final class ConnectionStore: ObservableObject {
     }
 
     func handleIncomingURL(_ url: URL) {
+        // Prefer path/host route names before treating host as a pairing IP.
         let host = (url.host ?? "").lowercased()
         let path = url.path.lowercased()
-        if host == "keyboard-sync" || host == "sync" {
+        let route = host.isEmpty ? path.trimmingCharacters(in: CharacterSet(charactersIn: "/")) : host
+
+        if route == "keyboard-sync" || route == "sync" || path.contains("keyboard-sync") {
             CompanionCredentials.sync(
                 host: serverHost,
                 port: serverPort,
@@ -359,40 +365,117 @@ final class ConnectionStore: ObservableObject {
             lastError = nil
             return
         }
-        if host == "speak" || path.contains("speak") || host == "siri" {
-            // From keyboard: show Speak UI so Sprachmodus is obvious
+        if route == "speak" || route == "siri" || path.contains("speak") {
             speak.openUI()
             launchSpeakFromShortcut()
             return
         }
-        if host == "eraser" || host == "radierer" || path.contains("eraser") || path.contains("radierer") {
+        if route == "eraser" || route == "radierer" || path.contains("eraser") || path.contains("radierer") {
             pendingTab = 1
             pendingOpenEraser = true
             return
         }
-        if host == "livescreen" || host == "live-screen" || path.contains("livescreen") || path.contains("live-screen") {
+        if route == "livescreen" || route == "live-screen" || path.contains("livescreen") || path.contains("live-screen") {
             pendingTab = 2
             pendingOpenLiveScreen = true
             return
         }
-        if host == "agent" || host == "noco-agent" || path.contains("/agent") {
-            pendingTab = 2
-            pendingOpenAgent = true
+        if route == "agent" || route == "noco-agent" || path.contains("/agent") {
+            let goal = URLComponents(url: url, resolvingAgainstBaseURL: false)?
+                .queryItems?
+                .first(where: { $0.name == "goal" || $0.name == "q" })?
+                .value
+            launchAgent(goal: goal)
             return
         }
-        if host == "visionlive" || host == "vision-live" || host == "vision" || path.contains("visionlive") || path.contains("vision-live") {
-            speak.openUI()
+        if route == "visionlive" || route == "vision-live" || route == "vision" || path.contains("visionlive") || path.contains("vision-live") {
+            launchVisionLive()
             return
         }
-        if host == "images" || host == "bildideen" || path.contains("images") || path.contains("bild") {
-            pendingTab = 1
+        if route == "images" || route == "bildideen" || path.contains("images") || path.contains("bild") {
+            let prompt = URLComponents(url: url, resolvingAgainstBaseURL: false)?
+                .queryItems?
+                .first(where: { $0.name == "prompt" || $0.name == "q" })?
+                .value
+            launchImages(prompt: prompt)
             return
         }
+        if route == "ask" || route == "chat" || path.contains("ask") {
+            let draft = URLComponents(url: url, resolvingAgainstBaseURL: false)?
+                .queryItems?
+                .first(where: { $0.name == "q" || $0.name == "draft" || $0.name == "text" })?
+                .value
+            if let draft, !draft.isEmpty {
+                launchAsk(draft: draft)
+            } else {
+                pendingTab = 0
+            }
+            return
+        }
+
+        // Pairing deep links use IP/host that must not collide with route names.
         guard let link = PairingDeepLink.from(url: url) else { return }
+        let linkHost = link.host.lowercased()
+        let reserved = ["speak", "siri", "images", "bildideen", "agent", "vision", "ask", "chat", "eraser"]
+        if reserved.contains(linkHost) { return }
         applyDeepLink(link)
         if let pin = link.pin, !pin.isEmpty {
             Task { await pair(host: link.host, port: link.port, pin: pin) }
         }
+    }
+
+    func handleQuickAction(_ type: String) {
+        switch type {
+        case "de.noco.nocoai.speak":
+            launchSpeakFromShortcut()
+        case "de.noco.nocoai.images":
+            launchImages(prompt: nil)
+        case "de.noco.nocoai.agent":
+            launchAgent(goal: nil)
+        case "de.noco.nocoai.vision":
+            launchVisionLive()
+        default:
+            break
+        }
+    }
+
+    func launchImages(prompt: String?) {
+        pendingTab = 1
+        if let prompt, !prompt.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+            images.prompt = prompt
+            images.genMode = .auto
+        }
+        NOCOLaunchBridge.pendingImages = false
+        NOCOLaunchBridge.pendingImagePrompt = nil
+        HapticService.soft()
+    }
+
+    func launchAgent(goal: String?) {
+        pendingTab = 2
+        pendingOpenAgent = true
+        if let goal, !goal.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+            pendingAgentDraft = goal
+        }
+        NOCOLaunchBridge.pendingAgent = false
+        NOCOLaunchBridge.pendingAgentGoal = nil
+        HapticService.soft()
+    }
+
+    func launchAsk(draft: String) {
+        pendingTab = 0
+        pendingChatDraft = draft
+        chat.mode = .auto
+        NOCOLaunchBridge.pendingAskDraft = nil
+        HapticService.soft()
+    }
+
+    func launchVisionLive() {
+        pendingTab = 2
+        pendingOpenVisionLive = true
+        speak.openUI()
+        speak.visionCameraEnabled = true
+        NOCOLaunchBridge.pendingVision = false
+        HapticService.soft()
     }
 
     /// Shortcuts / Siri / `nocoai://speak` — works even after cold start.
@@ -430,8 +513,36 @@ final class ConnectionStore: ObservableObject {
         launchSpeakFromShortcut()
     }
 
+    func consumePendingSystemLaunches() {
+        if let quick = NOCOQuickActionRouter.consume() {
+            handleQuickAction(quick)
+        }
+        consumePendingSpeakLaunchIfNeeded()
+        if NOCOLaunchBridge.pendingImages {
+            launchImages(prompt: NOCOLaunchBridge.pendingImagePrompt)
+        }
+        if NOCOLaunchBridge.pendingAgent {
+            launchAgent(goal: NOCOLaunchBridge.pendingAgentGoal)
+        }
+        if let draft = NOCOLaunchBridge.pendingAskDraft, !draft.isEmpty {
+            launchAsk(draft: draft)
+        }
+        if NOCOLaunchBridge.pendingVision {
+            launchVisionLive()
+        }
+    }
+
     func openImagesTab() {
         pendingTab = 1
+    }
+
+    /// Keep home-screen widget status fresh.
+    func publishWidgetStatus() {
+        let suite = UserDefaults(suiteName: CompanionCredentials.appGroupId)
+        suite?.set(isOnline, forKey: "nocoai.widget.online")
+        suite?.set(serverHost, forKey: "nocoai.host")
+        suite?.synchronize()
+        WidgetCenterReloader.reload()
     }
 
     func applyQRCode(_ raw: String) {
@@ -466,23 +577,56 @@ final class ConnectionStore: ObservableObject {
 
         do {
             let started = Date()
-            let newStatus = try await api.fetchStatus()
+            let newStatus = try await api.withTransientRetry(attempts: 2, baseDelayNanoseconds: 500_000_000) {
+                try await api.fetchStatus()
+            }
             let rttMs = Date().timeIntervalSince(started) * 1000
             status = newStatus.withMeasuredLatency(rttMs)
             // Companion reachable = online (independent of Ollama / AI readiness)
+            let wasReconnecting = isReconnecting || !isOnline
             consecutiveFailures = 0
             isOnline = true
             lastStatusAt = Date()
             lastError = nil
+            if wasReconnecting {
+                clearReconnectBanner(restored: true)
+            }
+            publishWidgetStatus()
             await loadFeatures()
         } catch {
             consecutiveFailures += 1
+            if consecutiveFailures == 1 {
+                beginReconnectBanner()
+            }
             if consecutiveFailures >= offlineFailureThreshold {
                 isOnline = false
+                beginReconnectBanner()
+                publishWidgetStatus()
             }
             if let err = error as? CompanionAPIError, case .unauthorized = err {
                 disconnect()
                 lastError = err.localizedDescription
+            }
+        }
+    }
+
+    private func beginReconnectBanner() {
+        isReconnecting = true
+        reconnectStatusLine = "Verbindung wird wiederhergestellt…"
+        chat.applyReconnectStatus(reconnectStatusLine)
+        if speak.isRunning {
+            speak.statusLine = "Verbindung wird wiederhergestellt…"
+        }
+    }
+
+    private func clearReconnectBanner(restored: Bool) {
+        guard isReconnecting || reconnectStatusLine != nil else { return }
+        isReconnecting = false
+        reconnectStatusLine = nil
+        if restored {
+            chat.clearReconnectStatus()
+            if speak.isRunning, speak.statusLine.contains("Verbindung") {
+                speak.statusLine = "Wieder verbunden"
             }
         }
     }
@@ -496,6 +640,8 @@ final class ConnectionStore: ObservableObject {
         isPaired = false
         isOnline = false
         consecutiveFailures = 0
+        isReconnecting = false
+        reconnectStatusLine = nil
         KeychainService.delete(account: Keys.token)
         CompanionCredentials.clear()
         rebuildAPI()
@@ -511,7 +657,10 @@ final class ConnectionStore: ObservableObject {
         pollTask = Task { [weak self] in
             while !Task.isCancelled {
                 await self?.refreshStatus()
-                try? await Task.sleep(nanoseconds: 4_000_000_000)
+                let offline = self?.isOnline != true || self?.isReconnecting == true
+                // Faster polls while healing a drop; calm cadence when stable.
+                let delay: UInt64 = offline ? 1_500_000_000 : 4_000_000_000
+                try? await Task.sleep(nanoseconds: delay)
             }
         }
     }

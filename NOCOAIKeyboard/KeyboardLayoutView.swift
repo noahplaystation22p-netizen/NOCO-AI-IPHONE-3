@@ -13,34 +13,40 @@ struct KeyboardLayoutView: View {
     private let num2 = Array("-/:;()€&@\"")
     private let num3 = Array(".,?!ß'")
 
+    /// Match stock iOS key rhythm (familiar muscle memory).
+    private let rowSpacing: CGFloat = 11
+    private let keySpacing: CGFloat = 6
+    private let keyHeight: CGFloat = 42
+
     var body: some View {
-        VStack(spacing: 7) {
+        VStack(spacing: rowSpacing) {
             if model.showingNumbers {
                 numbersLayout
             } else {
                 lettersLayout
             }
         }
-        .padding(.horizontal, 5)
-        .padding(.top, 6)
+        .padding(.horizontal, 3)
+        .padding(.top, 4)
         .padding(.bottom, 2)
         .animation(.easeOut(duration: 0.15), value: model.showingNumbers)
     }
 
     private var lettersLayout: some View {
-        VStack(spacing: 7) {
+        VStack(spacing: rowSpacing) {
             letterRow(row1)
-            letterRow(row2, sidePad: 10)
-            HStack(spacing: 6) {
+            letterRow(row2, sidePad: 18)
+            HStack(spacing: keySpacing) {
                 ModifierKey(
                     symbol: model.capsLock ? "capslock.fill" : "shift.fill",
-                    width: 46,
+                    width: 42,
+                    height: keyHeight,
                     active: model.shiftOn || model.capsLock
                 ) {
                     model.toggleShift()
                 }
                 letterRowContent(row3)
-                DeleteKey(width: 46) {
+                DeleteKey(width: 42, height: keyHeight) {
                     model.beginDeleteHold()
                 } onEnd: {
                     model.endDeleteHold()
@@ -51,15 +57,15 @@ struct KeyboardLayoutView: View {
     }
 
     private var numbersLayout: some View {
-        VStack(spacing: 7) {
+        VStack(spacing: rowSpacing) {
             letterRow(num1)
             letterRow(num2)
-            HStack(spacing: 6) {
-                ModifierKey(title: "#+=", width: 46) {
+            HStack(spacing: keySpacing) {
+                ModifierKey(title: "#+=", width: 42, height: keyHeight) {
                     model.insert("#")
                 }
                 letterRowContent(num3)
-                DeleteKey(width: 46) {
+                DeleteKey(width: 42, height: keyHeight) {
                     model.beginDeleteHold()
                 } onEnd: {
                     model.endDeleteHold()
@@ -70,26 +76,26 @@ struct KeyboardLayoutView: View {
     }
 
     private func bottomRow(leftTitle: String) -> some View {
-        HStack(spacing: 6.5) {
-            ModifierKey(title: leftTitle, width: 42) {
+        // Apple-like: [123] [punct] ——— Leertaste ——— [return]
+        HStack(spacing: keySpacing) {
+            ModifierKey(title: leftTitle, width: 42, height: keyHeight) {
                 model.toggleNumbers()
             }
-            PunctuationKey(width: 36) { inserted in
+            PunctuationKey(width: 42, height: keyHeight) { inserted in
                 model.insert(inserted)
             }
-            SpaceKey(
-                onTap: { model.space() },
-                onCursorMove: { model.moveCursor(by: $0) }
-            )
-            ModifierKey(title: "return", width: 106, prominent: true) {
+            SpaceKey(height: keyHeight) {
+                model.space()
+            } onCursorMove: { model.moveCursor(by: $0) }
+            ModifierKey(title: "return", width: 88, height: keyHeight, prominent: true) {
                 model.returnKey()
             }
         }
-        .padding(.horizontal, 2)
+        .padding(.horizontal, 1)
     }
 
     private func letterRow(_ chars: [Character], sidePad: CGFloat = 0) -> some View {
-        HStack(spacing: 6) {
+        HStack(spacing: keySpacing) {
             if sidePad > 0 { Spacer(minLength: sidePad) }
             letterRowContent(chars)
             if sidePad > 0 { Spacer(minLength: sidePad) }
@@ -97,11 +103,12 @@ struct KeyboardLayoutView: View {
     }
 
     private func letterRowContent(_ chars: [Character]) -> some View {
-        HStack(spacing: 6) {
+        HStack(spacing: keySpacing) {
             ForEach(Array(chars.enumerated()), id: \.offset) { _, ch in
                 let label = display(ch)
                 LetterKey(
                     label: label,
+                    height: keyHeight,
                     accents: AccentMap.variants(for: label)
                 ) { inserted in
                     model.insert(inserted)
@@ -197,6 +204,7 @@ enum AccentMap {
 
 private struct LetterKey: View {
     let label: String
+    var height: CGFloat = 42
     let accents: [String]
     var onInsert: (String) -> Void
 
@@ -208,15 +216,15 @@ private struct LetterKey: View {
 
     var body: some View {
         Text(label)
-            .font(.system(size: 24, weight: .regular, design: .rounded))
+            .font(.system(size: 22.5, weight: .regular, design: .rounded))
             .foregroundStyle(.white)
             .frame(maxWidth: .infinity)
-            .frame(height: 46)
+            .frame(height: height)
             .background(
-                RoundedRectangle(cornerRadius: 9, style: .continuous)
+                RoundedRectangle(cornerRadius: 8.5, style: .continuous)
                     .fill(keyFill)
                     .overlay(
-                        RoundedRectangle(cornerRadius: 9, style: .continuous)
+                        RoundedRectangle(cornerRadius: 8.5, style: .continuous)
                             .stroke(Color.white.opacity(pressed ? 0.08 : 0.14), lineWidth: 0.5)
                     )
                     .shadow(
@@ -234,6 +242,8 @@ private struct LetterKey: View {
                 }
             }
             .zIndex(pressed ? 40 : 0)
+            // Slightly taller hitbox than visible key for fast typing accuracy
+            .padding(.vertical, 2)
             .contentShape(Rectangle())
             .gesture(
                 DragGesture(minimumDistance: 0)
@@ -339,6 +349,7 @@ private struct LetterKey: View {
 /// Fixed-width `.` key with long-press scrub for `, ; : ! ? …` etc.
 private struct PunctuationKey: View {
     var width: CGFloat = 40
+    var height: CGFloat = 42
     var onInsert: (String) -> Void
 
     private let marks = [".", ",", ";", ":", "!", "?", "…", "·", "—", "'", "\"", "„", "“", "(", ")", "@"]
@@ -352,13 +363,13 @@ private struct PunctuationKey: View {
     var body: some View {
         Text(".")
             .font(.system(size: 22, weight: .semibold, design: .rounded))
-            .frame(width: width, height: 46)
+            .frame(width: width, height: height)
             .foregroundStyle(.white.opacity(0.95))
             .background(
-                RoundedRectangle(cornerRadius: 9, style: .continuous)
+                RoundedRectangle(cornerRadius: 8.5, style: .continuous)
                     .fill(Color(red: 0.18, green: 0.19, blue: 0.23))
                     .overlay(
-                        RoundedRectangle(cornerRadius: 9, style: .continuous)
+                        RoundedRectangle(cornerRadius: 8.5, style: .continuous)
                             .stroke(Color.white.opacity(0.1), lineWidth: 0.5)
                     )
             )
@@ -372,6 +383,7 @@ private struct PunctuationKey: View {
             }
             .zIndex(pressed ? 40 : 0)
             .scaleEffect(pressed ? 0.96 : 1)
+            .padding(.vertical, 2)
             .contentShape(Rectangle())
             .gesture(
                 DragGesture(minimumDistance: 0)
@@ -461,6 +473,7 @@ private struct PunctuationKey: View {
 
 private struct DeleteKey: View {
     var width: CGFloat = 44
+    var height: CGFloat = 42
     var onBegin: () -> Void
     var onEnd: () -> Void
     @Environment(\.colorScheme) private var scheme
@@ -468,18 +481,19 @@ private struct DeleteKey: View {
 
     var body: some View {
         Image(systemName: "delete.backward")
-            .font(.system(size: 16, weight: .semibold))
-            .frame(width: width, height: 46)
+            .font(.system(size: 17, weight: .semibold))
+            .frame(width: width, height: height)
             .foregroundStyle(.white.opacity(0.9))
             .background(
-                RoundedRectangle(cornerRadius: 9, style: .continuous)
+                RoundedRectangle(cornerRadius: 8.5, style: .continuous)
                     .fill(Color(red: 0.18, green: 0.19, blue: 0.23))
                     .overlay(
-                        RoundedRectangle(cornerRadius: 9, style: .continuous)
+                        RoundedRectangle(cornerRadius: 8.5, style: .continuous)
                             .stroke(Color.white.opacity(0.1), lineWidth: 0.5)
                     )
             )
             .scaleEffect(pressed ? 0.96 : 1)
+            .padding(.vertical, 2)
             .contentShape(Rectangle())
             .gesture(
                 DragGesture(minimumDistance: 0)
@@ -501,6 +515,7 @@ private struct ModifierKey: View {
     var title: String? = nil
     var symbol: String? = nil
     var width: CGFloat = 44
+    var height: CGFloat = 42
     var active = false
     var prominent = false
     var action: () -> Void
@@ -514,16 +529,16 @@ private struct ModifierKey: View {
                     .font(.system(size: 16, weight: .semibold))
             } else if let title {
                 Text(title)
-                    .font(.system(size: 13, weight: .semibold, design: .rounded))
+                    .font(.system(size: title == "return" ? 15 : 13, weight: .semibold, design: .rounded))
             }
         }
-        .frame(width: width, height: prominent ? 48 : 46)
+        .frame(width: width, height: height)
         .foregroundStyle(prominent ? .white : .white.opacity(0.9))
         .background(
-            RoundedRectangle(cornerRadius: 9, style: .continuous)
+            RoundedRectangle(cornerRadius: 8.5, style: .continuous)
                 .fill(fill)
                 .overlay(
-                    RoundedRectangle(cornerRadius: 9, style: .continuous)
+                    RoundedRectangle(cornerRadius: 8.5, style: .continuous)
                         .stroke(
                             prominent
                             ? Color.white.opacity(0.22)
@@ -534,6 +549,7 @@ private struct ModifierKey: View {
                 .shadow(color: .black.opacity(pressed ? 0 : 0.1), radius: 0.4, y: 1)
         )
         .scaleEffect(pressed ? 0.96 : 1)
+        .padding(.vertical, 2)
         .contentShape(Rectangle())
         .gesture(
             DragGesture(minimumDistance: 0)
@@ -570,6 +586,7 @@ private struct ModifierKey: View {
 }
 
 private struct SpaceKey: View {
+    var height: CGFloat = 42
     var onTap: () -> Void
     var onCursorMove: (Int) -> Void
 
@@ -585,20 +602,21 @@ private struct SpaceKey: View {
             .font(.system(size: 15, weight: .medium, design: .rounded))
             .foregroundStyle(.white.opacity(0.9))
             .frame(maxWidth: .infinity)
-            .frame(height: 48)
+            .frame(height: height)
             .background(
-                RoundedRectangle(cornerRadius: 10, style: .continuous)
+                RoundedRectangle(cornerRadius: 8.5, style: .continuous)
                     .fill(
                         trackpad
                         ? Color(red: 0.18, green: 0.32, blue: 0.55)
                         : Color(red: 0.26, green: 0.27, blue: 0.32).opacity(pressed ? 0.85 : 1)
                     )
                     .overlay(
-                        RoundedRectangle(cornerRadius: 10, style: .continuous)
+                        RoundedRectangle(cornerRadius: 8.5, style: .continuous)
                             .stroke(Color.white.opacity(trackpad ? 0.28 : 0.1), lineWidth: 0.5)
                     )
                     .shadow(color: .black.opacity(0.25), radius: 0.4, y: 1)
             )
+            .padding(.vertical, 2)
             .contentShape(Rectangle())
             .gesture(
                 DragGesture(minimumDistance: 0)

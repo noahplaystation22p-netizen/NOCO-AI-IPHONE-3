@@ -41,6 +41,10 @@ final class ChatStore: ObservableObject {
     @Published var peerTypingDraft: String?
     @Published var chatLimitReached = false
     @Published var isCompacting = false
+    /// Shown while Companion heals a brief network drop (in-chat status).
+    @Published var reconnectHint: String?
+    /// One-shot Live Knowledge from Plus menu (consumed on next send).
+    @Published var liveKnowledgeOnce: LiveKnowledgeOnceOverride?
     private let softMessageLimit = 36
     private let keepAfterCompact = 30
     /// Vision replies can flash then vanish when sync reloads before the PC has persisted them.
@@ -199,8 +203,8 @@ final class ChatStore: ObservableObject {
         isSending = true
         lastError = nil
         workPhase = .understanding
-        // Speak is always Flash (fast). Chat Auto can still pick Think.
-        let uiMode = speak ? .flash : (modeOverride ?? mode)
+        // Speak may override depth (Flash/Think). Tools (Agent/Image) use speak:false.
+        let uiMode = speak ? (modeOverride ?? .flash) : (modeOverride ?? mode)
         var effectiveMode = uiMode
 
         // Soft intelligence: Auto only picks depth (Think/Flash). Never auto-activates Vision/Agent/tools.
@@ -219,7 +223,19 @@ final class ChatStore: ObservableObject {
             }
         }
 
-        ModeIntelligence.recordUse(speak ? .flash : uiMode)
+        ModeIntelligence.recordUse(speak ? effectiveMode : uiMode)
+
+        let webWire: String
+        if speak {
+            webWire = LiveKnowledgeRouting.resolveSpeakWire(once: liveKnowledgeOnce)
+        } else {
+            webWire = LiveKnowledgeRouting.resolveWire(once: liveKnowledgeOnce)
+        }
+        liveKnowledgeOnce = nil
+        let armedWeb = webWire == "on" || (webWire == "auto" && LiveKnowledgeRouting.likelyNeedsWeb(trimmed))
+        if speak, armedWeb {
+            // Speak path shows status via SpeakSessionController; keep chat quiet.
+        }
 
         // Agent clarifying answers → continue previous goal
         var agentGoal = trimmed
@@ -279,34 +295,85 @@ final class ChatStore: ObservableObject {
         }
 
         do {
-            workPhase = .analyzing
+            workPhase = .understanding
             let outbound = effectiveMode.specialtyPrompt(for: trimmed) ?? trimmed
-            workPhase = .executing
-            for try await chunk in api.streamChatV2(
-                message: outbound,
-                conversationId: conversationId,
-                mode: effectiveMode,
-                speak: speak,
-                agentPower: false
-            ) {
-                try Task.checkCancellation()
-                if let cid = chunk.conversationId, !cid.isEmpty {
-                    conversationId = cid
-                    activeConversationId = cid
-                    persistActiveConversation()
-                }
-                if let text = chunk.content, !text.isEmpty {
-                    if let idx = messages.firstIndex(where: { $0.id == assistantID }) {
-                        messages[idx].text += text
-                    }
-                    HapticService.streamTick()
-                }
-                if chunk.done == true { break }
+
+            // Soft phase theater in-chat while waiting for first tokens.
+            let phaseAdvance = Task { @MainActor [weak self] in
+                try? await Task.sleep(nanoseconds: 450_000_000)
+                guard !Task.isCancelled, let self else { return }
+                if self.workPhase == .understanding { self.workPhase = .analyzing }
+                try? await Task.sleep(nanoseconds: 900_000_000)
+                guard !Task.isCancelled, let self else { return }
+                if self.workPhase == .analyzing { self.workPhase = .executing }
             }
+
+            var sawContent = false
+            var streamAttempt = 0
+            streamLoop: while true {
+                streamAttempt += 1
+                do {
+                    for try await chunk in api.streamChatV2(
+                        message: outbound,
+                        conversationId: conversationId,
+                        mode: effectiveMode,
+                        speak: speak,
+                        agentPower: false,
+                        web: webWire
+                    ) {
+                        try Task.checkCancellation()
+                        if let cid = chunk.conversationId, !cid.isEmpty {
+                            conversationId = cid
+                            activeConversationId = cid
+                            persistActiveConversation()
+                        }
+                        if chunk.webUsed == true, let idx = messages.firstIndex(where: { $0.id == assistantID }) {
+                            messages[idx].webUsed = true
+                            if let sources = chunk.sources, !sources.isEmpty {
+                                messages[idx].webSourceTitles = sources.compactMap { $0.title }.filter { !$0.isEmpty }
+                            }
+                        }
+                        if let text = chunk.content, !text.isEmpty {
+                            if !sawContent {
+                                sawContent = true
+                                phaseAdvance.cancel()
+                                workPhase = .executing
+                                reconnectHint = nil
+                            }
+                            if let idx = messages.firstIndex(where: { $0.id == assistantID }) {
+                                messages[idx].text += text
+                            }
+                            HapticService.streamTick()
+                        }
+                        if chunk.done == true { break }
+                    }
+                    break streamLoop
+                } catch is CancellationError {
+                    throw CancellationError()
+                } catch {
+                    // Retry only if we never got tokens — don't duplicate partial replies.
+                    if !sawContent, CompanionAPI.isTransient(error), streamAttempt < 3 {
+                        reconnectHint = "Verbindung wird wiederhergestellt…"
+                        if let idx = messages.firstIndex(where: { $0.id == assistantID }),
+                           messages[idx].text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                            messages[idx].text = "Verbindung wird wiederhergestellt…"
+                        }
+                        try? await Task.sleep(nanoseconds: UInt64(streamAttempt) * 1_200_000_000)
+                        if let idx = messages.firstIndex(where: { $0.id == assistantID }),
+                           messages[idx].text == "Verbindung wird wiederhergestellt…" {
+                            messages[idx].text = ""
+                        }
+                        continue streamLoop
+                    }
+                    throw error
+                }
+            }
+            phaseAdvance.cancel()
 
             if let idx = messages.firstIndex(where: { $0.id == assistantID }) {
                 messages[idx].isStreaming = false
                 var final = messages[idx].text.trimmingCharacters(in: .whitespacesAndNewlines)
+                if final == "Verbindung wird wiederhergestellt…" { final = "" }
                 if speak {
                     final = VoiceService.stripSpeakEcho(final)
                     messages[idx].text = final
@@ -365,6 +432,7 @@ final class ChatStore: ObservableObject {
             try? await Task.sleep(nanoseconds: 500_000_000)
         }
         workPhase = .idle
+        reconnectHint = nil
         isSending = false
         return reply
     }
@@ -382,11 +450,13 @@ final class ChatStore: ObservableObject {
             }
         }
         workPhase = .idle
+        reconnectHint = nil
         isSending = false
         pendingAgentConfirm = nil
         pendingAgentIntake = nil
         agentConfirmPollTask?.cancel()
-        ImageLiveActivityManager.end(immediate: true)
+        ImageLiveActivityManager.end(immediate: true, onlyIfOwner: .generation)
+        AgentLiveActivityManager.end(immediate: true)
         HapticService.soft()
     }
 
@@ -461,6 +531,9 @@ final class ChatStore: ObservableObject {
 
         let userMessage = ChatMessage(role: .user, text: userText, localImageData: jpeg)
         messages.append(userMessage)
+        let assistant = ChatMessage(role: .assistant, text: "", isStreaming: true, modelLabel: "Vision")
+        messages.append(assistant)
+        let assistantID = assistant.id
 
         isSending = true
         lastError = nil
@@ -473,6 +546,7 @@ final class ChatStore: ObservableObject {
         }
 
         do {
+            try? await Task.sleep(nanoseconds: 280_000_000)
             workPhase = .analyzing
             let result = try await Self.uploadVisionWithRetry(
                 api: api,
@@ -488,16 +562,27 @@ final class ChatStore: ObservableObject {
             }
 
             var keptAssistant: ChatMessage?
-            if let assistant = result.asAssistantMessage() {
-                let mapped = mapMessage(assistant)
-                messages.append(mapped)
-                keptAssistant = mapped
+            if let remote = result.asAssistantMessage() {
+                let mapped = mapMessage(remote)
+                if let idx = messages.firstIndex(where: { $0.id == assistantID }) {
+                    messages[idx].text = mapped.text
+                    messages[idx].isStreaming = false
+                    messages[idx].modelLabel = mapped.modelLabel ?? "Vision"
+                    messages[idx].imageURL = mapped.imageURL
+                    messages[idx].localImageData = mapped.localImageData
+                    keptAssistant = messages[idx]
+                } else {
+                    messages.append(mapped)
+                    keptAssistant = mapped
+                }
                 HapticService.messageReceived()
             } else if let text = result.replyText, !text.isEmpty {
-                let mapped = ChatMessage(role: .assistant, text: text)
-                messages.append(mapped)
-                keptAssistant = mapped
+                setAssistantText(assistantID, text, streaming: false)
+                keptAssistant = messages.first(where: { $0.id == assistantID })
                 HapticService.messageReceived()
+            } else if let idx = messages.firstIndex(where: { $0.id == assistantID }) {
+                messages[idx].isStreaming = false
+                messages[idx].text = "Keine Vision-Antwort erhalten."
             }
 
             workPhase = .done
@@ -541,7 +626,12 @@ final class ChatStore: ObservableObject {
             evaluateChatLimit()
             HapticService.success()
         } catch {
-            messages.append(ChatMessage(role: .assistant, text: "Bild-Upload fehlgeschlagen: \((error as? LocalizedError)?.errorDescription ?? error.localizedDescription)"))
+            if let idx = messages.firstIndex(where: { $0.id == assistantID }) {
+                messages[idx].isStreaming = false
+                messages[idx].text = "Bild-Upload fehlgeschlagen: \((error as? LocalizedError)?.errorDescription ?? error.localizedDescription)"
+            } else {
+                messages.append(ChatMessage(role: .assistant, text: "Bild-Upload fehlgeschlagen: \((error as? LocalizedError)?.errorDescription ?? error.localizedDescription)"))
+            }
             lastError = (error as? LocalizedError)?.errorDescription
             HapticService.error()
         }
@@ -744,11 +834,10 @@ final class ChatStore: ObservableObject {
         setAssistantText(
             assistantID,
             """
-            🧠 Analyse
-            Ich habe verstanden, dass du Folgendes möchtest:
+            🧠 Agent analysiert Aufgabe…
             \(shown)
 
-            Als Nächstes erstelle ich einen kurzen Plan…
+            📋 Erstellt Plan…
             """,
             streaming: true
         )
@@ -771,7 +860,7 @@ final class ChatStore: ObservableObject {
             Nutze nur relevante Werkzeuge. Keine unnötigen Schritte. Präsentiere das Ergebnis klar auf Deutsch.
             """
             workPhase = .analyzing
-            ImageLiveActivityManager.start(prompt: "Agent · \(String(shown.prefix(48)))")
+            AgentLiveActivityManager.start(goal: shown)
             var task = try await api.createAgentTask(
                 goal: goalText,
                 mode: .work,
@@ -792,12 +881,11 @@ final class ChatStore: ObservableObject {
                     setAssistantText(assistantID, snapshot, streaming: true)
                     lastSnapshot = snapshot
                     HapticService.streamTick()
-                    ImageLiveActivityManager.update(
+                    AgentLiveActivityManager.update(
                         progress: Double(task.progress) / 100.0,
                         status: task.phaseTitle,
                         insight: String(task.planSummary.prefix(80)),
-                        etaSeconds: nil,
-                        phase: task.progress >= 95 ? .finishing : .rendering,
+                        phase: task.progress >= 95 ? .executing : .executing,
                         force: false
                     )
                 }
@@ -813,12 +901,11 @@ final class ChatStore: ObservableObject {
                     setAssistantText(assistantID, waiting, streaming: false)
                     HapticService.rigid()
                     workPhase = .analyzing
-                    ImageLiveActivityManager.update(
+                    AgentLiveActivityManager.update(
                         progress: Double(task.progress) / 100.0,
                         status: "Bestätigung nötig",
                         insight: pending.title,
-                        etaSeconds: nil,
-                        phase: .rendering,
+                        phase: .awaitingConfirm,
                         force: true
                     )
                     return waiting
@@ -834,14 +921,14 @@ final class ChatStore: ObservableObject {
             evaluateChatLimit()
             if task.status == "completed" {
                 HapticService.success()
-                ImageLiveActivityManager.complete(prompt: "Agent fertig")
+                AgentLiveActivityManager.complete(goal: "Agent fertig")
             } else {
                 HapticService.error()
-                ImageLiveActivityManager.end(immediate: true)
+                AgentLiveActivityManager.end(immediate: true)
             }
             return finalText
         } catch is CancellationError {
-            ImageLiveActivityManager.end(immediate: true)
+            AgentLiveActivityManager.end(immediate: true)
             if let idx = messages.firstIndex(where: { $0.id == assistantID }) {
                 messages[idx].isStreaming = false
                 if messages[idx].text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
@@ -850,7 +937,7 @@ final class ChatStore: ObservableObject {
             }
             return nil
         } catch {
-            ImageLiveActivityManager.end(immediate: true)
+            AgentLiveActivityManager.end(immediate: true)
             return await streamAgentPowerFallback(
                 goal: goal,
                 assistantID: assistantID,
@@ -904,12 +991,11 @@ final class ChatStore: ObservableObject {
                 }
                 confirmIdleRounds = 0
                 setAssistantText(assistantID, Self.formatAgentChatProgress(task), streaming: true)
-                ImageLiveActivityManager.update(
+                AgentLiveActivityManager.update(
                     progress: Double(task.progress) / 100.0,
                     status: task.phaseTitle,
                     insight: String((task.planSummary).prefix(80)),
-                    etaSeconds: nil,
-                    phase: .rendering,
+                    phase: .executing,
                     force: false
                 )
             }
@@ -917,13 +1003,13 @@ final class ChatStore: ObservableObject {
             setAssistantText(assistantID, Self.formatAgentChatFinal(task), streaming: false)
             if task.status == "completed" {
                 HapticService.success()
-                ImageLiveActivityManager.complete(prompt: "Agent fertig")
+                AgentLiveActivityManager.complete(goal: "Agent fertig")
             } else {
-                ImageLiveActivityManager.end(immediate: true)
+                AgentLiveActivityManager.end(immediate: true)
             }
             workPhase = .done
         } catch {
-            ImageLiveActivityManager.end(immediate: true)
+            AgentLiveActivityManager.end(immediate: true)
         }
     }
 
@@ -1041,37 +1127,50 @@ final class ChatStore: ObservableObject {
             return nil
         }
 
-        setAssistantText(assistantID, "Formuliere Prompt…", streaming: true)
+        setAssistantText(assistantID, "🎨 Versteht Bildidee…", streaming: true)
         workPhase = .analyzing
         let prompt = await refineImagePrompt(idea)
         let displayPrompt = prompt.trimmingCharacters(in: .whitespacesAndNewlines)
-        setAssistantText(assistantID, "Erstelle Bild…\n\n\(displayPrompt)", streaming: true)
+        let resolved = ImageGenMode.auto.resolved(for: idea + " " + displayPrompt)
+        let params = resolved.engineParams
+        let isThink = resolved == .think
+        let startedAt = Date()
+
+        if isThink {
+            setAssistantText(assistantID, "🎨 Think-Modell arbeitet an deinem Bild…\n\n\(displayPrompt)", streaming: true)
+        } else {
+            setAssistantText(assistantID, "🎨 Erstellt Bild…\n\n\(displayPrompt)", streaming: true)
+        }
         workPhase = .executing
 
         ImageBackgroundKeeper.shared.begin(reason: "NOCO Bild erstellen")
-        ImageLiveActivityManager.start(prompt: displayPrompt)
+        ImageLiveActivityManager.start(prompt: "\(resolved.emoji) \(displayPrompt)", owner: .generation)
         defer {
             ImageBackgroundKeeper.shared.end(preserveAudioSession: true)
         }
 
-        let resolved = ImageGenMode.auto.resolved(for: displayPrompt)
-        let params = resolved.engineParams
-
         let progressTask = Task { @MainActor [weak self] in
+            var tick = 0
             while !Task.isCancelled {
-                try? await Task.sleep(nanoseconds: 1_200_000_000)
+                try? await Task.sleep(nanoseconds: 1_100_000_000)
                 guard !Task.isCancelled, let self else { return }
-                guard let prog = try? await api.imageProgress() else { continue }
-                let status = ImageStore.chatFriendlyProgress(prog)
-                self.setAssistantText(assistantID, "\(status)\n\n\(displayPrompt)", streaming: true)
-                ImageLiveActivityManager.update(
-                    progress: prog.normalizedProgress,
-                    status: status,
-                    insight: status,
-                    etaSeconds: nil,
-                    phase: .rendering,
-                    force: false
-                )
+                tick += 1
+                let elapsed = Date().timeIntervalSince(startedAt)
+                if let prog = try? await api.imageProgress() {
+                    let status = ImageStore.chatFriendlyProgress(prog, isThink: isThink, elapsed: elapsed)
+                    self.setAssistantText(assistantID, "\(status)\n\n\(displayPrompt)", streaming: true)
+                    ImageLiveActivityManager.update(
+                        progress: max(prog.normalizedProgress, softImageProgress(elapsed: elapsed, isThink: isThink)),
+                        status: status,
+                        insight: status,
+                        etaSeconds: isThink ? max(30, Int(420 - elapsed)) : nil,
+                        phase: .rendering,
+                        force: false
+                    )
+                } else if isThink {
+                    let status = ImageStore.thinkPhaseStatus(elapsed: elapsed)
+                    self.setAssistantText(assistantID, "\(status)\n\n\(displayPrompt)", streaming: true)
+                }
             }
         }
 
@@ -1127,6 +1226,61 @@ final class ChatStore: ObservableObject {
             return replyText
         } catch {
             progressTask.cancel()
+            if CompanionAPI.isTransient(error) {
+                setAssistantText(assistantID, "Verbindung wird wiederhergestellt…\n\n\(displayPrompt)", streaming: true)
+                do {
+                    try? await Task.sleep(nanoseconds: 1_600_000_000)
+                    let res = try await api.generateImage(
+                        prompt: displayPrompt,
+                        conversationId: conversationId,
+                        width: params.width,
+                        height: params.height,
+                        steps: params.steps
+                    )
+                    if let cid = res.conversationId, !cid.isEmpty {
+                        activeConversationId = cid
+                        persistActiveConversation()
+                    }
+                    var localData: Data?
+                    if let b64 = res.imageBase64 {
+                        let cleaned = b64
+                            .replacingOccurrences(of: "\n", with: "")
+                            .replacingOccurrences(of: "data:image/png;base64,", with: "")
+                            .replacingOccurrences(of: "data:image/jpeg;base64,", with: "")
+                        localData = Data(base64Encoded: cleaned)
+                    }
+                    var imageURL = media?.url(for: res.resolvedPath)
+                    if localData == nil, let downloadURL = imageURL {
+                        localData = try? await URLSession.shared.data(from: downloadURL).0
+                    }
+                    let replyText = "Fertig\n\n\(displayPrompt)"
+                    if let idx = messages.firstIndex(where: { $0.id == assistantID }) {
+                        messages[idx] = ChatMessage(
+                            id: assistantID,
+                            role: .assistant,
+                            text: replyText,
+                            isStreaming: false,
+                            imageURL: imageURL,
+                            localImageData: localData,
+                            modelLabel: AIMode.image.modelHint
+                        )
+                    }
+                    onImageCreated?(displayPrompt, imageURL, localData)
+                    ImageLiveActivityManager.complete(prompt: displayPrompt)
+                    await resolveConversationId(activeConversationId, preferLatest: isStartingNewChat)
+                    await softSyncPreservingVision(localAssistant: messages.first(where: { $0.id == assistantID }))
+                    evaluateChatLimit()
+                    HapticService.success()
+                    return replyText
+                } catch {
+                    let msg = (error as? LocalizedError)?.errorDescription ?? error.localizedDescription
+                    setAssistantText(assistantID, "Bild erstellen fehlgeschlagen: \(msg)", streaming: false)
+                    ImageLiveActivityManager.fail(msg)
+                    lastError = msg
+                    HapticService.error()
+                    return nil
+                }
+            }
             let msg = (error as? LocalizedError)?.errorDescription ?? error.localizedDescription
             setAssistantText(assistantID, "Bild erstellen fehlgeschlagen: \(msg)", streaming: false)
             ImageLiveActivityManager.fail(msg)
@@ -1136,13 +1290,54 @@ final class ChatStore: ObservableObject {
         }
     }
 
+    private func softImageProgress(elapsed: TimeInterval, isThink: Bool) -> Double {
+        let span = isThink ? 360.0 : 160.0
+        return min(0.72, elapsed / span)
+    }
+
+    func armLiveKnowledge(_ override: LiveKnowledgeOnceOverride) {
+        liveKnowledgeOnce = override
+        HapticService.selection()
+    }
+
+    func clearLiveKnowledgeArm() {
+        liveKnowledgeOnce = nil
+    }
+
+    func applyReconnectStatus(_ line: String?) {
+        reconnectHint = line
+        guard isSending,
+              let idx = messages.indices.last,
+              messages[idx].role == .assistant,
+              messages[idx].isStreaming,
+              let line, !line.isEmpty else { return }
+        let current = messages[idx].text.trimmingCharacters(in: .whitespacesAndNewlines)
+        if current.isEmpty || current.hasPrefix("🎨") || current.hasPrefix("🧠") || current.hasPrefix("✨")
+            || current.contains("Erstellt Bild") || current.contains("Think-Modell")
+            || current.contains("Verbindung") {
+            // Keep prompt footer if present
+            if let range = messages[idx].text.range(of: "\n\n") {
+                let footer = String(messages[idx].text[range.upperBound...])
+                messages[idx].text = "\(line)\n\n\(footer)"
+            } else if current.isEmpty {
+                messages[idx].text = line
+            }
+        }
+    }
+
+    func clearReconnectStatus() {
+        reconnectHint = nil
+    }
+
     private func refineImagePrompt(_ idea: String) async -> String {
         let cleaned = idea.trimmingCharacters(in: .whitespacesAndNewlines)
         guard let api, cleaned.count > 2 else { return cleaned }
 
         let instruction = """
-        Du bist Prompt-Engineer. Formuliere aus der Idee EINEN starken Bildprompt (Englisch, detailliert, max 45 Wörter).
-        Nur der Prompt — keine Anführungszeichen, kein Kommentar, keine Einleitung.
+        Du bist Prompt-Engineer für hochwertige Bildgenerierung. Formuliere aus der Nutzeridee EINEN starken englischen Bildprompt (max 55 Wörter).
+        Erweitere knappe Ideen mit sinnvollen Annahmen zu: Stil, Atmosphäre, Perspektive, Beleuchtung, Umgebung und den wichtigsten Details — ohne Rückfragen.
+        Beispiel: „Mach ein cooles Auto.“ → modernes Sportcoupé, dramatische Abendbeleuchtung, nasse Straße, leichte Nebelstimmung, filmische Kamera, hoher Detailgrad.
+        Nur der Prompt — keine Anführungszeichen, kein Kommentar, keine Einleitung, keine Fragen.
         Idee: \(cleaned)
         """
 
@@ -1161,7 +1356,7 @@ final class ChatStore: ObservableObject {
                 if chunk.done == true { break }
             }
         } catch {
-            return cleaned
+            return Self.fallbackImagePrompt(from: cleaned)
         }
 
         var prompt = out
@@ -1171,9 +1366,30 @@ final class ChatStore: ObservableObject {
             prompt = String(first).trimmingCharacters(in: .whitespacesAndNewlines)
         }
         if prompt.count < 8 || prompt.lowercased().hasPrefix("sorry") || prompt.lowercased().hasPrefix("ich ") {
-            return cleaned
+            return Self.fallbackImagePrompt(from: cleaned)
         }
         return prompt
+    }
+
+    /// Local enrichment when the refine stream is unavailable.
+    private static func fallbackImagePrompt(from idea: String) -> String {
+        let t = idea.lowercased()
+        var extras: [String] = []
+        if t.contains("auto") || t.contains("car") || t.contains("fahrzeug") {
+            extras += ["modern sportscar design", "cinematic lighting", "wet asphalt reflections"]
+        }
+        if t.contains("cool") || t.contains("episch") || t.contains("krass") {
+            extras += ["dramatic atmosphere", "high detail"]
+        }
+        if t.contains("nacht") || t.contains("night") {
+            extras += ["night scene", "neon accents"]
+        } else if extras.isEmpty == false {
+            extras += ["natural depth of field"]
+        }
+        if extras.isEmpty {
+            extras = ["cohesive style", "balanced composition", "tasteful lighting", "high detail"]
+        }
+        return "\(idea), \(extras.joined(separator: ", ")), high quality"
     }
 
     private static func formatAgentChatProgress(_ task: AgentTask, goal: String? = nil) -> String {
@@ -1181,38 +1397,30 @@ final class ChatStore: ObservableObject {
         let phase = (task.phase ?? "").lowercased()
         switch phase {
         case "analyzing", "draft", "queued":
-            lines.append("🧠 Analyse")
+            lines.append("🧠 Agent analysiert Aufgabe…")
             if let goal, !goal.isEmpty {
-                lines.append("Ich habe verstanden, dass du \(goal) möchtest.")
-            } else {
-                lines.append("Ich analysiere dein Ziel…")
+                lines.append(goal)
             }
         case "planning":
-            lines.append("📋 Plan")
+            lines.append("📋 Erstellt Plan…")
             if !task.planSummary.isEmpty {
                 lines.append(task.planSummary)
             }
         case "executing", "running", "reviewing":
-            lines.append("⚙️ Arbeiten · \(task.progress)%")
+            lines.append("⚙️ Führt Aktionen aus… · \(task.progress)%")
         case "awaiting", "awaiting_confirmation":
-            lines.append("⚙️ Arbeiten · Bestätigung nötig")
+            lines.append("⚙️ Wartet auf Bestätigung…")
         default:
-            lines.append("NOCO Agent · \(task.phaseTitle) · \(task.progress)%")
-        }
-
-        if let model = task.activeModelLabel?.trimmingCharacters(in: .whitespacesAndNewlines), !model.isEmpty {
-            lines.append("Modell: \(model)")
+            lines.append("🧠 Agent · \(task.phaseTitle) · \(task.progress)%")
         }
 
         if phase != "planning", !task.planSummary.isEmpty {
             lines.append("")
-            lines.append("Plan:")
             lines.append(task.planSummary)
         }
 
         if !task.steps.isEmpty {
             lines.append("")
-            lines.append("Schritte:")
             for step in task.steps.prefix(5) {
                 let mark: String
                 switch step.status {
@@ -1230,37 +1438,32 @@ final class ChatStore: ObservableObject {
             lines.append("Bestätigung: \(pending.title)")
             if !pending.detail.isEmpty { lines.append(pending.detail) }
         }
-        if let notes = task.qualityNotes, !notes.isEmpty {
-            lines.append("")
-            lines.append("Qualität: \(notes)")
-        }
         return lines.joined(separator: "\n")
     }
 
     private static func formatAgentChatFinal(_ task: AgentTask, goal: String? = nil) -> String {
         var lines: [String] = []
-        lines.append("✅ Fertig")
+        lines.append(task.status == "failed" ? "⚠️ Aufgabe fehlgeschlagen." : "✅ Aufgabe abgeschlossen.")
         lines.append("")
-        lines.append("Erledigt:")
         if let goal, !goal.isEmpty {
-            lines.append("• Ziel: \(goal)")
+            lines.append("Ziel: \(goal)")
+            lines.append("")
         }
         let doneSteps = task.steps.filter { $0.status == "completed" }.prefix(5)
-        if doneSteps.isEmpty {
-            lines.append("• Agent-Lauf \(task.statusEnum.label.lowercased())")
-        } else {
+        if !doneSteps.isEmpty {
+            lines.append("Schritte:")
             for step in doneSteps {
                 lines.append("• \(step.title)")
             }
+            lines.append("")
         }
-        lines.append("")
         lines.append("Ergebnis:")
         if let summary = task.resultSummary?.trimmingCharacters(in: .whitespacesAndNewlines), !summary.isEmpty {
             lines.append(summary)
         } else if task.status == "failed" {
-            lines.append("Die Aufgabe ist fehlgeschlagen. Du kannst den Auftrag im Chat erneut senden.")
+            lines.append("Du kannst den Auftrag im Chat erneut senden.")
         } else {
-            lines.append(task.planSummary.isEmpty ? "Aufgabe abgeschlossen." : task.planSummary)
+            lines.append(task.planSummary.isEmpty ? "Fertig." : task.planSummary)
         }
         if !task.artifacts.isEmpty {
             lines.append("")
@@ -1271,10 +1474,7 @@ final class ChatStore: ObservableObject {
         }
         if let notes = task.qualityNotes, !notes.isEmpty {
             lines.append("")
-            lines.append("Empfehlung: \(notes)")
-        } else {
-            lines.append("")
-            lines.append("Empfehlung: Sag einfach weiter, was als Nächstes dran ist — Agent bleibt im Chat.")
+            lines.append("Hinweis: \(notes)")
         }
         return lines.joined(separator: "\n")
     }

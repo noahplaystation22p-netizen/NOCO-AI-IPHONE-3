@@ -18,6 +18,9 @@ struct ChatMessage: Identifiable, Equatable {
     var localImageData: Data?
     /// Soft label for “Verwendetes Modell” (may be a mode hint).
     var modelLabel: String?
+    /// True when Companion Live Knowledge / web context was used.
+    var webUsed: Bool
+    var webSourceTitles: [String]
 
     init(
         id: UUID = UUID(),
@@ -28,7 +31,9 @@ struct ChatMessage: Identifiable, Equatable {
         isStreaming: Bool = false,
         imageURL: URL? = nil,
         localImageData: Data? = nil,
-        modelLabel: String? = nil
+        modelLabel: String? = nil,
+        webUsed: Bool = false,
+        webSourceTitles: [String] = []
     ) {
         self.id = id
         self.serverId = serverId
@@ -39,5 +44,7 @@ struct ChatMessage: Identifiable, Equatable {
         self.imageURL = imageURL
         self.localImageData = localImageData
         self.modelLabel = modelLabel
+        self.webUsed = webUsed
+        self.webSourceTitles = webSourceTitles
     }
 }

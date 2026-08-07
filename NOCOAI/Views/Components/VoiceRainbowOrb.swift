@@ -1,11 +1,12 @@
 import SwiftUI
 
-/// Apple-Intelligence voice stage: soft aurora + thin rings + reactive waveform — not a fat orb.
+/// Apple-Intelligence voice stage: living KI core + reactive rainbow waveform.
 struct IntelligenceVoiceStage: View {
     var phase: VoicePhase
     var level: CGFloat
     var bands: [CGFloat] = Array(repeating: 0.15, count: 16)
 
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var spin = false
     @State private var breathe = false
 
@@ -26,6 +27,16 @@ struct IntelligenceVoiceStage: View {
         }
     }
 
+    private var energy: NOCOIntelligenceEnergy {
+        switch phase {
+        case .listening: return .listening
+        case .processing: return .thinking
+        case .speaking: return .speaking
+        case .error: return .idle
+        case .idle: return .idle
+        }
+    }
+
     var body: some View {
         let interval: Double = {
             switch phase {
@@ -39,28 +50,38 @@ struct IntelligenceVoiceStage: View {
             let t = timeline.date.timeIntervalSinceReferenceDate
             ZStack {
                 auroraField
+
+                NOCOIntelligenceCore(
+                    energy: energy,
+                    size: .hero,
+                    level: level
+                )
+                .scaleEffect(1 + level * (phase == .listening ? 0.06 : 0.03))
+                .opacity(0.92)
+
                 softRings
+                    .allowsHitTesting(false)
+
                 centerWaveform(t: t)
+                    .offset(y: 78)
+
                 statusSpark
             }
-            .scaleEffect(active ? 1 + level * 0.05 : 1)
+            .scaleEffect(active ? 1 + level * 0.04 : 1)
             .animation(.easeOut(duration: 0.08), value: level)
         }
-        .frame(height: 250)
-        .onAppear {
-            guard active else { return }
-            withAnimation(.linear(duration: 14).repeatForever(autoreverses: false)) { spin = true }
-            withAnimation(.easeInOut(duration: 2.4).repeatForever(autoreverses: true)) { breathe = true }
+        .frame(height: 280)
+        .onAppear { startMotionIfNeeded() }
+        .onChange(of: active) { _, _ in startMotionIfNeeded() }
+    }
+
+    private func startMotionIfNeeded() {
+        guard !reduceMotion, active else {
+            if !active { spin = false; breathe = false }
+            return
         }
-        .onChange(of: active) { _, isActive in
-            if isActive {
-                withAnimation(.linear(duration: 14).repeatForever(autoreverses: false)) { spin = true }
-                withAnimation(.easeInOut(duration: 2.4).repeatForever(autoreverses: true)) { breathe = true }
-            } else {
-                spin = false
-                breathe = false
-            }
-        }
+        withAnimation(.linear(duration: 14).repeatForever(autoreverses: false)) { spin = true }
+        withAnimation(.easeInOut(duration: 2.4).repeatForever(autoreverses: true)) { breathe = true }
     }
 
     private var auroraField: some View {
@@ -69,8 +90,8 @@ struct IntelligenceVoiceStage: View {
                 .fill(
                     RadialGradient(
                         colors: [
-                            Color(red: 0.45, green: 0.78, blue: 1).opacity(0.38 * intensity),
-                            Color(red: 0.5, green: 0.9, blue: 0.85).opacity(0.16 * intensity),
+                            NOCORainbow.blue.opacity(0.38 * intensity),
+                            NOCORainbow.teal.opacity(0.16 * intensity),
                             .clear
                         ],
                         center: .center,
@@ -83,13 +104,13 @@ struct IntelligenceVoiceStage: View {
                 .scaleEffect(breathe ? 1.07 : 0.93)
 
             Ellipse()
-                .fill(Color(red: 0.35, green: 0.92, blue: 0.75).opacity(0.16 * intensity))
+                .fill(NOCORainbow.pink.opacity(0.14 * intensity))
                 .frame(width: 270, height: 150)
                 .blur(radius: 36)
                 .offset(x: breathe ? 22 : -20, y: breathe ? -12 : 16)
 
             Ellipse()
-                .fill(Color(red: 0.55, green: 0.7, blue: 1).opacity(0.1 * intensity))
+                .fill(NOCORainbow.violet.opacity(0.12 * intensity))
                 .frame(width: 200, height: 120)
                 .blur(radius: 28)
                 .offset(x: breathe ? -20 : 18, y: 18)
@@ -102,22 +123,15 @@ struct IntelligenceVoiceStage: View {
                 Circle()
                     .stroke(
                         AngularGradient(
-                            colors: [
-                                Color(red: 0.4, green: 0.8, blue: 1).opacity(0.55),
-                                .clear,
-                                Color(red: 0.7, green: 0.45, blue: 1).opacity(0.4),
-                                .clear,
-                                Color(red: 0.4, green: 0.95, blue: 0.75).opacity(0.35),
-                                .clear
-                            ],
+                            colors: NOCORainbow.flow.map { $0.opacity(0.45) } + [.clear],
                             center: .center
                         ),
                         lineWidth: 1.1
                     )
                     .frame(width: 168 + CGFloat(i) * 36, height: 168 + CGFloat(i) * 36)
                     .rotationEffect(.degrees((i % 2 == 0 ? 1 : -1) * (spin ? 360 : 0)))
-                    .opacity(0.35 + intensity * 0.35)
-                    .scaleEffect(1 + level * (phase == .listening ? 0.18 : 0.06))
+                    .opacity(0.28 + intensity * 0.3)
+                    .scaleEffect(1 + level * (phase == .listening ? 0.14 : 0.05))
                     .animation(.easeOut(duration: 0.05), value: level)
             }
         }
@@ -139,9 +153,9 @@ struct IntelligenceVoiceStage: View {
                     .shadow(color: barColors(i)[0].opacity(0.45 + Double(level) * 0.4), radius: active ? 6 : 0)
             }
         }
-        .frame(height: 88)
-        .padding(.horizontal, 24)
-        .padding(.vertical, 20)
+        .frame(height: 72)
+        .padding(.horizontal, 22)
+        .padding(.vertical, 14)
         .background(
             Capsule()
                 .fill(.ultraThinMaterial)
@@ -149,30 +163,25 @@ struct IntelligenceVoiceStage: View {
                     Capsule()
                         .stroke(
                             AngularGradient(
-                                colors: [
-                                    Color(red: 0.4, green: 0.8, blue: 1).opacity(0.55 + Double(level) * 0.35),
-                                    Color(red: 0.7, green: 0.4, blue: 1).opacity(0.35),
-                                    Color(red: 0.4, green: 0.95, blue: 0.7).opacity(0.4),
-                                    Color(red: 0.4, green: 0.8, blue: 1).opacity(0.55)
-                                ],
+                                colors: NOCORainbow.flow.map { $0.opacity(0.5 + Double(level) * 0.25) },
                                 center: .center
                             ),
                             lineWidth: 1.2 + level * 1.2
                         )
                         .rotationEffect(.degrees(spin ? 360 : 0))
                 )
-                .shadow(color: Color(red: 0.45, green: 0.7, blue: 1).opacity(0.22 + Double(level) * 0.35), radius: 14 + level * 18)
+                .shadow(color: NOCORainbow.blue.opacity(0.22 + Double(level) * 0.35), radius: 14 + level * 18)
         )
-        .scaleEffect(1 + level * (phase == .listening ? 0.12 : 0.05))
+        .scaleEffect(1 + level * (phase == .listening ? 0.1 : 0.04))
         .animation(.easeOut(duration: 0.05), value: level)
         .animation(.easeOut(duration: 0.05), value: bands)
     }
 
     private var statusSpark: some View {
         Image(systemName: glyph)
-            .font(.system(size: 18, weight: .semibold))
+            .font(.system(size: 16, weight: .semibold))
             .foregroundStyle(.secondary)
-            .padding(.top, 118)
+            .padding(.top, 168)
             .symbolEffect(.pulse, options: .repeating, isActive: phase == .processing || phase == .listening)
             .opacity(0.85)
     }
@@ -192,26 +201,22 @@ struct IntelligenceVoiceStage: View {
 
         switch phase {
         case .listening:
-            // True visualizer: loud = high bars, quiet = low
-            return max(6, 10 + band * 92 * CGFloat(envelope) + level * 18)
+            return max(6, 10 + band * 72 * CGFloat(envelope) + level * 16)
         case .speaking:
             let wave = abs(sin(t * 8.5 + Double(i) * 0.7))
-            return CGFloat(10 + (Double(band) * 0.75 + wave * 0.35) * envelope * 64)
+            return CGFloat(10 + (Double(band) * 0.75 + wave * 0.35) * envelope * 52)
         case .processing:
             let wave = abs(sin(t * 3.2 + Double(i) * 0.35))
-            return CGFloat(8 + wave * envelope * 28)
+            return CGFloat(8 + wave * envelope * 24)
         default:
             return CGFloat(6 + Double(band) * envelope * 12)
         }
     }
 
     private func barColors(_ i: Int) -> [Color] {
-        let hues = [0.55, 0.62, 0.72, 0.85, 0.95, 0.08]
-        let h = hues[i % hues.count]
-        return [
-            Color(hue: h, saturation: 0.75, brightness: 1),
-            Color(hue: (h + 0.08).truncatingRemainder(dividingBy: 1), saturation: 0.65, brightness: 1)
-        ]
+        let base = NOCORainbow.flow[i % (NOCORainbow.flow.count - 1)]
+        let next = NOCORainbow.flow[(i + 1) % (NOCORainbow.flow.count - 1)]
+        return [base, next]
     }
 
     private var glyph: String {
@@ -228,6 +233,7 @@ struct IntelligenceVoiceStage: View {
 /// Soft full-bleed mesh for Speak / Intelligence surfaces.
 struct IntelligenceMeshBackground: View {
     @Environment(\.colorScheme) private var scheme
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var drift = false
 
     var body: some View {
@@ -236,20 +242,27 @@ struct IntelligenceMeshBackground: View {
             FloatingIntelligenceDots(count: 6).opacity(0.18)
 
             Circle()
-                .fill(NOCOAITheme.glowPrimary.opacity(scheme == .dark ? 0.2 : 0.12))
+                .fill(NOCORainbow.blue.opacity(scheme == .dark ? 0.18 : 0.1))
                 .frame(width: 380, height: 380)
                 .blur(radius: 90)
                 .offset(x: drift ? 40 : -50, y: drift ? -120 : -40)
 
             Circle()
-                .fill(NOCOAITheme.glowSecondary.opacity(scheme == .dark ? 0.16 : 0.1))
+                .fill(NOCORainbow.violet.opacity(scheme == .dark ? 0.14 : 0.08))
                 .frame(width: 300, height: 300)
                 .blur(radius: 80)
                 .offset(x: drift ? -60 : 70, y: drift ? 180 : 80)
+
+            Circle()
+                .fill(NOCORainbow.green.opacity(scheme == .dark ? 0.08 : 0.05))
+                .frame(width: 220, height: 220)
+                .blur(radius: 70)
+                .offset(x: drift ? 30 : -40, y: drift ? 40 : -20)
         }
         .ignoresSafeArea()
         .onAppear {
-            withAnimation(.easeInOut(duration: 9).repeatForever(autoreverses: true)) {
+            guard !reduceMotion else { return }
+            withAnimation(.easeInOut(duration: 11).repeatForever(autoreverses: true)) {
                 drift = true
             }
         }
@@ -258,19 +271,14 @@ struct IntelligenceMeshBackground: View {
 
 /// Horizontal rainbow shimmer line (NOCO accent).
 struct IntelligenceShimmerLine: View {
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var move = false
 
     var body: some View {
         Capsule()
             .fill(
                 LinearGradient(
-                    colors: [
-                        .clear,
-                        Color(red: 0.4, green: 0.8, blue: 1),
-                        Color(red: 0.7, green: 0.45, blue: 1),
-                        Color(red: 0.4, green: 0.95, blue: 0.7),
-                        .clear
-                    ],
+                    colors: [.clear] + NOCORainbow.flow + [.clear],
                     startPoint: move ? .leading : .trailing,
                     endPoint: move ? .trailing : .leading
                 )
@@ -278,7 +286,8 @@ struct IntelligenceShimmerLine: View {
             .frame(height: 2)
             .opacity(0.85)
             .onAppear {
-                withAnimation(.easeInOut(duration: 2.2).repeatForever(autoreverses: true)) {
+                guard !reduceMotion else { return }
+                withAnimation(.easeInOut(duration: 3.6).repeatForever(autoreverses: true)) {
                     move = true
                 }
             }

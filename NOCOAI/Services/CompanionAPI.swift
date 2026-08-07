@@ -40,9 +40,13 @@ struct CompanionAPI {
 
     let session: URLSession = {
         let config = URLSessionConfiguration.default
-        config.timeoutIntervalForRequest = 20
-        config.timeoutIntervalForResource = 400
+        // Longer request window so brief Wi‑Fi hiccups don't kill status/stream setup.
+        config.timeoutIntervalForRequest = 45
+        // Think image gen + long agent/vision jobs need headroom.
+        config.timeoutIntervalForResource = 600
         config.waitsForConnectivity = true
+        config.allowsExpensiveNetworkAccess = true
+        config.allowsConstrainedNetworkAccess = true
         return URLSession(configuration: config)
     }()
 
@@ -200,5 +204,51 @@ struct CompanionAPI {
             return CompanionAPIError.unreachable
         }
         return CompanionAPIError.network(error)
+    }
+
+    /// True for short-lived network blips that are worth automatic retry.
+    static func isTransient(_ error: Error) -> Bool {
+        if let api = error as? CompanionAPIError {
+            switch api {
+            case .unreachable, .network: return true
+            case .server(let msg):
+                let low = msg.lowercased()
+                return low.contains("timeout") || low.contains("timed out") || low.contains("connection reset")
+            default: return false
+            }
+        }
+        if let url = error as? URLError {
+            switch url.code {
+            case .timedOut, .networkConnectionLost, .notConnectedToInternet,
+                 .cannotConnectToHost, .dnsLookupFailed, .cannotFindHost,
+                 .internationalRoamingOff, .dataNotAllowed, .secureConnectionFailed:
+                return true
+            default:
+                return false
+            }
+        }
+        let ns = error as NSError
+        return ns.domain == NSPOSIXErrorDomain && (ns.code == 64 || ns.code == 57 || ns.code == 54)
+    }
+
+    /// Retry transient failures with short backoff (status, images, short RPC).
+    func withTransientRetry<T>(
+        attempts: Int = 3,
+        baseDelayNanoseconds: UInt64 = 900_000_000,
+        operation: () async throws -> T
+    ) async throws -> T {
+        var lastError: Error?
+        for attempt in 0..<max(1, attempts) {
+            do {
+                return try await operation()
+            } catch {
+                let mapped = mapNetworkError(error)
+                lastError = mapped
+                guard Self.isTransient(mapped), attempt + 1 < attempts else { throw mapped }
+                let delay = baseDelayNanoseconds * UInt64(attempt + 1)
+                try? await Task.sleep(nanoseconds: delay)
+            }
+        }
+        throw lastError ?? CompanionAPIError.unreachable
     }
 }

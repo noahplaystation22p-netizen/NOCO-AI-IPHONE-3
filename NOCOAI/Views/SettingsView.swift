@@ -5,7 +5,13 @@ struct SettingsView: View {
     @EnvironmentObject private var connection: ConnectionStore
     @Environment(\.colorScheme) private var scheme
     @State private var autoSpeak = true
-    @State private var voiceId = ""
+    @State private var speakFullAccess = false
+    @State private var liveKnowledge: LiveKnowledgePolicy = .auto
+    @State private var speakLiveKnowledge: LiveKnowledgePolicy = .auto
+    @State private var voiceId = NOCOSpeakVoiceID.natural
+    @State private var voiceStyle: NOCOSpeakVoiceStyle = .natural
+    @State private var speakRate: Double = 1.0
+    @State private var speakPitch: Double = 1.0
     @State private var voices: [AVSpeechSynthesisVoice] = []
     @State private var previewSynth = AVSpeechSynthesizer()
     @State private var nameDraft = ""
@@ -22,22 +28,102 @@ struct SettingsView: View {
                 }
 
                 Section {
+                    Picker("Live Knowledge", selection: $liveKnowledge) {
+                        ForEach(LiveKnowledgePolicy.allCases) { policy in
+                            Text(policy.title).tag(policy)
+                        }
+                    }
+                    .onChange(of: liveKnowledge) { _, newValue in
+                        LiveKnowledgePolicy.current = newValue
+                        HapticService.toggle()
+                    }
+                    Text(liveKnowledge.subtitle)
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                } header: {
+                    Text("NOCO Live Knowledge")
+                } footer: {
+                    Text("Lokal zuerst. Web nur bei aktuellen Fakten — oder manuell über + → Internet.")
+                }
+
+                Section {
+                    Picker("Internetzugriff", selection: $speakLiveKnowledge) {
+                        ForEach(LiveKnowledgePolicy.allCases) { policy in
+                            Text(policy.title).tag(policy)
+                        }
+                    }
+                    .onChange(of: speakLiveKnowledge) { _, newValue in
+                        SpeakLiveKnowledgePolicy.current = newValue
+                        HapticService.toggle()
+                    }
+                    Text(speakLiveKnowledge.subtitle)
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+
                     Toggle("Antworten vorlesen", isOn: $autoSpeak)
                         .onChange(of: autoSpeak) { _, newValue in
                             UserDefaults.standard.set(newValue, forKey: "nocoai.autoSpeak")
                             HapticService.toggle()
                         }
 
+                    Toggle("NOCO Vollzugriff", isOn: $speakFullAccess)
+                        .onChange(of: speakFullAccess) { _, newValue in
+                            SpeakFullAccess.isEnabled = newValue
+                            HapticService.toggle()
+                        }
+
                     Picker("Stimme", selection: $voiceId) {
-                        Text("Automatisch (beste)").tag("")
-                        ForEach(voices, id: \.identifier) { voice in
-                            Text(voiceLabel(voice)).tag(voice.identifier)
+                        Text("NOCO Natural Voice").tag(NOCOSpeakVoiceID.natural)
+                        Text("Automatisch (beste)").tag(NOCOSpeakVoiceID.automatic)
+                        ForEach(Array(voices.enumerated()), id: \.element.identifier) { index, voice in
+                            Text(voiceLabel(voice, index: index)).tag(voice.identifier)
                         }
                     }
                     .onChange(of: voiceId) { _, newValue in
-                        UserDefaults.standard.set(newValue, forKey: "nocoai.voiceId")
+                        NOCOSpeakVoiceSettings.voiceIdentifier = newValue
+                        connection.speak.voice.preferredVoiceIdentifier = newValue
                         guard voicePreviewArmed else { return }
                         previewVoice(identifier: newValue)
+                    }
+
+                    Picker("Sprachstil", selection: $voiceStyle) {
+                        ForEach(NOCOSpeakVoiceStyle.allCases) { style in
+                            Text("\(style.label) — \(style.subtitle)").tag(style)
+                        }
+                    }
+                    .onChange(of: voiceStyle) { _, newValue in
+                        NOCOSpeakVoiceSettings.style = newValue
+                        HapticService.selection()
+                        guard voicePreviewArmed else { return }
+                        previewVoice(identifier: voiceId)
+                    }
+
+                    VStack(alignment: .leading, spacing: 8) {
+                        HStack {
+                            Text("Sprechgeschwindigkeit")
+                            Spacer()
+                            Text(rateLabel)
+                                .font(.caption.monospacedDigit())
+                                .foregroundStyle(.secondary)
+                        }
+                        Slider(value: $speakRate, in: 0.7...1.2, step: 0.05)
+                            .onChange(of: speakRate) { _, newValue in
+                                NOCOSpeakVoiceSettings.rateMultiplier = Float(newValue)
+                            }
+                    }
+
+                    VStack(alignment: .leading, spacing: 8) {
+                        HStack {
+                            Text("Tonhöhe")
+                            Spacer()
+                            Text(pitchLabel)
+                                .font(.caption.monospacedDigit())
+                                .foregroundStyle(.secondary)
+                        }
+                        Slider(value: $speakPitch, in: 0.85...1.2, step: 0.05)
+                            .onChange(of: speakPitch) { _, newValue in
+                                NOCOSpeakVoiceSettings.pitchMultiplier = Float(newValue)
+                            }
                     }
 
                     Button {
@@ -46,9 +132,9 @@ struct SettingsView: View {
                         Label("Stimme anhören", systemImage: "speaker.wave.2.fill")
                     }
                 } header: {
-                    Text("Speak")
+                    Text("NOCO Speak")
                 } footer: {
-                    Text("Speak antwortet immer im Flash-Modus (schnell). Kamera/Vision nur im Sprachmodus.")
+                    Text(speakFooter)
                 }
 
                 Section {
@@ -238,13 +324,20 @@ struct SettingsView: View {
             .navigationTitle("Einstellungen")
             .onAppear {
                 voicePreviewArmed = false
+                NOCOSpeakVoiceSettings.ensureDefaults()
                 VoiceSettings.defaultMode = .flash
                 if UserDefaults.standard.object(forKey: "nocoai.autoSpeak") == nil {
                     autoSpeak = true
                 } else {
                     autoSpeak = UserDefaults.standard.bool(forKey: "nocoai.autoSpeak")
                 }
-                voiceId = UserDefaults.standard.string(forKey: "nocoai.voiceId") ?? ""
+                voiceId = NOCOSpeakVoiceSettings.voiceIdentifier
+                voiceStyle = NOCOSpeakVoiceSettings.style
+                speakRate = Double(NOCOSpeakVoiceSettings.rateMultiplier)
+                speakPitch = Double(NOCOSpeakVoiceSettings.pitchMultiplier)
+                speakFullAccess = SpeakFullAccess.isEnabled
+                liveKnowledge = LiveKnowledgePolicy.current
+                speakLiveKnowledge = SpeakLiveKnowledgePolicy.current
                 voices = AVSpeechSynthesisVoice.speechVoices()
                     .filter { $0.language.hasPrefix("de") }
                     .sorted { qualityRank($0) > qualityRank($1) }
@@ -282,14 +375,37 @@ struct SettingsView: View {
         }
     }
 
-    private func voiceLabel(_ voice: AVSpeechSynthesisVoice) -> String {
+    private var speakFooter: String {
+        var parts: [String] = []
+        parts.append("Internetzugriff: \(speakLiveKnowledge.title) — bei aktuellen Fragen sagt NOCO „Ich schaue kurz nach.“ und nutzt Live Knowledge.")
+        if voiceId == NOCOSpeakVoiceID.natural {
+            parts.append("NOCO Natural Voice: beste Premium-/Neural-Stimme auf dem Gerät + natürlichere Prosodie — ohne Cloud-Latenz.")
+        }
+        parts.append(
+            speakFullAccess
+                ? "Vollzugriff: Tools starten automatisch aus der Sprache."
+                : "Sicherheitsmodus: Vor Tools fragt NOCO kurz nach."
+        )
+        return parts.joined(separator: " ")
+    }
+
+    private var rateLabel: String {
+        let pct = Int((speakRate * 100).rounded())
+        return "\(pct)%"
+    }
+
+    private var pitchLabel: String {
+        String(format: "%.2f", speakPitch)
+    }
+
+    private func voiceLabel(_ voice: AVSpeechSynthesisVoice, index: Int) -> String {
         let q: String
         switch voice.quality {
         case .premium: q = "Premium"
         case .enhanced: q = "Enhanced"
         default: q = "Standard"
         }
-        return "\(voice.name) · \(q)"
+        return "Voice \(index + 1) · \(voice.name) · \(q)"
     }
 
     private func qualityRank(_ voice: AVSpeechSynthesisVoice) -> Int {
@@ -302,15 +418,23 @@ struct SettingsView: View {
 
     private func previewVoice(identifier: String) {
         previewSynth.stopSpeaking(at: .immediate)
-        let utterance = AVSpeechUtterance(string: "Hallo, ich bin NOCO AI. So klingt diese Stimme.")
-        if identifier.isEmpty {
-            utterance.voice = AVSpeechSynthesisVoice(language: "de-DE")
+        let sample = "Hallo, ich bin NOCO. So klingt diese Stimme im Sprachmodus."
+        let natural = identifier == NOCOSpeakVoiceID.natural
+            || (identifier.isEmpty && NOCOSpeakVoiceSettings.usesNaturalPipeline)
+        let text = natural ? VoiceService.naturalizeForSpeech(sample) : sample
+        let utterance = AVSpeechUtterance(string: text)
+
+        if identifier == NOCOSpeakVoiceID.natural || identifier.isEmpty {
+            let ranked = voices.sorted { a, b in
+                qualityRank(a) > qualityRank(b)
+            }
+            utterance.voice = ranked.first ?? AVSpeechSynthesisVoice(language: "de-DE")
         } else {
             utterance.voice = AVSpeechSynthesisVoice(identifier: identifier)
                 ?? AVSpeechSynthesisVoice(language: "de-DE")
         }
-        utterance.rate = AVSpeechUtteranceDefaultSpeechRate * 0.96
-        utterance.pitchMultiplier = 1.05
+        utterance.rate = NOCOSpeakVoiceSettings.resolvedRate(naturalBase: natural)
+        utterance.pitchMultiplier = NOCOSpeakVoiceSettings.resolvedPitch(naturalBase: natural)
         utterance.volume = 1.0
         do {
             try AVAudioSession.sharedInstance().setCategory(.playback, mode: .spokenAudio, options: [.duckOthers])

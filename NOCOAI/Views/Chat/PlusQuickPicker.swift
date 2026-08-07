@@ -5,6 +5,7 @@ import UIKit
 enum PlusQuickAction: String, CaseIterable, Identifiable {
     case camera
     case vision
+    case liveWeb
     case agent
     case createImage
     case file
@@ -16,6 +17,7 @@ enum PlusQuickAction: String, CaseIterable, Identifiable {
         switch self {
         case .camera: return "Kamera"
         case .vision: return "Vision"
+        case .liveWeb: return "Internet"
         case .agent: return "Agent"
         case .createImage: return "Bild erstellen"
         case .file: return "Datei"
@@ -27,6 +29,7 @@ enum PlusQuickAction: String, CaseIterable, Identifiable {
         switch self {
         case .camera: return "camera.fill"
         case .vision: return "eye.circle.fill"
+        case .liveWeb: return "globe"
         case .agent: return "cpu.fill"
         case .createImage: return "paintbrush.pointed.fill"
         case .file: return "folder.fill"
@@ -38,6 +41,7 @@ enum PlusQuickAction: String, CaseIterable, Identifiable {
         switch self {
         case .camera: return Color(red: 0.35, green: 0.75, blue: 1)
         case .vision: return Color(red: 0.45, green: 0.85, blue: 0.7)
+        case .liveWeb: return Color(red: 0.35, green: 0.65, blue: 0.95)
         case .agent: return Color(red: 0.35, green: 0.78, blue: 0.72)
         case .createImage: return Color(red: 0.95, green: 0.55, blue: 0.78)
         case .file: return Color(red: 0.75, green: 0.65, blue: 0.45)
@@ -162,9 +166,17 @@ struct PlusQuickPickerOverlay: View {
     var body: some View {
         GeometryReader { geo in
             ZStack {
-                Color.black.opacity(model.visible ? 0.28 : 0)
+                Color.black.opacity(model.visible ? 0.32 : 0)
                     .ignoresSafeArea()
                     .animation(.easeOut(duration: 0.22), value: model.visible)
+
+                if model.visible {
+                    NOCOIntelligenceCore(energy: .idle, size: .compact)
+                        .opacity(0.35)
+                        .blur(radius: 2)
+                        .offset(y: -160)
+                        .allowsHitTesting(false)
+                }
 
                 VStack(spacing: 4) {
                     ForEach(actions) { action in
@@ -182,10 +194,21 @@ struct PlusQuickPickerOverlay: View {
                         .padding(.horizontal, 14)
                         .frame(height: rowHeight)
                         .background {
-                            RoundedRectangle(cornerRadius: 14, style: .continuous)
-                                .fill(model.highlighted == action
-                                      ? action.tint.opacity(0.95)
-                                      : Color(.secondarySystemBackground).opacity(0.94))
+                            Group {
+                                if model.highlighted == action {
+                                    RoundedRectangle(cornerRadius: 14, style: .continuous)
+                                        .fill(
+                                            LinearGradient(
+                                                colors: [action.tint, action.tint.opacity(0.78)],
+                                                startPoint: .topLeading,
+                                                endPoint: .bottomTrailing
+                                            )
+                                        )
+                                } else {
+                                    RoundedRectangle(cornerRadius: 14, style: .continuous)
+                                        .fill(Color(.secondarySystemBackground).opacity(0.94))
+                                }
+                            }
                         }
                         .scaleEffect(model.highlighted == action ? 1.03 : 1)
                         .animation(.spring(response: 0.28, dampingFraction: 0.78), value: model.highlighted)
@@ -197,18 +220,13 @@ struct PlusQuickPickerOverlay: View {
                     RoundedRectangle(cornerRadius: 22, style: .continuous)
                         .stroke(
                             AngularGradient(
-                                colors: [
-                                    NOCOAITheme.glowPrimary.opacity(0.55),
-                                    NOCOAITheme.glowSecondary.opacity(0.25),
-                                    NOCOAITheme.glowAccent.opacity(0.4),
-                                    NOCOAITheme.glowPrimary.opacity(0.55)
-                                ],
+                                colors: NOCORainbow.flow.map { $0.opacity(0.45) },
                                 center: .center
                             ),
                             lineWidth: 1.2
                         )
                 )
-                .shadow(color: NOCOAITheme.glowPrimary.opacity(0.22), radius: 20, y: 8)
+                .shadow(color: NOCORainbow.violet.opacity(0.22), radius: 20, y: 8)
                 .frame(width: 240)
                 .scaleEffect(model.visible ? 1 : 0.86)
                 .opacity(model.visible ? 1 : 0)

@@ -31,9 +31,12 @@ final class SpeakSessionController: ObservableObject {
     private var wired = false
     private var bgTask: UIBackgroundTaskIdentifier = .invalid
     private var resumeTask: Task<Void, Never>?
+    private var listenHealthTask: Task<Void, Never>?
+    private var bgRenewTask: Task<Void, Never>?
     /// One queued utterance while NOCO is processing / speaking.
     private var pendingUtterance: String?
     private var consecutiveFailures = 0
+    private var listenRetryCount = 0
     private var cancellables = Set<AnyCancellable>()
     /// While true: never reopen the mic (reply TTS / farewell in progress).
     private var holdMicForTTS = false
@@ -125,6 +128,8 @@ final class SpeakSessionController: ObservableObject {
             // Voice AI always speaks replies — that's the product.
             voice.autoSpeakReplies = true
             beginBackgroundKeepAlive()
+            startBackgroundRenewLoop()
+            startListenHealthLoop()
             try voice.startListening(autoEnd: true)
             HapticService.speakCue()
             assistantPhase = .listening
@@ -147,6 +152,10 @@ final class SpeakSessionController: ObservableObject {
             }
         } catch {
             isRunning = false
+            listenHealthTask?.cancel()
+            listenHealthTask = nil
+            bgRenewTask?.cancel()
+            bgRenewTask = nil
             endBackgroundKeepAlive()
             voice.phase = .error(error.localizedDescription)
             statusLine = "Mikrofon-Fehler"
@@ -161,6 +170,10 @@ final class SpeakSessionController: ObservableObject {
         holdMicForTTS = false
         resumeTask?.cancel()
         resumeTask = nil
+        listenHealthTask?.cancel()
+        listenHealthTask = nil
+        bgRenewTask?.cancel()
+        bgRenewTask = nil
         // Publish closed state immediately so Shortcuts / Action Button never see a stale "on".
         VoiceAISessionState.publish(active: false, micOn: false, islandOn: false)
         // Mute first so nothing else is captured/sent, then tear down
@@ -314,7 +327,8 @@ final class SpeakSessionController: ObservableObject {
         endBackgroundKeepAlive()
         bgTask = UIApplication.shared.beginBackgroundTask(withName: "NOCO Voice AI") { [weak self] in
             Task { @MainActor in
-                self?.endBackgroundKeepAlive()
+                // Renew instead of dying — continuous audio needs a fresh BG task.
+                self?.beginBackgroundKeepAlive()
             }
         }
     }
@@ -326,24 +340,74 @@ final class SpeakSessionController: ObservableObject {
         }
     }
 
+    /// Keep BG task + audio session alive while Island / lock-screen Voice AI runs.
+    private func startBackgroundRenewLoop() {
+        bgRenewTask?.cancel()
+        bgRenewTask = Task { [weak self] in
+            while !Task.isCancelled {
+                try? await Task.sleep(nanoseconds: 20_000_000_000)
+                guard let self, !Task.isCancelled else { return }
+                await MainActor.run {
+                    guard self.isRunning, !self.isExiting else { return }
+                    self.beginBackgroundKeepAlive()
+                    try? self.voice.activateBackgroundAudioSession()
+                }
+            }
+        }
+    }
+
+    /// If mic dies after TTS in background, reopen without waiting for the user to open the app.
+    private func startListenHealthLoop() {
+        listenHealthTask?.cancel()
+        listenHealthTask = Task { [weak self] in
+            while !Task.isCancelled {
+                try? await Task.sleep(nanoseconds: 1_200_000_000)
+                guard let self, !Task.isCancelled else { return }
+                await MainActor.run {
+                    self.ensureListeningHealthy()
+                }
+            }
+        }
+    }
+
+    private func ensureListeningHealthy() {
+        guard isRunning, !isExiting, !isMuted, !holdMicForTTS, !isBusy else { return }
+        if case .speaking = voice.phase { return }
+        if case .processing = voice.phase { return }
+        if voice.isActivelyListening { return }
+        // Idle / error / dead recognition → reopen mic (common after background TTS).
+        statusLine = "NOCO hört wieder zu…"
+        scheduleResumeListening(after: 0.05)
+    }
+
     func ensureBackgroundPresence() {
         guard isRunning else { return }
         try? voice.activateBackgroundAudioSession()
         beginBackgroundKeepAlive()
+        if bgRenewTask == nil { startBackgroundRenewLoop() }
+        if listenHealthTask == nil { startListenHealthLoop() }
         if !SpeakLiveActivityManager.isActive {
             SpeakLiveActivityManager.start()
         }
         pushLiveActivity(force: true)
+        // Critical: reopen mic if TTS→listen failed while app was backgrounded.
+        if !isMuted, !holdMicForTTS, !isBusy, !voice.isActivelyListening {
+            if case .speaking = voice.phase { return }
+            scheduleResumeListening(after: 0.15)
+        }
         statusLine = isMuted
             ? "Stumm · Live Activity aktiv"
-            : "Voice AI · Sperrbildschirm / Island"
+            : (voice.isActivelyListening
+                ? "Voice AI · Sperrbildschirm / Island"
+                : "NOCO hört zu…")
     }
 
-    /// Reliable re-listen after TTS (debounce + settle delay).
+    /// Reliable re-listen after TTS (debounce + settle delay). Longer in background.
     private func scheduleResumeListening(after delay: TimeInterval) {
         resumeTask?.cancel()
+        let bgBoost = UIApplication.shared.applicationState != .active ? 0.22 : 0
         resumeTask = Task { [weak self] in
-            let ns = UInt64(max(0, delay) * 1_000_000_000)
+            let ns = UInt64(max(0, delay + bgBoost) * 1_000_000_000)
             try? await Task.sleep(nanoseconds: ns)
             guard !Task.isCancelled else { return }
             await MainActor.run {
@@ -366,7 +430,10 @@ final class SpeakSessionController: ObservableObject {
                 if !speaking { break }
             }
             // Extra silence so the last syllable isn't cut and barge-in can't steal the turn.
-            try? await Task.sleep(nanoseconds: 420_000_000)
+            let tail: UInt64 = UIApplication.shared.applicationState != .active
+                ? 560_000_000
+                : 420_000_000
+            try? await Task.sleep(nanoseconds: tail)
             guard !Task.isCancelled else { return }
             await MainActor.run {
                 guard let self else { return }
@@ -376,8 +443,11 @@ final class SpeakSessionController: ObservableObject {
                 }
                 self.holdMicForTTS = false
                 self.isBusy = false
+                self.listenRetryCount = 0
                 self.connection?.liveScreen.suppressAutoVision = false
                 self.connection?.liveScreen.resumeQueuedAnalysisIfNeeded()
+                // Re-assert audio before mic — background route after TTS is fragile.
+                try? self.voice.activateListeningAfterTTS()
                 self.resumeListening()
                 Task { await self.drainPendingUtterance() }
             }
@@ -401,17 +471,27 @@ final class SpeakSessionController: ObservableObject {
             scheduleResumeListening(after: 0.2)
             return
         }
+        if voice.isActivelyListening {
+            listenRetryCount = 0
+            assistantPhase = pendingToolConfirm == nil ? .listening : .awaitingConfirm
+            return
+        }
         do {
             try voice.activateListeningAfterTTS()
             try voice.startListening(autoEnd: true)
+            listenRetryCount = 0
             assistantPhase = pendingToolConfirm == nil ? .listening : .awaitingConfirm
             statusLine = pendingToolConfirm?.confirmationQuestion ?? "NOCO hört zu"
             VoiceAISessionState.publish(active: true, micOn: true, islandOn: SpeakLiveActivityManager.isActive)
             pushLiveActivity(force: true)
             Task { await drainPendingUtterance() }
         } catch {
-            statusLine = "Zuhören unterbrochen — nochmal…"
-            scheduleResumeListening(after: 0.25)
+            listenRetryCount += 1
+            statusLine = listenRetryCount <= 2
+                ? "Zuhören unterbrochen — nochmal…"
+                : "NOCO hört wieder zu…"
+            let backoff = min(1.2, 0.2 + Double(listenRetryCount) * 0.18)
+            scheduleResumeListening(after: backoff)
         }
     }
 

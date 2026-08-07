@@ -1,6 +1,7 @@
 import AVFoundation
 import Foundation
 import Speech
+import UIKit
 
 enum VoicePhase: Equatable {
     case idle
@@ -102,7 +103,7 @@ final class VoiceService: NSObject, ObservableObject {
         let session = AVAudioSession.sharedInstance()
         try session.setCategory(
             .playAndRecord,
-            mode: .measurement,
+            mode: .voiceChat,
             options: [.defaultToSpeaker, .allowBluetooth, .mixWithOthers]
         )
         try session.overrideOutputAudioPort(.speaker)
@@ -121,17 +122,37 @@ final class VoiceService: NSObject, ObservableObject {
         try session.setActive(true, options: [])
     }
 
-    /// Back to mic after TTS — deactivate first so route switches cleanly.
+    /// Back to mic after TTS — never fully deactivate (that suspends background Voice AI).
     func activateListeningAfterTTS() throws {
         let session = AVAudioSession.sharedInstance()
-        try? session.setActive(false, options: .notifyOthersOnDeactivation)
+        // Soft route flip only — `setActive(false)` drops UIBackgroundModes.audio keep-alive.
         try session.setCategory(
             .playAndRecord,
-            mode: .measurement,
+            mode: .voiceChat,
             options: [.defaultToSpeaker, .allowBluetooth, .mixWithOthers]
         )
         try session.overrideOutputAudioPort(.speaker)
         try session.setActive(true, options: [])
+    }
+
+    enum ListenError: LocalizedError {
+        case micNotReady
+        case unavailable
+        case muted
+
+        var errorDescription: String? {
+            switch self {
+            case .micNotReady: return "Mikrofon nicht bereit"
+            case .unavailable: return "Spracherkennung nicht verfügbar"
+            case .muted: return "Stumm"
+            }
+        }
+    }
+
+    /// True while the mic + recognition pipeline should be capturing speech.
+    var isActivelyListening: Bool {
+        if case .listening = phase { return audioEngine.isRunning && recognitionTask != nil }
+        return false
     }
 
     func setMuted(_ muted: Bool) {
@@ -147,7 +168,7 @@ final class VoiceService: NSObject, ObservableObject {
     func startListening(autoEnd: Bool = true) throws {
         guard !isMuted else {
             phase = .idle
-            return
+            throw ListenError.muted
         }
         stopSpeaking(notifyFinished: false)
         stopListening(cancel: true)
@@ -155,25 +176,38 @@ final class VoiceService: NSObject, ObservableObject {
 
         guard let speechRecognizer, speechRecognizer.isAvailable else {
             phase = .error("Spracherkennung nicht verfügbar")
-            return
+            throw ListenError.unavailable
         }
 
         try activateBackgroundAudioSession()
 
         recognitionRequest = SFSpeechAudioBufferRecognitionRequest()
-        guard let recognitionRequest else { return }
+        guard let recognitionRequest else {
+            throw ListenError.unavailable
+        }
         recognitionRequest.shouldReportPartialResults = true
         recognitionRequest.taskHint = .dictation
         recognitionRequest.addsPunctuation = true
+        // Background: on-device is more reliable (cloud STT often stalls when suspended).
         if #available(iOS 17.0, *) {
-            recognitionRequest.requiresOnDeviceRecognition = false
+            let bg = UIApplication.shared.applicationState != .active
+            if bg, speechRecognizer.supportsOnDeviceRecognition {
+                recognitionRequest.requiresOnDeviceRecognition = true
+            } else {
+                recognitionRequest.requiresOnDeviceRecognition = false
+            }
         }
 
         let input = audioEngine.inputNode
-        let format = input.outputFormat(forBus: 0)
+        var format = input.outputFormat(forBus: 0)
+        if format.sampleRate <= 0 || format.channelCount <= 0 {
+            // Route may still be settling after TTS — one soft retry after category re-assert.
+            try activateBackgroundAudioSession()
+            format = input.outputFormat(forBus: 0)
+        }
         guard format.sampleRate > 0, format.channelCount > 0 else {
             phase = .error("Mikrofon nicht bereit")
-            return
+            throw ListenError.micNotReady
         }
         input.removeTap(onBus: 0)
         input.installTap(onBus: 0, bufferSize: 1024, format: format) { [weak self] buffer, _ in
@@ -229,8 +263,10 @@ final class VoiceService: NSObject, ObservableObject {
                         let partial = self.liveTranscript.trimmingCharacters(in: .whitespacesAndNewlines)
                         if !partial.isEmpty, self.autoFinishArmed {
                             self.emitAutoUtteranceIfNeeded(force: false)
+                        } else if ns.code == 1110 || ns.code == 1101 || ns.localizedDescription.lowercased().contains("no speech") {
+                            // Session died / timed out — drop to idle so health watchdog reopens mic.
+                            self.phase = .idle
                         }
-                        // else: keep listening — don't kill the session on soft errors
                     }
                 }
             }

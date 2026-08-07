@@ -329,3 +329,135 @@ struct IntelligenceShimmerLine: View {
             }
     }
 }
+
+// MARK: - Voice AI living transcript
+
+/// Compact reactive bars for live listening (Voice UI, not Island).
+struct SpeakVoiceMiniMeter: View {
+    var level: CGFloat
+    var bands: [CGFloat]
+
+    var body: some View {
+        HStack(alignment: .center, spacing: 3) {
+            ForEach(0..<min(9, max(bands.count, 5)), id: \.self) { i in
+                let v = i < bands.count ? bands[i] : level
+                Capsule()
+                    .fill(
+                        LinearGradient(
+                            colors: [NOCORainbow.blue, NOCORainbow.violet, NOCORainbow.mint],
+                            startPoint: .bottom,
+                            endPoint: .top
+                        )
+                    )
+                    .frame(width: 3, height: max(4, CGFloat(v) * 16 + level * 4))
+                    .opacity(0.5 + Double(v) * 0.5)
+            }
+        }
+        .animation(.easeOut(duration: 0.08), value: level)
+    }
+}
+
+enum VoiceTranscriptStyle {
+    case listening
+    case thinking
+    case speaking
+    case idle
+}
+
+/// Animated transcript / reply text for NOCO Voice AI.
+struct VoiceLivingTranscript: View {
+    let text: String
+    var style: VoiceTranscriptStyle
+    var level: CGFloat = 0
+
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @State private var glow = false
+
+    var body: some View {
+        Text(text)
+            .font(.body.weight(style == .speaking ? .medium : .regular))
+            .multilineTextAlignment(.center)
+            .foregroundStyle(foreground)
+            .shadow(color: glowColor.opacity(glowOpacity), radius: glowRadius)
+            .scaleEffect(scale)
+            .contentTransition(.opacity)
+            .animation(.easeOut(duration: 0.18), value: text)
+            .animation(.easeInOut(duration: 0.35), value: style)
+            .onAppear { armGlow() }
+            .onChange(of: style) { _, _ in armGlow() }
+    }
+
+    private var foreground: some ShapeStyle {
+        switch style {
+        case .speaking:
+            return AnyShapeStyle(
+                LinearGradient(
+                    colors: [
+                        Color.primary.opacity(0.95),
+                        NOCORainbow.violet.opacity(0.9),
+                        NOCORainbow.blue.opacity(0.85)
+                    ],
+                    startPoint: .topLeading,
+                    endPoint: .bottomTrailing
+                )
+            )
+        case .listening:
+            return AnyShapeStyle(Color.primary.opacity(0.92))
+        case .thinking:
+            return AnyShapeStyle(
+                LinearGradient(
+                    colors: [NOCORainbow.blue, NOCORainbow.violet, NOCORainbow.pink],
+                    startPoint: .leading,
+                    endPoint: .trailing
+                )
+            )
+        case .idle:
+            return AnyShapeStyle(Color.primary.opacity(0.78))
+        }
+    }
+
+    private var glowColor: Color {
+        switch style {
+        case .speaking: return NOCORainbow.violet
+        case .listening: return NOCORainbow.blue
+        case .thinking: return NOCORainbow.pink
+        case .idle: return .clear
+        }
+    }
+
+    private var glowOpacity: Double {
+        if reduceMotion { return style == .speaking ? 0.2 : 0.08 }
+        switch style {
+        case .speaking: return glow ? 0.42 : 0.18
+        case .listening: return 0.12 + Double(level) * 0.35
+        case .thinking: return glow ? 0.35 : 0.15
+        case .idle: return 0
+        }
+    }
+
+    private var glowRadius: CGFloat {
+        switch style {
+        case .speaking: return glow ? 12 : 6
+        case .listening: return 4 + level * 10
+        case .thinking: return 10
+        case .idle: return 0
+        }
+    }
+
+    private var scale: CGFloat {
+        guard !reduceMotion else { return 1 }
+        switch style {
+        case .speaking: return glow ? 1.012 : 1
+        case .listening: return 1 + level * 0.012
+        default: return 1
+        }
+    }
+
+    private func armGlow() {
+        guard !reduceMotion else { return }
+        glow = false
+        withAnimation(.easeInOut(duration: style == .thinking ? 1.1 : 1.6).repeatForever(autoreverses: true)) {
+            glow = true
+        }
+    }
+}

@@ -248,43 +248,90 @@ struct VoiceModeView: View {
         .padding(.horizontal, 28)
     }
 
-    // MARK: - Transcript (minimal glass)
+    // MARK: - Transcript (living glass)
+
+    private var transcriptStyle: VoiceTranscriptStyle {
+        if speak.pendingToolConfirm != nil { return .thinking }
+        switch speak.assistantPhase {
+        case .thinking, .webSearch, .creatingImage, .agentWorking, .vision, .awaitingConfirm:
+            return .thinking
+        case .speaking:
+            return .speaking
+        case .listening:
+            return .listening
+        case .error, .idle:
+            break
+        }
+        switch voice.phase {
+        case .listening: return .listening
+        case .processing: return .thinking
+        case .speaking: return .speaking
+        case .idle, .error: return speak.isRunning ? .listening : .idle
+        }
+    }
 
     private var glassTranscript: some View {
         ScrollViewReader { proxy in
             ScrollView(showsIndicators: false) {
-                Text(displayText)
-                    .font(.body.weight(.medium))
-                    .foregroundStyle(.primary.opacity(0.92))
-                    .multilineTextAlignment(.center)
+                VStack(spacing: 10) {
+                    if transcriptStyle == .listening, speak.isRunning {
+                        // Soft reactive audio cue above live speech
+                        SpeakVoiceMiniMeter(level: voice.level, bands: voice.bands)
+                            .frame(height: 18)
+                            .padding(.horizontal, 40)
+                            .opacity(0.85)
+                    }
+
+                    VoiceLivingTranscript(
+                        text: displayText,
+                        style: transcriptStyle,
+                        level: voice.level
+                    )
                     .frame(maxWidth: .infinity)
                     .padding(.horizontal, 8)
                     .padding(.vertical, 6)
                     .id("speakBottom")
-                    .contentTransition(.opacity)
+                }
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity)
             .padding(18)
             .background {
-                RoundedRectangle(cornerRadius: 28, style: .continuous)
-                    .fill(.ultraThinMaterial)
-                    .overlay(
-                        RoundedRectangle(cornerRadius: 28, style: .continuous)
-                            .stroke(
-                                LinearGradient(
-                                    colors: [
-                                        Color.white.opacity(0.35),
-                                        NOCORainbow.blue.opacity(0.25),
-                                        NOCORainbow.pink.opacity(0.2)
-                                    ],
-                                    startPoint: .topLeading,
-                                    endPoint: .bottomTrailing
-                                ),
-                                lineWidth: 1
+                ZStack {
+                    RoundedRectangle(cornerRadius: 28, style: .continuous)
+                        .fill(.ultraThinMaterial)
+                    RoundedRectangle(cornerRadius: 28, style: .continuous)
+                        .fill(
+                            LinearGradient(
+                                colors: [
+                                    Color.white.opacity(0.14),
+                                    transcriptStyle == .speaking
+                                        ? NOCORainbow.violet.opacity(0.08)
+                                        : NOCORainbow.blue.opacity(0.05),
+                                    Color.clear
+                                ],
+                                startPoint: .topLeading,
+                                endPoint: .bottomTrailing
                             )
-                    )
-                    .shadow(color: NOCORainbow.violet.opacity(0.12), radius: 20, y: 8)
+                        )
+                    RoundedRectangle(cornerRadius: 28, style: .continuous)
+                        .stroke(
+                            AngularGradient(
+                                colors: NOCORainbow.flow.map {
+                                    $0.opacity(transcriptStyle == .thinking ? 0.55 : 0.32)
+                                },
+                                center: .center
+                            ),
+                            lineWidth: 1.2
+                        )
+                }
+                .shadow(
+                    color: (transcriptStyle == .speaking ? NOCORainbow.violet : NOCORainbow.blue)
+                        .opacity(0.16),
+                    radius: 22,
+                    y: 8
+                )
             }
+            .animation(.easeInOut(duration: 0.35), value: transcriptStyle)
             .onChange(of: displayText) { _, _ in
                 withAnimation(.easeOut(duration: 0.18)) {
                     proxy.scrollTo("speakBottom", anchor: .bottom)

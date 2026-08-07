@@ -57,9 +57,16 @@ struct ChatHubView: View {
                                             }
                                         }
                                     }
-                                    .intelligenceMessageArrive()
+                                    .intelligenceMessageArrive(isUser: message.role == .user)
                                     .id(message.id)
-                                    .transition(.opacity.combined(with: .move(edge: .bottom)))
+                                    .transition(
+                                        .asymmetric(
+                                            insertion: .opacity
+                                                .combined(with: .scale(scale: 0.94))
+                                                .combined(with: .move(edge: .bottom)),
+                                            removal: .opacity
+                                        )
+                                    )
                                 }
                             }
                             .padding(.horizontal, 14)
@@ -526,6 +533,7 @@ private struct ChatBubble: View {
                     Text(message.text)
                         .font(.body)
                         .foregroundStyle(message.role == .user ? .white : NOCOAITheme.primaryText(for: scheme))
+                        .contentTransition(.opacity)
                     StreamingGlowCursor()
                 }
             } else {
@@ -544,7 +552,8 @@ private struct ChatBubble: View {
         .padding(.vertical, 12)
         .background(GlowBubbleBackground(isUser: message.role == .user, streaming: message.isStreaming))
         .intelligenceStreaming(message.isStreaming && message.role == .assistant)
-        .animation(.easeOut(duration: 0.12), value: message.text)
+        .animation(.easeOut(duration: 0.14), value: message.text)
+        .animation(.spring(response: 0.36, dampingFraction: 0.82), value: message.isStreaming)
         .contextMenu {
             Button {
                 copyWholeMessage()

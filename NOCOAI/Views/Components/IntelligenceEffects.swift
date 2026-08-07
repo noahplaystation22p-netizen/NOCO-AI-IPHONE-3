@@ -169,7 +169,9 @@ struct GlowBubbleBackground: View {
     let isUser: Bool
     var streaming: Bool = false
     @Environment(\.colorScheme) private var scheme
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var shimmer = false
+    @State private var sheen = false
 
     var body: some View {
         RoundedRectangle(cornerRadius: 24, style: .continuous)
@@ -178,9 +180,9 @@ struct GlowBubbleBackground: View {
                     ? AnyShapeStyle(
                         LinearGradient(
                             colors: [
-                                NOCOAITheme.accent,
+                                NOCOAITheme.accent.opacity(0.98),
                                 NOCOAITheme.accentSecondary,
-                                NOCOAITheme.glowAccent.opacity(0.85)
+                                NOCOAITheme.glowAccent.opacity(0.88)
                             ],
                             startPoint: .topLeading,
                             endPoint: .bottomTrailing
@@ -190,30 +192,52 @@ struct GlowBubbleBackground: View {
             )
             .overlay {
                 if isUser {
+                    // Liquid-glass highlight — soft light that drifts across the bubble
                     RoundedRectangle(cornerRadius: 24, style: .continuous)
-                        .stroke(Color.white.opacity(0.32), lineWidth: 1)
-                        .overlay(
-                            RoundedRectangle(cornerRadius: 24, style: .continuous)
-                                .fill(
-                                    LinearGradient(
-                                        colors: [Color.white.opacity(0.22), .clear],
-                                        startPoint: .top,
-                                        endPoint: .center
-                                    )
-                                )
-                                .allowsHitTesting(false)
+                        .fill(
+                            LinearGradient(
+                                colors: [
+                                    Color.white.opacity(sheen ? 0.34 : 0.14),
+                                    Color.white.opacity(0.06),
+                                    Color.clear,
+                                    NOCOAITheme.glowSecondary.opacity(sheen ? 0.18 : 0.08)
+                                ],
+                                startPoint: sheen ? .topLeading : .bottomTrailing,
+                                endPoint: sheen ? .bottomTrailing : .topLeading
+                            )
+                        )
+                        .allowsHitTesting(false)
+                    RoundedRectangle(cornerRadius: 24, style: .continuous)
+                        .stroke(
+                            LinearGradient(
+                                colors: [
+                                    Color.white.opacity(0.55),
+                                    Color.white.opacity(0.18),
+                                    NOCOAITheme.glowPrimary.opacity(0.35)
+                                ],
+                                startPoint: .topLeading,
+                                endPoint: .bottomTrailing
+                            ),
+                            lineWidth: 1
                         )
                 } else {
+                    RoundedRectangle(cornerRadius: 24, style: .continuous)
+                        .fill(
+                            LinearGradient(
+                                colors: [
+                                    Color.white.opacity(scheme == .dark ? 0.08 : 0.35),
+                                    Color.clear
+                                ],
+                                startPoint: .top,
+                                endPoint: .center
+                            )
+                        )
+                        .allowsHitTesting(false)
                     RoundedRectangle(cornerRadius: 24, style: .continuous)
                         .stroke(
                             AngularGradient(
                                 colors: streaming
-                                ? [
-                                    NOCOAITheme.glowPrimary.opacity(shimmer ? 0.85 : 0.35),
-                                    NOCOAITheme.glowSecondary.opacity(0.55),
-                                    NOCOAITheme.glowAccent.opacity(0.45),
-                                    NOCOAITheme.glowPrimary.opacity(shimmer ? 0.35 : 0.85)
-                                ]
+                                ? NOCORainbow.flow.map { $0.opacity(shimmer ? 0.75 : 0.35) }
                                 : [
                                     NOCOAITheme.glowPrimary.opacity(scheme == .dark ? 0.38 : 0.22),
                                     NOCOAITheme.glowAccent.opacity(0.18),
@@ -221,7 +245,7 @@ struct GlowBubbleBackground: View {
                                 ],
                                 center: .center
                             ),
-                            lineWidth: streaming ? 1.4 : 1
+                            lineWidth: streaming ? 1.5 : 1
                         )
                 }
             }
@@ -231,9 +255,9 @@ struct GlowBubbleBackground: View {
                         .fill(
                             LinearGradient(
                                 colors: [
-                                    NOCOAITheme.glowPrimary.opacity(shimmer ? 0.12 : 0.04),
+                                    NOCOAITheme.glowPrimary.opacity(shimmer ? 0.14 : 0.04),
                                     .clear,
-                                    NOCOAITheme.glowSecondary.opacity(shimmer ? 0.1 : 0.03)
+                                    NOCOAITheme.glowSecondary.opacity(shimmer ? 0.12 : 0.03)
                                 ],
                                 startPoint: shimmer ? .topLeading : .bottomTrailing,
                                 endPoint: shimmer ? .bottomTrailing : .topLeading
@@ -244,26 +268,37 @@ struct GlowBubbleBackground: View {
             }
             .shadow(
                 color: isUser
-                    ? NOCOAITheme.glowPrimary.opacity(0.42)
-                    : (streaming ? NOCOAITheme.glowPrimary.opacity(0.35) : NOCOAITheme.glowSecondary.opacity(0.16)),
-                radius: streaming ? 20 : (isUser ? 18 : 14),
-                y: 5
+                    ? NOCOAITheme.glowPrimary.opacity(sheen ? 0.5 : 0.32)
+                    : (streaming ? NOCOAITheme.glowPrimary.opacity(0.38) : NOCOAITheme.glowSecondary.opacity(0.14)),
+                radius: streaming ? 22 : (isUser ? 20 : 14),
+                y: isUser ? 6 : 5
             )
             .onAppear {
-                guard streaming else { return }
-                withAnimation(.easeInOut(duration: 2.2).repeatForever(autoreverses: true)) {
-                    shimmer = true
-                }
+                startLivingMotion()
             }
             .onChange(of: streaming) { _, on in
                 if on {
-                    withAnimation(.easeInOut(duration: 2.2).repeatForever(autoreverses: true)) {
+                    withAnimation(.easeInOut(duration: 1.8).repeatForever(autoreverses: true)) {
                         shimmer = true
                     }
                 } else {
                     shimmer = false
                 }
             }
+    }
+
+    private func startLivingMotion() {
+        guard !reduceMotion else { return }
+        if isUser {
+            withAnimation(.easeInOut(duration: 2.8).repeatForever(autoreverses: true)) {
+                sheen = true
+            }
+        }
+        if streaming {
+            withAnimation(.easeInOut(duration: 1.8).repeatForever(autoreverses: true)) {
+                shimmer = true
+            }
+        }
     }
 }
 
@@ -846,15 +881,27 @@ struct IntelligenceConnectionGlow: View {
 }
 
 struct IntelligenceMessageArrive: ViewModifier {
+    var isUser: Bool = false
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var shown = false
 
     func body(content: Content) -> some View {
         content
             .opacity(shown ? 1 : 0)
-            .offset(y: shown ? 0 : 10)
-            .scaleEffect(shown ? 1 : 0.96)
+            .offset(y: shown ? 0 : (isUser ? 16 : 12))
+            .scaleEffect(shown ? 1 : (isUser ? 0.9 : 0.94))
+            .brightness(shown ? 0 : (isUser ? 0.04 : 0))
             .onAppear {
-                withAnimation(.spring(response: 0.42, dampingFraction: 0.78)) {
+                if reduceMotion {
+                    shown = true
+                    return
+                }
+                withAnimation(
+                    .spring(
+                        response: isUser ? 0.48 : 0.4,
+                        dampingFraction: isUser ? 0.72 : 0.8
+                    )
+                ) {
                     shown = true
                 }
             }
@@ -862,8 +909,8 @@ struct IntelligenceMessageArrive: ViewModifier {
 }
 
 extension View {
-    func intelligenceMessageArrive() -> some View {
-        modifier(IntelligenceMessageArrive())
+    func intelligenceMessageArrive(isUser: Bool = false) -> some View {
+        modifier(IntelligenceMessageArrive(isUser: isUser))
     }
 
     /// Soft aurora wash while the PC streams a reply.

@@ -156,13 +156,16 @@ final class ImageBackgroundKeeper {
 
     private var bgTask: UIBackgroundTaskIdentifier = .invalid
     private var silentPlayer: AVAudioPlayer?
+    private var keepReason = "NOCO Bildidee"
 
     func begin(reason: String = "NOCO Bildidee") {
-        end(preserveAudioSession: true)
-        bgTask = UIApplication.shared.beginBackgroundTask(withName: reason) { [weak self] in
-            Task { @MainActor in self?.end(preserveAudioSession: true) }
+        keepReason = reason
+        // End previous task id but keep silent audio running across renewals.
+        if bgTask != .invalid {
+            UIApplication.shared.endBackgroundTask(bgTask)
+            bgTask = .invalid
         }
-        // Don't steal Speak's playAndRecord session
+        scheduleBackgroundTask()
         let cat = AVAudioSession.sharedInstance().category
         if cat != .playAndRecord {
             startSilentAudioIfPossible()
@@ -177,7 +180,28 @@ final class ImageBackgroundKeeper {
         }
     }
 
+    /// iOS expires bg tasks ~30s — renew while generation is still running; keep audio.
+    private func scheduleBackgroundTask() {
+        bgTask = UIApplication.shared.beginBackgroundTask(withName: keepReason) { [weak self] in
+            Task { @MainActor in
+                guard let self else { return }
+                let ending = self.bgTask
+                if ending != .invalid {
+                    UIApplication.shared.endBackgroundTask(ending)
+                    self.bgTask = .invalid
+                }
+                // Renew instead of tearing down silent audio (Think jobs run minutes).
+                self.scheduleBackgroundTask()
+                let cat = AVAudioSession.sharedInstance().category
+                if cat != .playAndRecord, self.silentPlayer?.isPlaying != true {
+                    self.startSilentAudioIfPossible()
+                }
+            }
+        }
+    }
+
     private func startSilentAudioIfPossible() {
+        if silentPlayer?.isPlaying == true { return }
         do {
             let session = AVAudioSession.sharedInstance()
             try session.setCategory(.playback, options: [.mixWithOthers])

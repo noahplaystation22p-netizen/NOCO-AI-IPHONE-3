@@ -116,30 +116,31 @@ enum NOCOSpeakVoiceSettings {
 
     /// Resolved AVSpeech rate for current settings.
     static func resolvedRate(naturalBase: Bool) -> Float {
+        // Keep Natural near default speaking rate — 0.78 felt deep/slow vs Settings preview.
         let base = naturalBase
-            ? AVSpeechUtteranceDefaultSpeechRate * 0.78
-            : AVSpeechUtteranceDefaultSpeechRate * 0.86
+            ? AVSpeechUtteranceDefaultSpeechRate * 0.98
+            : AVSpeechUtteranceDefaultSpeechRate * 0.95
         let styled = base * style.rateFactor * rateMultiplier
         return min(AVSpeechUtteranceMaximumSpeechRate * 0.92, max(AVSpeechUtteranceMinimumSpeechRate * 1.05, styled))
     }
 
     static func resolvedPitch(naturalBase: Bool) -> Float {
-        let base: Float = naturalBase ? 1.01 : 1.02
+        let base: Float = naturalBase ? 1.04 : 1.02
         return min(1.2, max(0.85, base + style.pitchBias + (pitchMultiplier - 1.0)))
     }
 
     static func resolvedPrePause(naturalBase: Bool) -> TimeInterval {
-        let base = naturalBase ? 0.14 : 0.1
+        let base = naturalBase ? 0.08 : 0.06
         return base * style.pauseScale
     }
 
     static func resolvedPostPause(naturalBase: Bool) -> TimeInterval {
-        let base = naturalBase ? 0.1 : 0.05
+        let base = naturalBase ? 0.06 : 0.04
         return base * style.pauseScale
     }
 
     static func resolvedInterChunkPause(naturalBase: Bool) -> TimeInterval {
-        let base = naturalBase ? 0.12 : 0.06
+        let base = naturalBase ? 0.07 : 0.05
         return base * style.pauseScale
     }
 

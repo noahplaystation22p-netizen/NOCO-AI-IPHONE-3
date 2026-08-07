@@ -339,7 +339,7 @@ extension CompanionAPI {
             do {
                 var request = try authorizedRequest(path: "images/txt2img", method: "POST")
                 request.setValue("application/json", forHTTPHeaderField: "Content-Type")
-                request.timeoutInterval = longJob ? 540 : 420
+                request.timeoutInterval = longJob ? 900 : 420
                 request.httpBody = try encoder.encode(
                     ImageGenerateRequest(
                         prompt: prompt,

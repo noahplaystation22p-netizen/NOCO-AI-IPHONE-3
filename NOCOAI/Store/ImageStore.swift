@@ -84,6 +84,10 @@ final class ImageStore: ObservableObject {
         self.media = MediaURLBuilder(host: host, port: port)
     }
 
+    func mediaURL(for path: String?) -> URL? {
+        media?.url(for: path)
+    }
+
     /// Fire-and-forget so leaving the screen / app does not cancel generation.
     /// Always creates a dedicated Bild-chat on the PC (nil conversationId).
     func startGenerate(conversationId: String? = nil) {

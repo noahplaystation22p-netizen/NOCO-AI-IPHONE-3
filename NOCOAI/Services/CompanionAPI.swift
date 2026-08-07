@@ -43,7 +43,7 @@ struct CompanionAPI {
         // Longer request window so brief Wi‑Fi hiccups don't kill status/stream setup.
         config.timeoutIntervalForRequest = 45
         // Think image gen + long agent/vision jobs need headroom.
-        config.timeoutIntervalForResource = 600
+        config.timeoutIntervalForResource = 960
         config.waitsForConnectivity = true
         config.allowsExpensiveNetworkAccess = true
         config.allowsConstrainedNetworkAccess = true

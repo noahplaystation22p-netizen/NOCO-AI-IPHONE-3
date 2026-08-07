@@ -77,7 +77,7 @@ enum ImageAttachIntent {
         let lower = userText.lowercased()
         if lower.contains("entferne") || lower.contains("remove") || lower.contains("lösch")
             || lower.contains("erase") || lower.contains("füll") {
-            return 0.88
+            return 0.78
         }
         if lower.contains("ersetze") || lower.contains("replace") || lower.contains("mach ") {
             return 0.78

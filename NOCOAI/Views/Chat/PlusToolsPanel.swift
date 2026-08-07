@@ -51,11 +51,6 @@ struct PlusToolsPanel: View {
                             HapticService.open()
                             dismiss()
                         },
-                        .init("Nur lokal", "lock.laptopcomputer", Color(red: 0.55, green: 0.55, blue: 0.62)) {
-                            connection.chat.armLiveKnowledge(.local)
-                            HapticService.open()
-                            dismiss()
-                        },
                         .init("Agent", "cpu.fill", Color(red: 0.35, green: 0.78, blue: 0.72)) {
                             connection.chat.setMode(.agent)
                             HapticService.open()

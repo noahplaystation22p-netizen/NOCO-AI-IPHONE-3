@@ -645,13 +645,45 @@ struct MagischerRadiererView: View {
                     presentError("Bild konnte nicht gelesen werden")
                     HapticService.error()
                 }
-            } else if result.resolvedPath != nil {
-                isWorking = false
-                status = "Fertig — siehe Galerie"
-                HapticService.success()
-                ImageLiveActivityManager.complete(prompt: "🪄 \(prompt)")
-                await AppNotificationService.notifyEraserReady(prompt: prompt)
-                ImageBackgroundKeeper.shared.end(preserveAudioSession: true)
+            } else if let path = result.resolvedPath, let url = connection.images.mediaURL(for: path) {
+                // Path-only success — download bytes so result canvas is filled.
+                do {
+                    let (data, _) = try await URLSession.shared.data(from: url)
+                    if let ui = UIImage(data: data) {
+                        try? await Task.sleep(nanoseconds: 320_000_000)
+                        withAnimation(.spring(response: 0.55, dampingFraction: 0.82)) {
+                            isWorking = false
+                            resultImage = ui
+                        }
+                        withAnimation(.spring(response: 0.6, dampingFraction: 0.78).delay(0.05)) {
+                            revealResult = true
+                        }
+                        status = "Fertig ✨"
+                        HapticService.success()
+                        connection.images.ingestEditedImage(
+                            prompt: prompt,
+                            localData: data,
+                            path: path
+                        )
+                        ImageLiveActivityManager.complete(prompt: "🪄 \(prompt)")
+                        await AppNotificationService.notifyEraserReady(prompt: prompt)
+                        ImageBackgroundKeeper.shared.end(preserveAudioSession: true)
+                    } else {
+                        isWorking = false
+                        status = "Fertig — siehe Galerie"
+                        HapticService.success()
+                        ImageLiveActivityManager.complete(prompt: "🪄 \(prompt)")
+                        await AppNotificationService.notifyEraserReady(prompt: prompt)
+                        ImageBackgroundKeeper.shared.end(preserveAudioSession: true)
+                    }
+                } catch {
+                    isWorking = false
+                    status = "Fertig — siehe Galerie"
+                    HapticService.success()
+                    ImageLiveActivityManager.complete(prompt: "🪄 \(prompt)")
+                    await AppNotificationService.notifyEraserReady(prompt: prompt)
+                    ImageBackgroundKeeper.shared.end(preserveAudioSession: true)
+                }
             } else {
                 isWorking = false
                 ImageLiveActivityManager.fail("Keine Bilddaten")

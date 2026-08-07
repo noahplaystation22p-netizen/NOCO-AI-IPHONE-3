@@ -579,21 +579,28 @@ private struct ChatBubble: View {
         switch action {
         case .retryThink:
             Task {
-                await connection.chat.send(
-                    "Bitte generiere deine letzte Antwort erneut — gründlicher durchdacht, gleiche Absicht. Kein Meta-Kommentar.",
-                    modeOverride: .think
-                )
+                // If this assistant bubble is an image, regenerate the image; else re-ask last user turn.
+                if message.localImageData != nil || message.imageURL != nil {
+                    await connection.chat.retryLastUserMessage(modeOverride: .image)
+                } else {
+                    await connection.chat.retryLastUserMessage(modeOverride: .think)
+                }
             }
         case .retryFlash:
             Task {
-                await connection.chat.send(
-                    "Bitte generiere deine letzte Antwort erneut — knapp und klar, gleiche Absicht. Kein Meta-Kommentar.",
-                    modeOverride: .flash
-                )
+                if message.localImageData != nil || message.imageURL != nil {
+                    await connection.chat.retryLastUserMessage(modeOverride: .image)
+                } else {
+                    await connection.chat.retryLastUserMessage(modeOverride: .flash)
+                }
             }
         case .regenerate:
             Task {
-                await connection.chat.send("Bitte generiere deine letzte Antwort erneut — klarer und besser, gleiche Absicht.")
+                if message.localImageData != nil || message.imageURL != nil {
+                    await connection.chat.retryLastUserMessage(modeOverride: .image)
+                } else {
+                    await connection.chat.retryLastUserMessage(modeOverride: nil)
+                }
             }
         case .showModel:
             let label = message.modelLabel ?? connection.chat.mode.modelHint
@@ -644,8 +651,9 @@ private struct MessageActionRow: View {
             iconButton("square.and.arrow.up", label: "Teilen", action: onShare)
             Menu {
                 if message.role == .assistant {
-                    Button { onMore(.retryThink) } label: { Label("Retry (Think)", systemImage: "brain.head.profile") }
-                    Button { onMore(.retryFlash) } label: { Label("Retry (Flash)", systemImage: "bolt.fill") }
+                    Button { onMore(.regenerate) } label: { Label("Erneut versuchen", systemImage: "arrow.clockwise") }
+                    Button { onMore(.retryThink) } label: { Label("Erneut (Think)", systemImage: "brain.head.profile") }
+                    Button { onMore(.retryFlash) } label: { Label("Erneut (Flash)", systemImage: "bolt.fill") }
                     Button { onMore(.shorter) } label: { Label("Kürzer", systemImage: "arrow.down.right.and.arrow.up.left") }
                     Button { onMore(.longer) } label: { Label("Ausführlicher", systemImage: "arrow.up.left.and.arrow.down.right") }
                     Divider()

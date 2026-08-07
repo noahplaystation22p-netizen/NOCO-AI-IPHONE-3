@@ -645,14 +645,18 @@ final class VoiceService: NSObject, ObservableObject {
         }
         if voice.language.lowercased().hasPrefix("de-de") { score += 3 }
         let name = voice.name.lowercased()
-        // Prefer warm, modern German neural names when available on device.
-        if ["anna", "helena", "martin", "petra", "yannick", "viktoria", "markus", "katja", "shelley", "sandy"].contains(where: { name.contains($0) }) {
-            score += boostNatural ? 4 : 2
+        // Prefer clear, modern German neural voices — avoid defaulting to deep male.
+        let preferred = ["anna", "helena", "petra", "viktoria", "katja", "shelley", "sandy", "martha", "nicky"]
+        let deepMale = ["martin", "markus", "yannick", "stefan", "reed", "thomas"]
+        if preferred.contains(where: { name.contains($0) }) {
+            score += boostNatural ? 8 : 3
+        }
+        if deepMale.contains(where: { name.contains($0) }) {
+            score -= boostNatural ? 4 : 1
         }
         if name.contains("neural") || name.contains("siri") || name.contains("premium") || name.contains("enhanced") {
             score += boostNatural ? 5 : 2
         }
-        // Compact/default voices sound more robotic — deprioritize for Natural.
         if boostNatural, voice.quality == .default {
             score -= 3
         }

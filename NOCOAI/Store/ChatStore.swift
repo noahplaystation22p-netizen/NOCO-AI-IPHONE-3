@@ -378,6 +378,14 @@ final class ChatStore: ObservableObject {
                     final = VoiceService.stripSpeakEcho(final)
                     messages[idx].text = final
                 }
+                // Forced Internet but Companion never reported web_used
+                if webWire == "on", !messages[idx].webUsed, !final.isEmpty {
+                    let note = "\n\n⚠️ Websuche lieferte keine Quellen — Antwort ggf. ohne aktuelle Daten."
+                    if !final.contains("Websuche lieferte") {
+                        messages[idx].text = final + note
+                        final = messages[idx].text
+                    }
+                }
                 reply = final.isEmpty ? nil : final
             }
 
@@ -1226,7 +1234,23 @@ final class ChatStore: ObservableObject {
             return replyText
         } catch {
             progressTask.cancel()
-            if CompanionAPI.isTransient(error) {
+            // Think/long jobs: do NOT re-queue on timeout — that starts a second SD job.
+            let isThinkJob = params.steps >= 12 || params.width >= 512
+            let allowRetry: Bool = {
+                guard CompanionAPI.isTransient(error) else { return false }
+                if isThinkJob {
+                    if let url = error as? URLError {
+                        return [
+                            .networkConnectionLost,
+                            .cannotConnectToHost,
+                            .notConnectedToInternet
+                        ].contains(url.code)
+                    }
+                    return false
+                }
+                return true
+            }()
+            if allowRetry {
                 setAssistantText(assistantID, "Verbindung wird wiederhergestellt…\n\n\(displayPrompt)", streaming: true)
                 do {
                     try? await Task.sleep(nanoseconds: 1_600_000_000)
@@ -1302,6 +1326,32 @@ final class ChatStore: ObservableObject {
 
     func clearLiveKnowledgeArm() {
         liveKnowledgeOnce = nil
+    }
+
+    /// Re-run the last user turn freshly (no meta “regenerate” prompt, no cached reply).
+    func retryLastUserMessage(modeOverride: AIMode? = nil, forceWeb: Bool = false) async {
+        guard let lastUser = messages.last(where: { $0.role == .user }) else { return }
+        var text = lastUser.text.trimmingCharacters(in: .whitespacesAndNewlines)
+        if text.hasPrefix("Bitte generiere deine letzte Antwort") {
+            if let prior = messages.dropLast().last(where: { $0.role == .user }) {
+                text = prior.text.trimmingCharacters(in: .whitespacesAndNewlines)
+            }
+        }
+        guard !text.isEmpty else { return }
+
+        if forceWeb {
+            armLiveKnowledge(.web)
+        }
+
+        let imageRetry = (modeOverride ?? mode).isImageCompose
+            || lastUser.localImageData != nil
+            || (lastUser.imageURL != nil && mode.isImageCompose)
+        if imageRetry {
+            await send(text, modeOverride: .image)
+            return
+        }
+
+        await send(text, modeOverride: modeOverride)
     }
 
     func applyReconnectStatus(_ line: String?) {

@@ -98,7 +98,7 @@
 		NA0000010000000000000033 /* SpeakLiveActivity.swift in Sources */ = {isa = PBXBuildFile; fileRef = NA0000020000000000000033 /* SpeakLiveActivity.swift */; };
 		NA0000010000000000000034 /* SpeakSessionController.swift in Sources */ = {isa = PBXBuildFile; fileRef = NA0000020000000000000034 /* SpeakSessionController.swift */; };
 		SI0000010000000000000001 /* SpeakIntentEngine.swift in Sources */ = {isa = PBXBuildFile; fileRef = SI0000020000000000000001 /* SpeakIntentEngine.swift */; };
-		SV0000010000000000000001 /* SpeakVisualContext.swift in Sources */ = {isa = PBXBuildFile; fileRef = SV0000020000000000000001 /* SpeakVisualContext.swift */; };
+		SVC000010000000000000001 /* SpeakVisualContext.swift in Sources */ = {isa = PBXBuildFile; fileRef = SVC000020000000000000001 /* SpeakVisualContext.swift */; };
 		NA0000010000000000000035 /* SpeakActivityAttributes.swift in Sources */ = {isa = PBXBuildFile; fileRef = NA0000020000000000000035 /* SpeakActivityAttributes.swift */; };
 		NA0000010000000000000036 /* NotificationService.swift in Sources */ = {isa = PBXBuildFile; fileRef = NA0000020000000000000036 /* NotificationService.swift */; };
 		NA00000100000000000000C1 /* MessageClipboard.swift in Sources */ = {isa = PBXBuildFile; fileRef = NA00000200000000000000C1 /* MessageClipboard.swift */; };
@@ -245,7 +245,7 @@
 		NA0000020000000000000033 /* SpeakLiveActivity.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SpeakLiveActivity.swift; sourceTree = "<group>"; };
 		NA0000020000000000000034 /* SpeakSessionController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SpeakSessionController.swift; sourceTree = "<group>"; };
 		SI0000020000000000000001 /* SpeakIntentEngine.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SpeakIntentEngine.swift; sourceTree = "<group>"; };
-		SV0000020000000000000001 /* SpeakVisualContext.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SpeakVisualContext.swift; sourceTree = "<group>"; };
+		SVC000020000000000000001 /* SpeakVisualContext.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SpeakVisualContext.swift; sourceTree = "<group>"; };
 		NA0000020000000000000035 /* SpeakActivityAttributes.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SpeakActivityAttributes.swift; sourceTree = "<group>"; };
 		NA0000020000000000000036 /* NotificationService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NotificationService.swift; sourceTree = "<group>"; };
 		NA00000200000000000000C1 /* MessageClipboard.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MessageClipboard.swift; sourceTree = "<group>"; };
@@ -384,7 +384,7 @@
 				AA0000020000000000000003 /* WidgetCenterReloader.swift */,
 				NA0000020000000000000034 /* SpeakSessionController.swift */,
 				SI0000020000000000000001 /* SpeakIntentEngine.swift */,
-				SV0000020000000000000001 /* SpeakVisualContext.swift */,
+				SVC000020000000000000001 /* SpeakVisualContext.swift */,
 				NA0000020000000000000036 /* NotificationService.swift */,
 				NA00000200000000000000C1 /* MessageClipboard.swift */,
 				NA0000020000000000000039 /* SpeakAppIntents.swift */,
@@ -859,7 +859,7 @@
 				AA0000010000000000000003 /* WidgetCenterReloader.swift in Sources */,
 				NA0000010000000000000034 /* SpeakSessionController.swift in Sources */,
 				SI0000010000000000000001 /* SpeakIntentEngine.swift in Sources */,
-				SV0000010000000000000001 /* SpeakVisualContext.swift in Sources */,
+				SVC000010000000000000001 /* SpeakVisualContext.swift in Sources */,
 				SV0000010000000000000001 /* NOCOSpeakVoiceSettings.swift in Sources */,
 				NA0000010000000000000039 /* SpeakAppIntents.swift in Sources */,
 				VA0000010000000000000001 /* VoiceAISessionState.swift in Sources */,

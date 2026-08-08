@@ -257,7 +257,7 @@ final class VoiceService: NSObject, ObservableObject {
         ttsPendingBuffers = 0
         speakingStartedAt = nil
         speakingTextLower = ""
-        let keepWarm = sessionActive && UIApplication.shared.applicationState != .active && audioEngine.isRunning
+        let keepWarm = sessionActive && audioEngine.isRunning
         clearRecognitionPipeline(cancel: true, keepAudioEngineRunning: keepWarm, reason: keepWarm ? "hard_reinit_keep_warm" : "hard_reinit")
         if case .speaking = phase { phase = .idle }
         try activateListeningAfterTTS()
@@ -278,7 +278,7 @@ final class VoiceService: NSObject, ObservableObject {
             throw ListenError.muted
         }
         stopSpeaking(notifyFinished: false)
-        let keepWarm = sessionActive && UIApplication.shared.applicationState != .active && audioEngine.isRunning
+        let keepWarm = sessionActive && audioEngine.isRunning
         clearRecognitionPipeline(cancel: true, keepAudioEngineRunning: keepWarm, reason: keepWarm ? "start_listen_keep_warm" : "start_listen")
         autoFinishArmed = autoEnd
 
@@ -535,8 +535,8 @@ final class VoiceService: NSObject, ObservableObject {
         }
     }
 
-    private func pauseRecognitionForBackgroundTTS() {
-        VoiceDebugLog.event("BACKGROUND_RECOVERY", "pause_recognition_keep_mic")
+    private func pauseRecognitionForSessionTTS() {
+        VoiceDebugLog.event("VOICE_RECOVERY", "pause_recognition_keep_mic")
         clearRecognitionPipeline(cancel: true, keepAudioEngineRunning: true, reason: "tts_keep_mic_warm")
         do {
             try activateBackgroundAudioSession()
@@ -569,13 +569,18 @@ final class VoiceService: NSObject, ObservableObject {
             audioEngine.prepare()
             try audioEngine.start()
         }
-        VoiceDebugLog.event("MIC_WARM_BACKGROUND", "engine=\(audioEngine.isRunning) tap=\(inputTapInstalled)")
+        VoiceDebugLog.event("MIC_WARM_SESSION", "engine=\(audioEngine.isRunning) tap=\(inputTapInstalled)")
     }
 
     func finishUtterance() -> String {
         autoFinishArmed = false
         pendingEndCandidateAt = nil
-        stopListening(cancel: false)
+        let keepWarm = sessionActive && audioEngine.isRunning
+        clearRecognitionPipeline(
+            cancel: false,
+            keepAudioEngineRunning: keepWarm,
+            reason: keepWarm ? "speech_end_keep_warm" : "speech_end"
+        )
         let text = liveTranscript.trimmingCharacters(in: .whitespacesAndNewlines)
         phase = text.isEmpty ? .idle : .processing
         return text
@@ -594,8 +599,8 @@ final class VoiceService: NSObject, ObservableObject {
 
         cancelBargeIn()
         stopSpeaking(notifyFinished: false)
-        if sessionActive && UIApplication.shared.applicationState != .active {
-            pauseRecognitionForBackgroundTTS()
+        if sessionActive {
+            pauseRecognitionForSessionTTS()
         } else {
             stopListening(cancel: true)
         }

@@ -550,6 +550,12 @@ final class SpeakSessionController: ObservableObject {
 
     /// Single owner of speak→listen: wait for TTS to leave speaking, hard-reinit audio, open mic.
     private func beginReturnToListening(settleSeconds: TimeInterval) {
+        if let started = resumeTaskStartedAt,
+           resumeTask != nil,
+           Date().timeIntervalSince(started) < 1.6 {
+            VoiceDebugLog.event("RECOVERY", "return_to_listen_already_pending")
+            return
+        }
         resumeTask?.cancel()
         resumeGeneration &+= 1
         let generation = resumeGeneration

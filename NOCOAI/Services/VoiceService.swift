@@ -292,11 +292,9 @@ final class VoiceService: NSObject, ObservableObject {
         try activateBackgroundAudioSession()
 
         let bg = UIApplication.shared.applicationState != .active
-        // Prefer on-device in background (cloud STT often dies when suspended).
+        // Do not force on-device in background. Logs showed immediate 1110 after
+        // background refresh with requiresOnDeviceRecognition=true while mic buffers flowed.
         var preferOnDevice = false
-        if #available(iOS 17.0, *) {
-            preferOnDevice = bg && speechRecognizer.supportsOnDeviceRecognition
-        }
 
         do {
             try installRecognitionPipeline(preferOnDevice: preferOnDevice, speechRecognizer: speechRecognizer)
@@ -494,6 +492,9 @@ final class VoiceService: NSObject, ObservableObject {
             return
         }
         guard case .listening = phase, autoFinishArmed else { return }
+        // In background, a healthy running recognition task is more valuable than
+        // a proactive refresh. Restarting it caused kAFAssistant 1110 and lost STT.
+        guard UIApplication.shared.applicationState == .active else { return }
         let started = recognitionStartedAt ?? .distantPast
         guard Date().timeIntervalSince(started) >= maxAge else { return }
         let partial = liveTranscript

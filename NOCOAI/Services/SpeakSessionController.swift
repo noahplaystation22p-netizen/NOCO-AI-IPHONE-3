@@ -747,11 +747,10 @@ final class SpeakSessionController: ObservableObject {
         VoiceDebugLog.event("SPEECH_END", String(trimmed.prefix(48)))
         // Never accept speech while shutting down.
         if isExiting { return }
-        // Drop mic chrome immediately — Lock Screen / Island should leave "hört zu"
-        // the moment the utterance commits, not only when the PC replies.
+        // Island: leave mic chrome immediately (do NOT flip sessionPhase here —
+        // that would park the utterance in the processing gate below).
         if !holdMicForTTS, sessionPhase != .speaking, voice.phase != .speaking {
             assistantPhase = .thinking
-            sessionPhase = .processing
             statusLine = SpeakActivityPhase.thinking.title
             pushLiveActivity(force: true)
         }

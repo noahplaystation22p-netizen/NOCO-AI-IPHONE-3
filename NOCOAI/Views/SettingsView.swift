@@ -1,5 +1,6 @@
 import AVFoundation
 import SwiftUI
+import UIKit
 
 struct SettingsView: View {
     @EnvironmentObject private var connection: ConnectionStore
@@ -15,6 +16,7 @@ struct SettingsView: View {
     @State private var voices: [AVSpeechSynthesisVoice] = []
     @State private var previewSynth = AVSpeechSynthesizer()
     @State private var nameDraft = ""
+    @State private var voiceLogStatus = ""
     /// Skip auto-preview when Settings first loads / binds the saved voice.
     @State private var voicePreviewArmed = false
 
@@ -337,6 +339,25 @@ struct SettingsView: View {
 
                     Button("Status aktualisieren") {
                         Task { await connection.refreshStatus(showLoading: true) }
+                    }
+                    Button {
+                        UIPasteboard.general.string = VoiceDebugLog.exportText()
+                        voiceLogStatus = "Voice Logs kopiert"
+                        HapticService.success()
+                    } label: {
+                        Label("Voice Logs kopieren", systemImage: "doc.on.doc")
+                    }
+                    Button(role: .destructive) {
+                        VoiceDebugLog.clear()
+                        voiceLogStatus = "Voice Logs gelöscht"
+                        HapticService.soft()
+                    } label: {
+                        Label("Voice Logs löschen", systemImage: "trash")
+                    }
+                    if !voiceLogStatus.isEmpty {
+                        Text(voiceLogStatus)
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
                     }
                     Button("Verbindung trennen", role: .destructive) {
                         connection.disconnect()

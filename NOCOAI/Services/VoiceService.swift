@@ -130,11 +130,13 @@ final class VoiceService: NSObject, ObservableObject {
               let type = AVAudioSession.InterruptionType(rawValue: typeVal) else { return }
         switch type {
         case .began:
+            VoiceDebugLog.event("AUDIO_INTERRUPTION", "began")
             if case .listening = phase {
                 stopListening(cancel: true)
                 phase = .idle
             }
         case .ended:
+            VoiceDebugLog.event("AUDIO_INTERRUPTION", "ended")
             let opts = (info[AVAudioSessionInterruptionOptionKey] as? UInt)
                 .flatMap { AVAudioSession.InterruptionOptions(rawValue: $0) } ?? []
             guard opts.contains(.shouldResume), sessionActive, !isMuted else { return }
@@ -151,6 +153,7 @@ final class VoiceService: NSObject, ObservableObject {
 
     private func handleRouteChange() {
         guard sessionActive, !isMuted else { return }
+        VoiceDebugLog.event("AUDIO_ROUTE_CHANGE")
         if case .speaking = phase { return }
         // After BT / speaker flips, recognition often dies silently.
         if case .listening = phase, !audioEngine.isRunning {
@@ -189,6 +192,7 @@ final class VoiceService: NSObject, ObservableObject {
     /// Mic + background-capable duplex session.
     func activateBackgroundAudioSession() throws {
         let session = AVAudioSession.sharedInstance()
+        VoiceDebugLog.event("AUDIO_SESSION_CONFIGURE", "playAndRecord.voiceChat")
         try session.setCategory(
             .playAndRecord,
             mode: .voiceChat,
@@ -196,11 +200,13 @@ final class VoiceService: NSObject, ObservableObject {
         )
         try session.overrideOutputAudioPort(.speaker)
         try session.setActive(true, options: [])
+        VoiceDebugLog.event("AUDIO_SESSION_ACTIVE", "input=\(session.isInputAvailable)")
     }
 
     /// Loud TTS route — during an active Speak session keep duplex so background mic survives.
     func activateLoudPlaybackSession() throws {
         let session = AVAudioSession.sharedInstance()
+        VoiceDebugLog.event("AUDIO_SESSION_CONFIGURE", sessionActive ? "duplex_tts" : "playback_tts")
         if sessionActive {
             // Pure `.playback` after filler TTS often kills Island/background follow-ups.
             try session.setCategory(
@@ -217,11 +223,13 @@ final class VoiceService: NSObject, ObservableObject {
         }
         try session.overrideOutputAudioPort(.speaker)
         try session.setActive(true, options: [])
+        VoiceDebugLog.event("AUDIO_SESSION_ACTIVE", "tts")
     }
 
     /// Back to mic after TTS — never fully deactivate (that suspends background Voice AI).
     func activateListeningAfterTTS() throws {
         let session = AVAudioSession.sharedInstance()
+        VoiceDebugLog.event("AUDIO_SESSION_RECONFIGURE", "listen_after_tts")
         // Soft route flip only — `setActive(false)` drops UIBackgroundModes.audio keep-alive.
         try session.setCategory(
             .playAndRecord,
@@ -230,6 +238,7 @@ final class VoiceService: NSObject, ObservableObject {
         )
         try session.overrideOutputAudioPort(.speaker)
         try session.setActive(true, options: [])
+        VoiceDebugLog.event("AUDIO_SESSION_ACTIVE", "listen input=\(session.isInputAvailable)")
     }
 
     /// Tear down TTS + recognition, then rebuild a clean duplex session for the next listen turn.
@@ -471,6 +480,7 @@ final class VoiceService: NSObject, ObservableObject {
     func stopListening(cancel: Bool = false) {
         silenceTask?.cancel()
         silenceTask = nil
+        VoiceDebugLog.event("RECOGNITION_STOPPED", cancel ? "cancel" : "end")
         if audioEngine.isRunning {
             audioEngine.stop()
             audioEngine.inputNode.removeTap(onBus: 0)
@@ -648,14 +658,17 @@ final class VoiceService: NSObject, ObservableObject {
                         if !self.ttsPlayer.isPlaying {
                             self.ttsPlayer.play()
                         }
-                        self.ttsPlayer.scheduleBuffer(copy, completionHandler: { [weak self] in
+                        self.ttsPlayer.scheduleBuffer(
+                            copy,
+                            completionCallbackType: .dataRendered
+                        ) { [weak self] _ in
                             Task { @MainActor in
                                 guard let self else { return }
                                 guard self.speakGeneration == generation else { return }
                                 self.ttsPendingBuffers = max(0, self.ttsPendingBuffers - 1)
                                 self.finishAmplifiedIfIdle(generation: generation)
                             }
-                        })
+                        }
                     } catch {
                         guard self.speakGeneration == generation else { return }
                         self.ttsUseAmplified = false
@@ -671,31 +684,19 @@ final class VoiceService: NSObject, ObservableObject {
         guard ttsUseAmplified, case .speaking = phase else { return }
         if pendingSpeakChunks > 0 || ttsPendingBuffers > 0 { return }
         // Empty-buffer race: chunk counter can hit 0 before the last PCM is scheduled.
-        // Defer completion until playback is truly idle.
+        // `ttsPendingBuffers` is decremented only on `.dataRendered`, so zero means audio output completed.
         Task { @MainActor [weak self] in
             guard let self else { return }
-            for _ in 0..<8 {
-                try? await Task.sleep(nanoseconds: 120_000_000)
-                guard self.speakGeneration == generation else { return }
-                guard case .speaking = self.phase else { return }
-                if self.pendingSpeakChunks > 0 || self.ttsPendingBuffers > 0 || self.ttsPlayer.isPlaying {
-                    continue
-                }
-                // One extra settle so the last syllable isn't cut.
-                try? await Task.sleep(nanoseconds: 180_000_000)
-                guard self.speakGeneration == generation else { return }
-                guard case .speaking = self.phase else { return }
-                if self.pendingSpeakChunks > 0 || self.ttsPendingBuffers > 0 || self.ttsPlayer.isPlaying {
-                    continue
-                }
-                self.phase = .idle
-                self.speakingStartedAt = nil
-                HapticService.success()
-                self.stopTTSEngine()
-                VoiceDebugLog.event("TTS_AUDIO_COMPLETE")
-                self.notifySpeakFinishedOnce()
-                return
-            }
+            try? await Task.sleep(nanoseconds: 220_000_000)
+            guard self.speakGeneration == generation else { return }
+            guard case .speaking = self.phase else { return }
+            guard self.pendingSpeakChunks == 0, self.ttsPendingBuffers == 0 else { return }
+            self.phase = .idle
+            self.speakingStartedAt = nil
+            HapticService.success()
+            self.stopTTSEngine()
+            VoiceDebugLog.event("TTS_PLAYBACK_COMPLETE")
+            self.notifySpeakFinishedOnce()
         }
     }
 

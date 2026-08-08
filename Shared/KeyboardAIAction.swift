@@ -90,58 +90,10 @@ enum KeyboardAIAction: String, CaseIterable, Identifiable {
 
     func prompt(for text: String, shortenLevel: Int) -> String {
         let t = text.trimmingCharacters(in: .whitespacesAndNewlines)
-        let example = """
-        Beispiel:
-        TEXT: was ist ein Duft?
-        RICHTIG: Was ist ein Duft?
-        FALSCH: Sure, here is… / Ein Duft ist… / Bitte gib mir den Text…
-        """
         switch self {
-        case .improve:
-            // Dedicated rewrite engine — system rules bind before USER_TEXT (data, not chat).
-            return KeyboardImprovePipeline.prompt(for: t)
-        case .cleanup:
-            return """
-            \(rewriterRule)
-            \(example)
-
-            Aufgabe „Aufräumen“ — behalte nur das Wichtige, wirf Ballast weg.
-
-            Streiche / kürze weg:
-            - Unsicherheiten („ich weiß nicht“, „irgendwie“, „vielleicht“, „halt“, „sozusagen“)
-            - Füllwörter und Wiederholungen
-            - Nebensächliches, das die Kernaussage nicht trägt
-            - Höflichkeits-Schleifen ohne Inhalt
-
-            Behalte:
-            - Die eigentliche Nachricht / Fakten / Bitte / Frage
-            - Natürlichen Ton (nicht roboterhaft)
-            - Sprache des Originals
-
-            Ergebnis: klarer, aufgeräumter Text — deutlich fokussierter als das Original.
-            \(outputOnlyCloser)
-
-            TEXT:
-            \(t)
-            """
-        case .complete:
-            return """
-            \(rewriterRule)
-
-            Aufgabe: SATZERGÄNZUNG — aus dem Fragment GENAU EINEN fertigen Satz machen.
-            \(outputOnlyCloser)
-            - Kein zweiter Satz, keine Liste, kein Markdown.
-            - Sprache des Fragments behalten.
-            - Endet mit Punkt (oder !/?).
-
-            Beispiele:
-            TEXT: Treffen morgen
-            RICHTIG: Wir treffen uns morgen.
-            FALSCH: Sure! Wir treffen uns morgen. Ich freue mich!
-
-            TEXT:
-            \(t)
-            """
+        case .improve, .cleanup, .complete, .shorten, .longer, .answer:
+            // Dedicated per-tool pipelines (system + USER_TEXT). Level used for shorten/longer.
+            return KeyboardToolPipelines.wirePrompt(for: self, text: t, shortenLevel: shortenLevel)
         case .list:
             return """
             \(rewriterRule)
@@ -164,97 +116,6 @@ enum KeyboardAIAction: String, CaseIterable, Identifiable {
 
             TEXT:
             \(t)
-            """
-        case .shorten:
-            let level = min(max(shortenLevel, 1), 4)
-            let intensity: String
-            switch level {
-            case 1:
-                intensity = """
-                Stufe 1 — leicht kürzen. Füllwörter und Wiederholungen weg, Bedeutung bleibt.
-                Beispiel: „Ich wollte nur kurz sagen, dass ich morgen wahrscheinlich zum Strand gehen werde.“ → „Ich gehe morgen wahrscheinlich zum Strand.“
-                """
-            case 2:
-                intensity = """
-                Stufe 2 — deutlich kürzer. Nur Kernaussage, wenige Wörter.
-                Beispiel → „Morgen Strand.“
-                """
-            case 3:
-                intensity = """
-                Stufe 3 — Extremkurz. Oft ein Wort oder zwei.
-                Beispiel → „Strand.“
-                """
-            default:
-                intensity = """
-                Stufe 4 — maximal verdichten. Ein Wort oder kürzeste sinnvolle Form.
-                """
-            }
-            return """
-            \(rewriterRule)
-
-            Aufgabe „Kürzer“ — kürze den TEXT SOFORT. Frage NICHT „Was soll ich kürzen?“.
-
-            Regeln:
-            - Bedeutung erhalten
-            - unnötige Wörter entfernen
-            - Wiederholungen entfernen
-            - Keine Antwort auf Fragen im Text — nur kürzen
-
-            \(intensity)
-            \(outputOnlyCloser)
-
-            TEXT:
-            \(t)
-            """
-        case .longer:
-            let level = min(max(shortenLevel, 1), 4)
-            let intensity: String
-            switch level {
-            case 1:
-                intensity = """
-                Stufe 1 — leicht erweitern / umformulieren (~120–140%).
-                Beispiel: „Ich heiße Noah.“ → „Mein Name ist Noah.“
-                """
-            case 2:
-                intensity = """
-                Stufe 2 — klar erweitern (~160–200%). Ein freundlicher Zusatz, der schon angelegt ist.
-                Beispiel → „Ich heiße Noah und freue mich, dich kennenzulernen.“
-                """
-            case 3:
-                intensity = """
-                Stufe 3 — ausführlicher (~220–280%). Mehr Fluss und natürliche Details ohne neue Fakten zu erfinden.
-                """
-            default:
-                intensity = """
-                Stufe 4 — reich erweitern (~300%). Mehrere Sätze, weiterhin dieselbe Kernaussage.
-                """
-            }
-            return """
-            \(rewriterRule)
-
-            Aufgabe „Länger“ — erweitere den TEXT SOFORT. Frage NICHT nach mehr Input.
-
-            Regeln:
-            - Kernaussage behalten
-            - Natürlich und flüssig erweitern
-            - Nichts Wichtiges erfinden, das nicht schon anklingt
-            - Frage im TEXT = Frage länger formulieren, nicht beantworten
-
-            \(intensity)
-            \(outputOnlyCloser)
-
-            TEXT:
-            \(t)
-            """
-        case .answer:
-            return """
-            Du beantwortest die Frage knapp. Format GENAU:
-
-            \(t)
-
-            <Antwort in 1–3 Sätzen>
-
-            Kein „Gerne/Sure/Here is“. Frage in Zeile 1 behalten.
             """
         case .friendlier:
             return """
@@ -300,9 +161,14 @@ enum KeyboardAIAction: String, CaseIterable, Identifiable {
 
     /// Strip model chatter; clamp runaway “answers” for rewrite actions.
     static func sanitize(_ raw: String, action: KeyboardAIAction, original: String, shortenLevel: Int = 1) -> String {
-        // Verbessern: specialized rewrite pipeline + semantic safety (never answer questions).
-        if action == .improve {
-            return KeyboardImprovePipeline.finalize(raw: raw, original: original)
+        // Per-tool pipelines handle primary keyboard AI actions.
+        if KeyboardToolPipelines.taskID(for: action) != nil {
+            return KeyboardToolPipelines.finalize(
+                raw: raw,
+                action: action,
+                original: original,
+                shortenLevel: shortenLevel
+            )
         }
 
         var s = raw.trimmingCharacters(in: .whitespacesAndNewlines)

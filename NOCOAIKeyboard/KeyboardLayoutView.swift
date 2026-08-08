@@ -13,10 +13,11 @@ struct KeyboardLayoutView: View {
     private let num2 = Array("-/:;()€&@\"")
     private let num3 = Array(".,?!ß'")
 
-    /// Tight Apple-like rhythm — small gaps, oversized hit pads (fewer missed taps).
-    private let rowSpacing: CGFloat = 8
-    private let keySpacing: CGFloat = 5
-    private let keyHeight: CGFloat = 43
+    /// Apple-like rhythm — compact gaps, full-size hit pads (glyphs can be smaller).
+    private let rowSpacing: CGFloat = 7
+    private let keySpacing: CGFloat = 6
+    private let keyHeight: CGFloat = 42
+    private let shiftDeleteWidth: CGFloat = 46
 
     var body: some View {
         VStack(spacing: rowSpacing) {
@@ -27,27 +28,27 @@ struct KeyboardLayoutView: View {
             }
         }
         .padding(.horizontal, 3)
-        .padding(.top, 1)
-        .padding(.bottom, 4)
+        .padding(.top, 2)
+        .padding(.bottom, 3)
         .animation(.easeOut(duration: 0.15), value: model.showingNumbers)
     }
 
     private var lettersLayout: some View {
         VStack(spacing: rowSpacing) {
-            // Top + middle German rows are both 11 keys — keep aligned (no false inset).
+            // German iOS: row1 + row2 are 11 keys edge-to-edge; row3 inset between Shift/Delete.
             letterRow(row1, size: .top)
             letterRow(row2, size: .middle)
             HStack(spacing: keySpacing) {
                 ModifierKey(
                     symbol: model.capsLock ? "capslock.fill" : "shift.fill",
-                    width: 44,
+                    width: shiftDeleteWidth,
                     height: keyHeight,
                     active: model.shiftOn || model.capsLock
                 ) {
                     model.toggleShift()
                 }
                 letterRowContent(row3, size: .bottom)
-                DeleteKey(width: 44, height: keyHeight) {
+                DeleteKey(width: shiftDeleteWidth, height: keyHeight) {
                     model.beginDeleteHold()
                 } onEnd: {
                     model.endDeleteHold()
@@ -62,11 +63,11 @@ struct KeyboardLayoutView: View {
             letterRow(num1, size: .top)
             letterRow(num2, size: .middle)
             HStack(spacing: keySpacing) {
-                ModifierKey(title: "#+=", width: 44, height: keyHeight) {
+                ModifierKey(title: "#+=", width: shiftDeleteWidth, height: keyHeight) {
                     model.insert("#")
                 }
                 letterRowContent(num3, size: .bottom)
-                DeleteKey(width: 44, height: keyHeight) {
+                DeleteKey(width: shiftDeleteWidth, height: keyHeight) {
                     model.beginDeleteHold()
                 } onEnd: {
                     model.endDeleteHold()
@@ -77,12 +78,12 @@ struct KeyboardLayoutView: View {
     }
 
     private func bottomRow(leftTitle: String) -> some View {
-        // Apple-like: [123] [.] ——— space ——— [return]
+        // Apple-like: [123] [.,?!] ——— space ——— [return]
         HStack(spacing: keySpacing) {
-            ModifierKey(title: leftTitle, width: 44, height: keyHeight) {
+            ModifierKey(title: leftTitle, width: shiftDeleteWidth, height: keyHeight) {
                 model.toggleNumbers()
             }
-            PunctuationKey(width: 44, height: keyHeight) { inserted in
+            PunctuationKey(width: shiftDeleteWidth, height: keyHeight) { inserted in
                 model.insert(inserted)
             }
             SpaceKey(height: keyHeight) {
@@ -90,7 +91,7 @@ struct KeyboardLayoutView: View {
             } onCursorMove: { model.moveCursor(by: $0) }
             ModifierKey(
                 title: returnTitle,
-                width: 88,
+                width: 92,
                 height: keyHeight,
                 prominent: false
             ) {
@@ -231,23 +232,23 @@ private struct LetterKey: View {
 
     var body: some View {
         Text(label)
-            .font(.system(size: letterSize, weight: isUppercaseLetter ? .medium : .regular, design: .rounded))
-            // Optical Apple-style centering (glyphs sit slightly high by default).
-            .offset(y: -1.2)
+            // Smaller Apple-like glyphs — hit box stays full key size below.
+            .font(.system(size: letterSize, weight: .regular))
+            .offset(y: -0.5)
             .foregroundStyle(.white)
             .frame(maxWidth: .infinity)
             .frame(height: height)
             .background(
-                RoundedRectangle(cornerRadius: 8.5, style: .continuous)
+                RoundedRectangle(cornerRadius: 7.5, style: .continuous)
                     .fill(keyFill)
                     .overlay(
-                        RoundedRectangle(cornerRadius: 8.5, style: .continuous)
-                            .stroke(Color.white.opacity(pressed ? 0.08 : 0.14), lineWidth: 0.5)
+                        RoundedRectangle(cornerRadius: 7.5, style: .continuous)
+                            .stroke(Color.white.opacity(pressed ? 0.06 : 0.12), lineWidth: 0.4)
                     )
                     .shadow(
-                        color: .black.opacity(0.35),
-                        radius: pressed ? 0 : 0.5,
-                        y: pressed ? 0 : 1
+                        color: .black.opacity(scheme == .dark ? 0.45 : 0.18),
+                        radius: pressed ? 0 : 0.4,
+                        y: pressed ? 0 : 0.8
                     )
             )
             .overlay(alignment: .top) {
@@ -259,9 +260,9 @@ private struct LetterKey: View {
                 }
             }
             .zIndex(pressed ? 40 : 0)
-            // Expand hit pad into the gaps so taps between keys still register.
-            .padding(.horizontal, -2.5)
-            .padding(.vertical, 1)
+            // Hit pad stays large (into gaps) even when glyphs are smaller.
+            .padding(.horizontal, -3)
+            .padding(.vertical, 2)
             .contentShape(Rectangle())
             .gesture(
                 DragGesture(minimumDistance: 0)
@@ -276,14 +277,14 @@ private struct LetterKey: View {
     }
 
     private var letterSize: CGFloat {
-        // Middle home row is largest — Apple-like visual weight.
+        // Smaller Apple-like letter glyphs (touch target unchanged via frame/hit pad).
         switch size {
         case .middle:
-            return isUppercaseLetter ? 27 : 25
+            return isUppercaseLetter ? 21 : 19.5
         case .top:
-            return isUppercaseLetter ? 24 : 22.5
+            return isUppercaseLetter ? 20 : 18.5
         case .bottom:
-            return isUppercaseLetter ? 23 : 21.5
+            return isUppercaseLetter ? 20 : 18.5
         }
     }
 

@@ -24,7 +24,7 @@ final class KeyboardViewModel: ObservableObject {
 
     /// Rewrite chips for the AI Tools bar only.
     var quickAIActions: [KeyboardAIAction] {
-        [.improve, .cleanup, .complete, .shorten, .answer]
+        [.improve, .cleanup, .complete, .shorten, .longer, .answer]
     }
 
     // MARK: NOCO AI Diktat

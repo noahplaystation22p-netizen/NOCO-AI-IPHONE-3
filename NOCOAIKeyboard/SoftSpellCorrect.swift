@@ -1,17 +1,21 @@
 import UIKit
 
-/// Lightweight system spell-check on space — fixes obvious typos without a suggestion bar or AI.
+/// Lightweight German spell-check on space — no suggestion bar, no AI, not English.
 enum SoftSpellCorrect {
-    /// Returns a replacement only when UITextChecker is confident (single clear guess).
+    /// Returns a replacement only for clear German typos (conservative).
     static func suggestion(for word: String) -> String? {
         let raw = word.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard raw.count >= 3, raw.count <= 32 else { return nil }
-        // Skip URLs / handles / codes
+        guard raw.count >= 4, raw.count <= 28 else { return nil }
+        // Skip URLs / handles / codes / mixed junk
         if raw.contains("@") || raw.contains(".") || raw.contains("/") { return nil }
         if raw.unicodeScalars.contains(where: { CharacterSet.decimalDigits.contains($0) }) { return nil }
+        // Never autocorrect short function words / particles
+        let low = raw.lowercased()
+        if germanStopWords.contains(low) { return nil }
 
         let checker = UITextChecker()
-        let langs = preferredLanguages()
+        // German QWERTZ keyboard → German dictionary only (never English fallback).
+        let langs = ["de_DE", "de"]
         let ns = raw as NSString
         let full = NSRange(location: 0, length: ns.length)
 
@@ -23,22 +27,68 @@ enum SoftSpellCorrect {
                 wrap: false,
                 language: lang
             )
-            guard misspelled.location != NSNotFound else { continue }
+            // Word is fine in German — leave it.
+            guard misspelled.location != NSNotFound else { return nil }
+
             guard let guesses = checker.guesses(forWordRange: misspelled, in: raw, language: lang),
                   let best = guesses.first else { continue }
-            // Prefer close edits (Baun→Baum); avoid wild rewrites.
-            guard editDistance(raw.lowercased(), best.lowercased()) <= 2 else { continue }
+
+            let a = raw.lowercased()
+            let b = best.lowercased()
+            guard a != b else { return nil }
+
+            // Less aggressive: only very close edits.
+            let dist = editDistance(a, b)
+            let maxDist = a.count <= 5 ? 1 : 2
+            guard dist <= maxDist else { continue }
+
+            // Reject English-looking swaps for German typing (e.g. „ist“→„is“, „und“→„and“).
+            if looksLikeEnglishReplacement(original: a, replacement: b) { continue }
+
+            // Prefer same length ±1 for short words.
+            if a.count <= 6, abs(a.count - b.count) > 1 { continue }
+
             return matchCase(of: raw, to: best)
         }
         return nil
     }
 
-    private static func preferredLanguages() -> [String] {
-        var langs = ["de_DE", "de", "en_US", "en"]
-        for code in Locale.preferredLanguages {
-            if !langs.contains(code) { langs.insert(code, at: 0) }
+    private static let germanStopWords: Set<String> = [
+        "der", "die", "das", "den", "dem", "des", "ein", "eine", "einer", "einem", "einen",
+        "und", "oder", "aber", "mit", "von", "zu", "im", "in", "am", "an", "auf", "für", "fur",
+        "ist", "sind", "war", "bin", "bist", "hat", "hab", "habe", "wir", "ihr", "sie", "ich",
+        "du", "er", "es", "man", "nur", "noch", "auch", "nicht", "nein", "ja", "ok", "okay"
+    ]
+
+    /// Heuristic: English dictionary corrections that steal German words.
+    private static func looksLikeEnglishReplacement(original: String, replacement: String) -> Bool {
+        // If original has German letters, never replace with ASCII-only English form that drops them.
+        let germanChars = CharacterSet(charactersIn: "äöüßÄÖÜ")
+        let origHasDE = original.unicodeScalars.contains(where: { germanChars.contains($0) })
+        let replHasDE = replacement.unicodeScalars.contains(where: { germanChars.contains($0) })
+        if origHasDE && !replHasDE { return true }
+
+        // Known false friends / aggressive EN swaps
+        let bannedPairs: Set<String> = [
+            "ist>is", "und>and", "oder>or", "mit>with", "für>for", "fur>for",
+            "nicht>not", "auch>also", "noch>still", "dann>then", "wenn>when",
+            "wie>how", "was>what", "wer>who", "wo>where", "hier>here", "dort>there",
+            "gut>good", "sehr>very", "mein>my", "dein>your", "kein>no", "keine>no",
+            "tempo>tempo", // leave; but block tempo→time etc via other checks
+            "ai>ai" // no-op
+        ]
+        if bannedPairs.contains("\(original)>\(replacement)") { return true }
+
+        // Replacement is a common English function word while original is not the same.
+        let englishFunction: Set<String> = [
+            "is", "are", "was", "were", "the", "and", "or", "with", "for", "not",
+            "what", "how", "when", "where", "who", "why", "this", "that", "have", "has",
+            "been", "will", "would", "could", "should", "from", "into", "about"
+        ]
+        if englishFunction.contains(replacement), !englishFunction.contains(original) {
+            return true
         }
-        return langs
+        return false
     }
 
     private static func matchCase(of original: String, to replacement: String) -> String {

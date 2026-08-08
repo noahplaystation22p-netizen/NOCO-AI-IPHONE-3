@@ -19,6 +19,8 @@
 		KBD0000010000000000000007 /* KeyboardAIClient.swift in Sources */ = {isa = PBXBuildFile; fileRef = KBD0000020000000000000012 /* KeyboardAIClient.swift */; };
 		KBD00000100000000000000IMP /* KeyboardImprovePipeline.swift in Sources */ = {isa = PBXBuildFile; fileRef = KBD00000200000000000000IMP /* KeyboardImprovePipeline.swift */; };
 		NA00000100000000000000IMP /* KeyboardImprovePipeline.swift in Sources */ = {isa = PBXBuildFile; fileRef = KBD00000200000000000000IMP /* KeyboardImprovePipeline.swift */; };
+		KBD00000100000000000000TP /* KeyboardToolPipelines.swift in Sources */ = {isa = PBXBuildFile; fileRef = KBD00000200000000000000TP /* KeyboardToolPipelines.swift */; };
+		NA00000100000000000000TP /* KeyboardToolPipelines.swift in Sources */ = {isa = PBXBuildFile; fileRef = KBD00000200000000000000TP /* KeyboardToolPipelines.swift */; };
 		KBD000001000000000000000A /* KeyboardChipPreferences.swift in Sources */ = {isa = PBXBuildFile; fileRef = KBD0000020000000000000013 /* KeyboardChipPreferences.swift */; };
 		NA0000010000000000000071 /* KeyboardChipPreferences.swift in Sources */ = {isa = PBXBuildFile; fileRef = KBD0000020000000000000013 /* KeyboardChipPreferences.swift */; };
 		NA0000010000000000000072 /* KeyboardCustomizationView.swift in Sources */ = {isa = PBXBuildFile; fileRef = NA0000020000000000000090 /* KeyboardCustomizationView.swift */; };
@@ -169,6 +171,7 @@
 		KBD0000020000000000000011 /* KeyboardAIAction.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = KeyboardAIAction.swift; sourceTree = "<group>"; };
 		KBD0000020000000000000012 /* KeyboardAIClient.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = KeyboardAIClient.swift; sourceTree = "<group>"; };
 		KBD00000200000000000000IMP /* KeyboardImprovePipeline.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = KeyboardImprovePipeline.swift; sourceTree = "<group>"; };
+		KBD00000200000000000000TP /* KeyboardToolPipelines.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = KeyboardToolPipelines.swift; sourceTree = "<group>"; };
 		KBD0000020000000000000013 /* KeyboardChipPreferences.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = KeyboardChipPreferences.swift; sourceTree = "<group>"; };
 		NA0000020000000000000090 /* KeyboardCustomizationView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = KeyboardCustomizationView.swift; sourceTree = "<group>"; };
 		KBD0000030000000000000001 /* NOCOAIKeyboard.appex */ = {isa = PBXFileReference; explicitFileType = "wrapper.app-extension"; includeInIndex = 0; path = NOCOAIKeyboard.appex; sourceTree = BUILT_PRODUCTS_DIR; };
@@ -560,6 +563,7 @@
 				KBD0000020000000000000011 /* KeyboardAIAction.swift */,
 				KBD0000020000000000000012 /* KeyboardAIClient.swift */,
 				KBD00000200000000000000IMP /* KeyboardImprovePipeline.swift */,
+				KBD00000200000000000000TP /* KeyboardToolPipelines.swift */,
 				KBD0000020000000000000013 /* KeyboardChipPreferences.swift */,
 			);
 			path = Shared;
@@ -786,6 +790,7 @@
 				KBD0000010000000000000006 /* KeyboardAIAction.swift in Sources */,
 				KBD0000010000000000000007 /* KeyboardAIClient.swift in Sources */,
 				KBD00000100000000000000IMP /* KeyboardImprovePipeline.swift in Sources */,
+				KBD00000100000000000000TP /* KeyboardToolPipelines.swift in Sources */,
 				KBD000001000000000000000A /* KeyboardChipPreferences.swift in Sources */,
 				KBD0000010000000000000008 /* KeychainService.swift in Sources */,
 			);
@@ -804,6 +809,7 @@
 				BC0000010000000000000003 /* SharedBroadcastFrameStore.swift in Sources */,
 				NA0000010000000000000061 /* KeyboardAIAction.swift in Sources */,
 				NA00000100000000000000IMP /* KeyboardImprovePipeline.swift in Sources */,
+				NA00000100000000000000TP /* KeyboardToolPipelines.swift in Sources */,
 				NA0000010000000000000071 /* KeyboardChipPreferences.swift in Sources */,
 				NA0000010000000000000072 /* KeyboardCustomizationView.swift in Sources */,
 				NA0000010000000000000005 /* HapticService.swift in Sources */,

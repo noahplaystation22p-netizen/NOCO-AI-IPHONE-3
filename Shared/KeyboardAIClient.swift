@@ -78,26 +78,32 @@ enum KeyboardAIClient {
         let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty else { throw ClientError.empty }
 
-        // Verbessern: local passthrough for empty/technical; strict rewrite pipeline.
-        if action == .improve {
-            if let local = KeyboardImprovePipeline.passthroughIfNoAINeeded(trimmed) {
+        // Dedicated per-tool pipelines (button = task; never answer unless .answer).
+        if let task = KeyboardToolPipelines.taskID(for: action) {
+            if action == .improve,
+               let local = KeyboardImprovePipeline.passthroughIfNoAINeeded(trimmed) {
                 guard !local.isEmpty else { throw ClientError.empty }
                 return local
             }
-            let base: TimeInterval = 14
+            let base: TimeInterval = action.isAnswer ? 16 : (action.isPrimary ? 14 : 12)
             let reply = try await post(
-                message: KeyboardImprovePipeline.userMessage(for: trimmed),
+                message: KeyboardToolPipelines.userMessage(for: action, text: trimmed, shortenLevel: shortenLevel),
                 display: action.displayLabel(for: trimmed),
                 timeout: timeout(for: trimmed, base: base),
-                system: KeyboardImprovePipeline.systemInstruction,
-                task: "rewrite_improve"
+                system: KeyboardToolPipelines.system(for: action, shortenLevel: shortenLevel),
+                task: task.rawValue
             )
-            let clean = KeyboardImprovePipeline.finalize(raw: reply, original: trimmed)
+            let clean = KeyboardToolPipelines.finalize(
+                raw: reply,
+                action: action,
+                original: trimmed,
+                shortenLevel: shortenLevel
+            )
             guard !clean.isEmpty else { throw ClientError.empty }
             return clean
         }
 
-        let base: TimeInterval = action.isAnswer ? 16 : (action.isPrimary ? 15 : 12)
+        let base: TimeInterval = 12
         let reply = try await post(
             message: action.prompt(for: trimmed, shortenLevel: shortenLevel),
             display: action.displayLabel(for: trimmed),
@@ -169,14 +175,14 @@ enum KeyboardAIClient {
         request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
 
         // Prefer true system/user split when companion supports `system`.
-        // Fallback: bind rules into `message` so improve stays rewrite-only even on older PCs.
+        // Fallback: bind rules into `message` so rewrite tools stay on-task on older PCs.
         let wireMessage: String
-        if let system, task == "rewrite_improve" {
+        if let system, let task, !task.isEmpty {
             wireMessage = """
             [SYSTEM — BINDENDE REGELN]
             \(system)
 
-            [USER TASK]
+            [USER TASK — \(task)]
             \(message)
             """
         } else {

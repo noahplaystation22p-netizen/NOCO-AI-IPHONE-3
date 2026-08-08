@@ -23,6 +23,10 @@ final class ChatStore: ObservableObject {
     @Published var conversations: [ConversationSummary] = []
     @Published var messages: [ChatMessage] = []
     @Published var activeConversationId: String?
+    /// Cold process start: open a new empty chat instead of restoring the last thread.
+    var preferFreshLaunchChat = false
+    /// Sticky until ChatHub skips restore — survives the fresh-chat Task completing first.
+    var suppressSessionRestore = false
     @Published var mode: AIMode = .auto
     @Published var workPhase: ModeWorkPhase = .idle
     @Published var modeRecommendation: ModeRecommendation?
@@ -162,6 +166,58 @@ final class ChatStore: ObservableObject {
         activeConversationId = nil
         persistActiveConversation()
         VoiceDebugLog.event("CONVERSATION_CREATED", "id=nil source=voice_clean_local")
+    }
+
+    /// Hard app relaunch: always a new normal chat. Old chats remain in the overview.
+    func openFreshLaunchChatIfNeeded() async {
+        guard preferFreshLaunchChat else { return }
+        preferFreshLaunchChat = false
+        messages = []
+        pendingAgentIntake = nil
+        pendingAgentConfirm = nil
+        modeRecommendation = nil
+        reconnectHint = nil
+        // Wait briefly for API after pair/bootstrap.
+        if api == nil {
+            for _ in 0..<40 {
+                if api != nil { break }
+                try? await Task.sleep(nanoseconds: 50_000_000)
+            }
+        }
+        if let id = await newConversation() {
+            VoiceDebugLog.event("CONVERSATION_CREATED", "id=\(id) source=cold_launch")
+            return
+        }
+        activeConversationId = nil
+        persistActiveConversation()
+        VoiceDebugLog.event("CONVERSATION_CREATED", "id=nil source=cold_launch_local")
+    }
+
+    /// Delete every non-keyboard conversation (remote + local list). Starts a fresh empty chat.
+    func deleteAllConversations() async {
+        let ids = conversations.filter { !$0.isKeyboard }.map(\.id)
+        guard !ids.isEmpty else {
+            messages = []
+            activeConversationId = nil
+            persistActiveConversation()
+            return
+        }
+        for id in ids {
+            deletedIds.insert(id)
+            conversations.removeAll { $0.id == id }
+        }
+        persistDeletedIds()
+        activeConversationId = nil
+        messages = []
+        UserDefaults.standard.removeObject(forKey: "nocoai.activeConversation")
+        if let api {
+            for id in ids {
+                try? await api.deleteConversation(id: id)
+            }
+        }
+        await loadConversations()
+        _ = await newConversation()
+        HapticService.medium()
     }
 
     /// Dedicated Voice conversation — keeps chat list history of past Voice sessions.

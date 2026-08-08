@@ -59,27 +59,26 @@ struct ChatHubView: View {
                                     }
                                     .intelligenceMessageArrive(isUser: message.role == .user)
                                     .id(message.id)
-                                    .transition(
-                                        .asymmetric(
-                                            insertion: .opacity
-                                                .combined(with: .scale(scale: 0.94))
-                                                .combined(with: .move(edge: .bottom)),
-                                            removal: .opacity
-                                        )
-                                    )
                                 }
+                                Color.clear
+                                    .frame(height: 1)
+                                    .id("chatBottom")
                             }
                             .padding(.horizontal, 14)
                             .padding(.vertical, 12)
-                            .animation(.spring(response: 0.38, dampingFraction: 0.84), value: connection.chat.messages.count)
                         }
                     }
                     .onTapGesture { inputFocused = false }
                     .onChange(of: connection.chat.messages.count) { _, _ in
-                        scrollToBottom(proxy)
+                        scrollToBottom(proxy, animated: true)
+                    }
+                    .onChange(of: connection.chat.messages.last?.id) { _, _ in
+                        scrollToBottom(proxy, animated: true)
                     }
                     .onChange(of: connection.chat.messages.last?.text) { _, _ in
-                        scrollToBottom(proxy)
+                        // Streaming tokens: pin without spring so the list doesn't bounce upward.
+                        guard connection.chat.isSending || connection.chat.messages.last?.isStreaming == true else { return }
+                        scrollToBottom(proxy, animated: false)
                     }
                 }
 
@@ -152,6 +151,12 @@ struct ChatHubView: View {
                     HStack(spacing: 8) {
                         if connection.chat.isSyncActive {
                             SyncBadge(active: true)
+                        }
+                        RainbowNewChatButton {
+                            HapticService.medium()
+                            Task {
+                                _ = await connection.chat.newConversation()
+                            }
                         }
                         StatusBadge(
                             online: connection.isOnline,
@@ -240,6 +245,12 @@ struct ChatHubView: View {
                     input = draft
                     connection.pendingChatDraft = nil
                     inputFocused = true
+                }
+                // Hard relaunch: always a fresh empty chat (old threads stay in the list).
+                if connection.chat.suppressSessionRestore || connection.chat.preferFreshLaunchChat {
+                    await connection.chat.openFreshLaunchChatIfNeeded()
+                    connection.chat.suppressSessionRestore = false
+                    return
                 }
                 connection.chat.restoreSession()
                 await connection.chat.loadConversations()
@@ -343,11 +354,18 @@ struct ChatHubView: View {
         .frame(width: 72)
     }
 
-    private func scrollToBottom(_ proxy: ScrollViewProxy) {
-        if let last = connection.chat.messages.last {
-            withAnimation(.spring(response: 0.35, dampingFraction: 0.85)) {
-                proxy.scrollTo(last.id, anchor: .bottom)
+    private func scrollToBottom(_ proxy: ScrollViewProxy, animated: Bool = true) {
+        let action = {
+            if connection.chat.messages.last != nil {
+                proxy.scrollTo("chatBottom", anchor: .bottom)
             }
+        }
+        if animated {
+            withAnimation(.easeOut(duration: 0.18)) { action() }
+        } else {
+            var transaction = Transaction()
+            transaction.disablesAnimations = true
+            withTransaction(transaction, action)
         }
     }
 }
@@ -701,6 +719,7 @@ struct ConversationListView: View {
     @EnvironmentObject private var connection: ConnectionStore
     @Environment(\.dismiss) private var dismiss
     @State private var appeared = false
+    @State private var confirmDeleteAll = false
 
     var body: some View {
         NavigationStack {
@@ -717,6 +736,15 @@ struct ConversationListView: View {
                             .font(.body.weight(.semibold))
                             .foregroundStyle(NOCOAITheme.accent)
                     }
+
+                    Button(role: .destructive) {
+                        HapticService.warning()
+                        confirmDeleteAll = true
+                    } label: {
+                        Label("Alle Chats löschen", systemImage: "trash.fill")
+                            .font(.body.weight(.semibold))
+                    }
+                    .disabled(connection.chat.filteredConversations.isEmpty)
                 }
 
                 Section {
@@ -807,6 +835,21 @@ struct ConversationListView: View {
             }
             .onAppear {
                 withAnimation { appeared = true }
+            }
+            .confirmationDialog(
+                "Alle Chats löschen?",
+                isPresented: $confirmDeleteAll,
+                titleVisibility: .visible
+            ) {
+                Button("Alle löschen", role: .destructive) {
+                    Task {
+                        await connection.chat.deleteAllConversations()
+                        dismiss()
+                    }
+                }
+                Button("Abbrechen", role: .cancel) {}
+            } message: {
+                Text("Alle Unterhaltungen werden entfernt. Das lässt sich nicht rückgängig machen.")
             }
         }
     }

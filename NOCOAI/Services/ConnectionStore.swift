@@ -208,15 +208,17 @@ final class ConnectionStore: ObservableObject {
         consumePendingSystemLaunches()
     }
 
-    /// New empty chat when the process starts. Skip if already empty. Never on mere foreground.
+    /// Always open a brand-new chat on hard process start (history stays in the list).
+    /// Never on mere home→foreground. ChatHub must respect `suppressSessionRestore`.
     func openFreshChatOnColdLaunchIfNeeded() {
         guard isPaired else { return }
         guard !didColdLaunchFreshChat else { return }
         didColdLaunchFreshChat = true
+        // Sticky flags so ChatHub `.task` cannot restore the previous thread after we finish.
+        chat.preferFreshLaunchChat = true
+        chat.suppressSessionRestore = true
         Task { @MainActor in
-            // Empty thread already — keep it.
-            if chat.messages.isEmpty { return }
-            await chat.beginCleanSession()
+            await chat.openFreshLaunchChatIfNeeded()
         }
     }
 

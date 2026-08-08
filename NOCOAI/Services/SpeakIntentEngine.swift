@@ -339,12 +339,21 @@ enum SpeakIntentEngine {
             "speak verlassen", "speak beenden", "end speak", "stop speak", "exit speak",
             "voice verlassen", "voice beenden", "stop voice", "exit voice", "voice ai verlassen",
             "voice ai beenden", "stop voice ai", "noco verlassen", "noco beenden",
+            "nocospeak beenden", "noco speak beenden", "nocospeak verlassen",
             "zuruck zum chat", "zurück zum chat", "back to chat",
-            "assistent beenden", "modus verlassen", "beenden"
+            "assistent beenden", "modus verlassen", "beenden",
+            // Farewells end Speak (bye / goodbye / tschüss …)
+            "goodbye", "good bye", "bye bye", "see you", "see ya",
+            "tschuss", "tschüss", "tschau", "ciao", "auf wiedersehen",
+            "auf wiederhoeren", "auf wiederhören", "machs gut", "mach's gut",
+            "bis bald", "bis dann", "bis spater", "bis später"
         ]
         if phrases.contains(where: { t.contains($0) }) { return true }
-        // Exact short stops only
-        return ["stopp", "stop", "ende", "exit", "fertig"].contains(t)
+        // Exact short stops / farewells only
+        return [
+            "stopp", "stop", "ende", "exit", "fertig",
+            "bye", "goodbye", "tschuss", "tschüss", "tschau", "ciao"
+        ].contains(t)
     }
 
     private static func matches(_ text: String, _ pattern: String) -> Bool {

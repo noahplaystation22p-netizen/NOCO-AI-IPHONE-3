@@ -41,10 +41,10 @@ struct SpeakLiveActivityWidget: Widget {
                         .padding(.bottom, 2)
                 }
             } compactLeading: {
-                // Keep glow inside the pill — oversized aura was clipping on the left.
-                SpeakRainbowCore(state: context.state, diameter: 11, showSymbol: true, compact: true)
-                    .frame(width: 16, height: 16)
-                    .padding(.leading, 5)
+                // Brighter rainbow, still clipped inside the pill.
+                SpeakRainbowCore(state: context.state, diameter: 12, showSymbol: true, compact: true)
+                    .frame(width: 18, height: 18)
+                    .padding(.leading, 4)
                     .padding(.trailing, 1)
             } compactTrailing: {
                 SpeakMiniVisualizer(
@@ -57,10 +57,10 @@ struct SpeakLiveActivityWidget: Widget {
                 .frame(width: 34, height: 14)
                 .padding(.trailing, 3)
             } minimal: {
-                SpeakRainbowCore(state: context.state, diameter: 10, showSymbol: false, compact: true)
+                SpeakRainbowCore(state: context.state, diameter: 11, showSymbol: false, compact: true)
             }
             .widgetURL(URL(string: "nocoai://speak"))
-            .keylineTint(SpeakPhasePalette.accent(for: context.state.phaseRaw).opacity(0.85))
+            .keylineTint(SpeakPhasePalette.accent(for: context.state.phaseRaw).opacity(0.95))
         }
     }
 }
@@ -228,14 +228,28 @@ struct SpeakExpandedAuraCore: View {
                     .fill(
                         AngularGradient(
                             colors: SpeakPhasePalette.gradientColors(for: state.phaseRaw, muted: state.isMuted)
-                                .map { $0.opacity(0.75) },
+                                .map { $0.opacity(0.88) },
                             center: .center,
                             angle: .degrees(spin)
                         )
                     )
-                    .frame(width: 48, height: 48)
-                    .blur(radius: 7)
-                    .opacity(0.95)
+                    .frame(width: 52, height: 52)
+                    .blur(radius: 9)
+                    .opacity(1.0)
+                    .scaleEffect(pulse)
+                    .blendMode(.plusLighter)
+
+                Circle()
+                    .fill(
+                        AngularGradient(
+                            colors: SpeakPhasePalette.gradientColors(for: state.phaseRaw, muted: state.isMuted),
+                            center: .center,
+                            angle: .degrees(spin * 1.35)
+                        )
+                    )
+                    .frame(width: 40, height: 40)
+                    .blur(radius: 4)
+                    .opacity(0.75)
                     .scaleEffect(pulse)
                     .blendMode(.plusLighter)
 
@@ -408,13 +422,13 @@ struct SpeakRainbowCore: View {
     var body: some View {
         let period = SpeakPhasePalette.spinPeriod(for: state.phaseRaw)
         let interval = max(0.08, min(0.14, period / 42))
-        let glowPad: CGFloat = compact ? 2 : (diameter <= 15 ? 2 : 6)
-        let outerGlow: CGFloat = compact ? diameter + 2 : diameter + 10
-        let midGlow: CGFloat = compact ? diameter + 1 : diameter + 4
+        let glowPad: CGFloat = compact ? 3 : (diameter <= 15 ? 3 : 8)
+        let outerGlow: CGFloat = compact ? diameter + 4 : diameter + 14
+        let midGlow: CGFloat = compact ? diameter + 2 : diameter + 6
         TimelineView(.animation(minimumInterval: interval, paused: false)) { timeline in
             let t = timeline.date.timeIntervalSinceReferenceDate
             let spin = (t.truncatingRemainder(dividingBy: period) / period) * 360
-            let pulse = 0.94 + 0.06 * abs(sin(t * (state.phaseRaw == "listening" ? 2.4 : 3.2)))
+            let pulse = 0.92 + 0.08 * abs(sin(t * (state.phaseRaw == "listening" ? 2.6 : 3.4)))
             ZStack {
                 Circle()
                     .fill(
@@ -425,22 +439,23 @@ struct SpeakRainbowCore: View {
                         )
                     )
                     .frame(width: outerGlow, height: outerGlow)
-                    .blur(radius: compact ? 1.1 : (diameter > 20 ? 3.2 : 2.0))
-                    .opacity(compact ? 0.85 : 0.9)
+                    .blur(radius: compact ? 1.8 : (diameter > 20 ? 4.2 : 2.6))
+                    .opacity(compact ? 0.95 : 0.98)
                     .scaleEffect(pulse)
+                    .blendMode(compact ? .normal : .plusLighter)
 
                 Circle()
                     .fill(
                         AngularGradient(
                             colors: SpeakPhasePalette.gradientColors(for: state.phaseRaw, muted: state.isMuted)
-                                .map { $0.opacity(0.85) },
+                                .map { $0.opacity(0.9) },
                             center: .center,
                             angle: .degrees(spin * 1.2)
                         )
                     )
                     .frame(width: midGlow, height: midGlow)
-                    .blur(radius: compact ? 0.5 : (diameter > 20 ? 1.4 : 0.7))
-                    .opacity(0.9)
+                    .blur(radius: compact ? 0.9 : (diameter > 20 ? 1.8 : 1.0))
+                    .opacity(0.95)
                     .scaleEffect(pulse)
 
                 Circle()
@@ -450,10 +465,10 @@ struct SpeakRainbowCore: View {
                             center: .center,
                             angle: .degrees(-spin * 0.7)
                         ),
-                        lineWidth: compact ? 1.0 : max(1.2, diameter * 0.08)
+                        lineWidth: compact ? 1.25 : max(1.4, diameter * 0.09)
                     )
-                    .frame(width: diameter + (compact ? 0.5 : 2), height: diameter + (compact ? 0.5 : 2))
-                    .opacity(0.98)
+                    .frame(width: diameter + (compact ? 1 : 3), height: diameter + (compact ? 1 : 3))
+                    .opacity(1.0)
 
                 Circle()
                     .fill(Color.black.opacity(0.32))

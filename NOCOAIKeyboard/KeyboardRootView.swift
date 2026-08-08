@@ -6,6 +6,13 @@ struct KeyboardRootView: View {
     var body: some View {
         VStack(spacing: 0) {
             compactChrome
+            if model.showToolsPanel {
+                toolsBar
+                    .transition(.asymmetric(
+                        insertion: .move(edge: .top).combined(with: .opacity).combined(with: .scale(scale: 0.96, anchor: .top)),
+                        removal: .opacity.combined(with: .scale(scale: 0.98, anchor: .top))
+                    ))
+            }
             if model.showAskPanel {
                 askPanel
                     .transition(.move(edge: .top).combined(with: .opacity))
@@ -34,6 +41,7 @@ struct KeyboardRootView: View {
         .animation(.spring(response: 0.36, dampingFraction: 0.86), value: model.isProcessing)
         .animation(.spring(response: 0.36, dampingFraction: 0.86), value: model.showIntelligenceBurst)
         .animation(.spring(response: 0.34, dampingFraction: 0.88), value: model.showAskPanel)
+        .animation(.spring(response: 0.38, dampingFraction: 0.84), value: model.showToolsPanel)
         .animation(.easeInOut(duration: 0.18), value: model.animationPhase)
         .animation(.easeInOut(duration: 0.12), value: model.isDictating)
     }
@@ -41,8 +49,7 @@ struct KeyboardRootView: View {
     // MARK: - Compact chrome (Apple-height friendly)
 
     private var compactChrome: some View {
-        HStack(spacing: 8) {
-            // Logo tucked to the side
+        HStack(spacing: 7) {
             ZStack {
                 Circle()
                     .fill(
@@ -102,7 +109,50 @@ struct KeyboardRootView: View {
                 .shadow(color: Color(red: 0.45, green: 0.55, blue: 1).opacity(0.35), radius: 6, y: 1)
             }
             .buttonStyle(SoftPressStyle())
-            .accessibilityLabel("NOCO AI")
+            .accessibilityLabel("NOCO AI Fragefeld")
+
+            Button {
+                model.toggleAITools()
+            } label: {
+                HStack(spacing: 4) {
+                    Image(systemName: "wand.and.stars")
+                        .font(.system(size: 10, weight: .bold))
+                    Text("AI Tools")
+                        .font(.system(size: 12, weight: .semibold, design: .rounded))
+                    if model.showToolsPanel {
+                        Image(systemName: "xmark")
+                            .font(.system(size: 9, weight: .bold))
+                            .opacity(0.75)
+                    }
+                }
+                .padding(.horizontal, 10)
+                .padding(.vertical, 6)
+                .background(
+                    Capsule(style: .continuous)
+                        .fill(
+                            model.showToolsPanel
+                            ? AnyShapeStyle(
+                                LinearGradient(
+                                    colors: [
+                                        Color(red: 1.0, green: 0.45, blue: 0.65),
+                                        Color(red: 0.55, green: 0.45, blue: 1.0),
+                                        Color(red: 0.35, green: 0.85, blue: 1.0)
+                                    ],
+                                    startPoint: .leading,
+                                    endPoint: .trailing
+                                )
+                            )
+                            : AnyShapeStyle(Color.white.opacity(0.12))
+                        )
+                        .overlay(
+                            Capsule(style: .continuous)
+                                .stroke(Color.white.opacity(model.showToolsPanel ? 0.28 : 0.14), lineWidth: 0.6)
+                        )
+                )
+                .foregroundStyle(.white.opacity(0.95))
+            }
+            .buttonStyle(SoftPressStyle())
+            .accessibilityLabel("AI Tools")
 
             Spacer(minLength: 4)
 
@@ -111,110 +161,80 @@ struct KeyboardRootView: View {
                     .font(.system(size: 10, weight: .medium, design: .rounded))
                     .foregroundStyle(.white.opacity(0.55))
             }
-
-            dictationMicButton
         }
         .padding(.horizontal, 10)
         .padding(.top, 2)
         .padding(.bottom, 4)
     }
 
-    private var dictationMicButton: some View {
-        Button {
-            model.toggleDictation()
-        } label: {
-            ZStack {
-                if model.isDictating || model.isDictationPolishing {
-                    Circle()
-                        .stroke(
-                            AngularGradient(
-                                colors: [
-                                    Color(red: 1.0, green: 0.45, blue: 0.55),
+    // MARK: - AI Tools bar (does not capture typing)
+
+    private var toolsBar: some View {
+        ScrollView(.horizontal, showsIndicators: false) {
+            HStack(spacing: 8) {
+                ForEach(Array(model.quickAIActions.enumerated()), id: \.element.rawValue) { index, action in
+                    Button {
+                        model.runBuiltinAction(action)
+                    } label: {
+                        HStack(spacing: 5) {
+                            Image(systemName: action.systemImage)
+                                .font(.system(size: 11, weight: .semibold))
+                                .symbolEffect(.bounce, value: model.showToolsPanel)
+                            Text(action.title)
+                                .font(.system(size: 12, weight: .semibold, design: .rounded))
+                        }
+                        .padding(.horizontal, 11)
+                        .padding(.vertical, 8)
+                        .background {
+                            TimelineView(.animation(minimumInterval: 0.12, paused: false)) { timeline in
+                                let t = timeline.date.timeIntervalSinceReferenceDate
+                                let spin = (t.truncatingRemainder(dividingBy: 4.5) / 4.5) * 360
+                                let colors: [Color] = [
+                                    Color(red: 1.0, green: 0.45, blue: 0.6),
                                     Color(red: 1.0, green: 0.75, blue: 0.35),
-                                    Color(red: 0.45, green: 0.9, blue: 0.55),
+                                    Color(red: 0.4, green: 0.95, blue: 0.65),
                                     Color(red: 0.4, green: 0.75, blue: 1.0),
                                     Color(red: 0.7, green: 0.5, blue: 1.0),
-                                    Color(red: 1.0, green: 0.45, blue: 0.55)
-                                ],
-                                center: .center
-                            ),
-                            lineWidth: 2
-                        )
-                        .frame(width: 28, height: 28)
-                        .scaleEffect(model.isDictating ? 1.0 + model.dictationLevel * 0.15 : 1.04)
-                }
-
-                Circle()
-                    .fill(
-                        model.isDictating
-                        ? Color(red: 0.95, green: 0.28, blue: 0.32)
-                        : Color.white.opacity(0.12)
+                                    Color(red: 1.0, green: 0.45, blue: 0.6)
+                                ]
+                                Capsule(style: .continuous)
+                                    .fill(Color.white.opacity(0.1))
+                                    .overlay(
+                                        Capsule(style: .continuous)
+                                            .stroke(
+                                                AngularGradient(
+                                                    colors: colors.map { $0.opacity(0.85) },
+                                                    center: .center,
+                                                    angle: .degrees(spin + Double(index) * 40)
+                                                ),
+                                                lineWidth: 1.2
+                                            )
+                                    )
+                            }
+                        }
+                        .foregroundStyle(.white.opacity(0.95))
+                        .shadow(color: Color(red: 0.55, green: 0.45, blue: 1).opacity(0.25), radius: 5, y: 1)
+                    }
+                    .buttonStyle(SoftPressStyle())
+                    .disabled(model.isProcessing)
+                    .opacity(model.isProcessing ? 0.45 : 1)
+                    .offset(y: model.showToolsPanel ? 0 : 8)
+                    .animation(
+                        .spring(response: 0.42, dampingFraction: 0.78).delay(Double(index) * 0.04),
+                        value: model.showToolsPanel
                     )
-                    .frame(width: 26, height: 26)
-
-                Image(systemName: model.isDictating ? "waveform" : "mic.fill")
-                    .font(.system(size: 11, weight: .semibold))
-                    .foregroundStyle(.white.opacity(0.95))
-                    .symbolEffect(.pulse, options: .repeating, isActive: model.isDictating)
-            }
-            .frame(width: 30, height: 30)
-            .contentShape(Circle())
-        }
-        .buttonStyle(SoftPressStyle())
-        .contextMenu {
-            ForEach(KeyboardDictationStyle.allCases) { style in
-                Button {
-                    model.dictationStyle = style
-                    KeyboardDictationStyle.current = style
-                    model.statusLine = "Diktat: \(style.title)"
-                } label: {
-                    Label(style.title, systemImage: style == model.dictationStyle ? "checkmark" : "mic")
                 }
             }
+            .padding(.horizontal, 10)
+            .padding(.vertical, 2)
         }
-        .disabled(model.isAsking || (model.isProcessing && !model.isDictating && !model.isDictationPolishing))
-        .opacity(model.isAsking ? 0.45 : 1)
-        .accessibilityLabel("NOCO AI Diktat")
+        .padding(.bottom, 4)
     }
 
-    // MARK: - Ask / AI panel
+    // MARK: - Ask panel (text field only)
 
     private var askPanel: some View {
         VStack(alignment: .leading, spacing: 6) {
-            // Quick rewrite actions — only when AI mode is open (saves default height)
-            if model.askReply.isEmpty && !model.isAsking {
-                ScrollView(.horizontal, showsIndicators: false) {
-                    HStack(spacing: 6) {
-                        ForEach(model.quickAIActions, id: \.rawValue) { action in
-                            Button {
-                                model.runBuiltinAction(action)
-                            } label: {
-                                HStack(spacing: 4) {
-                                    Image(systemName: action.systemImage)
-                                        .font(.system(size: 10, weight: .semibold))
-                                    Text(action.title)
-                                        .font(.system(size: 11, weight: .semibold, design: .rounded))
-                                }
-                                .padding(.horizontal, 9)
-                                .padding(.vertical, 5)
-                                .background(
-                                    Capsule(style: .continuous)
-                                        .fill(Color.white.opacity(0.1))
-                                        .overlay(
-                                            Capsule(style: .continuous)
-                                                .stroke(Color.white.opacity(0.14), lineWidth: 0.5)
-                                        )
-                                )
-                                .foregroundStyle(.white.opacity(0.92))
-                            }
-                            .buttonStyle(SoftPressStyle())
-                            .disabled(model.isProcessing)
-                        }
-                    }
-                    .padding(.horizontal, 2)
-                }
-            }
-
             HStack(alignment: .center, spacing: 8) {
                 HStack(alignment: .center, spacing: 2) {
                     if model.askDraft.isEmpty {

@@ -96,12 +96,13 @@ enum SpeakLiveActivityManager {
         let title: String
         if isMuted && phase != .speaking {
             title = "Voice AI stumm"
-        } else if let titleOverride, !titleOverride.isEmpty {
-            title = String(titleOverride.prefix(40))
+        } else         if let titleOverride, !titleOverride.isEmpty {
+            title = String(titleOverride.prefix(120))
         } else {
             title = phase.title
         }
-        let clippedDetail = String(detail.prefix(80))
+        // Keep enough copy for Island marquee — UI scrolls instead of truncating with "…"
+        let clippedDetail = String(detail.prefix(220))
         let phaseChanged = phase.rawValue != lastPhaseRaw
         let textChanged = clippedDetail != lastDetail || title != lastTitle
         let now = Date()

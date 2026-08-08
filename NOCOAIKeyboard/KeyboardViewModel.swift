@@ -16,11 +16,13 @@ final class KeyboardViewModel: ObservableObject {
     @Published var overlayTitle = "…"
     @Published var toolbarChips: [KeyboardToolbarChip] = []
     @Published var showAskPanel = false
+    /// Separate from ask — tools never steal typing / Apple autocorrect.
+    @Published var showToolsPanel = false
     @Published var askDraft = ""
     @Published var askReply = ""
     @Published var isAsking = false
 
-    /// Compact rewrite actions shown only inside the NOCO AI panel.
+    /// Rewrite chips for the AI Tools bar only.
     var quickAIActions: [KeyboardAIAction] {
         [.improve, .cleanup, .complete, .shorten, .answer]
     }
@@ -76,6 +78,8 @@ final class KeyboardViewModel: ObservableObject {
             statusLine = "In der App: Zugangsdaten aktualisieren"
         } else if showAskPanel {
             statusLine = "Tippe deine Frage — Return sendet"
+        } else if showToolsPanel {
+            statusLine = "AI Tools — Text markieren oder tippen"
         } else {
             statusLine = "NOCO AI bereit"
         }
@@ -262,13 +266,14 @@ final class KeyboardViewModel: ObservableObject {
         selectHaptic.selectionChanged()
     }
 
-    /// Opens the compact NOCO AI field and focuses typing into it (blinking cursor).
+    /// Opens only the Frag NOCO AI text field (not tools).
     func openNOCOAI() {
         if showAskPanel {
             closeNOCOAI()
             return
         }
         withAnimation(.spring(response: 0.34, dampingFraction: 0.88)) {
+            showToolsPanel = false
             showAskPanel = true
         }
         askReply = ""
@@ -281,7 +286,35 @@ final class KeyboardViewModel: ObservableObject {
         withAnimation(.spring(response: 0.34, dampingFraction: 0.88)) {
             showAskPanel = false
         }
-        statusLine = "NOCO AI bereit"
+        statusLine = showToolsPanel ? "AI Tools — Text markieren oder tippen" : "NOCO AI bereit"
+        controller?.updateKeyboardHeight()
+    }
+
+    /// Opens only the AI tools bar — typing stays in the host field (Apple autocorrect).
+    func toggleAITools() {
+        if showToolsPanel {
+            withAnimation(.spring(response: 0.34, dampingFraction: 0.88)) {
+                showToolsPanel = false
+            }
+            statusLine = showAskPanel ? "Tippe deine Frage — Return sendet" : "NOCO AI bereit"
+            selectHaptic.selectionChanged()
+            controller?.updateKeyboardHeight()
+            return
+        }
+        withAnimation(.spring(response: 0.34, dampingFraction: 0.88)) {
+            showAskPanel = false
+            showToolsPanel = true
+        }
+        statusLine = "AI Tools — Text markieren oder tippen"
+        selectHaptic.selectionChanged()
+        controller?.updateKeyboardHeight()
+    }
+
+    func closeAITools() {
+        withAnimation(.spring(response: 0.34, dampingFraction: 0.88)) {
+            showToolsPanel = false
+        }
+        statusLine = showAskPanel ? "Tippe deine Frage — Return sendet" : "NOCO AI bereit"
         controller?.updateKeyboardHeight()
     }
 

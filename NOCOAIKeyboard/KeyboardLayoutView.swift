@@ -34,19 +34,20 @@ struct KeyboardLayoutView: View {
 
     private var lettersLayout: some View {
         VStack(spacing: rowSpacing) {
-            letterRow(row1, letterBoost: true)
-            letterRow(row2, sidePad: 16, letterBoost: true)
+            // Top + middle German rows are both 11 keys — keep aligned (no false inset).
+            letterRow(row1, size: .top)
+            letterRow(row2, size: .middle)
             HStack(spacing: keySpacing) {
                 ModifierKey(
                     symbol: model.capsLock ? "capslock.fill" : "shift.fill",
-                    width: 42,
+                    width: 44,
                     height: keyHeight,
                     active: model.shiftOn || model.capsLock
                 ) {
                     model.toggleShift()
                 }
-                letterRowContent(row3, letterBoost: false)
-                DeleteKey(width: 42, height: keyHeight) {
+                letterRowContent(row3, size: .bottom)
+                DeleteKey(width: 44, height: keyHeight) {
                     model.beginDeleteHold()
                 } onEnd: {
                     model.endDeleteHold()
@@ -58,14 +59,14 @@ struct KeyboardLayoutView: View {
 
     private var numbersLayout: some View {
         VStack(spacing: rowSpacing) {
-            letterRow(num1, letterBoost: true)
-            letterRow(num2, letterBoost: true)
+            letterRow(num1, size: .top)
+            letterRow(num2, size: .middle)
             HStack(spacing: keySpacing) {
-                ModifierKey(title: "#+=", width: 42, height: keyHeight) {
+                ModifierKey(title: "#+=", width: 44, height: keyHeight) {
                     model.insert("#")
                 }
-                letterRowContent(num3, letterBoost: false)
-                DeleteKey(width: 42, height: keyHeight) {
+                letterRowContent(num3, size: .bottom)
+                DeleteKey(width: 44, height: keyHeight) {
                     model.beginDeleteHold()
                 } onEnd: {
                     model.endDeleteHold()
@@ -78,10 +79,10 @@ struct KeyboardLayoutView: View {
     private func bottomRow(leftTitle: String) -> some View {
         // Apple-like: [123] [.] ——— space ——— [return]
         HStack(spacing: keySpacing) {
-            ModifierKey(title: leftTitle, width: 42, height: keyHeight) {
+            ModifierKey(title: leftTitle, width: 44, height: keyHeight) {
                 model.toggleNumbers()
             }
-            PunctuationKey(width: 42, height: keyHeight) { inserted in
+            PunctuationKey(width: 44, height: keyHeight) { inserted in
                 model.insert(inserted)
             }
             SpaceKey(height: keyHeight) {
@@ -104,22 +105,20 @@ struct KeyboardLayoutView: View {
         model.showAskPanel ? "senden" : "return"
     }
 
-    private func letterRow(_ chars: [Character], sidePad: CGFloat = 0, letterBoost: Bool = false) -> some View {
+    private func letterRow(_ chars: [Character], size: LetterKey.SizeClass = .top) -> some View {
         HStack(spacing: keySpacing) {
-            if sidePad > 0 { Spacer(minLength: sidePad) }
-            letterRowContent(chars, letterBoost: letterBoost)
-            if sidePad > 0 { Spacer(minLength: sidePad) }
+            letterRowContent(chars, size: size)
         }
     }
 
-    private func letterRowContent(_ chars: [Character], letterBoost: Bool = false) -> some View {
+    private func letterRowContent(_ chars: [Character], size: LetterKey.SizeClass = .top) -> some View {
         HStack(spacing: keySpacing) {
             ForEach(Array(chars.enumerated()), id: \.offset) { _, ch in
                 let label = display(ch)
                 LetterKey(
                     label: label,
                     height: keyHeight,
-                    letterBoost: letterBoost,
+                    size: size,
                     accents: AccentMap.variants(for: label)
                 ) { inserted in
                     model.insert(inserted)
@@ -214,10 +213,13 @@ enum AccentMap {
 // MARK: - Letter key with popup + long-press accents
 
 private struct LetterKey: View {
+    enum SizeClass {
+        case top, middle, bottom
+    }
+
     let label: String
     var height: CGFloat = 42
-    /// Top two letter rows get a slightly larger glyph.
-    var letterBoost: Bool = false
+    var size: SizeClass = .top
     let accents: [String]
     var onInsert: (String) -> Void
 
@@ -230,6 +232,8 @@ private struct LetterKey: View {
     var body: some View {
         Text(label)
             .font(.system(size: letterSize, weight: isUppercaseLetter ? .medium : .regular, design: .rounded))
+            // Optical Apple-style centering (glyphs sit slightly high by default).
+            .offset(y: -1.2)
             .foregroundStyle(.white)
             .frame(maxWidth: .infinity)
             .frame(height: height)
@@ -255,7 +259,6 @@ private struct LetterKey: View {
                 }
             }
             .zIndex(pressed ? 40 : 0)
-            // Slightly taller hitbox than visible key for fast typing accuracy
             .padding(.vertical, 1)
             .contentShape(Rectangle())
             .gesture(
@@ -271,10 +274,15 @@ private struct LetterKey: View {
     }
 
     private var letterSize: CGFloat {
-        if letterBoost {
-            return isUppercaseLetter ? 25 : 23
+        // Middle home row is largest — Apple-like visual weight.
+        switch size {
+        case .middle:
+            return isUppercaseLetter ? 27 : 25
+        case .top:
+            return isUppercaseLetter ? 24 : 22.5
+        case .bottom:
+            return isUppercaseLetter ? 23 : 21.5
         }
-        return isUppercaseLetter ? 22 : 21
     }
 
     @ViewBuilder

@@ -57,13 +57,16 @@ final class KeyboardViewController: UIInputViewController {
 
     func updateKeyboardHeight() {
         let hasAsk = model.showAskPanel
+        let hasTools = model.showToolsPanel
         let hasReply = !model.askReply.isEmpty
         let needed: CGFloat
         // Compact chrome — keep board height close to Apple so host content stays visible.
         if hasAsk && hasReply {
             needed = 400
         } else if hasAsk {
-            needed = 338
+            needed = 318
+        } else if hasTools {
+            needed = 312
         } else {
             needed = 268
         }

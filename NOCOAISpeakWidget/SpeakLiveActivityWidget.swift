@@ -307,16 +307,16 @@ struct SpeakIslandExpandedHeader: View {
             let t = timeline.date.timeIntervalSinceReferenceDate
             let breathe = 0.88 + 0.12 * abs(sin(t * 1.6))
             VStack(spacing: 3) {
-                Text(SpeakPhasePalette.statusHeadline(for: state))
-                    .font(.system(.subheadline, design: .rounded).weight(.semibold))
-                    .foregroundStyle(.white)
-                    .lineLimit(1)
-                    .minimumScaleFactor(0.85)
-                    .multilineTextAlignment(.center)
-                    .opacity(breathe)
-                    .contentTransition(.identity)
-                    .animation(nil, value: state.title)
-                    .animation(nil, value: state.phaseRaw)
+                SpeakMarqueeText(
+                    text: SpeakPhasePalette.statusHeadline(for: state),
+                    font: .system(.subheadline, design: .rounded).weight(.semibold),
+                    foreground: .white.opacity(breathe),
+                    speed: state.phaseRaw == "speaking" ? 38 : 28,
+                    forceScroll: state.phaseRaw == "speaking"
+                )
+                .frame(maxWidth: .infinity)
+                .frame(height: 18)
+
                 Label {
                     Text(SpeakPhasePalette.shortLabel(for: state.phaseRaw))
                         .font(.system(size: 10, weight: .medium, design: .rounded))
@@ -345,16 +345,16 @@ struct SpeakIslandExpandedGlassPanel: View {
             let drift = (t.truncatingRemainder(dividingBy: 4.5) / 4.5)
             let textPulse = 0.78 + 0.18 * abs(sin(t * 1.9))
             VStack(spacing: 6) {
-                Text(SpeakPhasePalette.statusDetail(for: state))
-                    .font(.system(size: 11, weight: .medium, design: .rounded))
-                    .foregroundStyle(.white.opacity(textPulse))
-                    .lineLimit(2)
-                    .minimumScaleFactor(0.8)
-                    .multilineTextAlignment(.center)
-                    .frame(maxWidth: .infinity)
-                    .contentTransition(.identity)
-                    .animation(nil, value: state.detail)
-                    .animation(nil, value: state.phaseRaw)
+                SpeakMarqueeText(
+                    text: SpeakPhasePalette.statusDetail(for: state),
+                    font: .system(size: 11, weight: .medium, design: .rounded),
+                    foreground: .white.opacity(textPulse),
+                    speed: state.phaseRaw == "speaking" ? 42 : 30,
+                    forceScroll: state.phaseRaw == "speaking",
+                    lineCount: 1
+                )
+                .frame(maxWidth: .infinity)
+                .frame(height: 16)
 
                 SpeakIslandWaveform(state: state)
                     .frame(height: 22)
@@ -407,6 +407,56 @@ struct SpeakIslandExpandedGlassPanel: View {
             }
             .compositingGroup()
             .clipped()
+        }
+    }
+}
+
+/// Smooth left→right wipe/marquee when copy is longer than the Island slot.
+struct SpeakMarqueeText: View {
+    let text: String
+    var font: Font = .caption
+    var foreground: Color = .white
+    /// Points per second while scrolling.
+    var speed: CGFloat = 32
+    /// Always scroll while speaking, even if short.
+    var forceScroll: Bool = false
+    var lineCount: Int = 1
+
+    var body: some View {
+        GeometryReader { geo in
+            let width = max(geo.size.width, 1)
+            TimelineView(.animation(minimumInterval: 0.05, paused: false)) { timeline in
+                let t = timeline.date.timeIntervalSinceReferenceDate
+                // Approximate text width: ~0.55em per character for rounded caption sizes.
+                let approxChar: CGFloat = 6.6
+                let textWidth = max(CGFloat(text.count) * approxChar, width)
+                let needsScroll = forceScroll || textWidth > width + 8
+                let travel = textWidth + width * 0.35
+                let period = max(Double(travel / max(speed, 8)), 3.2)
+                let progress = needsScroll
+                    ? (t.truncatingRemainder(dividingBy: period) / period)
+                    : 0
+                // Left → right wipe: start off left, slide across.
+                let x = needsScroll ? (-textWidth + progress * (textWidth + width)) : 0
+
+                Text(text)
+                    .font(font)
+                    .foregroundStyle(foreground)
+                    .lineLimit(lineCount)
+                    .fixedSize(horizontal: true, vertical: false)
+                    .offset(x: x)
+                    .frame(width: width, alignment: .leading)
+                    .clipped()
+                    .mask(
+                        LinearGradient(
+                            colors: needsScroll
+                            ? [.clear, .white, .white, .clear]
+                            : [.white, .white],
+                            startPoint: .leading,
+                            endPoint: .trailing
+                        )
+                    )
+            }
         }
     }
 }
@@ -501,22 +551,24 @@ struct SpeakIslandWaveform: View {
     let state: SpeakActivityAttributes.ContentState
 
     var body: some View {
-        TimelineView(.animation(minimumInterval: 0.11, paused: false)) { timeline in
+        TimelineView(.animation(minimumInterval: 0.07, paused: false)) { timeline in
             let t = timeline.date.timeIntervalSinceReferenceDate
             let colors = SpeakPhasePalette.gradientColors(for: state.phaseRaw, muted: state.isMuted)
             HStack(alignment: .center, spacing: 3) {
                 ForEach(0..<7, id: \.self) { i in
                     let base = i < state.bars.count ? state.bars[i] : state.level
+                    // Always blend a local oscillator so bars never freeze if ActivityKit meters stall.
+                    let pulse = 0.14 + 0.22 * abs(sin(t * 5.4 + Double(i) * 0.85))
                     let wave: Double = {
                         switch state.phaseRaw {
                         case "listening":
-                            return base
+                            return max(pulse, base * (0.8 + 0.4 * abs(sin(t * 8.2 + Double(i)))))
                         case "speaking":
-                            return 0.35 + 0.55 * abs(sin(t * 7 + Double(i) * 0.7)) * (0.4 + base)
+                            return 0.32 + 0.58 * abs(sin(t * 7.6 + Double(i) * 0.72)) * (0.4 + max(0.18, base))
                         case "webSearch", "thinking", "processing":
-                            return 0.25 + 0.6 * abs(sin(t * 4.5 + Double(i) * 0.5))
+                            return 0.22 + 0.55 * abs(sin(t * 4.4 + Double(i) * 0.52))
                         default:
-                            return max(0.15, base)
+                            return max(pulse, base)
                         }
                     }()
                     Capsule()
@@ -549,11 +601,14 @@ struct SpeakLockScreenView: View {
                         .foregroundStyle(.white)
                         .lineLimit(1)
                         .minimumScaleFactor(0.75)
-                    Text(SpeakPhasePalette.statusDetail(for: state))
-                        .font(.subheadline)
-                        .foregroundStyle(.white.opacity(0.8))
-                        .lineLimit(2)
-                        .minimumScaleFactor(0.85)
+                    SpeakMarqueeText(
+                        text: SpeakPhasePalette.statusDetail(for: state),
+                        font: .subheadline,
+                        foreground: .white.opacity(0.8),
+                        speed: state.phaseRaw == "speaking" ? 40 : 28,
+                        forceScroll: state.phaseRaw == "speaking"
+                    )
+                    .frame(height: 18)
                 }
 
                 Spacer(minLength: 0)
@@ -604,15 +659,16 @@ struct SpeakMiniVisualizer: View {
                     let wave: Double = {
                         switch phaseRaw {
                         case "listening":
-                            // Blend live mic with a soft pulse so quiet speech still moves.
-                            let pulse = 0.12 + 0.18 * abs(sin(t * 5.2 + Double(i) * 0.9))
-                            return max(pulse, base * (0.85 + 0.35 * abs(sin(t * 8.5 + Double(i)))))
+                            // Always animate locally — never freeze if meter packets stall.
+                            let pulse = 0.14 + 0.22 * abs(sin(t * 5.6 + Double(i) * 0.9))
+                            return max(pulse, base * (0.85 + 0.35 * abs(sin(t * 8.8 + Double(i)))))
                         case "speaking":
-                            return 0.28 + 0.62 * abs(sin(t * 8.2 + Double(i) * 0.75)) * (0.45 + max(0.2, base))
+                            return 0.28 + 0.62 * abs(sin(t * 8.4 + Double(i) * 0.75)) * (0.45 + max(0.2, base))
                         case "webSearch", "thinking", "processing":
-                            return 0.18 + 0.48 * abs(sin(t * 4.2 + Double(i) * 0.55))
+                            return 0.18 + 0.52 * abs(sin(t * 4.4 + Double(i) * 0.55))
                         default:
-                            return max(0.12, base)
+                            let pulse = 0.12 + 0.18 * abs(sin(t * 3.8 + Double(i)))
+                            return max(pulse, base)
                         }
                     }()
                     Capsule()

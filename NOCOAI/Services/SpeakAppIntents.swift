@@ -184,8 +184,8 @@ struct ToggleVoiceAIIntent: AppIntent {
     static var description = IntentDescription(
         "Startet oder beendet NOCO Voice AI. Ideal für den Action Button: einmal an, einmal aus."
     )
-    /// Prefer staying in background when possible. Mic cold-start may still wake the app briefly.
-    static var openAppWhenRun: Bool = false
+    /// Must wake the app so SpeakSessionController can own the mic (openAppWhenRun false broke Shortcuts).
+    static var openAppWhenRun: Bool = true
 
     static var parameterSummary: some ParameterSummary {
         Summary("NOCO Voice AI")
@@ -199,10 +199,8 @@ struct ToggleVoiceAIIntent: AppIntent {
             return .result(dialog: "NOCO Voice AI beendet.")
         }
         SpeakLaunchBridge.requestToggle(backgroundOnly: true)
-        // If app is suspended, nudge Live Activity / pending start without forcing Speak UI.
-        SpeakLiveActivityManager.start(sessionLabel: "NOCO Voice AI")
-        try? await Task.sleep(nanoseconds: 220_000_000)
-        return .result(dialog: "NOCO Voice AI startet im Hintergrund.")
+        try? await Task.sleep(nanoseconds: 180_000_000)
+        return .result(dialog: "NOCO Voice AI gestartet.")
     }
 }
 
@@ -210,9 +208,9 @@ struct ToggleVoiceAIIntent: AppIntent {
 struct StartSpeakIntent: AppIntent {
     static var title: LocalizedStringResource = "NOCO Voice AI starten"
     static var description = IntentDescription(
-        "Startet NOCO Voice AI im Hintergrund (Dynamic Island). App nur kurz wecken, falls nötig."
+        "Startet NOCO Voice AI (Dynamic Island). Öffnet die App kurz, damit das Mikrofon starten kann."
     )
-    static var openAppWhenRun: Bool = false
+    static var openAppWhenRun: Bool = true
 
     static var parameterSummary: some ParameterSummary {
         Summary("NOCO Voice AI starten")
@@ -221,9 +219,8 @@ struct StartSpeakIntent: AppIntent {
     @MainActor
     func perform() async throws -> some IntentResult & ProvidesDialog {
         SpeakLaunchBridge.requestStart(backgroundOnly: true)
-        SpeakLiveActivityManager.start(sessionLabel: "NOCO Voice AI")
-        try? await Task.sleep(nanoseconds: 260_000_000)
-        return .result(dialog: "NOCO Voice AI startet im Hintergrund.")
+        try? await Task.sleep(nanoseconds: 200_000_000)
+        return .result(dialog: "NOCO Voice AI startet.")
     }
 }
 

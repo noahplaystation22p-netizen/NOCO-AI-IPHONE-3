@@ -15,9 +15,9 @@ struct KeyboardRootView: View {
             statusBar
             KeyboardLayoutView(model: model)
                 .padding(.horizontal, 2)
-                .padding(.bottom, 10)
+                .padding(.bottom, 2)
         }
-        .padding(.top, 8)
+        .padding(.top, 2)
         .background(keyboardBackground)
         .overlay {
             if model.isProcessing || model.showIntelligenceBurst || model.isAsking || model.isDictationPolishing {
@@ -89,6 +89,7 @@ struct KeyboardRootView: View {
             dictationMicButton
         }
         .padding(.horizontal, 14)
+        .padding(.top, 10)
         .padding(.bottom, 2)
     }
 

@@ -13,10 +13,10 @@ struct KeyboardLayoutView: View {
     private let num2 = Array("-/:;()€&@\"")
     private let num3 = Array(".,?!ß'")
 
-    /// Match stock iOS key rhythm (familiar muscle memory).
-    private let rowSpacing: CGFloat = 10
-    private let keySpacing: CGFloat = 6
-    private let keyHeight: CGFloat = 44
+    /// Tight Apple-like rhythm — fits custom keyboard height without clipping.
+    private let rowSpacing: CGFloat = 8
+    private let keySpacing: CGFloat = 5.5
+    private let keyHeight: CGFloat = 40
 
     var body: some View {
         VStack(spacing: rowSpacing) {
@@ -26,16 +26,16 @@ struct KeyboardLayoutView: View {
                 lettersLayout
             }
         }
-        .padding(.horizontal, 4)
-        .padding(.top, 8)
-        .padding(.bottom, 8)
+        .padding(.horizontal, 3)
+        .padding(.top, 2)
+        .padding(.bottom, 2)
         .animation(.easeOut(duration: 0.15), value: model.showingNumbers)
     }
 
     private var lettersLayout: some View {
         VStack(spacing: rowSpacing) {
-            letterRow(row1)
-            letterRow(row2, sidePad: 18)
+            letterRow(row1, letterBoost: true)
+            letterRow(row2, sidePad: 16, letterBoost: true)
             HStack(spacing: keySpacing) {
                 ModifierKey(
                     symbol: model.capsLock ? "capslock.fill" : "shift.fill",
@@ -45,7 +45,7 @@ struct KeyboardLayoutView: View {
                 ) {
                     model.toggleShift()
                 }
-                letterRowContent(row3)
+                letterRowContent(row3, letterBoost: false)
                 DeleteKey(width: 42, height: keyHeight) {
                     model.beginDeleteHold()
                 } onEnd: {
@@ -58,13 +58,13 @@ struct KeyboardLayoutView: View {
 
     private var numbersLayout: some View {
         VStack(spacing: rowSpacing) {
-            letterRow(num1)
-            letterRow(num2)
+            letterRow(num1, letterBoost: true)
+            letterRow(num2, letterBoost: true)
             HStack(spacing: keySpacing) {
                 ModifierKey(title: "#+=", width: 42, height: keyHeight) {
                     model.insert("#")
                 }
-                letterRowContent(num3)
+                letterRowContent(num3, letterBoost: false)
                 DeleteKey(width: 42, height: keyHeight) {
                     model.beginDeleteHold()
                 } onEnd: {
@@ -78,37 +78,39 @@ struct KeyboardLayoutView: View {
     private func bottomRow(leftTitle: String) -> some View {
         // Apple-like: [123] [punct] ——— Leertaste ——— [return]
         HStack(spacing: keySpacing) {
-            ModifierKey(title: leftTitle, width: 42, height: keyHeight) {
+            ModifierKey(title: leftTitle, width: 42, height: keyHeight, glyphLift: 1.5) {
                 model.toggleNumbers()
             }
-            PunctuationKey(width: 42, height: keyHeight) { inserted in
+            PunctuationKey(width: 42, height: keyHeight, glyphLift: 1.5) { inserted in
                 model.insert(inserted)
             }
-            SpaceKey(height: keyHeight) {
+            SpaceKey(height: keyHeight, glyphLift: 1.5) {
                 model.space()
             } onCursorMove: { model.moveCursor(by: $0) }
-            ModifierKey(title: "return", width: 88, height: keyHeight, prominent: true) {
+            ModifierKey(title: "return", width: 88, height: keyHeight, prominent: true, glyphLift: 1.5) {
                 model.returnKey()
             }
         }
         .padding(.horizontal, 1)
+        .offset(y: -2)
     }
 
-    private func letterRow(_ chars: [Character], sidePad: CGFloat = 0) -> some View {
+    private func letterRow(_ chars: [Character], sidePad: CGFloat = 0, letterBoost: Bool = false) -> some View {
         HStack(spacing: keySpacing) {
             if sidePad > 0 { Spacer(minLength: sidePad) }
-            letterRowContent(chars)
+            letterRowContent(chars, letterBoost: letterBoost)
             if sidePad > 0 { Spacer(minLength: sidePad) }
         }
     }
 
-    private func letterRowContent(_ chars: [Character]) -> some View {
+    private func letterRowContent(_ chars: [Character], letterBoost: Bool = false) -> some View {
         HStack(spacing: keySpacing) {
             ForEach(Array(chars.enumerated()), id: \.offset) { _, ch in
                 let label = display(ch)
                 LetterKey(
                     label: label,
                     height: keyHeight,
+                    letterBoost: letterBoost,
                     accents: AccentMap.variants(for: label)
                 ) { inserted in
                     model.insert(inserted)
@@ -205,6 +207,8 @@ enum AccentMap {
 private struct LetterKey: View {
     let label: String
     var height: CGFloat = 42
+    /// Top two letter rows get a slightly larger glyph.
+    var letterBoost: Bool = false
     let accents: [String]
     var onInsert: (String) -> Void
 
@@ -243,7 +247,7 @@ private struct LetterKey: View {
             }
             .zIndex(pressed ? 40 : 0)
             // Slightly taller hitbox than visible key for fast typing accuracy
-            .padding(.vertical, 3)
+            .padding(.vertical, 1)
             .contentShape(Rectangle())
             .gesture(
                 DragGesture(minimumDistance: 0)
@@ -258,7 +262,10 @@ private struct LetterKey: View {
     }
 
     private var letterSize: CGFloat {
-        isUppercaseLetter ? 26 : 23
+        if letterBoost {
+            return isUppercaseLetter ? 25 : 23
+        }
+        return isUppercaseLetter ? 22 : 21
     }
 
     @ViewBuilder
@@ -359,6 +366,7 @@ private struct LetterKey: View {
 private struct PunctuationKey: View {
     var width: CGFloat = 40
     var height: CGFloat = 42
+    var glyphLift: CGFloat = 0
     var onInsert: (String) -> Void
 
     private let marks = [".", ",", ";", ":", "!", "?", "…", "·", "—", "'", "\"", "„", "“", "(", ")", "@"]
@@ -372,6 +380,7 @@ private struct PunctuationKey: View {
     var body: some View {
         Text(".")
             .font(.system(size: 22, weight: .semibold, design: .rounded))
+            .offset(y: -glyphLift)
             .frame(width: width, height: height)
             .foregroundStyle(.white.opacity(0.95))
             .background(
@@ -527,6 +536,7 @@ private struct ModifierKey: View {
     var height: CGFloat = 42
     var active = false
     var prominent = false
+    var glyphLift: CGFloat = 0
     var action: () -> Void
     @Environment(\.colorScheme) private var scheme
     @State private var pressed = false
@@ -541,6 +551,7 @@ private struct ModifierKey: View {
                     .font(.system(size: title == "return" ? 15 : 13, weight: .semibold, design: .rounded))
             }
         }
+        .offset(y: -glyphLift)
         .frame(width: width, height: height)
         .foregroundStyle(prominent ? .white : .white.opacity(0.9))
         .background(
@@ -596,6 +607,7 @@ private struct ModifierKey: View {
 
 private struct SpaceKey: View {
     var height: CGFloat = 42
+    var glyphLift: CGFloat = 0
     var onTap: () -> Void
     var onCursorMove: (Int) -> Void
 
@@ -610,6 +622,7 @@ private struct SpaceKey: View {
         Text(trackpad ? "Cursor" : "Leertaste")
             .font(.system(size: 15, weight: .medium, design: .rounded))
             .foregroundStyle(.white.opacity(0.9))
+            .offset(y: -glyphLift)
             .frame(maxWidth: .infinity)
             .frame(height: height)
             .background(

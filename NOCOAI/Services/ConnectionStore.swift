@@ -188,7 +188,14 @@ final class ConnectionStore: ObservableObject {
         if isPaired, !serverHost.isEmpty {
             prepareLocalNetworkAccess(host: serverHost, port: serverPort)
             chat.startSyncLoop()
-            Task { await refreshStatus() }
+            Task {
+                await refreshStatus()
+                // Still offline after status → force Tailscale attempt.
+                if !isOnline, !preferredRemoteHost.isEmpty {
+                    remoteSessionApproved = true
+                    _ = await trySwitchToHost(preferredRemoteHost, path: .remote, allowWithoutPing: true)
+                }
+            }
         }
         // Fresh chat only on cold launch — not every time the app returns to foreground.
         openFreshChatOnColdLaunchIfNeeded()
@@ -752,9 +759,27 @@ final class ConnectionStore: ObservableObject {
     }
 
     func refreshStatus(showLoading: Bool = false) async {
-        guard let api else { return }
+        guard let api else {
+            // Paired but API missing — rebuild and try Tailscale if we have it.
+            if isPaired, !serverHost.isEmpty {
+                rebuildAPI()
+            }
+            if isPaired, !preferredRemoteHost.isEmpty {
+                _ = await trySwitchToHost(preferredRemoteHost, path: .remote)
+            }
+            return
+        }
         if showLoading { isRefreshing = true }
         defer { if showLoading { isRefreshing = false } }
+
+        // On cellular / no Wi‑Fi: switch to Tailscale BEFORE probing a dead LAN IP.
+        if prefersRemotePath,
+           activePath != .remote,
+           !preferredRemoteHost.isEmpty {
+            if await trySwitchToHost(preferredRemoteHost, path: .remote) {
+                return
+            }
+        }
 
         // Prefer local path when away-session can return home.
         if activePath == .remote {
@@ -801,6 +826,14 @@ final class ConnectionStore: ObservableObject {
                     }
                 }
             }
+            // Still offline on LAN — always attempt Tailscale once more with longer patience.
+            if !isOnline || consecutiveFailures >= 1,
+               !preferredRemoteHost.isEmpty,
+               activePath != .remote || consecutiveFailures >= offlineFailureThreshold {
+                if await trySwitchToHost(preferredRemoteHost, path: .remote, allowWithoutPing: true) {
+                    return
+                }
+            }
             if consecutiveFailures >= offlineFailureThreshold {
                 isOnline = false
                 beginReconnectBanner()
@@ -824,7 +857,11 @@ final class ConnectionStore: ObservableObject {
             return
         }
         pathStatusLine = "Verbinde über Tailscale…"
-        _ = await trySwitchToHost(preferredRemoteHost, path: .remote)
+        let ok = await trySwitchToHost(preferredRemoteHost, path: .remote, allowWithoutPing: true)
+        if !ok {
+            lastError = "Remote nicht erreichbar — PC: „Remote starten“, iPhone: Tailscale VPN an (Exit Node: None)."
+            pathStatusLine = "Remote fehlgeschlagen"
+        }
     }
 
     func declineRemoteConnection() {
@@ -927,7 +964,7 @@ final class ConnectionStore: ObservableObject {
         if activePath == .local, !preferredRemoteHost.isEmpty {
             remoteSessionApproved = true
             showRemotePrompt = false
-            if await trySwitchToHost(preferredRemoteHost, path: .remote) {
+            if await trySwitchToHost(preferredRemoteHost, path: .remote, allowWithoutPing: true) {
                 pathStatusLine = "Remote (Tailscale)"
                 return
             }
@@ -942,16 +979,21 @@ final class ConnectionStore: ObservableObject {
         monitor.pathUpdateHandler = { [weak self] path in
             Task { @MainActor in
                 guard let self else { return }
-                // No Wi‑Fi → prefer Tailscale remote automatically.
+                // Cellular / expensive / no Wi‑Fi → Tailscale remote automatically.
                 let wifi = path.usesInterfaceType(.wifi)
-                let expensive = path.isExpensive || path.isConstrained || path.usesInterfaceType(.cellular)
-                self.prefersRemotePath = !wifi && (expensive || path.usesInterfaceType(.other))
+                let cellular = path.usesInterfaceType(.cellular)
+                let expensive = path.isExpensive || path.isConstrained
+                self.prefersRemotePath = cellular || expensive || (!wifi && path.status == .satisfied)
                 if self.prefersRemotePath,
                    self.isPaired,
-                   self.activePath == .local,
-                   !self.preferredRemoteHost.isEmpty {
+                   !self.preferredRemoteHost.isEmpty,
+                   (self.activePath == .local || !self.isOnline) {
                     self.remoteSessionApproved = true
-                    _ = await self.trySwitchToHost(self.preferredRemoteHost, path: .remote)
+                    _ = await self.trySwitchToHost(
+                        self.preferredRemoteHost,
+                        path: .remote,
+                        allowWithoutPing: true
+                    )
                 }
             }
         }
@@ -975,10 +1017,18 @@ final class ConnectionStore: ObservableObject {
     }
 
     @discardableResult
-    private func trySwitchToHost(_ host: String, path: ConnectionPathKind) async -> Bool {
+    private func trySwitchToHost(
+        _ host: String,
+        path: ConnectionPathKind,
+        allowWithoutPing: Bool = false
+    ) async -> Bool {
         let cleaned = HostSanitizer.hostOnly(host)
         guard !cleaned.isEmpty else { return false }
-        guard await quickPing(host: cleaned) else { return false }
+        let pingOk = await quickPing(host: cleaned)
+        // Tailscale over cellular can time out on public ping — still try authenticated status.
+        if !pingOk, !(allowWithoutPing && path == .remote) {
+            return false
+        }
         serverHost = cleaned
         activePath = path
         if path == .local {
@@ -1002,21 +1052,32 @@ final class ConnectionStore: ObservableObject {
         consecutiveFailures = 0
         pathStatusLine = path.label
         do {
-            guard let api else { return true }
+            guard let api else { return pingOk }
             let started = Date()
             let newStatus = try await api.fetchStatus()
             status = newStatus.withMeasuredLatency(Date().timeIntervalSince(started) * 1000)
             isOnline = true
             lastStatusAt = Date()
+            lastError = nil
             clearReconnectBanner(restored: true)
             publishWidgetStatus()
+            learnHosts(from: newStatus)
             HapticService.success()
             return true
         } catch {
+            if let err = error as? CompanionAPIError, case .remoteAccessDisabled = err {
+                lastError = err.localizedDescription
+                pathStatusLine = "PC: Remote starten"
+                reconnectStatusLine = "PC: in NOCO AI X „Remote starten“ tippen"
+                if !pingOk { return false }
+            }
             // Ping worked; status may still settle on next poll.
-            isOnline = true
-            clearReconnectBanner(restored: true)
-            return true
+            if pingOk {
+                isOnline = true
+                clearReconnectBanner(restored: true)
+                return true
+            }
+            return false
         }
     }
 
@@ -1026,7 +1087,7 @@ final class ConnectionStore: ObservableObject {
               let url = URL(string: "http://\(cleaned):\(serverPort)/api/v1/ping") else { return false }
         var request = URLRequest(url: url)
         // Tailscale / mobile hops need more headroom than LAN.
-        request.timeoutInterval = HostSanitizer.isTailscaleIP(cleaned) ? 5.5 : 2.4
+        request.timeoutInterval = HostSanitizer.isTailscaleIP(cleaned) ? 9.0 : 2.4
         do {
             let (data, response) = try await URLSession.shared.data(for: request)
             guard let http = response as? HTTPURLResponse else { return false }

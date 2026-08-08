@@ -305,7 +305,9 @@ struct ChatHubView: View {
 
                 Text(connection.isOnline
                     ? "Tippe unten — oder öffne + für Kamera, Agent und mehr."
-                    : "Zuerst Companion verbinden.")
+                    : (connection.isPaired
+                       ? "PC offline — Einstellungen → Remote tippen. PC: „Remote starten“, iPhone: Tailscale VPN an."
+                       : "Zuerst Companion verbinden."))
                     .font(.subheadline)
                     .multilineTextAlignment(.center)
                     .foregroundStyle(NOCOAITheme.secondaryText(for: scheme))

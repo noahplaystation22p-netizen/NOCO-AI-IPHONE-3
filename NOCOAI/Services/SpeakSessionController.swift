@@ -390,7 +390,8 @@ final class SpeakSessionController: ObservableObject {
         listenHealthTask?.cancel()
         listenHealthTask = Task { [weak self] in
             while !Task.isCancelled {
-                try? await Task.sleep(nanoseconds: 800_000_000)
+                let bg = await MainActor.run { UIApplication.shared.applicationState != .active }
+                try? await Task.sleep(nanoseconds: bg ? 450_000_000 : 700_000_000)
                 guard let self, !Task.isCancelled else { return }
                 await MainActor.run {
                     self.ensureListeningHealthy()
@@ -407,7 +408,7 @@ final class SpeakSessionController: ObservableObject {
            let since = busySince,
            Date().timeIntervalSince(since) > 48 {
             if case .speaking = voice.phase {
-                voice.forceFinishIfSpeakingStuck(maxDuration: 90)
+                voice.forceFinishIfSpeakingStuck(maxDuration: 120)
                 return
             }
             setBusy(false)
@@ -420,20 +421,33 @@ final class SpeakSessionController: ObservableObject {
         }
 
         // TTS hold stuck forever → force end and reopen mic.
-        if holdMicForTTS, case .speaking = voice.phase {
-            voice.forceFinishIfSpeakingStuck(maxDuration: 90)
+        if holdMicForTTS {
+            if case .speaking = voice.phase {
+                voice.forceFinishIfSpeakingStuck(maxDuration: 120)
+                return
+            }
+            // Watchdog still running — let it reopen the mic cleanly.
+            if resumeTask != nil { return }
+            // TTS already ended but hold flag stuck (common on home screen / Island).
+            holdMicForTTS = false
+            setBusy(false)
+            statusLine = "NOCO hört wieder zu…"
+            try? voice.activateListeningAfterTTS()
+            scheduleResumeListening(after: 0.05)
+            return
         }
 
-        guard !holdMicForTTS, !isBusy else { return }
+        guard !isBusy else { return }
         if case .speaking = voice.phase { return }
         if case .processing = voice.phase { return }
         if voice.isActivelyListening {
             let bg = UIApplication.shared.applicationState != .active
-            voice.refreshRecognitionIfStale(maxAge: bg ? 14 : 28)
+            voice.refreshRecognitionIfStale(maxAge: bg ? 10 : 24)
             return
         }
         // Idle / error / dead recognition → reopen mic (common after background TTS).
         statusLine = "NOCO hört wieder zu…"
+        try? voice.activateListeningAfterTTS()
         scheduleResumeListening(after: 0.05)
     }
 
@@ -481,16 +495,16 @@ final class SpeakSessionController: ObservableObject {
                 try? await Task.sleep(nanoseconds: 80_000_000)
                 guard let self, !Task.isCancelled else { return }
                 let speaking = await MainActor.run { () -> Bool in
-                    self.voice.forceFinishIfSpeakingStuck(maxDuration: 90)
+                    self.voice.forceFinishIfSpeakingStuck(maxDuration: 120)
                     if case .speaking = self.voice.phase { return true }
                     return false
                 }
                 if !speaking { break }
             }
-            // Extra silence so the last syllable isn't cut and barge-in can't steal the turn.
+            // Short settle — then reopen mic aggressively (Island / home screen).
             let tail: UInt64 = UIApplication.shared.applicationState != .active
-                ? 560_000_000
-                : 420_000_000
+                ? 380_000_000
+                : 280_000_000
             try? await Task.sleep(nanoseconds: tail)
             guard !Task.isCancelled else { return }
             await MainActor.run {
@@ -511,6 +525,15 @@ final class SpeakSessionController: ObservableObject {
                 // Re-assert audio before mic — background route after TTS is fragile.
                 try? self.voice.activateListeningAfterTTS()
                 self.resumeListening()
+                // Second chance — background audio route often settles late.
+                Task { @MainActor in
+                    try? await Task.sleep(nanoseconds: 450_000_000)
+                    guard self.isRunning, !self.isExiting, !self.holdMicForTTS, !self.isMuted else { return }
+                    if !self.voice.isActivelyListening {
+                        try? self.voice.activateListeningAfterTTS()
+                        self.resumeListening()
+                    }
+                }
                 Task { await self.drainPendingUtterance() }
             }
         }
@@ -997,7 +1020,8 @@ final class SpeakSessionController: ObservableObject {
                     holdMicForTTS = true
                     setBusy(true)
                     assistantPhase = .speaking
-                    voice.speak(msg, allowBargeIn: true)
+                    // No barge-in — echo was cutting TTS mid-sentence on Island/home.
+                    voice.speak(msg, allowBargeIn: false)
                     startSpeakWatchdog()
                 } else {
                     setBusy(false)
@@ -1022,7 +1046,8 @@ final class SpeakSessionController: ObservableObject {
             holdMicForTTS = true
             setBusy(true)
             connection.liveScreen.suppressAutoVision = true
-            voice.speak(resolved, allowBargeIn: true)
+            // Barge-in off: prevents TTS cutoff from mic echo while speaking on home screen.
+            voice.speak(resolved, allowBargeIn: false)
             startSpeakWatchdog()
         } else {
             setBusy(false)
@@ -1071,7 +1096,7 @@ final class SpeakSessionController: ObservableObject {
         if voice.autoSpeakReplies {
             holdMicForTTS = true
             setBusy(true)
-            voice.speak(text, allowBargeIn: true)
+            voice.speak(text, allowBargeIn: false)
             startSpeakWatchdog()
         } else {
             setBusy(false)

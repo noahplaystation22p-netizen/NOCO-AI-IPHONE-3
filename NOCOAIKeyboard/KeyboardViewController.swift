@@ -59,12 +59,13 @@ final class KeyboardViewController: UIInputViewController {
         let hasAsk = model.showAskPanel
         let hasReply = !model.askReply.isEmpty
         let needed: CGFloat
+        // Keep height tight so the board doesn't overflow the host app.
         if hasAsk && hasReply {
-            needed = 470
+            needed = 430
         } else if hasAsk {
-            needed = 390
+            needed = 360
         } else {
-            needed = 318
+            needed = 292
         }
         if let heightConstraint {
             heightConstraint.constant = needed

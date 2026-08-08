@@ -1,4 +1,3 @@
-import PhotosUI
 import SwiftUI
 import UIKit
 
@@ -10,7 +9,6 @@ struct LiveScreenView: View {
     @Environment(\.openURL) private var openURL
 
     private var session: LiveScreenSessionController { connection.liveScreen }
-    @State private var photoItem: PhotosPickerItem?
     @State private var draft = ""
     @State private var showConsent = false
     @State private var appear = false
@@ -110,10 +108,6 @@ struct LiveScreenView: View {
             endSessionSheet
                 .presentationDetents([.medium])
                 .presentationDragIndicator(.visible)
-        }
-        .onChange(of: photoItem) { _, item in
-            guard let item else { return }
-            Task { await loadPhoto(item) }
         }
         .alert("Live Screen", isPresented: Binding(
             get: { session.lastError != nil },
@@ -358,36 +352,41 @@ struct LiveScreenView: View {
             }
 
             HStack(spacing: 10) {
-                PhotosPicker(selection: $photoItem, matching: .images) {
-                    labelChip(title: "Screenshot", icon: "photo.on.rectangle")
-                }
-                .disabled(!session.isActive)
-
                 Button {
-                    HapticService.light()
-                    Task { _ = await session.ingestClipboardIfPossible() }
+                    HapticService.open()
+                    Task {
+                        if !connection.speak.isRunning {
+                            connection.speak.showSpeakUI = true
+                            await connection.speak.enableScreenShare()
+                            if !connection.speak.isRunning {
+                                connection.speak.start()
+                            }
+                        } else {
+                            await connection.speak.enableScreenShare()
+                        }
+                    }
                 } label: {
-                    labelChip(title: "Einfügen", icon: "doc.on.clipboard")
+                    labelChip(title: "In Speak nutzen", icon: "waveform.circle.fill")
                 }
-                .disabled(!session.isActive)
 
                 Button {
                     HapticService.open()
                     Task {
-                        if session.captureKind == .inAppReplay {
-                            await session.captureCurrentInAppFrame()
-                        } else {
-                            await session.startInAppCapture()
-                        }
+                        await session.startBroadcastCapture()
                     }
                 } label: {
                     labelChip(
-                        title: session.captureKind == .inAppReplay ? "Frame" : "In-App",
+                        title: "Broadcast",
                         icon: "record.circle"
                     )
                 }
                 .disabled(!session.isActive)
             }
+
+            Text("Echte Bildschirmübertragung (Broadcast) — keine Foto-Simulation. Analyse nur event-basiert über Speak Mode (Screen View).")
+                .font(.caption2)
+                .foregroundStyle(.secondary)
+                .fixedSize(horizontal: false, vertical: true)
         }
     }
 
@@ -597,7 +596,7 @@ struct LiveScreenView: View {
                 }
                 .toggleStyle(.switch)
                 .labelsHidden()
-                Text(session.autoAssistEnabled ? "Auto bei Änderungen" : "Nur auf Nachfrage")
+                Text(session.autoAssistEnabled ? "Studio-Auto (selten)" : "Nur Speak / Nachfrage")
                     .font(.caption)
                     .foregroundStyle(.secondary)
                 Spacer()
@@ -743,19 +742,6 @@ struct LiveScreenView: View {
         Task {
             await session.analyze(userPrompt: text.isEmpty ? nil : text)
         }
-    }
-
-    private func loadPhoto(_ item: PhotosPickerItem) async {
-        guard session.isActive else { return }
-        do {
-            if let data = try await item.loadTransferable(type: Data.self),
-               let image = UIImage(data: data) {
-                await session.ingest(image: image, source: .photoLibrary, autoAnalyze: true, force: true)
-            }
-        } catch {
-            // ignore
-        }
-        photoItem = nil
     }
 
     private func kindLabel(_ kind: LiveScreenCaptureKind) -> String {

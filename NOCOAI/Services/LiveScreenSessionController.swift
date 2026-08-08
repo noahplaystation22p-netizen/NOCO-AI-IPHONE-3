@@ -22,7 +22,7 @@ final class LiveScreenSessionController: ObservableObject {
     @Published private(set) var lastError: String?
     @Published private(set) var conversationId: String?
     @Published private(set) var captureKind: LiveScreenCaptureKind?
-    @Published var autoAssistEnabled = true
+    @Published var autoAssistEnabled = false
     /// When Speak is talking / processing — never upload a new vision frame.
     @Published var suppressAutoVision = false
     @Published private(set) var sessionSummary = ""
@@ -328,22 +328,22 @@ final class LiveScreenSessionController: ObservableObject {
                 self.updatePreview(image, source: .broadcastExtension)
 
                 // Always refresh preview; only analyze on meaningful change + policy
+                // Preview always; analysis only when auto-assist is explicitly on
+                // (Speak Mode uses event-based capture instead — never continuous vision).
                 guard self.canAutoAnalyze() else { return }
                 let hash = LiveScreenSceneDiff.perceptualHash(of: image)
                 let changed = LiveScreenSceneDiff.isSignificant(previous: self.lastPerceptualHash, new: hash, threshold: 12)
                 let now = Date()
-                let throttle: TimeInterval = self.autoAssistEnabled ? 6.0 : 20.0
+                let throttle: TimeInterval = 6.0
                 if let last = self.lastAutoAnalyzeAt, now.timeIntervalSince(last) < throttle { return }
 
-                // First frame → overview. Later → only on scene change when Auto on.
-                let isFirst = !self.didInitialSummary
-                if isFirst || (self.autoAssistEnabled && changed) {
+                if changed || !self.didInitialSummary {
                     self.lastAutoAnalyzeAt = now
                     await self.ingest(
                         image: image,
                         source: .broadcastExtension,
                         autoAnalyze: true,
-                        force: isFirst
+                        force: !self.didInitialSummary
                     )
                 }
             }
@@ -574,10 +574,12 @@ final class LiveScreenSessionController: ObservableObject {
     }
 
     private func canAutoAnalyze() -> Bool {
-        guard autoAssistEnabled else { return !didInitialSummary }
+        // Speak owns event-based vision — never auto-upload while Speak suppresses or is busy.
         if suppressAutoVision { return false }
         if isAnalyzing { return false }
         if speakBusyProvider?() == true { return false }
+        // Preview frames only unless the user explicitly enabled auto-assist (Studio).
+        guard autoAssistEnabled else { return false }
         return true
     }
 

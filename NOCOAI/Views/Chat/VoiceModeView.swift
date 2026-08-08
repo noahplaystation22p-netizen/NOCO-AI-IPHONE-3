@@ -100,8 +100,10 @@ struct VoiceModeView: View {
             if cameraOn {
                 camera.stop()
                 cameraOn = false
-                speak.visionCameraEnabled = false
                 speak.visionFrameProvider = nil
+                if speak.visualMode == .camera {
+                    speak.setCameraVisualMode(enabled: false)
+                }
             }
         }
         .onChange(of: speak.visionCameraEnabled) { _, enabled in
@@ -346,7 +348,7 @@ struct VoiceModeView: View {
                 systemImage: cameraOn ? "camera.fill" : "camera",
                 active: cameraOn,
                 tint: NOCORainbow.blue,
-                label: "Kamera"
+                label: "Live View"
             ) {
                 Task { await toggleCamera() }
             }
@@ -358,7 +360,7 @@ struct VoiceModeView: View {
                     : "rectangle.dashed",
                 active: speak.screenShareEnabled,
                 tint: NOCORainbow.teal,
-                label: "Bildschirm",
+                label: "Screen View",
                 analyzing: speak.screenShareEnabled && speak.assistantPhase == .vision
             ) {
                 Task { await toggleScreenShare() }
@@ -540,10 +542,9 @@ struct VoiceModeView: View {
         if cameraOn {
             camera.stop()
             cameraOn = false
-            speak.visionCameraEnabled = false
             speak.visionFrameProvider = nil
-            speak.pendingVisionJPEG = nil
-            speak.statusLine = speak.isRunning ? "Kamera aus" : "Voice AI bereit"
+            speak.setCameraVisualMode(enabled: false)
+            speak.statusLine = speak.isRunning ? "Live View aus" : "Voice AI bereit"
             HapticService.soft()
             return
         }
@@ -557,10 +558,9 @@ struct VoiceModeView: View {
             return
         }
         cameraOn = true
-        speak.visionCameraEnabled = true
         speak.visionFrameProvider = { camera.latestFrame }
-        speak.pendingVisionJPEG = nil
-        speak.statusLine = "Kamera bereit"
+        speak.setCameraVisualMode(enabled: true)
+        speak.statusLine = "Live View bereit"
         HapticService.success()
     }
 
@@ -572,8 +572,8 @@ struct VoiceModeView: View {
         if cameraOn {
             camera.stop()
             cameraOn = false
-            speak.visionCameraEnabled = false
             speak.visionFrameProvider = nil
+            speak.setCameraVisualMode(enabled: false)
         }
         await speak.enableScreenShare()
     }

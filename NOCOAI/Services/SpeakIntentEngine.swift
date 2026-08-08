@@ -149,10 +149,10 @@ enum SpeakFullAccess {
 enum SpeakIntentEngine {
     static func classify(
         _ text: String,
-        cameraOn: Bool,
-        screenShareOn: Bool,
+        visualMode: VisualMode,
         hasPendingFrame: Bool,
-        lastAssistantHadImage: Bool = false
+        lastAssistantHadImage: Bool = false,
+        hasVisualContext: Bool = false
     ) -> SpeakIntent {
         let t = normalize(text)
         var style = extractStyle(from: t)
@@ -187,12 +187,14 @@ enum SpeakIntentEngine {
         }
 
         let visionCue = isVision(t)
-        let hasEyes = cameraOn || screenShareOn || hasPendingFrame
-        if visionCue && hasEyes {
-            return SpeakIntent(action: .visionAnalyze, style: style, confidence: 0.9)
+        let hasEyes = visualMode != .none || hasPendingFrame
+        // Follow-up about previous visual answer while Visual Mode is on.
+        let visualFollowUp = hasVisualContext && visualMode != .none && isVisualFollowUp(t)
+        if (visionCue || visualFollowUp) && hasEyes {
+            return SpeakIntent(action: .visionAnalyze, style: style, confidence: visionCue ? 0.92 : 0.82)
         }
         if visionCue && !hasEyes {
-            // Still route to vision intent — session will ask for camera/frame.
+            // Still route to vision intent — session explains that Visual Mode is off.
             return SpeakIntent(action: .visionAnalyze, style: style, confidence: 0.75)
         }
 
@@ -207,6 +209,46 @@ enum SpeakIntentEngine {
             style: style,
             confidence: 0.7,
             useLiveKnowledge: needsWeb && speakPolicy != .local
+        )
+    }
+
+    /// Whether a visual question should capture a fresh frame instead of reusing context.
+    static func visualRefreshReason(
+        _ text: String,
+        mode: VisualMode,
+        context: VisualContext?
+    ) -> VisualRefreshReason {
+        guard mode != .none else { return .noContext }
+        guard let context else { return .noContext }
+        let expected: VisualSource = mode == .screen ? .screen : .camera
+        if context.source != expected { return .sourceMismatch }
+        if !context.isFresh { return .stale }
+        let t = normalize(text)
+        if isExplicitVisualRefresh(t) { return .explicitRefresh }
+        // First-class "what do you see" always wants a current frame when mode is on.
+        if isFreshLookRequest(t) { return .explicitRefresh }
+        if isVision(t) && context.summary.isEmpty { return .noContext }
+        // Follow-ups like "was steht oben" reuse context.
+        if isVisualFollowUp(t) { return .none }
+        if isVision(t) { return .none }
+        return .followUpNeedsDetail
+    }
+
+    // Compatibility wrapper for older call sites.
+    static func classify(
+        _ text: String,
+        cameraOn: Bool,
+        screenShareOn: Bool,
+        hasPendingFrame: Bool,
+        lastAssistantHadImage: Bool = false
+    ) -> SpeakIntent {
+        let mode: VisualMode = screenShareOn ? .screen : (cameraOn ? .camera : .none)
+        return classify(
+            text,
+            visualMode: mode,
+            hasPendingFrame: hasPendingFrame,
+            lastAssistantHadImage: lastAssistantHadImage,
+            hasVisualContext: false
         )
     }
 
@@ -321,11 +363,26 @@ enum SpeakIntentEngine {
     }
 
     private static func isVision(_ t: String) -> Bool {
-        matches(t, #"\b(was sehe ich|was siehst du|was ist das|was soll ich|wo tippe|wo klicke|schau(e)? mal|erkenne|beschreib(e)?.*(bild|foto|das)|analysiere.*(bild|foto|das|bildschirm)|sieh(e)? (dir|mal)|kamera|bildschirm|screen|fenster|fehlermeldung|was ist hier)\b"#)
+        matches(t, #"\b(was sehe ich|was siehst du|was siehst du (auf|gerade|hier)|was ist das|was ist da|was ist hier|was ist vor mir|was ist auf (dem |meinem )?bildschirm|was steht (dort|da|oben|unten|links|rechts|hier)|was bedeutet (das|die|der)|welche fehlermeldung|was muss ich (hier )?drucken|was muss ich (hier )?tippen|was soll ich (hier )?(machen|drucken|tippen|klicken)|wo tippe|wo klicke|schau(e)? (mal|nochmal)|schau noch ?mal|erkenne|beschreib(e)?( mir)?( das| den| die| es)?|analysiere.*(bild|foto|bildschirm|screen)|sieh(e)? (dir|mal)|kamera|bildschirm|screen|fenster|fehlermeldung|was ist auf dieser seite|was ist auf der seite|welche farbe|was fur ein gegenstand|was für ein gegenstand|erklar(e)? mir was ich (hier )?sehe|kannst du mir erklaren was ich (hier )?sehe)\b"#)
+    }
+
+    /// Follow-up that still refers to the last visual context (no forced new frame).
+    private static func isVisualFollowUp(_ t: String) -> Bool {
+        matches(t, #"\b(und was|was genau|was bedeutet|was soll ich|wo (ist|steht|tippe|klicke)|oben links|oben rechts|unten|welche (taste|fehlermeldung|seite|farbe)|erklar(e)? (das|die|mir)|wie gehe ich weiter|was als nachstes|was als nächstes)\b"#)
+            || matches(t, #"^(und|also|dann|dabei)\b"#)
+    }
+
+    private static func isExplicitVisualRefresh(_ t: String) -> Bool {
+        matches(t, #"\b(was ist jetzt|und jetzt|was sehe ich jetzt|was ist jetzt da|was ist jetzt hier|schau noch ?mal|schau(e)? erneut|was hat sich geander|was hat sich geändert|aktualisier(e)?|neuer screenshot|nochmal anschauen|frisch anschauen)\b"#)
+    }
+
+    private static func isFreshLookRequest(_ t: String) -> Bool {
+        matches(t, #"\b(was siehst du|was sehe ich|was ist auf (dem |meinem )?bildschirm|was ist vor mir|beschreib(e)? (mir )?(das|den bildschirm|die szene)|was ist da gerade zu sehen)\b"#)
     }
 
     private static func isScreenMemory(_ t: String) -> Bool {
         matches(t, #"\b(was war|nochmal.*(bildschirm|screen)|vorher.*(bildschirm|fenster)|erinnerst du|was stand|was war auf)\b"#)
+            && !isExplicitVisualRefresh(t)
     }
 
     private static func isEndSpeak(_ t: String) -> Bool {

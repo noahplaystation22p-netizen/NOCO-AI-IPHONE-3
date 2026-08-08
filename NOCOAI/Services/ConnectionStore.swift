@@ -607,10 +607,10 @@ final class ConnectionStore: ObservableObject {
     }
 
     func launchVisionLive() {
-        pendingTab = 2
-        pendingOpenVisionLive = true
+        // Live View is Speak-owned — open Speak UI; user enables camera there.
+        pendingTab = 0
         speak.openUI()
-        speak.visionCameraEnabled = true
+        speak.statusLine = "Live View: tippe Kamera in Speak"
         NOCOLaunchBridge.pendingVision = false
         HapticService.soft()
     }

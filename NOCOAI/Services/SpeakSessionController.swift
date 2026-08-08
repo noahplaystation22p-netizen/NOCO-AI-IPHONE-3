@@ -34,6 +34,10 @@ final class SpeakSessionController: ObservableObject {
     @Published var visionCameraEnabled = false
     /// Live Screen frames available for vision questions (no continuous upload).
     @Published var screenShareEnabled = false
+    /// Single authoritative visual source for Speak (screen XOR camera XOR none).
+    @Published private(set) var visualMode: VisualMode = .none
+    /// Cached analysis for follow-up questions — not dumped into chat history.
+    @Published private(set) var visualContext: VisualContext?
     /// One-shot JPEG waiting to be analyzed with the next relevant utterance.
     @Published var pendingVisionJPEG: Data?
     /// Rich assistant phase for Island + Speak UI (beyond mic phase).
@@ -42,6 +46,8 @@ final class SpeakSessionController: ObservableObject {
     @Published var pendingToolConfirm: SpeakIntent?
     private var pendingToolOriginal: String?
     var visionFrameProvider: (() -> UIImage?)?
+    /// Ignores stale vision async completions.
+    private var visualGeneration: UInt64 = 0
 
     private weak var connection: ConnectionStore?
     private var isBusy = false
@@ -327,6 +333,9 @@ final class SpeakSessionController: ObservableObject {
         isMuted = false
         visionCameraEnabled = false
         screenShareEnabled = false
+        visualMode = .none
+        visualContext = nil
+        visualGeneration &+= 1
         visionFrameProvider = nil
         pendingVisionJPEG = nil
         pendingToolConfirm = nil
@@ -383,6 +392,9 @@ final class SpeakSessionController: ObservableObject {
         }
         screenShareEnabled = false
         visionCameraEnabled = false
+        visualMode = .none
+        visualContext = nil
+        visualGeneration &+= 1
         visionFrameProvider = nil
         pendingVisionJPEG = nil
 
@@ -448,6 +460,9 @@ final class SpeakSessionController: ObservableObject {
         }
         screenShareEnabled = false
         visionCameraEnabled = false
+        visualMode = .none
+        visualContext = nil
+        visualGeneration &+= 1
         visionFrameProvider = nil
         pendingVisionJPEG = nil
 
@@ -822,9 +837,9 @@ final class SpeakSessionController: ObservableObject {
         if holdMicForTTS || sessionPhase == .speaking || (voice.phase == .speaking) {
             let intent = SpeakIntentEngine.classify(
                 trimmed,
-                cameraOn: visionCameraEnabled,
-                screenShareOn: screenShareEnabled,
-                hasPendingFrame: pendingVisionJPEG != nil
+                visualMode: effectiveVisualMode(),
+                hasPendingFrame: pendingVisionJPEG != nil,
+                hasVisualContext: visualContext != nil
             )
             if case .endSpeak = intent.action {
                 setHoldMicForTTS(false)
@@ -863,9 +878,9 @@ final class SpeakSessionController: ObservableObject {
 
         let intent = SpeakIntentEngine.classify(
             text,
-            cameraOn: visionCameraEnabled,
-            screenShareOn: screenShareEnabled,
-            hasPendingFrame: pendingVisionJPEG != nil
+            visualMode: effectiveVisualMode(),
+            hasPendingFrame: pendingVisionJPEG != nil,
+            hasVisualContext: visualContext != nil
         )
         if case .endSpeak = intent.action {
             await exitVoiceAI(spokenFarewell: true)
@@ -908,12 +923,12 @@ final class SpeakSessionController: ObservableObject {
 
         let intent = SpeakIntentEngine.classify(
             text,
-            cameraOn: visionCameraEnabled,
-            screenShareOn: screenShareEnabled,
+            visualMode: effectiveVisualMode(),
             hasPendingFrame: pendingVisionJPEG != nil,
             lastAssistantHadImage: connection.chat.messages.reversed().contains {
                 $0.role == .assistant && ($0.localImageData != nil || $0.imageURL != nil)
-            }
+            },
+            hasVisualContext: visualContext != nil
         )
 
         if case .endSpeak = intent.action {
@@ -1112,64 +1127,209 @@ final class SpeakSessionController: ObservableObject {
 
     private func handleVision(originalText: String, connection: ConnectionStore, turn: UInt64) async {
         guard turnIsLive(turn) else { setBusy(false); return }
+        let mode = effectiveVisualMode()
+        VisualLog.event("VISUAL_QUERY_DETECTED", "\"\(originalText.prefix(80))\" mode=\(mode.logName)")
+
         assistantPhase = .vision
         connection.liveScreen.suppressAutoVision = true
         statusLine = SpeakActivityPhase.vision.title
         pushLiveActivity(force: true)
-        try? await Task.sleep(nanoseconds: 120_000_000)
+        try? await Task.sleep(nanoseconds: 80_000_000)
         guard turnIsLive(turn) else { setBusy(false); return }
 
-        var jpeg = pendingVisionJPEG
-        pendingVisionJPEG = nil
-        // Prefer a fresh frame when camera/screen is live — seamless Vision.
-        if jpeg == nil, let image = visionFrameProvider?() {
-            jpeg = image.jpegData(compressionQuality: 0.78)
-        }
-        if jpeg == nil, screenShareEnabled,
-           let preview = connection.liveScreen.latestPreview,
-           let data = preview.jpegData(compressionQuality: 0.78) {
-            jpeg = data
-        }
-        if jpeg == nil, screenShareEnabled, let screenJPEG = connection.liveScreen.latestJPEG {
-            jpeg = screenJPEG
-        }
-
-        guard let jpeg else {
-            let tip = visionCameraEnabled || screenShareEnabled
-                ? "Ich brauche noch ein klares Bild — tippe kurz auf Snapshot."
-                : "Aktiviere Kamera oder Bildschirm, dann frag nochmal."
-            await finishWithReply(tip, connection: connection, turn: turn)
+        // Visual Mode off → never pretend we need a photo; ask to enable Screen/Live View.
+        if mode == .none, pendingVisionJPEG == nil {
+            VisualLog.event("VISUAL_CAPTURE_FAILED", "reason=no_visual_mode")
+            await finishWithReply(
+                "Aktiviere zuerst Screen View oder Live View in Speak — dann frag mich, was ich sehe.",
+                connection: connection,
+                turn: turn
+            )
             return
         }
 
-        statusLine = screenShareEnabled ? "👁 Analysiere Bildschirm…" : "👁 Analysiere Bild…"
+        let refresh = SpeakIntentEngine.visualRefreshReason(
+            originalText,
+            mode: mode,
+            context: visualContext
+        )
+        if refresh == .none, let ctx = visualContext, !ctx.summary.isEmpty {
+            VisualLog.event("VISUAL_CONTEXT_REUSED", "age=\(Int(ctx.age))s source=\(ctx.source.rawValue)")
+            await answerFromVisualContext(originalText: originalText, context: ctx, connection: connection, turn: turn)
+            return
+        }
+        if refresh != .none {
+            VisualLog.event("VISUAL_CONTEXT_REFRESH_REQUIRED", "reason=\(refresh.rawValue)")
+        }
+
+        visualGeneration &+= 1
+        let gen = visualGeneration
+
+        VisualLog.event("VISUAL_CAPTURE_REQUESTED", "source=\(mode.logName)")
+        let jpeg = await captureCurrentVisualFrame(mode: mode, connection: connection)
+        guard turnIsLive(turn), gen == visualGeneration else { setBusy(false); return }
+
+        guard let jpeg else {
+            VisualLog.event("VISUAL_CAPTURE_FAILED", "source=\(mode.logName)")
+            let tip: String
+            if mode == .screen {
+                tip = connection.liveScreen.broadcastWaiting || connection.liveScreen.latestPreview == nil
+                    ? "Screen View wartet noch auf die Bildschirmübertragung. Tippe rot „Übertragen“ und wähle NOCO Live Screen — dann frag nochmal."
+                    : "Ich konnte gerade keinen Bildschirm-Frame lesen. Kurz warten und nochmal fragen."
+            } else {
+                tip = "Live View hat gerade kein Kamerabild. Kurz warten und nochmal fragen."
+            }
+            await finishWithReply(tip, connection: connection, turn: turn)
+            return
+        }
+        VisualLog.event("VISUAL_CAPTURE_SUCCESS", "source=\(mode.logName) bytes=\(jpeg.count)")
+
+        statusLine = mode == .screen ? "NOCO analysiert Bildschirm…" : "NOCO analysiert…"
+        pushLiveActivity(force: true)
         ImageLiveActivityManager.start(
-            prompt: screenShareEnabled ? "Live Screen · Speak" : "Vision · Speak",
+            prompt: mode == .screen ? "Screen View · Speak" : "Live View · Speak",
             owner: .speakVision
         )
         ImageLiveActivityManager.update(
             progress: 0.35,
-            status: "Analysiere…",
+            status: "Analysiert…",
             insight: String(originalText.prefix(60)),
             etaSeconds: 8,
             phase: .rendering,
             force: true
         )
 
-        var prompt = originalText
-        let briefing = connection.liveScreen.contextBriefing
-        if screenShareEnabled, !briefing.isEmpty {
-            prompt = """
-            \(originalText)
-
-            [Live-Screen-Kontext]
-            \(briefing)
-            """
-        }
-        let reply = await connection.chat.sendVisionForSpeak(jpeg: jpeg, userText: prompt)
+        VisualLog.event("VISUAL_ANALYSIS_STARTED", "source=\(mode.logName)")
+        let ocrHint = mode == .screen
+            ? connection.liveScreen.latestOCRPreview
+            : ""
+        let reply = await connection.chat.sendVisionForSpeak(
+            jpeg: jpeg,
+            userText: originalText,
+            sourceLabel: mode == .screen ? "screen" : "camera",
+            ocrHint: ocrHint
+        )
         ImageLiveActivityManager.complete(prompt: "Vision fertig")
+        guard turnIsLive(turn), gen == visualGeneration else { setBusy(false); return }
+
+        if let reply, !reply.isEmpty {
+            VisualLog.event("VISUAL_ANALYSIS_COMPLETE", "chars=\(reply.count)")
+            visualContext = VisualContext(
+                source: mode == .screen ? .screen : .camera,
+                capturedAt: Date(),
+                summary: String(reply.prefix(900)),
+                relevantText: originalText,
+                ocrSnippet: String(ocrHint.prefix(400)),
+                generation: gen
+            )
+            VisualLog.event("VISUAL_CONTEXT_UPDATED", "source=\(mode.logName)")
+            await finishWithReply(reply, connection: connection, turn: turn)
+        } else {
+            VisualLog.event("VISUAL_CAPTURE_FAILED", "reason=empty_reply")
+            await finishWithReply(
+                "Die Bildanalyse ist kurz fehlgeschlagen. Speak läuft weiter — frag gerne noch einmal.",
+                connection: connection,
+                turn: turn
+            )
+        }
+    }
+
+    private func answerFromVisualContext(
+        originalText: String,
+        context: VisualContext,
+        connection: ConnectionStore,
+        turn: UInt64
+    ) async {
         guard turnIsLive(turn) else { setBusy(false); return }
-        await finishWithReply(reply ?? "", connection: connection, allowRetry: originalText, turn: turn)
+        assistantPhase = .thinking
+        statusLine = "NOCO denkt…"
+        pushLiveActivity(force: true)
+        let hidden = """
+        [NOCO SPEAK · VISUAL CONTEXT — INTERN]
+        Nutze NUR diesen gespeicherten visuellen Kontext. Kein neues Bild.
+        Antworte kurz und natürlich auf Deutsch zum Vorlesen.
+
+        \(context.briefing)
+
+        Nutzerfrage: \(originalText)
+        """
+        let reply = await connection.chat.sendSpeakHiddenContext(
+            userVisibleText: originalText,
+            hiddenPrompt: hidden
+        )
+        guard turnIsLive(turn) else { setBusy(false); return }
+        await finishWithReply(
+            reply?.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty == false
+                ? reply!
+                : "Dazu brauche ich einen frischen Blick — frag nochmal mit „Was siehst du jetzt?“.",
+            connection: connection,
+            turn: turn
+        )
+    }
+
+    /// Resolves VisualMode; prefers explicit Speak toggles.
+    private func effectiveVisualMode() -> VisualMode {
+        if visualMode != .none { return visualMode }
+        if screenShareEnabled { return .screen }
+        if visionCameraEnabled { return .camera }
+        return .none
+    }
+
+    private func setVisualMode(_ mode: VisualMode, reason: String) {
+        let old = visualMode
+        guard old != mode else {
+            visionCameraEnabled = mode == .camera
+            screenShareEnabled = mode == .screen
+            return
+        }
+        visualMode = mode
+        visionCameraEnabled = mode == .camera
+        screenShareEnabled = mode == .screen
+        if mode == .none || (old != .none && old != mode) {
+            visualContext = nil
+            pendingVisionJPEG = nil
+        }
+        VisualLog.event("VISUAL_MODE_CHANGED", "\(old.logName) -> \(mode.logName) | \(reason)")
+        pushLiveActivity(force: true)
+    }
+
+    /// Event-based: grab ONE current frame from the active visual source.
+    private func captureCurrentVisualFrame(mode: VisualMode, connection: ConnectionStore) async -> Data? {
+        if let pending = pendingVisionJPEG {
+            pendingVisionJPEG = nil
+            return pending
+        }
+        switch mode {
+        case .camera:
+            if let image = visionFrameProvider?(),
+               let jpeg = image.jpegData(compressionQuality: 0.78) {
+                return jpeg
+            }
+            // Brief settle if camera just opened.
+            try? await Task.sleep(nanoseconds: 180_000_000)
+            if let image = visionFrameProvider?(),
+               let jpeg = image.jpegData(compressionQuality: 0.78) {
+                return jpeg
+            }
+            return nil
+        case .screen:
+            // Poll briefly for broadcast frames — do not claim "enable screen" if already waiting.
+            for attempt in 0..<8 {
+                if let preview = connection.liveScreen.latestPreview,
+                   let jpeg = preview.jpegData(compressionQuality: 0.78) {
+                    return jpeg
+                }
+                if let jpeg = connection.liveScreen.latestJPEG {
+                    return jpeg
+                }
+                if attempt < 7 {
+                    try? await Task.sleep(nanoseconds: 220_000_000)
+                }
+            }
+            return nil
+        case .none:
+            return nil
+        }
     }
 
     private func handleConversation(
@@ -1374,7 +1534,8 @@ final class SpeakSessionController: ObservableObject {
 
     /// Capture one still for the next vision-aware utterance (no continuous upload).
     func captureVisionSnapshot() {
-        if screenShareEnabled {
+        let mode = effectiveVisualMode()
+        if mode == .screen {
             if let preview = connection?.liveScreen.latestPreview,
                let jpeg = preview.jpegData(compressionQuality: 0.8) {
                 pendingVisionJPEG = jpeg
@@ -1388,10 +1549,14 @@ final class SpeakSessionController: ObservableObject {
                 HapticService.imageSnap()
                 return
             }
+            statusLine = "Kein Screen-Frame — Übertragung prüfen"
+            HapticService.error()
+            return
         }
-        guard let image = visionFrameProvider?(),
+        guard mode == .camera,
+              let image = visionFrameProvider?(),
               let jpeg = image.jpegData(compressionQuality: 0.8) else {
-            statusLine = "Kein Bild — Kamera oder Bildschirm prüfen"
+            statusLine = "Kein Bild — Live View oder Screen View aktivieren"
             HapticService.error()
             return
         }
@@ -1400,12 +1565,12 @@ final class SpeakSessionController: ObservableObject {
         HapticService.imageSnap()
     }
 
-    /// Enable Live Screen context inside Speak (Broadcast / existing session).
+    /// Enable Live Screen context inside Speak (Broadcast only — event-based analysis).
     func enableScreenShare() async {
         guard let connection else { return }
         let live = connection.liveScreen
         if !live.hasConsent {
-            statusLine = "Live Screen Zustimmung nötig — öffne Studio → Live Screen"
+            statusLine = "Live Screen Zustimmung nötig — einmalig in Studio → Live Screen"
             HapticService.error()
             connection.pendingOpenLiveScreen = true
             connection.pendingTab = 2
@@ -1415,10 +1580,13 @@ final class SpeakSessionController: ObservableObject {
             if !live.isActive {
                 try live.startSession()
             }
-            // Speak-driven: don't auto-spam vision; only on questions / snapshots
+            // Speak owns vision timing — preview only, no auto vision spam.
             live.autoAssistEnabled = false
-            screenShareEnabled = true
-            statusLine = "🖥 Bildschirm — tippe rot „Übertragen“ falls noch nicht aktiv"
+            live.suppressAutoVision = true
+            setVisualMode(.screen, reason: "enable_screen_share")
+            statusLine = live.broadcastWaiting || live.latestPreview == nil
+                ? "Screen View · tippe rot „Übertragen“ → NOCO Live Screen"
+                : "Screen View aktiv"
             HapticService.success()
         } catch {
             statusLine = (error as? LocalizedError)?.errorDescription ?? "Live Screen Start fehlgeschlagen"
@@ -1427,14 +1595,23 @@ final class SpeakSessionController: ObservableObject {
     }
 
     func disableScreenShare() {
-        screenShareEnabled = false
+        setVisualMode(.none, reason: "disable_screen_share")
         if let live = connection?.liveScreen, live.isActive {
-            live.autoAssistEnabled = true
-            // While Voice AI runs, keep vision quiet so it cannot steal the audio turn.
-            live.suppressAutoVision = isRunning
+            live.autoAssistEnabled = false
+            live.suppressAutoVision = true
+            // Keep broadcast session for quick re-enable; Speak no longer consumes frames.
         }
-        statusLine = isRunning ? "Bildschirm aus · nur Sprache" : "Voice AI bereit"
+        statusLine = isRunning ? "Screen View aus · nur Sprache" : "Voice AI bereit"
         HapticService.soft()
+    }
+
+    /// Called from Speak UI when camera Live View is toggled.
+    func setCameraVisualMode(enabled: Bool) {
+        if enabled {
+            setVisualMode(.camera, reason: "enable_camera")
+        } else if visualMode == .camera {
+            setVisualMode(.none, reason: "disable_camera")
+        }
     }
 
     func pushLiveActivity(force: Bool) {
@@ -1542,7 +1719,12 @@ final class SpeakSessionController: ObservableObject {
         switch phase {
         case .listening:
             let live = voice.liveTranscript.trimmingCharacters(in: .whitespacesAndNewlines)
-            return live.isEmpty ? "Rede natürlich…" : live
+            if !live.isEmpty { return live }
+            switch effectiveVisualMode() {
+            case .screen: return "Screen View · Rede natürlich…"
+            case .camera: return "Live View · Rede natürlich…"
+            case .none: return "Rede natürlich…"
+            }
         case .speaking:
             return lastReply.isEmpty ? "Antwort wird vorgelesen…" : lastReply
         case .thinking, .processing:
@@ -1554,7 +1736,11 @@ final class SpeakSessionController: ObservableObject {
         case .agentWorking:
             return "Plant, recherchiert und führt aus…"
         case .vision:
-            return "Vision versteht die Szene…"
+            switch effectiveVisualMode() {
+            case .screen: return "NOCO analysiert den Bildschirm…"
+            case .camera: return "NOCO analysiert die Kamera…"
+            case .none: return "NOCO sieht…"
+            }
         case .awaitingConfirm:
             return "Ja oder Nein sagen"
         case .error:
@@ -1605,6 +1791,17 @@ final class SpeakSessionController: ObservableObject {
         }
         if s.contains("voice ai beendet") {
             return "Voice AI beendet"
+        }
+        if phase == .vision {
+            return "NOCO sieht…"
+        }
+        // Keep listening/speaking titles honest; decorate with Visual Mode when idle/listen.
+        if phase == .listening || phase == .idle {
+            switch effectiveVisualMode() {
+            case .screen: return "NOCO Voice · Screen View"
+            case .camera: return "NOCO Voice · Live View"
+            case .none: break
+            }
         }
         // Prefer live phase titles — avoid stale "NOCO spricht" while already listening again.
         return phase.title

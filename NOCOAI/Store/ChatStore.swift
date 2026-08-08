@@ -2099,18 +2099,31 @@ final class ChatStore: ObservableObject {
     }
 
     /// Quiet vision path for Speak — same chat, returns spoken reply text.
-    func sendVisionForSpeak(jpeg: Data, userText: String) async -> String? {
+    /// Does not dump internal analysis scaffolding into the visible thread.
+    func sendVisionForSpeak(
+        jpeg: Data,
+        userText: String,
+        sourceLabel: String = "speak_vision",
+        ocrHint: String = ""
+    ) async -> String? {
         guard let api else {
             lastError = "Companion offline"
             return nil
         }
-        let prompt = """
-        [NOCO SPEAK + VISION]
-        Der Nutzer spricht. Ein aktuelles Bild (Kamera oder Bildschirm) ist angehängt.
-        Du kannst das Bild sehen. Antworte kurz und natürlich auf Deutsch — geeignet zum Vorlesen.
+        let visible = userText.trimmingCharacters(in: .whitespacesAndNewlines)
+        var prompt = """
+        [NOCO SPEAK + VISION — INTERN]
+        Quelle: \(sourceLabel == "screen" ? "Bildschirmübertragung (Screen View)" : "Kamera (Live View)").
+        Ein aktuelles Einzelbild ist angehängt. Du kannst das Bild sehen.
+        Antworte kurz und natürlich auf Deutsch — geeignet zum Vorlesen.
         Niemals behaupten, du könntest keine Bilder sehen oder beschreiben.
-        Nutzerfrage: \(userText)
+        Schreibe KEINE Meta-Analyse-Überschrift und keinen langen Systembericht — nur die gesprochene Antwort.
+        Nutzerfrage: \(visible)
         """
+        let ocr = ocrHint.trimmingCharacters(in: .whitespacesAndNewlines)
+        if !ocr.isEmpty {
+            prompt += "\n\nOCR-Hinweis (kann unvollständig sein):\n\(String(ocr.prefix(500)))"
+        }
         isSending = true
         defer { isSending = false }
         do {
@@ -2120,8 +2133,8 @@ final class ChatStore: ObservableObject {
                 userText: prompt,
                 conversationId: activeConversationId,
                 filename: "speak-vision.jpg",
-                qualityProfile: LiveScreenQuality.recommend(ocr: "", userPrompt: userText).rawValue,
-                source: "speak_vision"
+                qualityProfile: LiveScreenQuality.recommend(ocr: ocr, userPrompt: visible).rawValue,
+                source: sourceLabel == "screen" ? "speak_screen" : "speak_camera"
             )
             if let cid = result.conversationId, !cid.isEmpty {
                 activeConversationId = cid
@@ -2136,18 +2149,19 @@ final class ChatStore: ObservableObject {
                     imageData: Self.jpegData(from: jpeg),
                     filename: "speak-vision-retry.jpg",
                     message: """
-                    Bild ist angehängt. Beschreibe kurz und klar auf Deutsch, was du siehst, und beantworte: \(userText). \
+                    Bild ist angehängt. Beschreibe kurz und klar auf Deutsch, was du siehst, und beantworte: \(visible). \
                     Du kannst Bilder sehen.
                     """,
                     conversationId: activeConversationId,
                     qualityProfile: LiveScreenQuality.accurate.rawValue,
-                    source: "speak_vision"
+                    source: sourceLabel == "screen" ? "speak_screen" : "speak_camera"
                 )
                 reply = (retry.replyText ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
             }
             reply = VoiceService.stripSpeakEcho(reply)
             if !reply.isEmpty {
-                messages.append(ChatMessage(role: .user, text: userText, localImageData: jpeg))
+                // Clean chat: user question + spoken answer only (no giant system dump).
+                messages.append(ChatMessage(role: .user, text: visible))
                 messages.append(ChatMessage(role: .assistant, text: reply))
             }
             return reply.isEmpty ? nil : reply
@@ -2155,6 +2169,19 @@ final class ChatStore: ObservableObject {
             lastError = (error as? LocalizedError)?.errorDescription ?? error.localizedDescription
             return nil
         }
+    }
+
+    /// Follow-up using cached visual context — no new image upload; chat stays clean.
+    func sendSpeakHiddenContext(userVisibleText: String, hiddenPrompt: String) async -> String? {
+        let visible = userVisibleText.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !visible.isEmpty else { return nil }
+        let reply = await sendAndReturnReply(
+            hiddenPrompt,
+            modeOverride: .flash,
+            speak: true,
+            displayText: visible
+        )
+        return reply
     }
 
     private func softSyncPreservingVision(localAssistant: ChatMessage?) async {

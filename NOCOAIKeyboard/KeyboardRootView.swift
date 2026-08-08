@@ -176,44 +176,27 @@ struct KeyboardRootView: View {
                     Button {
                         model.runBuiltinAction(action)
                     } label: {
-                        HStack(spacing: 5) {
-                            Image(systemName: action.systemImage)
-                                .font(.system(size: 11, weight: .semibold))
-                                .symbolEffect(.bounce, value: model.showToolsPanel)
-                            Text(action.title)
-                                .font(.system(size: 12, weight: .semibold, design: .rounded))
-                        }
-                        .padding(.horizontal, 11)
-                        .padding(.vertical, 8)
-                        .background {
-                            TimelineView(.animation(minimumInterval: 0.12, paused: false)) { timeline in
-                                let t = timeline.date.timeIntervalSinceReferenceDate
-                                let spin = (t.truncatingRemainder(dividingBy: 4.5) / 4.5) * 360
-                                let colors: [Color] = [
-                                    Color(red: 1.0, green: 0.45, blue: 0.6),
-                                    Color(red: 1.0, green: 0.75, blue: 0.35),
-                                    Color(red: 0.4, green: 0.95, blue: 0.65),
-                                    Color(red: 0.4, green: 0.75, blue: 1.0),
-                                    Color(red: 0.7, green: 0.5, blue: 1.0),
-                                    Color(red: 1.0, green: 0.45, blue: 0.6)
-                                ]
+                        if action == .improve {
+                            PremiumImproveChip(active: model.showToolsPanel)
+                        } else {
+                            HStack(spacing: 5) {
+                                Image(systemName: action.systemImage)
+                                    .font(.system(size: 11, weight: .semibold))
+                                Text(action.title)
+                                    .font(.system(size: 12, weight: .semibold, design: .rounded))
+                            }
+                            .padding(.horizontal, 11)
+                            .padding(.vertical, 8)
+                            .foregroundStyle(.white.opacity(0.92))
+                            .background {
                                 Capsule(style: .continuous)
                                     .fill(Color.white.opacity(0.1))
                                     .overlay(
                                         Capsule(style: .continuous)
-                                            .stroke(
-                                                AngularGradient(
-                                                    colors: colors.map { $0.opacity(0.85) },
-                                                    center: .center,
-                                                    angle: .degrees(spin + Double(index) * 40)
-                                                ),
-                                                lineWidth: 1.2
-                                            )
+                                            .stroke(Color.white.opacity(0.18), lineWidth: 1)
                                     )
                             }
                         }
-                        .foregroundStyle(.white.opacity(0.95))
-                        .shadow(color: Color(red: 0.55, green: 0.45, blue: 1).opacity(0.25), radius: 5, y: 1)
                     }
                     .buttonStyle(SoftPressStyle())
                     .disabled(model.isProcessing)
@@ -238,10 +221,11 @@ struct KeyboardRootView: View {
             HStack(alignment: .center, spacing: 8) {
                 HStack(alignment: .center, spacing: 2) {
                     if model.askDraft.isEmpty {
+                        // Cursor at the start of the field (not after the placeholder).
+                        BlinkingCursor()
                         Text("Frag NOCO AI…")
                             .font(.system(size: 14, weight: .medium, design: .rounded))
                             .foregroundStyle(Color.white.opacity(0.38))
-                        BlinkingCursor()
                     } else {
                         Text(model.askDraft)
                             .font(.system(size: 14, weight: .medium, design: .rounded))
@@ -555,8 +539,72 @@ private struct IntelligenceRewriteOverlay: View {
 private struct SoftPressStyle: ButtonStyle {
     func makeBody(configuration: Configuration) -> some View {
         configuration.label
-            .scaleEffect(configuration.isPressed ? 0.95 : 1)
-            .opacity(configuration.isPressed ? 0.9 : 1)
-            .animation(.easeOut(duration: 0.1), value: configuration.isPressed)
+            .scaleEffect(configuration.isPressed ? 0.97 : 1)
+            .opacity(configuration.isPressed ? 0.92 : 1)
+            .animation(.easeOut(duration: 0.08), value: configuration.isPressed)
+    }
+}
+
+/// Hero chip for „Verbessern“ — Apple Intelligence–style rainbow glow (main AI Tools action).
+private struct PremiumImproveChip: View {
+    var active: Bool
+
+    private let rainbow: [Color] = [
+        Color(red: 1.0, green: 0.42, blue: 0.58),
+        Color(red: 1.0, green: 0.72, blue: 0.32),
+        Color(red: 0.45, green: 0.95, blue: 0.6),
+        Color(red: 0.4, green: 0.78, blue: 1.0),
+        Color(red: 0.72, green: 0.48, blue: 1.0),
+        Color(red: 1.0, green: 0.42, blue: 0.58)
+    ]
+
+    var body: some View {
+        TimelineView(.animation(minimumInterval: 0.12, paused: false)) { timeline in
+            let t = timeline.date.timeIntervalSinceReferenceDate
+            let spin = (t.truncatingRemainder(dividingBy: 3.6) / 3.6) * 360
+            let pulse = 0.94 + 0.06 * abs(sin(t * 2.0))
+            HStack(spacing: 6) {
+                Image(systemName: "wand.and.stars")
+                    .font(.system(size: 12, weight: .bold))
+                    .symbolEffect(.variableColor.iterative, options: .repeating, isActive: active)
+                Text("Verbessern")
+                    .font(.system(size: 13, weight: .bold, design: .rounded))
+            }
+            .padding(.horizontal, 14)
+            .padding(.vertical, 9)
+            .foregroundStyle(.white)
+            .background {
+                ZStack {
+                    Capsule(style: .continuous)
+                        .fill(
+                            LinearGradient(
+                                colors: [
+                                    Color(red: 0.45, green: 0.4, blue: 0.95).opacity(0.55),
+                                    Color(red: 0.35, green: 0.7, blue: 1.0).opacity(0.45)
+                                ],
+                                startPoint: .topLeading,
+                                endPoint: .bottomTrailing
+                            )
+                        )
+                    Capsule(style: .continuous)
+                        .stroke(
+                            AngularGradient(colors: rainbow, center: .center, angle: .degrees(spin)),
+                            lineWidth: 1.8
+                        )
+                    Capsule(style: .continuous)
+                        .stroke(
+                            AngularGradient(
+                                colors: rainbow.map { $0.opacity(0.85) },
+                                center: .center,
+                                angle: .degrees(-spin * 0.8)
+                            ),
+                            lineWidth: 1.0
+                        )
+                }
+            }
+            .shadow(color: Color(red: 0.55, green: 0.45, blue: 1).opacity(0.5 * pulse), radius: 8, y: 1)
+            .scaleEffect(pulse)
+        }
+        .accessibilityLabel("Verbessern")
     }
 }

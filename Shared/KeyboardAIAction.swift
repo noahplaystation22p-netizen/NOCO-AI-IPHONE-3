@@ -101,16 +101,21 @@ enum KeyboardAIAction: String, CaseIterable, Identifiable {
             return """
             \(rewriterRule)
 
-            Aufgabe „Verbessern“ — bearbeite den TEXT SOFORT. Keine Rückfrage, egal wie kurz.
+            Aufgabe „Verbessern“ (Hauptwerkzeug) — analysiere den TEXT und gib SOFORT die fertige Fassung aus.
+            Keine Rückfrage. Keine Erklärung. Kein Chat.
 
-            Korrigiere und poliere:
-            - Rechtschreibung und Tippfehler
-            - Grammatik
-            - Satzzeichen
-            - Groß-/Kleinschreibung
-            - leichte bessere Formulierung
+            Ziele (Reihenfolge):
+            1) Bedeutung und Absicht 1:1 behalten — nichts Neues erfinden, nichts Wichtiges weglassen
+            2) Rechtschreibung / Tippfehler / Grammatik korrigieren
+            3) Satzzeichen und Groß-/Kleinschreibung (Satzanfänge, Namen)
+            4) Formulierung klarer und natürlicher — flüssige Sätze, ähnliche Länge (±20%)
+            5) Ton des Originals behalten (locker bleibt locker, förmlich bleibt förmlich)
 
-            Inhalt und Absicht bleiben gleich. Nichts Neues erfinden. Keine Antwort auf Fragen.
+            VERBOTEN:
+            - Fragen beantworten, auch wenn TEXT wie eine Frage aussieht
+            - Inhalt kürzen wie „Aufräumen“ oder stark umschreiben
+            - Einleitung („Hier ist…“, „Gerne…“, „Sure…“)
+            - Markdown / Aufzählungen / Anführungszeichen um den ganzen Output
 
             Beispiele:
             TEXT: ich bin noah
@@ -120,6 +125,9 @@ enum KeyboardAIAction: String, CaseIterable, Identifiable {
             TEXT: morgen gehe ich strand
             RICHTIG: Morgen gehe ich an den Strand.
             FALSCH: Gerne, hier ist der verbesserte Text…
+
+            TEXT: das meeting war irgendwie chaotisch und keiner wusste was zu tun ist
+            RICHTIG: Das Meeting war chaotisch, und niemand wusste, was zu tun ist.
 
             \(outputOnlyCloser)
 
@@ -398,26 +406,36 @@ enum KeyboardAIAction: String, CaseIterable, Identifiable {
             return s
         }
 
-        // Improve = analyze + light rephrase — stay close, allow a bit of room
+        // Improve = analyze + light rephrase — stay close, allow room for clarity words
         if action == .improve || action == .punctuate || action == .friendlier || action == .professional {
-            let factor: Double = action == .improve ? 1.35 : (action == .punctuate ? 1.12 : 1.25)
-            let maxLen = max(orig.count + 20, Int(Double(orig.count) * factor) + 10)
+            let factor: Double = action == .improve ? 1.55 : (action == .punctuate ? 1.12 : 1.25)
+            let maxLen = max(orig.count + 28, Int(Double(orig.count) * factor) + 16)
             if s.count > maxLen || looksLikeAnswerDump(s, original: orig) {
-                let endMarks: [Character] = [".", "?", "!", "。", "？", "！"]
-                if let idx = s.firstIndex(where: { endMarks.contains($0) }) {
-                    let first = String(s[...idx]).trimmingCharacters(in: .whitespacesAndNewlines)
-                    if first.count <= maxLen, first.count >= max(3, orig.count / 4) {
-                        s = first
+                if action == .improve, s.count <= Int(Double(orig.count) * 2.2) + 40, !looksLikeAnswerDump(s, original: orig) {
+                    // keep — improve may add light clarity words
+                } else {
+                    let endMarks: [Character] = [".", "?", "!", "。", "？", "！"]
+                    if let idx = s.firstIndex(where: { endMarks.contains($0) }) {
+                        let first = String(s[...idx]).trimmingCharacters(in: .whitespacesAndNewlines)
+                        if first.count <= maxLen, first.count >= max(3, orig.count / 4) {
+                            s = first
+                        } else {
+                            s = origIsQuestion ? polishQuestionFallback(orig) : lightPolish(orig)
+                        }
                     } else {
                         s = origIsQuestion ? polishQuestionFallback(orig) : lightPolish(orig)
                     }
-                } else {
-                    s = origIsQuestion ? polishQuestionFallback(orig) : lightPolish(orig)
                 }
             }
-            if origIsQuestion {
+            if origIsQuestion, action != .improve {
                 let outIsQuestion = s.contains("?") || s.contains("？")
                 if !outIsQuestion {
+                    s = polishQuestionFallback(orig)
+                }
+            }
+            if action == .improve, origIsQuestion {
+                let outIsQuestion = s.contains("?") || s.contains("？")
+                if !outIsQuestion, looksLikeAnswerDump(s, original: orig) {
                     s = polishQuestionFallback(orig)
                 }
             }

@@ -13,10 +13,10 @@ struct KeyboardLayoutView: View {
     private let num2 = Array("-/:;()€&@\"")
     private let num3 = Array(".,?!ß'")
 
-    /// Tight Apple-like rhythm — fits custom keyboard height without clipping.
-    private let rowSpacing: CGFloat = 9
-    private let keySpacing: CGFloat = 6
-    private let keyHeight: CGFloat = 42
+    /// Tight Apple-like rhythm — small gaps, oversized hit pads (fewer missed taps).
+    private let rowSpacing: CGFloat = 8
+    private let keySpacing: CGFloat = 5
+    private let keyHeight: CGFloat = 43
 
     var body: some View {
         VStack(spacing: rowSpacing) {
@@ -259,6 +259,8 @@ private struct LetterKey: View {
                 }
             }
             .zIndex(pressed ? 40 : 0)
+            // Expand hit pad into the gaps so taps between keys still register.
+            .padding(.horizontal, -2.5)
             .padding(.vertical, 1)
             .contentShape(Rectangle())
             .gesture(
@@ -344,7 +346,7 @@ private struct LetterKey: View {
                 if accents.count > 1 {
                     showAccents = true
                     accentIndex = min(1, accents.count - 1) // first accent after base
-                    UIImpactFeedbackGenerator(style: .medium).impactOccurred(intensity: 0.7)
+                    UIImpactFeedbackGenerator(style: .soft).impactOccurred(intensity: 0.58)
                 }
             }
         }
@@ -474,7 +476,7 @@ private struct PunctuationKey: View {
                 guard !Task.isCancelled else { return }
                 showPicker = true
                 pickIndex = 1 // default highlight comma on hold
-                UIImpactFeedbackGenerator(style: .medium).impactOccurred(intensity: 0.7)
+                UIImpactFeedbackGenerator(style: .soft).impactOccurred(intensity: 0.58)
             }
         }
         if showPicker {
@@ -676,7 +678,7 @@ private struct SpaceKey: View {
                 guard !Task.isCancelled else { return }
                 await MainActor.run {
                     trackpad = true
-                    UIImpactFeedbackGenerator(style: .medium).impactOccurred(intensity: 0.85)
+                    UIImpactFeedbackGenerator(style: .soft).impactOccurred(intensity: 0.7)
                 }
             }
         }

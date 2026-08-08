@@ -303,34 +303,27 @@ struct SpeakIslandExpandedHeader: View {
     let state: SpeakActivityAttributes.ContentState
 
     var body: some View {
-        TimelineView(.animation(minimumInterval: 0.35, paused: false)) { timeline in
-            let t = timeline.date.timeIntervalSinceReferenceDate
-            let breathe = 0.88 + 0.12 * abs(sin(t * 1.6))
-            VStack(spacing: 3) {
-                SpeakMarqueeText(
-                    text: SpeakPhasePalette.statusHeadline(for: state),
-                    font: .system(.subheadline, design: .rounded).weight(.semibold),
-                    foreground: .white.opacity(breathe),
-                    speed: state.phaseRaw == "speaking" ? 38 : 28,
-                    forceScroll: state.phaseRaw == "speaking"
-                )
+        // Title stays stationary — only detail/reply marquees (cheaper for Island).
+        VStack(spacing: 3) {
+            Text(SpeakPhasePalette.statusHeadline(for: state))
+                .font(.system(.subheadline, design: .rounded).weight(.semibold))
+                .foregroundStyle(.white)
+                .lineLimit(1)
+                .minimumScaleFactor(0.8)
+                .multilineTextAlignment(.center)
                 .frame(maxWidth: .infinity)
-                .frame(height: 18)
 
-                Label {
-                    Text(SpeakPhasePalette.shortLabel(for: state.phaseRaw))
-                        .font(.system(size: 10, weight: .medium, design: .rounded))
-                } icon: {
-                    Image(systemName: SpeakPhasePalette.symbol(for: state.phaseRaw, muted: state.isMuted))
-                        .font(.system(size: 9, weight: .semibold))
-                        .opacity(0.75 + 0.25 * abs(sin(t * 2.4)))
-                }
-                .foregroundStyle(.white.opacity(0.62 + 0.2 * abs(sin(t * 2.1))))
-                .labelStyle(.titleAndIcon)
-                .contentTransition(.opacity)
+            Label {
+                Text(SpeakPhasePalette.shortLabel(for: state.phaseRaw))
+                    .font(.system(size: 10, weight: .medium, design: .rounded))
+            } icon: {
+                Image(systemName: SpeakPhasePalette.symbol(for: state.phaseRaw, muted: state.isMuted))
+                    .font(.system(size: 9, weight: .semibold))
             }
-            .frame(maxWidth: .infinity)
+            .foregroundStyle(.white.opacity(0.7))
+            .labelStyle(.titleAndIcon)
         }
+        .frame(maxWidth: .infinity)
     }
 }
 
@@ -340,16 +333,15 @@ struct SpeakIslandExpandedGlassPanel: View {
 
     var body: some View {
         let colors = SpeakPhasePalette.gradientColors(for: state.phaseRaw, muted: state.isMuted)
-        TimelineView(.animation(minimumInterval: 0.14, paused: false)) { timeline in
+        TimelineView(.animation(minimumInterval: 0.22, paused: false)) { timeline in
             let t = timeline.date.timeIntervalSinceReferenceDate
-            let drift = (t.truncatingRemainder(dividingBy: 4.5) / 4.5)
-            let textPulse = 0.78 + 0.18 * abs(sin(t * 1.9))
+            let drift = (t.truncatingRemainder(dividingBy: 5.5) / 5.5)
             VStack(spacing: 6) {
                 SpeakMarqueeText(
                     text: SpeakPhasePalette.statusDetail(for: state),
                     font: .system(size: 11, weight: .medium, design: .rounded),
-                    foreground: .white.opacity(textPulse),
-                    speed: state.phaseRaw == "speaking" ? 42 : 30,
+                    foreground: .white.opacity(0.9),
+                    speed: state.phaseRaw == "speaking" ? 34 : 26,
                     forceScroll: state.phaseRaw == "speaking",
                     lineCount: 1
                 )
@@ -411,7 +403,7 @@ struct SpeakIslandExpandedGlassPanel: View {
     }
 }
 
-/// Smooth left→right wipe/marquee when copy is longer than the Island slot.
+/// Reading-order marquee: start of sentence first, then scroll so later words enter (LTR reading).
 struct SpeakMarqueeText: View {
     let text: String
     var font: Font = .caption
@@ -425,19 +417,20 @@ struct SpeakMarqueeText: View {
     var body: some View {
         GeometryReader { geo in
             let width = max(geo.size.width, 1)
-            TimelineView(.animation(minimumInterval: 0.05, paused: false)) { timeline in
+            TimelineView(.animation(minimumInterval: 0.12, paused: false)) { timeline in
                 let t = timeline.date.timeIntervalSinceReferenceDate
-                // Approximate text width: ~0.55em per character for rounded caption sizes.
                 let approxChar: CGFloat = 6.6
                 let textWidth = max(CGFloat(text.count) * approxChar, width)
-                let needsScroll = forceScroll || textWidth > width + 8
-                let travel = textWidth + width * 0.35
-                let period = max(Double(travel / max(speed, 8)), 3.2)
-                let progress = needsScroll
-                    ? (t.truncatingRemainder(dividingBy: period) / period)
-                    : 0
-                // Left → right wipe: start off left, slide across.
-                let x = needsScroll ? (-textWidth + progress * (textWidth + width)) : 0
+                let overflow = max(0, textWidth - width)
+                let needsScroll = forceScroll || overflow > 10
+                // Hold the start briefly, then scroll so reading progresses L→R through the sentence.
+                let travel = overflow + width * 0.25
+                let period = max(Double(travel / max(speed, 8)), 4.0)
+                let raw = needsScroll ? t.truncatingRemainder(dividingBy: period) / period : 0
+                let progress = needsScroll ? max(0, (raw - 0.12) / 0.76) : 0
+                let clamped = min(max(progress, 0), 1)
+                // x: 0 → -travel (content moves left; reader advances through text left→right)
+                let x = needsScroll ? -clamped * travel : 0
 
                 Text(text)
                     .font(font)
@@ -450,7 +443,7 @@ struct SpeakMarqueeText: View {
                     .mask(
                         LinearGradient(
                             colors: needsScroll
-                            ? [.clear, .white, .white, .clear]
+                            ? [.white, .white, .white, .clear]
                             : [.white, .white],
                             startPoint: .leading,
                             endPoint: .trailing
@@ -551,7 +544,7 @@ struct SpeakIslandWaveform: View {
     let state: SpeakActivityAttributes.ContentState
 
     var body: some View {
-        TimelineView(.animation(minimumInterval: 0.07, paused: false)) { timeline in
+        TimelineView(.animation(minimumInterval: 0.14, paused: false)) { timeline in
             let t = timeline.date.timeIntervalSinceReferenceDate
             let colors = SpeakPhasePalette.gradientColors(for: state.phaseRaw, muted: state.isMuted)
             HStack(alignment: .center, spacing: 3) {

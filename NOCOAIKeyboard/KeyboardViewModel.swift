@@ -49,10 +49,10 @@ final class KeyboardViewModel: ObservableObject {
     private var runTask: Task<Void, Never>?
     private var deleteHoldTask: Task<Void, Never>?
     private var lastSpaceAt: Date?
-    private let keyHaptic = UIImpactFeedbackGenerator(style: .medium)
+    private let keyHaptic = UIImpactFeedbackGenerator(style: .soft)
     private let selectHaptic = UISelectionFeedbackGenerator()
     private let notifyHaptic = UINotificationFeedbackGenerator()
-    private let heavyHaptic = UIImpactFeedbackGenerator(style: .heavy)
+    private let heavyHaptic = UIImpactFeedbackGenerator(style: .medium)
     private let voiceTyping = KeyboardVoiceTyping()
     private var dictationTickTask: Task<Void, Never>?
     private var dictationFinishing = false
@@ -122,13 +122,13 @@ final class KeyboardViewModel: ObservableObject {
         if showAskPanel {
             askDraft += text
             if shiftOn && !capsLock { shiftOn = false }
-            keyHaptic.impactOccurred(intensity: 0.85)
+            keyHaptic.impactOccurred(intensity: 0.52)
             keyHaptic.prepare()
             return
         }
         controller?.textDocumentProxy.insertText(text)
         if shiftOn && !capsLock { shiftOn = false }
-        keyHaptic.impactOccurred(intensity: 0.92)
+        keyHaptic.impactOccurred(intensity: 0.55)
         keyHaptic.prepare()
         syncDocumentSnapshot()
     }
@@ -137,13 +137,13 @@ final class KeyboardViewModel: ObservableObject {
         if showAskPanel {
             if !askDraft.isEmpty {
                 askDraft.removeLast()
-                keyHaptic.impactOccurred(intensity: 0.7)
+                keyHaptic.impactOccurred(intensity: 0.48)
                 keyHaptic.prepare()
             }
             return
         }
         controller?.textDocumentProxy.deleteBackward()
-        keyHaptic.impactOccurred(intensity: 0.78)
+        keyHaptic.impactOccurred(intensity: 0.5)
         keyHaptic.prepare()
         syncDocumentSnapshot()
     }
@@ -239,7 +239,7 @@ final class KeyboardViewModel: ObservableObject {
         insert("\n")
     }
 
-    /// Double-tap space → period + space (iOS-style).
+    /// Double-tap space → period + space (iOS-style). Soft local typo fix on space.
     func space() {
         if showAskPanel {
             insert(" ")
@@ -250,12 +250,38 @@ final class KeyboardViewModel: ObservableObject {
             lastSpaceAt = nil
             // Replace the previous space with ". "
             controller?.textDocumentProxy.deleteBackward()
+            applySoftAutocorrectIfNeeded()
             insert(". ")
             selectHaptic.selectionChanged()
             return
         }
         lastSpaceAt = now
+        applySoftAutocorrectIfNeeded()
         insert(" ")
+    }
+
+    /// Quiet UITextChecker fix (e.g. Baun → Baum) — no suggestion strip, no AI.
+    private func applySoftAutocorrectIfNeeded() {
+        guard let proxy = controller?.textDocumentProxy else { return }
+        let before = proxy.documentContextBeforeInput ?? ""
+        guard let word = Self.lastTypedWord(in: before), word.count >= 3 else { return }
+        guard let replacement = SoftSpellCorrect.suggestion(for: word) else { return }
+        guard replacement.caseInsensitiveCompare(word) != .orderedSame else { return }
+        for _ in 0..<word.count {
+            proxy.deleteBackward()
+        }
+        proxy.insertText(replacement)
+        syncDocumentSnapshot()
+    }
+
+    private static func lastTypedWord(in before: String) -> String? {
+        let trimmed = before.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else { return nil }
+        let parts = trimmed.split(whereSeparator: { $0.isWhitespace || $0.isNewline })
+        guard let last = parts.last else { return nil }
+        let word = String(last).trimmingCharacters(in: .punctuationCharacters)
+        guard word.unicodeScalars.contains(where: { CharacterSet.letters.contains($0) }) else { return nil }
+        return word
     }
 
     /// Apple-style cursor scrub via long-press space + drag.
@@ -276,6 +302,8 @@ final class KeyboardViewModel: ObservableObject {
             showToolsPanel = false
             showAskPanel = true
         }
+        // Fresh field every open — cursor sits at the start (leading edge).
+        askDraft = ""
         askReply = ""
         statusLine = "Tippe deine Frage — Return sendet"
         selectHaptic.selectionChanged()
@@ -286,6 +314,8 @@ final class KeyboardViewModel: ObservableObject {
         withAnimation(.spring(response: 0.34, dampingFraction: 0.88)) {
             showAskPanel = false
         }
+        askDraft = ""
+        askReply = ""
         statusLine = showToolsPanel ? "AI Tools — Text markieren oder tippen" : "NOCO AI bereit"
         controller?.updateKeyboardHeight()
     }

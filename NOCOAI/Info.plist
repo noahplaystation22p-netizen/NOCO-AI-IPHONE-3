@@ -10,10 +10,11 @@
 	</array>
 	<key>NSAppTransportSecurity</key>
 	<dict>
+		<key>NSAllowsArbitraryLoads</key>
+		<true/>
 		<key>NSAllowsLocalNetworking</key>
 		<true/>
-		<!-- Cleartext HTTP to companion: LAN + Tailscale (100.x). Without this, iOS shows “secure connection” failures on Tailscale IPs. -->
-		<key>NSAllowsArbitraryLoads</key>
+		<key>NSAllowsArbitraryLoadsInWebContent</key>
 		<true/>
 	</dict>
 	<key>NSLocalNetworkUsageDescription</key>

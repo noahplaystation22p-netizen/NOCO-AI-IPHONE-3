@@ -46,6 +46,7 @@ final class VoiceService: NSObject, ObservableObject {
     private var speakingStartedAt: Date?
     private var recognitionStartedAt: Date?
     private var audioObserversInstalled = false
+    private var inputTapInstalled = false
 
     /// Amplified TTS path (gain > 1.0 — AVSpeechUtterance.volume alone caps at 1).
     private let ttsEngine = AVAudioEngine()
@@ -256,7 +257,8 @@ final class VoiceService: NSObject, ObservableObject {
         ttsPendingBuffers = 0
         speakingStartedAt = nil
         speakingTextLower = ""
-        stopListening(cancel: true)
+        let keepWarm = sessionActive && UIApplication.shared.applicationState != .active && audioEngine.isRunning
+        clearRecognitionPipeline(cancel: true, keepAudioEngineRunning: keepWarm, reason: keepWarm ? "hard_reinit_keep_warm" : "hard_reinit")
         if case .speaking = phase { phase = .idle }
         try activateListeningAfterTTS()
         // Validate input hardware settled after route flip.
@@ -276,7 +278,8 @@ final class VoiceService: NSObject, ObservableObject {
             throw ListenError.muted
         }
         stopSpeaking(notifyFinished: false)
-        stopListening(cancel: true)
+        let keepWarm = sessionActive && UIApplication.shared.applicationState != .active && audioEngine.isRunning
+        clearRecognitionPipeline(cancel: true, keepAudioEngineRunning: keepWarm, reason: keepWarm ? "start_listen_keep_warm" : "start_listen")
         autoFinishArmed = autoEnd
 
         guard let speechRecognizer, speechRecognizer.isAvailable else {
@@ -333,16 +336,22 @@ final class VoiceService: NSObject, ObservableObject {
             phase = .error("Mikrofon nicht bereit")
             throw ListenError.micNotReady
         }
-        input.removeTap(onBus: 0)
+        if inputTapInstalled {
+            input.removeTap(onBus: 0)
+            inputTapInstalled = false
+        }
         input.installTap(onBus: 0, bufferSize: 1024, format: format) { [weak self] buffer, _ in
             self?.recognitionRequest?.append(buffer)
             Task { @MainActor in
                 self?.processAudio(buffer)
             }
         }
+        inputTapInstalled = true
 
-        audioEngine.prepare()
-        try audioEngine.start()
+        if !audioEngine.isRunning {
+            audioEngine.prepare()
+            try audioEngine.start()
+        }
 
         liveTranscript = ""
         lastTranscript = ""
@@ -395,16 +404,8 @@ final class VoiceService: NSObject, ObservableObject {
     /// Clear a finished/failed recognition pipeline so health can reopen for real.
     private func tearDownDeadRecognition(reason: String) {
         guard case .listening = phase else { return }
-        silenceTask?.cancel()
-        silenceTask = nil
-        if audioEngine.isRunning {
-            audioEngine.stop()
-            audioEngine.inputNode.removeTap(onBus: 0)
-        }
-        recognitionRequest?.endAudio()
-        recognitionTask?.cancel()
-        recognitionRequest = nil
-        recognitionTask = nil
+        let keepWarm = sessionActive && UIApplication.shared.applicationState != .active && audioEngine.isRunning
+        clearRecognitionPipeline(cancel: true, keepAudioEngineRunning: keepWarm, reason: reason)
         autoFinishArmed = false
         phase = .idle
         VoiceDebugLog.event("RECOGNITION_STOPPED", reason)
@@ -429,10 +430,29 @@ final class VoiceService: NSObject, ObservableObject {
     var isActivelyListening: Bool {
         guard case .listening = phase else { return false }
         guard !isMuted, autoFinishArmed else { return false }
-        return audioEngine.isRunning && recognitionRequest != nil && recognitionTask != nil
+        return audioEngine.isRunning
+            && inputTapInstalled
+            && recognitionRequest != nil
+            && recognitionTask != nil
+            && AVAudioSession.sharedInstance().isInputAvailable
     }
 
     func verifyListeningPipeline() -> Bool { isActivelyListening }
+
+    func pipelineDebugSummary() -> String {
+        let session = AVAudioSession.sharedInstance()
+        return "phase=\(phaseDebugName) sessionActive=\(sessionActive) engine=\(audioEngine.isRunning) tap=\(inputTapInstalled) request=\(recognitionRequest != nil) task=\(recognitionTask != nil) input=\(session.isInputAvailable) tts=\(ttsPlayer.isPlaying || synthesizer.isSpeaking) muted=\(isMuted)"
+    }
+
+    private var phaseDebugName: String {
+        switch phase {
+        case .idle: return "idle"
+        case .listening: return "listening"
+        case .processing: return "processing"
+        case .speaking: return "speaking"
+        case .error: return "error"
+        }
+    }
 
     /// STT tasks die in background — refresh / reopen so follow-ups still land.
     func refreshRecognitionIfStale(maxAge: TimeInterval = 45) {
@@ -478,24 +498,78 @@ final class VoiceService: NSObject, ObservableObject {
     }
 
     func stopListening(cancel: Bool = false) {
+        clearRecognitionPipeline(cancel: cancel, keepAudioEngineRunning: false, reason: cancel ? "cancel" : "end")
+        level = 0
+        bands = Array(repeating: 0.1, count: bands.count)
+        if case .listening = phase {
+            phase = liveTranscript.isEmpty ? .idle : .processing
+        }
+    }
+
+    private func clearRecognitionPipeline(
+        cancel: Bool,
+        keepAudioEngineRunning: Bool,
+        reason: String
+    ) {
         silenceTask?.cancel()
         silenceTask = nil
-        VoiceDebugLog.event("RECOGNITION_STOPPED", cancel ? "cancel" : "end")
-        if audioEngine.isRunning {
-            audioEngine.stop()
-            audioEngine.inputNode.removeTap(onBus: 0)
-        }
+        VoiceDebugLog.event("RECOGNITION_STOPPED", reason)
         recognitionRequest?.endAudio()
         if cancel {
             recognitionTask?.cancel()
         }
         recognitionRequest = nil
         recognitionTask = nil
-        level = 0
-        bands = Array(repeating: 0.1, count: bands.count)
-        if case .listening = phase {
-            phase = liveTranscript.isEmpty ? .idle : .processing
+        autoFinishArmed = false
+
+        if keepAudioEngineRunning {
+            VoiceDebugLog.event("BACKGROUND_RECOVERY", "mic_kept_warm")
+            return
         }
+        if audioEngine.isRunning {
+            audioEngine.stop()
+        }
+        if inputTapInstalled {
+            audioEngine.inputNode.removeTap(onBus: 0)
+            inputTapInstalled = false
+        }
+    }
+
+    private func pauseRecognitionForBackgroundTTS() {
+        VoiceDebugLog.event("BACKGROUND_RECOVERY", "pause_recognition_keep_mic")
+        clearRecognitionPipeline(cancel: true, keepAudioEngineRunning: true, reason: "tts_keep_mic_warm")
+        do {
+            try activateBackgroundAudioSession()
+            try ensureWarmInputPipeline()
+        } catch {
+            VoiceDebugLog.event("VOICE_ERROR", "warm_mic_failed \(error.localizedDescription)")
+        }
+    }
+
+    private func ensureWarmInputPipeline() throws {
+        let input = audioEngine.inputNode
+        var format = input.outputFormat(forBus: 0)
+        if format.sampleRate <= 0 || format.channelCount <= 0 {
+            try activateBackgroundAudioSession()
+            format = input.outputFormat(forBus: 0)
+        }
+        guard format.sampleRate > 0, format.channelCount > 0 else {
+            throw ListenError.micNotReady
+        }
+        if !inputTapInstalled {
+            input.installTap(onBus: 0, bufferSize: 1024, format: format) { [weak self] buffer, _ in
+                self?.recognitionRequest?.append(buffer)
+                Task { @MainActor in
+                    self?.processAudio(buffer)
+                }
+            }
+            inputTapInstalled = true
+        }
+        if !audioEngine.isRunning {
+            audioEngine.prepare()
+            try audioEngine.start()
+        }
+        VoiceDebugLog.event("MIC_WARM_BACKGROUND", "engine=\(audioEngine.isRunning) tap=\(inputTapInstalled)")
     }
 
     func finishUtterance() -> String {
@@ -520,7 +594,11 @@ final class VoiceService: NSObject, ObservableObject {
 
         cancelBargeIn()
         stopSpeaking(notifyFinished: false)
-        stopListening(cancel: true)
+        if sessionActive && UIApplication.shared.applicationState != .active {
+            pauseRecognitionForBackgroundTTS()
+        } else {
+            stopListening(cancel: true)
+        }
 
         speakingTextLower = cleaned.lowercased()
         bargeInArmed = allowBargeIn
@@ -973,13 +1051,17 @@ final class VoiceService: NSObject, ObservableObject {
         let format = input.outputFormat(forBus: 0)
         guard format.sampleRate > 0 else { return }
         if !audioEngine.isRunning {
-            input.removeTap(onBus: 0)
+            if inputTapInstalled {
+                input.removeTap(onBus: 0)
+                inputTapInstalled = false
+            }
             input.installTap(onBus: 0, bufferSize: 1024, format: format) { [weak self] buffer, _ in
                 self?.recognitionRequest?.append(buffer)
                 Task { @MainActor in
                     self?.processAudio(buffer)
                 }
             }
+            inputTapInstalled = true
             do {
                 audioEngine.prepare()
                 try audioEngine.start()
@@ -1014,7 +1096,10 @@ final class VoiceService: NSObject, ObservableObject {
         if audioEngine.isRunning {
             // Keep TTS engine separate — only stop input tap if we installed it for barge-in.
             // Full stopListening would kill session; here just detach recognition.
-            audioEngine.inputNode.removeTap(onBus: 0)
+            if inputTapInstalled {
+                audioEngine.inputNode.removeTap(onBus: 0)
+                inputTapInstalled = false
+            }
             audioEngine.stop()
         }
     }

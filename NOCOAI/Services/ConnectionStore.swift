@@ -179,6 +179,10 @@ final class ConnectionStore: ObservableObject {
 
     /// Call when app returns to foreground to keep Local Network permission warm.
     func onForeground() {
+        if speak.isRunning {
+            VoiceDebugLog.event("APP_FOREGROUND", speak.voice.pipelineDebugSummary())
+            speak.ensureBackgroundPresence()
+        }
         images.handleDidBecomeActive()
         AppNotificationService.clearBadge()
         CompanionCredentials.sync(
@@ -227,6 +231,7 @@ final class ConnectionStore: ObservableObject {
     func onBackground() {
         images.handleDidEnterBackground()
         if speak.isRunning {
+            VoiceDebugLog.event("APP_BACKGROUND", speak.voice.pipelineDebugSummary())
             VoiceDebugLog.event("BACKGROUND_ENTER", "app_background")
             speak.ensureBackgroundPresence()
         }

@@ -12,10 +12,15 @@ final class SpeakSessionController: ObservableObject {
     /// Hard session state machine (controller-owned). Engine `voice.phase` is subordinate.
     enum SessionPhase: Equatable {
         case idle
+        case starting
         case listening
         case processing
         case speaking
+        case restartingListening
         case recovering
+        case stopping
+        case stopped
+        case error
         case exiting
     }
 
@@ -65,7 +70,7 @@ final class SpeakSessionController: ObservableObject {
     var isBusyForVision: Bool {
         if isBusy { return true }
         switch sessionPhase {
-        case .processing, .speaking, .exiting: return true
+        case .processing, .speaking, .restartingListening, .recovering, .stopping, .exiting: return true
         default: break
         }
         if case .speaking = voice.phase { return true }
@@ -176,7 +181,7 @@ final class SpeakSessionController: ObservableObject {
         isExiting = false
         setHoldMicForTTS(false)
         setBusy(false)
-        sessionPhase = .recovering
+        sessionPhase = .starting
         // Live Activity = status mirror only (not the voice engine).
         let liveOk = await SpeakLiveActivityManager.startAndWait(sessionLabel: "NOCO Voice AI")
         do {
@@ -214,7 +219,7 @@ final class SpeakSessionController: ObservableObject {
                 VoiceAISessionState.publish(active: true, micOn: true, islandOn: SpeakLiveActivityManager.isActive)
             }
         } catch {
-            sessionPhase = .idle
+            sessionPhase = .error
             isRunning = false
             listenHealthTask?.cancel()
             listenHealthTask = nil
@@ -231,7 +236,7 @@ final class SpeakSessionController: ObservableObject {
     func stop(playCue: Bool = true) {
         if playCue { HapticService.speakCue() }
         isExiting = true
-        sessionPhase = .exiting
+        sessionPhase = .stopping
         setHoldMicForTTS(false)
         invalidateTurn()
         connection?.chat.cancelSpeakSend()
@@ -261,7 +266,7 @@ final class SpeakSessionController: ObservableObject {
         pendingToolConfirm = nil
         pendingToolOriginal = nil
         pendingUtterance = nil
-        sessionPhase = .idle
+        sessionPhase = .stopped
         assistantPhase = .idle
         statusLine = "Voice AI beendet"
         VoiceDebugLog.event("VOICE_EXIT")
@@ -462,7 +467,7 @@ final class SpeakSessionController: ObservableObject {
             invalidateTurn()
             connection?.chat.cancelSpeakSend()
             statusLine = "NOCO hört wieder zu…"
-            sessionPhase = .recovering
+            sessionPhase = .restartingListening
             VoiceDebugLog.event("VOICE_RECOVERY", "stuck_busy")
             beginReturnToListening(settleSeconds: 0.08)
             return
@@ -484,7 +489,7 @@ final class SpeakSessionController: ObservableObject {
             resumeTaskStartedAt = nil
             setHoldMicForTTS(false)
             setBusy(false)
-            sessionPhase = .recovering
+            sessionPhase = .restartingListening
             statusLine = "NOCO hört wieder zu…"
             VoiceDebugLog.event("VOICE_ERROR", "stuck_hold_forced")
             VoiceDebugLog.event("VOICE_RECOVERY", "health_force_listen")
@@ -510,7 +515,7 @@ final class SpeakSessionController: ObservableObject {
         }
 
         // Phase said listening but pipeline is dead — reopen for real.
-        sessionPhase = .recovering
+        sessionPhase = .restartingListening
         statusLine = "NOCO hört wieder zu…"
         VoiceDebugLog.event("BACKGROUND_RECOVERY", "pipeline_not_active")
         beginReturnToListening(settleSeconds: bg ? 0.12 : 0.05)
@@ -518,7 +523,7 @@ final class SpeakSessionController: ObservableObject {
 
     func ensureBackgroundPresence() {
         guard isRunning else { return }
-        VoiceDebugLog.event("BACKGROUND_ENTER", "ensure_presence")
+        VoiceDebugLog.event("BACKGROUND_ENTER", "ensure_presence \(voice.pipelineDebugSummary())")
         try? voice.activateBackgroundAudioSession()
         beginBackgroundKeepAlive()
         if bgRenewTask == nil { startBackgroundRenewLoop() }
@@ -1333,7 +1338,7 @@ final class SpeakSessionController: ObservableObject {
             case .idle:
                 if isMuted {
                     phase = .idle
-                } else if sessionPhase == .recovering {
+                } else if sessionPhase == .recovering || sessionPhase == .restartingListening {
                     phase = .processing
                 } else if voice.verifyListeningPipeline() {
                     phase = .listening

@@ -41,22 +41,23 @@ struct SpeakLiveActivityWidget: Widget {
                         .padding(.bottom, 2)
                 }
             } compactLeading: {
-                SpeakRainbowCore(state: context.state, diameter: 14, showSymbol: true)
-                    .frame(width: 20, height: 20)
-                    .padding(.leading, 1)
-                    .contentTransition(.opacity)
+                // Keep glow inside the pill — oversized aura was clipping on the left.
+                SpeakRainbowCore(state: context.state, diameter: 11, showSymbol: true, compact: true)
+                    .frame(width: 16, height: 16)
+                    .padding(.leading, 5)
+                    .padding(.trailing, 1)
             } compactTrailing: {
                 SpeakMiniVisualizer(
                     bars: Array(context.state.bars.prefix(5)),
                     level: context.state.level,
-                    barWidth: 2.4,
-                    spacing: 1.8,
+                    barWidth: 2.2,
+                    spacing: 1.6,
                     phaseRaw: context.state.phaseRaw
                 )
-                .frame(width: 38, height: 16)
-                .contentTransition(.opacity)
+                .frame(width: 34, height: 14)
+                .padding(.trailing, 3)
             } minimal: {
-                SpeakRainbowCore(state: context.state, diameter: 14, showSymbol: false)
+                SpeakRainbowCore(state: context.state, diameter: 10, showSymbol: false, compact: true)
             }
             .widgetURL(URL(string: "nocoai://speak"))
             .keylineTint(SpeakPhasePalette.accent(for: context.state.phaseRaw).opacity(0.85))
@@ -401,14 +402,19 @@ struct SpeakRainbowCore: View {
     let state: SpeakActivityAttributes.ContentState
     var diameter: CGFloat = 22
     var showSymbol: Bool = true
+    /// Compact Island must stay fully inside the pill — no oversized glow.
+    var compact: Bool = false
 
     var body: some View {
         let period = SpeakPhasePalette.spinPeriod(for: state.phaseRaw)
-        let interval = max(0.09, min(0.16, period / 40))
+        let interval = max(0.08, min(0.14, period / 42))
+        let glowPad: CGFloat = compact ? 2 : (diameter <= 15 ? 2 : 6)
+        let outerGlow: CGFloat = compact ? diameter + 2 : diameter + 10
+        let midGlow: CGFloat = compact ? diameter + 1 : diameter + 4
         TimelineView(.animation(minimumInterval: interval, paused: false)) { timeline in
             let t = timeline.date.timeIntervalSinceReferenceDate
             let spin = (t.truncatingRemainder(dividingBy: period) / period) * 360
-            let pulse = 0.93 + 0.07 * abs(sin(t * (state.phaseRaw == "listening" ? 2.0 : 3.2)))
+            let pulse = 0.94 + 0.06 * abs(sin(t * (state.phaseRaw == "listening" ? 2.4 : 3.2)))
             ZStack {
                 Circle()
                     .fill(
@@ -418,11 +424,10 @@ struct SpeakRainbowCore: View {
                             angle: .degrees(spin)
                         )
                     )
-                    .frame(width: diameter + 10, height: diameter + 10)
-                    .blur(radius: diameter > 20 ? 3.2 : 2.0)
-                    .opacity(0.9)
+                    .frame(width: outerGlow, height: outerGlow)
+                    .blur(radius: compact ? 1.1 : (diameter > 20 ? 3.2 : 2.0))
+                    .opacity(compact ? 0.85 : 0.9)
                     .scaleEffect(pulse)
-                    .blendMode(.plusLighter)
 
                 Circle()
                     .fill(
@@ -433,9 +438,9 @@ struct SpeakRainbowCore: View {
                             angle: .degrees(spin * 1.2)
                         )
                     )
-                    .frame(width: diameter + 4, height: diameter + 4)
-                    .blur(radius: diameter > 20 ? 1.4 : 0.7)
-                    .opacity(0.85)
+                    .frame(width: midGlow, height: midGlow)
+                    .blur(radius: compact ? 0.5 : (diameter > 20 ? 1.4 : 0.7))
+                    .opacity(0.9)
                     .scaleEffect(pulse)
 
                 Circle()
@@ -445,21 +450,19 @@ struct SpeakRainbowCore: View {
                             center: .center,
                             angle: .degrees(-spin * 0.7)
                         ),
-                        lineWidth: max(1.2, diameter * 0.08)
+                        lineWidth: compact ? 1.0 : max(1.2, diameter * 0.08)
                     )
-                    .frame(width: diameter + 2, height: diameter + 2)
+                    .frame(width: diameter + (compact ? 0.5 : 2), height: diameter + (compact ? 0.5 : 2))
                     .opacity(0.98)
-                    .shadow(color: SpeakPhasePalette.accent(for: state.phaseRaw).opacity(0.55), radius: 4)
 
                 Circle()
-                    .fill(Color.black.opacity(0.28))
-                    .frame(width: diameter * 0.72, height: diameter * 0.72)
+                    .fill(Color.black.opacity(0.32))
+                    .frame(width: diameter * 0.7, height: diameter * 0.7)
 
                 if showSymbol {
                     Image(systemName: SpeakPhasePalette.symbol(for: state.phaseRaw, muted: state.isMuted))
-                        .font(.system(size: max(8, diameter * 0.34), weight: .semibold))
+                        .font(.system(size: max(compact ? 7 : 8, diameter * 0.34), weight: .semibold))
                         .foregroundStyle(.white)
-                        .contentTransition(.opacity)
                 } else {
                     Circle()
                         .fill(
@@ -469,18 +472,12 @@ struct SpeakRainbowCore: View {
                                 angle: .degrees(spin * 1.4)
                             )
                         )
-                        .frame(width: diameter * 0.38, height: diameter * 0.38)
-                        .blur(radius: 0.4)
+                        .frame(width: diameter * 0.36, height: diameter * 0.36)
                 }
             }
-            .frame(width: diameter + (diameter <= 15 ? 2 : 6), height: diameter + (diameter <= 15 ? 2 : 6))
+            .frame(width: diameter + glowPad, height: diameter + glowPad)
+            .clipped()
             .compositingGroup()
-            .shadow(
-                color: SpeakPhasePalette.accent(for: state.phaseRaw).opacity(diameter <= 15 ? 0.28 : 0.48),
-                radius: diameter <= 15 ? 1.5 : (diameter > 20 ? 5 : 3.5)
-            )
-            .animation(nil, value: state.phaseRaw)
-            .animation(nil, value: state.isMuted)
         }
     }
 }
@@ -583,21 +580,41 @@ struct SpeakMiniVisualizer: View {
 
     var body: some View {
         let colors = SpeakPhasePalette.gradientColors(for: phaseRaw, muted: false)
-        HStack(alignment: .center, spacing: spacing) {
-            ForEach(Array(bars.enumerated()), id: \.offset) { _, value in
-                Capsule()
-                    .fill(
-                        LinearGradient(
-                            colors: Array(colors.prefix(3)),
-                            startPoint: .bottom,
-                            endPoint: .top
+        // Local Timeline keeps bars lively even when ActivityKit updates arrive slowly.
+        TimelineView(.animation(minimumInterval: 0.07, paused: false)) { timeline in
+            let t = timeline.date.timeIntervalSinceReferenceDate
+            HStack(alignment: .center, spacing: spacing) {
+                ForEach(0..<5, id: \.self) { i in
+                    let base = i < bars.count ? bars[i] : level
+                    let wave: Double = {
+                        switch phaseRaw {
+                        case "listening":
+                            // Blend live mic with a soft pulse so quiet speech still moves.
+                            let pulse = 0.12 + 0.18 * abs(sin(t * 5.2 + Double(i) * 0.9))
+                            return max(pulse, base * (0.85 + 0.35 * abs(sin(t * 8.5 + Double(i)))))
+                        case "speaking":
+                            return 0.28 + 0.62 * abs(sin(t * 8.2 + Double(i) * 0.75)) * (0.45 + max(0.2, base))
+                        case "webSearch", "thinking", "processing":
+                            return 0.18 + 0.48 * abs(sin(t * 4.2 + Double(i) * 0.55))
+                        default:
+                            return max(0.12, base)
+                        }
+                    }()
+                    Capsule()
+                        .fill(
+                            LinearGradient(
+                                colors: Array(colors.prefix(3)),
+                                startPoint: .bottom,
+                                endPoint: .top
+                            )
                         )
-                    )
-                    .frame(width: barWidth, height: max(6, CGFloat(value) * 38 + CGFloat(level) * 6))
-                    .opacity(0.55 + value * 0.45)
+                        .frame(width: barWidth, height: max(4, min(14, CGFloat(wave) * 16 + CGFloat(level) * 3)))
+                        .opacity(0.5 + wave * 0.5)
+                }
             }
+            .frame(maxHeight: 14, alignment: .center)
+            .clipped()
         }
-        .animation(.easeOut(duration: 0.08), value: bars)
     }
 }
 

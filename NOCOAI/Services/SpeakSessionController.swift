@@ -169,16 +169,20 @@ final class SpeakSessionController: ObservableObject {
                 self.setHoldMicForTTS(false)
                 return
             }
-            // Deterministic speaking → restartingListening. Do not leave UI on "Speaking"
-            // and do not let health-loop stuck_hold cancel the live watchdog.
+            // Mid-turn bridge ("Ich schaue kurz nach") finishes while still busy —
+            // never reopen listening / never leave Island stuck between webSearch & listen.
+            if self.isBusy, !self.holdMicForTTS {
+                VoiceDebugLog.event("TTS_END", "bridge_keep_busy")
+                VoiceDebugLog.event("RECOVERY_SKIPPED", "normal_transition filler_tts")
+                return
+            }
+            // Deterministic speaking → restartingListening.
             self.connection?.liveScreen.suppressAutoVision = true
             self.transition(to: .restartingListening, reason: "tts_end")
             self.assistantPhase = .listening
             if self.resumeTask == nil {
                 self.beginReturnToListening(settleSeconds: 0.18)
             } else {
-                // Watchdog was started at TTS begin — refresh its clock so health
-                // does not treat a long spoken reply as a stuck hold.
                 self.resumeTaskStartedAt = Date()
             }
             VoiceDebugLog.event("TTS_END", "speaking→listening")
@@ -1297,12 +1301,15 @@ final class SpeakSessionController: ObservableObject {
         guard !trimmed.isEmpty, voice.autoSpeakReplies else { return }
         guard turnIsLive(turn) else { return }
         resumeTask?.cancel()
+        resumeTask = nil
+        resumeTaskStartedAt = nil
+        let previousPhase = assistantPhase
         assistantPhase = .speaking
         lastReply = trimmed
         statusLine = trimmed
         pushLiveActivity(force: true)
-        // Short ack — no barge-in (avoids racing the in-flight turn).
-        voice.speak(trimmed, allowBargeIn: false)
+        // Bridge TTS must not fire onSpeakFinished → return-to-listen.
+        voice.speakBridge(trimmed)
         for _ in 0..<100 {
             try? await Task.sleep(nanoseconds: 50_000_000)
             guard turnIsLive(turn) else {
@@ -1316,8 +1323,13 @@ final class SpeakSessionController: ObservableObject {
         if case .speaking = voice.phase {
             voice.stopSpeaking(notifyFinished: false)
         }
-        // Keep busy; do not startSpeakWatchdog — caller continues the task.
-        try? await Task.sleep(nanoseconds: 60_000_000)
+        // Restore tool / knowledge phase for Island while the PC works.
+        assistantPhase = previousPhase == .speaking ? .thinking : previousPhase
+        if assistantPhase == .idle || assistantPhase == .listening {
+            assistantPhase = .thinking
+        }
+        pushLiveActivity(force: true)
+        try? await Task.sleep(nanoseconds: 40_000_000)
     }
 
     /// End-of-turn spoken line that resumes listening afterward.
@@ -1553,32 +1565,36 @@ final class SpeakSessionController: ObservableObject {
         }
     }
 
-    /// Real mic bars only while listening. Synthetic meters elsewhere so warm-mic
-    /// buffers during TTS don't make the Island look like the mic is still open.
+    /// Real mic bars while listening — boost quiet speech so Island reacts.
     private func islandMeter(for phase: SpeakActivityPhase) -> (Double, [Double]) {
         switch phase {
         case .listening:
+            let raw = Double(voice.level)
+            // Gate soft noise, then expand mid speech so compact bars jump alive.
+            let gated = raw < 0.045 ? raw * 0.35 : min(1.0, pow(raw, 0.62) * 1.35)
             let step = max(voice.bands.count / 7, 1)
             var seven: [Double] = []
             for i in stride(from: 0, to: voice.bands.count, by: step) where seven.count < 7 {
-                seven.append(Double(voice.bands[i]))
+                let b = Double(voice.bands[i])
+                let boosted = b < 0.045 ? b * 0.4 : min(1.0, pow(b, 0.62) * 1.4)
+                seven.append(max(boosted, gated * (0.55 + 0.08 * Double(seven.count))))
             }
-            while seven.count < 7 { seven.append(Double(voice.level)) }
-            return (Double(voice.level), seven)
+            while seven.count < 7 { seven.append(gated) }
+            return (gated, seven)
         case .speaking:
             let t = Date().timeIntervalSinceReferenceDate
             let bars = (0..<7).map { i in
-                0.28 + 0.55 * abs(sin(t * 6.2 + Double(i) * 0.72))
+                0.32 + 0.58 * abs(sin(t * 7.4 + Double(i) * 0.78))
             }
-            return (0.55 + 0.25 * abs(sin(t * 5.1)), bars)
+            return (0.62 + 0.28 * abs(sin(t * 5.6)), bars)
         case .thinking, .processing, .webSearch:
             let t = Date().timeIntervalSinceReferenceDate
             let bars = (0..<7).map { i in
-                0.18 + 0.45 * abs(sin(t * 3.6 + Double(i) * 0.55))
+                0.16 + 0.42 * abs(sin(t * 3.8 + Double(i) * 0.58))
             }
-            return (0.35, bars)
+            return (0.32, bars)
         default:
-            return (0.18, Array(repeating: 0.16, count: 7))
+            return (0.14, Array(repeating: 0.12, count: 7))
         }
     }
 

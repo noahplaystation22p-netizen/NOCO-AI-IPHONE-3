@@ -109,7 +109,7 @@ enum SpeakLiveActivityManager {
         // Phase / copy transitions must never wait behind meter flood.
         // Meter-only updates: lighter throttle so Island stays snappy without queueing.
         if !force, !phaseChanged, !textChanged {
-            let minGap: TimeInterval = (phase == .listening || phase == .speaking) ? 0.22 : 0.45
+            let minGap: TimeInterval = (phase == .listening || phase == .speaking) ? 0.12 : 0.4
             if now.timeIntervalSince(lastLevelUpdate) < minGap { return }
         }
         lastLevelUpdate = now

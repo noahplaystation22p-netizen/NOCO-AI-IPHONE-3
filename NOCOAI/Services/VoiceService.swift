@@ -58,6 +58,8 @@ final class VoiceService: NSObject, ObservableObject {
     private var ttsPendingBuffers = 0
     /// Ensures TTS_PLAYBACK_START is logged once per utterance.
     private var didLogTTSPlaybackStart = false
+    /// Bridge/filler TTS must not trigger return-to-listen mid-turn.
+    private var suppressSpeakFinishedNotify = false
 
     /// Wait for a clear end of speech — responsive, but not mid-thought.
     private let silenceToEnd: TimeInterval = 0.86
@@ -639,18 +641,30 @@ final class VoiceService: NSObject, ObservableObject {
     }
 
     func speak(_ text: String, allowBargeIn: Bool = false) {
+        speakInternal(text, allowBargeIn: allowBargeIn, notifyWhenFinished: true)
+    }
+
+    /// Short mid-turn bridge ("Ich schaue kurz nach") — must not reopen the mic.
+    func speakBridge(_ text: String) {
+        speakInternal(text, allowBargeIn: false, notifyWhenFinished: false)
+    }
+
+    private func speakInternal(_ text: String, allowBargeIn: Bool, notifyWhenFinished: Bool) {
         let natural = NOCOSpeakVoiceSettings.usesNaturalPipeline
         let cleaned = natural
             ? Self.naturalizeForSpeech(Self.cleanForSpeech(text))
             : Self.applyVoiceAIPronunciation(Self.cleanForSpeech(text))
         guard !cleaned.isEmpty else {
             phase = .idle
-            notifySpeakFinishedOnce()
+            if notifyWhenFinished {
+                notifySpeakFinishedOnce()
+            }
             return
         }
 
         cancelBargeIn()
         stopSpeaking(notifyFinished: false)
+        suppressSpeakFinishedNotify = !notifyWhenFinished
         if sessionActive {
             pauseRecognitionForSessionTTS()
         } else {
@@ -661,7 +675,6 @@ final class VoiceService: NSObject, ObservableObject {
         bargeInArmed = allowBargeIn
 
         do {
-            // playAndRecord when barge-in needed so mic can hear the user mid-reply.
             if allowBargeIn {
                 try activateBackgroundAudioSession()
             } else {
@@ -685,7 +698,7 @@ final class VoiceService: NSObject, ObservableObject {
         phase = .speaking
         HapticService.soft()
 
-        VoiceDebugLog.event("TTS_PREPARED", "chunks=\(chunks.count) chars=\(cleaned.count)")
+        VoiceDebugLog.event("TTS_PREPARED", "chunks=\(chunks.count) chars=\(cleaned.count) bridge=\(!notifyWhenFinished)")
         VoiceDebugLog.event("TTS_START", String(cleaned.prefix(48)))
         Task { await animateSpeakingBands() }
         speakAmplified(chunks: chunks, natural: natural, generation: generation)
@@ -949,6 +962,11 @@ final class VoiceService: NSObject, ObservableObject {
     private func notifySpeakFinishedOnce() {
         guard !speakFinishedNotified else { return }
         speakFinishedNotified = true
+        if suppressSpeakFinishedNotify {
+            suppressSpeakFinishedNotify = false
+            VoiceDebugLog.event("TTS_AUDIO_COMPLETE", "bridge_no_resume \(pipelineDebugSummary())")
+            return
+        }
         VoiceDebugLog.event("TTS_AUDIO_COMPLETE", "notify \(pipelineDebugSummary())")
         onSpeakFinished?()
     }

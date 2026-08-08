@@ -5,6 +5,9 @@ import Foundation
 enum SpeakLiveActivityManager {
     private static var activity: Activity<SpeakActivityAttributes>?
     private static var lastLevelUpdate: Date = .distantPast
+    private static var lastPhaseRaw: String = ""
+    private static var lastDetail: String = ""
+    private static var lastTitle: String = ""
 
     static var isActive: Bool {
         activity != nil || !Activity<SpeakActivityAttributes>.activities.isEmpty
@@ -90,12 +93,6 @@ enum SpeakLiveActivityManager {
             return
         }
 
-        let now = Date()
-            if !force, phase == .listening || phase == .speaking {
-            if now.timeIntervalSince(lastLevelUpdate) < 0.14 { return }
-        }
-        lastLevelUpdate = now
-
         let title: String
         if isMuted && phase != .speaking {
             title = "Voice AI stumm"
@@ -104,11 +101,26 @@ enum SpeakLiveActivityManager {
         } else {
             title = phase.title
         }
+        let clippedDetail = String(detail.prefix(80))
+        let phaseChanged = phase.rawValue != lastPhaseRaw
+        let textChanged = clippedDetail != lastDetail || title != lastTitle
+        let now = Date()
+
+        // Phase / copy transitions must never wait behind meter flood.
+        // Meter-only updates: lighter throttle so Island stays snappy without queueing.
+        if !force, !phaseChanged, !textChanged {
+            let minGap: TimeInterval = (phase == .listening || phase == .speaking) ? 0.22 : 0.45
+            if now.timeIntervalSince(lastLevelUpdate) < minGap { return }
+        }
+        lastLevelUpdate = now
+        lastPhaseRaw = phase.rawValue
+        lastDetail = clippedDetail
+        lastTitle = title
 
         let state = SpeakActivityAttributes.ContentState(
             phaseRaw: phase.rawValue,
             title: title,
-            detail: String(detail.prefix(80)),
+            detail: clippedDetail,
             level: min(max(level, 0), 1),
             bars: bars.map { min(max($0, 0), 1) },
             isOnline: isOnline,

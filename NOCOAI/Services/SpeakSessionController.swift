@@ -60,6 +60,7 @@ final class SpeakSessionController: ObservableObject {
     /// One queued utterance while NOCO is processing / speaking.
     private var pendingUtterance: String?
     private var consecutiveFailures = 0
+    private var lastIslandTranscript: String = ""
     private var listenRetryCount = 0
     private var cancellables = Set<AnyCancellable>()
     /// While true: never reopen the mic (reply TTS / farewell in progress).
@@ -111,7 +112,18 @@ final class SpeakSessionController: ObservableObject {
         guard !wired else { return }
         wired = true
         voice.objectWillChange.sink { [weak self] _ in
-            self?.objectWillChange.send()
+            guard let self else { return }
+            self.objectWillChange.send()
+            // Push Island immediately when the live transcript grows — Lock Screen
+            // already felt snappy; Island was lagging behind throttled meter updates.
+            let live = self.voice.liveTranscript
+            if live != self.lastIslandTranscript {
+                self.lastIslandTranscript = live
+                if self.isRunning, !live.isEmpty,
+                   self.assistantPhase == .listening || self.sessionPhase == .listening {
+                    self.pushLiveActivity(force: true)
+                }
+            }
         }.store(in: &cancellables)
         voice.onAutoUtterance = { [weak self] text in
             Task { @MainActor in
@@ -704,6 +716,7 @@ final class SpeakSessionController: ObservableObject {
             sessionPhase = .listening
             assistantPhase = pendingToolConfirm == nil ? .listening : .awaitingConfirm
             statusLine = pendingToolConfirm?.confirmationQuestion ?? "NOCO hört zu"
+            lastIslandTranscript = ""
             VoiceAISessionState.publish(active: true, micOn: true, islandOn: SpeakLiveActivityManager.isActive)
             VoiceDebugLog.event("LISTENING_START", "verified")
             pushLiveActivity(force: true)
@@ -734,6 +747,14 @@ final class SpeakSessionController: ObservableObject {
         VoiceDebugLog.event("SPEECH_END", String(trimmed.prefix(48)))
         // Never accept speech while shutting down.
         if isExiting { return }
+        // Drop mic chrome immediately — Lock Screen / Island should leave "hört zu"
+        // the moment the utterance commits, not only when the PC replies.
+        if !holdMicForTTS, sessionPhase != .speaking, voice.phase != .speaking {
+            assistantPhase = .thinking
+            sessionPhase = .processing
+            statusLine = SpeakActivityPhase.thinking.title
+            pushLiveActivity(force: true)
+        }
         // During TTS: only exit phrases interrupt; otherwise queue one follow-up.
         if holdMicForTTS || sessionPhase == .speaking || (voice.phase == .speaking) {
             let intent = SpeakIntentEngine.classify(
@@ -1351,85 +1372,136 @@ final class SpeakSessionController: ObservableObject {
             SpeakLiveActivityManager.start()
         }
 
-        // Prefer rich assistant phase while tools / thinking / web are active.
-        let phase: SpeakActivityPhase
-        switch assistantPhase {
-        case .creatingImage, .agentWorking, .vision, .awaitingConfirm, .thinking, .webSearch:
-            phase = assistantPhase.activityPhase
-        default:
-            switch voice.phase {
-            case .listening:
-                // Never show Listening on Island unless STT pipeline is really live.
-                phase = voice.verifyListeningPipeline() ? .listening : .idle
-            case .processing:
-                if assistantPhase == .webSearch {
-                    phase = .webSearch
-                } else {
-                    phase = assistantPhase == .thinking ? .thinking : .processing
-                }
-            case .speaking: phase = .speaking
-            case .error: phase = .error
-            case .idle:
-                if isMuted {
-                    phase = .idle
-                } else if sessionPhase == .recovering || sessionPhase == .restartingListening {
-                    phase = .processing
-                } else if voice.verifyListeningPipeline() {
-                    phase = .listening
-                } else {
-                    phase = .idle
-                }
-            }
-        }
-
-        let detail: String
-        if isMuted {
-            switch voice.phase {
-            case .speaking: detail = lastReply.isEmpty ? "Stumm · Wiedergabe…" : lastReply
-            default: detail = "Mic stumm — Mute aus zum Sprechen"
-            }
-        } else if pendingToolConfirm != nil {
-            detail = pendingToolConfirm?.confirmationQuestion ?? "Bestätigung nötig"
-        } else {
-            switch phase {
-            case .listening:
-                detail = voice.liveTranscript.isEmpty ? "Rede natürlich…" : voice.liveTranscript
-            case .speaking:
-                detail = lastReply
-            case .thinking, .processing:
-                detail = statusLine.isEmpty ? SpeakActivityPhase.thinking.title : statusLine
-            case .webSearch:
-                detail = statusLine.isEmpty ? "Live Knowledge · Quellen werden gelesen…" : statusLine
-            case .creatingImage:
-                detail = "Bildmodell arbeitet…"
-            case .agentWorking:
-                detail = "Plant, recherchiert und führt aus…"
-            case .vision:
-                detail = "Vision versteht die Szene…"
-            case .awaitingConfirm:
-                detail = "Ja oder Nein sagen"
-            case .error:
-                if case .error(let m) = voice.phase { detail = m } else { detail = statusLine }
-            case .idle:
-                detail = SpeakFullAccess.isEnabled ? "Vollzugriff · Assistent bereit" : "Bereit"
-            }
-        }
-        let step = max(voice.bands.count / 7, 1)
-        var seven: [Double] = []
-        for i in stride(from: 0, to: voice.bands.count, by: step) where seven.count < 7 {
-            seven.append(Double(voice.bands[i]))
-        }
-        while seven.count < 7 { seven.append(Double(voice.level)) }
+        let phase = resolveIslandPhase()
+        let detail = resolveIslandDetail(for: phase)
+        let (level, bars) = islandMeter(for: phase)
         SpeakLiveActivityManager.update(
             phase: phase,
             detail: detail,
-            level: Double(voice.level),
-            bars: seven,
+            level: level,
+            bars: bars,
             isOnline: connection?.isOnline ?? false,
             isMuted: isMuted,
             force: force,
             titleOverride: islandTitle(for: phase)
         )
+    }
+
+    /// Island must follow the user-visible turn, not mic-warm side effects.
+    private func resolveIslandPhase() -> SpeakActivityPhase {
+        // Speaking / TTS hold always wins — never leave "NOCO denkt" while audio plays.
+        if holdMicForTTS || assistantPhase == .speaking {
+            return .speaking
+        }
+        if case .speaking = voice.phase {
+            return .speaking
+        }
+        if case .error = voice.phase {
+            return .error
+        }
+        if isMuted {
+            return .idle
+        }
+
+        switch assistantPhase {
+        case .creatingImage, .agentWorking, .vision, .awaitingConfirm, .webSearch:
+            return assistantPhase.activityPhase
+        case .thinking:
+            // Live partial speech still counts as listening for Island.
+            if case .listening = voice.phase,
+               !voice.liveTranscript.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                return .listening
+            }
+            return .thinking
+        case .speaking:
+            return .speaking
+        case .error:
+            return .error
+        case .listening, .idle:
+            switch voice.phase {
+            case .listening:
+                return voice.verifyListeningPipeline() ? .listening : .idle
+            case .processing:
+                return .thinking
+            case .speaking:
+                return .speaking
+            case .error:
+                return .error
+            case .idle:
+                // Soft re-open after TTS — keep "hört zu", never flash "denkt".
+                if sessionPhase == .recovering || sessionPhase == .restartingListening {
+                    return .listening
+                }
+                if voice.verifyListeningPipeline() {
+                    return .listening
+                }
+                return .idle
+            }
+        }
+    }
+
+    private func resolveIslandDetail(for phase: SpeakActivityPhase) -> String {
+        if isMuted {
+            return phase == .speaking
+                ? (lastReply.isEmpty ? "Stumm · Wiedergabe…" : lastReply)
+                : "Mic stumm — Mute aus zum Sprechen"
+        }
+        if pendingToolConfirm != nil {
+            return pendingToolConfirm?.confirmationQuestion ?? "Bestätigung nötig"
+        }
+        switch phase {
+        case .listening:
+            let live = voice.liveTranscript.trimmingCharacters(in: .whitespacesAndNewlines)
+            return live.isEmpty ? "Rede natürlich…" : live
+        case .speaking:
+            return lastReply.isEmpty ? "Antwort wird vorgelesen…" : lastReply
+        case .thinking, .processing:
+            return statusLine.isEmpty ? SpeakActivityPhase.thinking.title : statusLine
+        case .webSearch:
+            return statusLine.isEmpty ? "Live Knowledge · Quellen werden gelesen…" : statusLine
+        case .creatingImage:
+            return "Bildmodell arbeitet…"
+        case .agentWorking:
+            return "Plant, recherchiert und führt aus…"
+        case .vision:
+            return "Vision versteht die Szene…"
+        case .awaitingConfirm:
+            return "Ja oder Nein sagen"
+        case .error:
+            if case .error(let m) = voice.phase { return m }
+            return statusLine
+        case .idle:
+            return SpeakFullAccess.isEnabled ? "Vollzugriff · Assistent bereit" : "Bereit"
+        }
+    }
+
+    /// Real mic bars only while listening. Synthetic meters elsewhere so warm-mic
+    /// buffers during TTS don't make the Island look like the mic is still open.
+    private func islandMeter(for phase: SpeakActivityPhase) -> (Double, [Double]) {
+        switch phase {
+        case .listening:
+            let step = max(voice.bands.count / 7, 1)
+            var seven: [Double] = []
+            for i in stride(from: 0, to: voice.bands.count, by: step) where seven.count < 7 {
+                seven.append(Double(voice.bands[i]))
+            }
+            while seven.count < 7 { seven.append(Double(voice.level)) }
+            return (Double(voice.level), seven)
+        case .speaking:
+            let t = Date().timeIntervalSinceReferenceDate
+            let bars = (0..<7).map { i in
+                0.28 + 0.55 * abs(sin(t * 6.2 + Double(i) * 0.72))
+            }
+            return (0.55 + 0.25 * abs(sin(t * 5.1)), bars)
+        case .thinking, .processing, .webSearch:
+            let t = Date().timeIntervalSinceReferenceDate
+            let bars = (0..<7).map { i in
+                0.18 + 0.45 * abs(sin(t * 3.6 + Double(i) * 0.55))
+            }
+            return (0.35, bars)
+        default:
+            return (0.18, Array(repeating: 0.16, count: 7))
+        }
     }
 
     private func islandTitle(for phase: SpeakActivityPhase) -> String {

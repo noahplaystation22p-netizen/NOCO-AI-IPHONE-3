@@ -299,9 +299,9 @@ struct SpeakIslandExpandedHeader: View {
                     .minimumScaleFactor(0.85)
                     .multilineTextAlignment(.center)
                     .opacity(breathe)
-                    .contentTransition(.opacity)
-                    .animation(.easeInOut(duration: 0.35), value: state.title)
-                    .animation(.easeInOut(duration: 0.35), value: state.phaseRaw)
+                    .contentTransition(.identity)
+                    .animation(nil, value: state.title)
+                    .animation(nil, value: state.phaseRaw)
                 Label {
                     Text(SpeakPhasePalette.shortLabel(for: state.phaseRaw))
                         .font(.system(size: 10, weight: .medium, design: .rounded))
@@ -337,9 +337,9 @@ struct SpeakIslandExpandedGlassPanel: View {
                     .minimumScaleFactor(0.8)
                     .multilineTextAlignment(.center)
                     .frame(maxWidth: .infinity)
-                    .contentTransition(.opacity)
-                    .animation(.easeInOut(duration: 0.32), value: state.detail)
-                    .animation(.easeInOut(duration: 0.32), value: state.phaseRaw)
+                    .contentTransition(.identity)
+                    .animation(nil, value: state.detail)
+                    .animation(nil, value: state.phaseRaw)
 
                 SpeakIslandWaveform(state: state)
                     .frame(height: 22)
@@ -479,8 +479,8 @@ struct SpeakRainbowCore: View {
                 color: SpeakPhasePalette.accent(for: state.phaseRaw).opacity(diameter <= 15 ? 0.28 : 0.48),
                 radius: diameter <= 15 ? 1.5 : (diameter > 20 ? 5 : 3.5)
             )
-            .animation(.easeInOut(duration: 0.35), value: state.phaseRaw)
-            .animation(.easeInOut(duration: 0.3), value: state.isMuted)
+            .animation(nil, value: state.phaseRaw)
+            .animation(nil, value: state.isMuted)
         }
     }
 }
@@ -597,7 +597,7 @@ struct SpeakMiniVisualizer: View {
                     .opacity(0.55 + value * 0.45)
             }
         }
-        .animation(.easeOut(duration: 0.14), value: bars)
+        .animation(.easeOut(duration: 0.08), value: bars)
     }
 }
 

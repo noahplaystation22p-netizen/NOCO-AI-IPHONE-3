@@ -145,8 +145,8 @@ final class ChatStore: ObservableObject {
         }
     }
 
-    /// Clean empty thread — used on app enter / Speak shortcut.
-    /// Tries server create; always clears local messages for a fresh UI.
+    /// Clean empty thread — used on Speak Shortcut (always fresh Voice context).
+    /// Tries server create; always clears local messages for a fresh UI + empty LLM context.
     func beginCleanSession() async {
         messages = []
         pendingAgentIntake = nil
@@ -154,10 +154,33 @@ final class ChatStore: ObservableObject {
         modeRecommendation = nil
         reconnectHint = nil
         if api != nil {
-            if await newConversation() != nil { return }
+            if let id = await newVoiceConversation() {
+                VoiceDebugLog.event("CONVERSATION_CREATED", "id=\(id) source=voice_clean")
+                return
+            }
         }
         activeConversationId = nil
         persistActiveConversation()
+        VoiceDebugLog.event("CONVERSATION_CREATED", "id=nil source=voice_clean_local")
+    }
+
+    /// Dedicated Voice conversation — keeps chat list history of past Voice sessions.
+    private func newVoiceConversation() async -> String? {
+        guard let api else { return nil }
+        do {
+            let created = try await api.createConversation(title: "Voice Session")
+            guard let id = created.resolvedId else { return nil }
+            activeConversationId = id
+            persistActiveConversation()
+            messages = []
+            pendingAgentIntake = nil
+            pendingAgentConfirm = nil
+            await loadConversations()
+            return id
+        } catch {
+            lastError = (error as? LocalizedError)?.errorDescription
+            return nil
+        }
     }
 
     func loadMessages(for id: String) async {

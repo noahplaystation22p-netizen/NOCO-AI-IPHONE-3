@@ -56,6 +56,8 @@ final class VoiceService: NSObject, ObservableObject {
     private var ttsEngineReady = false
     private var ttsUseAmplified = false
     private var ttsPendingBuffers = 0
+    /// Ensures TTS_PLAYBACK_START is logged once per utterance.
+    private var didLogTTSPlaybackStart = false
 
     /// Wait for a clear end of speech — responsive, but not mid-thought.
     private let silenceToEnd: TimeInterval = 0.86
@@ -537,6 +539,25 @@ final class VoiceService: NSObject, ObservableObject {
         keepAudioEngineRunning: Bool,
         reason: String
     ) {
+        let hadPipeline = recognitionRequest != nil || recognitionTask != nil
+        if !hadPipeline {
+            if cancel {
+                VoiceDebugLog.event("DUPLICATE_CANCEL_IGNORED", reason)
+            }
+            silenceTask?.cancel()
+            silenceTask = nil
+            autoFinishArmed = false
+            if keepAudioEngineRunning { return }
+            if audioEngine.isRunning { audioEngine.stop() }
+            if inputTapInstalled {
+                audioEngine.inputNode.removeTap(onBus: 0)
+                inputTapInstalled = false
+            }
+            lastAudioBufferAt = nil
+            audioBufferCount = 0
+            return
+        }
+
         silenceTask?.cancel()
         silenceTask = nil
         VoiceDebugLog.event("RECOGNITION_STOPPED", reason)
@@ -660,9 +681,11 @@ final class VoiceService: NSObject, ObservableObject {
         speakingStartedAt = Date()
         ttsUseAmplified = true
         ttsPendingBuffers = 0
+        didLogTTSPlaybackStart = false
         phase = .speaking
         HapticService.soft()
 
+        VoiceDebugLog.event("TTS_PREPARED", "chunks=\(chunks.count) chars=\(cleaned.count)")
         VoiceDebugLog.event("TTS_START", String(cleaned.prefix(48)))
         Task { await animateSpeakingBands() }
         speakAmplified(chunks: chunks, natural: natural, generation: generation)
@@ -772,9 +795,13 @@ final class VoiceService: NSObject, ObservableObject {
                         if !self.ttsPlayer.isPlaying {
                             self.ttsPlayer.play()
                         }
+                        if !self.didLogTTSPlaybackStart {
+                            self.didLogTTSPlaybackStart = true
+                            VoiceDebugLog.event("TTS_PLAYBACK_START", self.pipelineDebugSummary())
+                        }
                         self.ttsPlayer.scheduleBuffer(
                             copy,
-                            completionCallbackType: .dataRendered
+                            completionCallbackType: .dataPlayedBack
                         ) { [weak self] _ in
                             Task { @MainActor in
                                 guard let self else { return }
@@ -797,18 +824,27 @@ final class VoiceService: NSObject, ObservableObject {
         guard speakGeneration == generation else { return }
         guard ttsUseAmplified, case .speaking = phase else { return }
         if pendingSpeakChunks > 0 || ttsPendingBuffers > 0 { return }
-        // Empty-buffer race: chunk counter can hit 0 before the last PCM is scheduled.
-        // `ttsPendingBuffers` is decremented only on `.dataRendered`, so zero means audio output completed.
+        // `.dataPlayedBack` already means audio left the player. Brief settle for DAC,
+        // then confirm the node is idle before tearing the engine down (avoids clipped tails).
         Task { @MainActor [weak self] in
             guard let self else { return }
-            try? await Task.sleep(nanoseconds: 220_000_000)
+            for _ in 0..<8 {
+                try? await Task.sleep(nanoseconds: 40_000_000)
+                guard self.speakGeneration == generation else { return }
+                guard case .speaking = self.phase else { return }
+                if self.pendingSpeakChunks > 0 || self.ttsPendingBuffers > 0 { return }
+                if !self.ttsPlayer.isPlaying { break }
+            }
             guard self.speakGeneration == generation else { return }
             guard case .speaking = self.phase else { return }
             guard self.pendingSpeakChunks == 0, self.ttsPendingBuffers == 0 else { return }
             self.phase = .idle
             self.speakingStartedAt = nil
             HapticService.success()
-            self.stopTTSEngine()
+            // Soft stop: leave engine attached; hard stop only if still marked playing.
+            if self.ttsPlayer.isPlaying {
+                self.ttsPlayer.pause()
+            }
             VoiceDebugLog.event("TTS_PLAYBACK_COMPLETE", self.pipelineDebugSummary())
             self.notifySpeakFinishedOnce()
         }

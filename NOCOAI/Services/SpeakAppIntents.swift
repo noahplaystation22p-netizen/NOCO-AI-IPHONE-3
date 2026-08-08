@@ -201,7 +201,7 @@ struct ToggleVoiceAIIntent: AppIntent {
         }
         SpeakLaunchBridge.requestToggle(backgroundOnly: true)
         try? await Task.sleep(nanoseconds: 180_000_000)
-        return .result(dialog: "NOCO Voice AI gestartet.")
+        return .result(dialog: "NOCO Voice AI gestartet — neue Session.")
     }
 }
 

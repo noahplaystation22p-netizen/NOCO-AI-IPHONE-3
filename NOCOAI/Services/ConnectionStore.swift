@@ -648,11 +648,10 @@ final class ConnectionStore: ObservableObject {
                     SpeakLaunchBridge.clearPending()
                     HapticService.soft()
                 } else if !active {
-                    // Keep current chat — Speak shortcut must not wipe the thread.
+                    // Shortcut always starts a fresh Voice conversation (empty LLM context).
                     speak.showSpeakUI = false
-                    speak.start()
+                    speak.startFromShortcut(freshConversation: true)
                     SpeakLaunchBridge.clearPending()
-                    // Keep sheet closed — Island is the surface.
                     speak.showSpeakUI = false
                     speak.ensureBackgroundPresence()
                     HapticService.success()

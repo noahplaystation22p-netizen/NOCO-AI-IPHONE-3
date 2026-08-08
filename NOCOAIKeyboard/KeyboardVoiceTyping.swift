@@ -78,7 +78,7 @@ final class KeyboardVoiceTyping: ObservableObject {
 
     var hasPermission: Bool {
         guard !keyboardAudioDisabled else { return false }
-        SFSpeechRecognizer.authorizationStatus() == .authorized
+        return SFSpeechRecognizer.authorizationStatus() == .authorized
             && AVAudioSession.sharedInstance().recordPermission == .granted
     }
 

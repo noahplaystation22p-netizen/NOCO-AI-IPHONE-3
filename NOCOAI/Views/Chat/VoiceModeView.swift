@@ -89,9 +89,9 @@ struct VoiceModeView: View {
         }
         .onChange(of: scenePhase) { _, phase in
             if speak.isRunning {
-                if phase != .active {
+                if phase == .background {
                     speak.ensureBackgroundPresence()
-                } else {
+                } else if phase == .active {
                     speak.pushLiveActivity(force: true)
                 }
             }

@@ -55,6 +55,8 @@ final class SpeakSessionController: ObservableObject {
     private var resumeGeneration: UInt64 = 0
     private var listenHealthTask: Task<Void, Never>?
     private var bgRenewTask: Task<Void, Never>?
+    /// Debounce lifecycle presence so inactive/background/foreground don't stampede audio.
+    private var lastPresenceAt: Date?
     /// One queued utterance while NOCO is processing / speaking.
     private var pendingUtterance: String?
     private var consecutiveFailures = 0
@@ -136,20 +138,21 @@ final class SpeakSessionController: ObservableObject {
                 self.setHoldMicForTTS(false)
                 return
             }
-            // TTS finished — always ensure a return-to-listen path is alive.
-            // Never leave holdMicForTTS without a live resume task (root cause of "2nd question dies").
-            if self.holdMicForTTS || self.sessionPhase == .speaking {
-                if self.resumeTask == nil {
-                    self.beginReturnToListening(settleSeconds: 0.28)
-                }
-                VoiceDebugLog.event("TTS_END", "hold→listen")
-                self.objectWillChange.send()
-                return
-            }
-            // Keep Live Screen quiet for the whole Speak session — Island is status only.
+            // Deterministic speaking → restartingListening. Do not leave UI on "Speaking"
+            // and do not let health-loop stuck_hold cancel the live watchdog.
             self.connection?.liveScreen.suppressAutoVision = true
-            VoiceDebugLog.event("TTS_END", "resume")
-            self.beginReturnToListening(settleSeconds: 0.22)
+            self.sessionPhase = .restartingListening
+            self.assistantPhase = .listening
+            if self.resumeTask == nil {
+                self.beginReturnToListening(settleSeconds: 0.18)
+            } else {
+                // Watchdog was started at TTS begin — refresh its clock so health
+                // does not treat a long spoken reply as a stuck hold.
+                self.resumeTaskStartedAt = Date()
+            }
+            VoiceDebugLog.event("TTS_END", "speaking→listening")
+            self.pushLiveActivity(force: true)
+            self.objectWillChange.send()
         }
     }
 
@@ -454,6 +457,11 @@ final class SpeakSessionController: ObservableObject {
     private func ensureListeningHealthy() {
         guard isRunning, !isExiting, !isMuted else { return }
 
+        // A live TTS→listen transition owns the mic. Never race it with health recovery.
+        if resumeTask != nil {
+            return
+        }
+
         // Stuck busy without TTS → recover so the next question can send.
         if isBusy, !holdMicForTTS,
            let since = busySince,
@@ -473,20 +481,14 @@ final class SpeakSessionController: ObservableObject {
             return
         }
 
-        // Speaking hold: force return to listen if TTS ended or watchdog is stuck.
+        // Speaking hold with NO resume in flight (true stuck after TTS).
         if holdMicForTTS || sessionPhase == .speaking {
             if case .speaking = voice.phase {
                 voice.forceFinishIfSpeakingStuck(maxDuration: 120)
                 return
             }
             let holdAge = holdMicStartedAt.map { Date().timeIntervalSince($0) } ?? 99
-            let resumeAge = resumeTaskStartedAt.map { Date().timeIntervalSince($0) } ?? 99
-            if resumeTask != nil, resumeAge < 2.2, holdAge < 3.5 {
-                return
-            }
-            resumeTask?.cancel()
-            resumeTask = nil
-            resumeTaskStartedAt = nil
+            guard holdAge > 8 else { return }
             setHoldMicForTTS(false)
             setBusy(false)
             sessionPhase = .restartingListening
@@ -500,11 +502,14 @@ final class SpeakSessionController: ObservableObject {
         guard !isBusy else { return }
         if case .speaking = voice.phase { return }
         if case .processing = voice.phase { return }
+        if sessionPhase == .restartingListening { return }
 
         let bg = UIApplication.shared.applicationState != .active
         if voice.verifyListeningPipeline() {
-            // Keep refreshing STT in background before Apple kills the task.
-            voice.refreshRecognitionIfStale(maxAge: bg ? 5 : 18)
+            // Never proactive-refresh in background — that destroyed working STT (1110).
+            if !bg {
+                voice.refreshRecognitionIfStale(maxAge: 18)
+            }
             if voice.verifyListeningPipeline() {
                 sessionPhase = .listening
                 if assistantPhase == .listening || assistantPhase == .idle {
@@ -523,24 +528,47 @@ final class SpeakSessionController: ObservableObject {
 
     func ensureBackgroundPresence() {
         guard isRunning else { return }
-        VoiceDebugLog.event("BACKGROUND_ENTER", "ensure_presence \(voice.pipelineDebugSummary())")
-        try? voice.activateBackgroundAudioSession()
+        if let last = lastPresenceAt, Date().timeIntervalSince(last) < 1.8 {
+            VoiceDebugLog.event("BACKGROUND_ENTER", "ensure_presence_debounced")
+            return
+        }
+        lastPresenceAt = Date()
+
         beginBackgroundKeepAlive()
         if bgRenewTask == nil { startBackgroundRenewLoop() }
         if listenHealthTask == nil { startListenHealthLoop() }
+
+        let listeningOK = voice.verifyListeningPipeline()
+        if listeningOK {
+            // Soft presence: mic/STT already healthy — do not reconfigure audio.
+            VoiceDebugLog.event("BACKGROUND_ENTER", "soft_presence \(voice.pipelineDebugSummary())")
+            if !SpeakLiveActivityManager.isActive {
+                SpeakLiveActivityManager.start()
+            }
+            pushLiveActivity(force: true)
+            statusLine = isMuted ? "Stumm · Live Activity aktiv" : "Voice AI · Sperrbildschirm / Island"
+            return
+        }
+
+        VoiceDebugLog.event("BACKGROUND_ENTER", "ensure_presence \(voice.pipelineDebugSummary())")
+        try? voice.activateBackgroundAudioSession()
         if !SpeakLiveActivityManager.isActive {
             SpeakLiveActivityManager.start()
         }
         pushLiveActivity(force: true)
-        if !isMuted, !holdMicForTTS, !isBusy, !voice.verifyListeningPipeline() {
-            if case .speaking = voice.phase { return }
+
+        // TTS_END / resumeTask own the transition — presence must not start a parallel recovery.
+        if resumeTask != nil || holdMicForTTS {
+            return
+        }
+        if case .speaking = voice.phase { return }
+        if case .processing = voice.phase { return }
+        if !isMuted, !isBusy {
             beginReturnToListening(settleSeconds: 0.15)
         }
         statusLine = isMuted
             ? "Stumm · Live Activity aktiv"
-            : (voice.verifyListeningPipeline()
-                ? "Voice AI · Sperrbildschirm / Island"
-                : "NOCO hört zu…")
+            : "NOCO hört zu…"
     }
 
     /// Reliable re-listen after TTS (debounce + settle delay).

@@ -40,8 +40,12 @@ struct RootView: View {
             switch phase {
             case .active:
                 connection.onForeground()
-            case .background, .inactive:
+            case .background:
+                // Only true background — .inactive fires during app-switch transitions
+                // and was stampeding ensure_presence / audio reconfigure.
                 connection.onBackground()
+            case .inactive:
+                break
             @unknown default:
                 break
             }

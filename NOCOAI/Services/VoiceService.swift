@@ -235,8 +235,9 @@ final class VoiceService: NSObject, ObservableObject {
     /// Tear down TTS + recognition, then rebuild a clean duplex session for the next listen turn.
     /// Call this after every reply before `startListening` — do not reuse a damaged post-TTS route.
     func hardReinitAudioForListen() throws {
+        VoiceDebugLog.event("AUDIO_SESSION_REACTIVATED", "hard_reinit")
         cancelBargeIn()
-        speakGeneration &+= 1
+        // Do NOT bump speakGeneration here if TTS already finished — avoid racing a late finish.
         if synthesizer.isSpeaking {
             synthesizer.stopSpeaking(at: .immediate)
         }
@@ -250,57 +251,13 @@ final class VoiceService: NSObject, ObservableObject {
         if case .speaking = phase { phase = .idle }
         try activateListeningAfterTTS()
         // Validate input hardware settled after route flip.
-        let format = audioEngine.inputNode.outputFormat(forBus: 0)
+        var format = audioEngine.inputNode.outputFormat(forBus: 0)
         if format.sampleRate <= 0 || format.channelCount <= 0 {
             try activateBackgroundAudioSession()
+            format = audioEngine.inputNode.outputFormat(forBus: 0)
         }
-    }
-
-    enum ListenError: LocalizedError {
-        case micNotReady
-        case unavailable
-        case muted
-
-        var errorDescription: String? {
-            switch self {
-            case .micNotReady: return "Mikrofon nicht bereit"
-            case .unavailable: return "Spracherkennung nicht verfügbar"
-            case .muted: return "Stumm"
-            }
-        }
-    }
-
-    /// True while the mic + recognition pipeline should be capturing speech.
-    var isActivelyListening: Bool {
-        if case .listening = phase { return audioEngine.isRunning && recognitionTask != nil }
-        return false
-    }
-
-    /// STT tasks go stale in background — refresh so follow-ups still land.
-    func refreshRecognitionIfStale(maxAge: TimeInterval = 45) {
-        guard case .listening = phase, autoFinishArmed, !isMuted else { return }
-        let started = recognitionStartedAt ?? .distantPast
-        guard Date().timeIntervalSince(started) >= maxAge else { return }
-        let partial = liveTranscript
-        do {
-            try startListening(autoEnd: true)
-            if !partial.isEmpty {
-                liveTranscript = partial
-                lastTranscript = partial
-                speechStarted = true
-            }
-        } catch {
-            phase = .idle
-        }
-    }
-
-    func setMuted(_ muted: Bool) {
-        isMuted = muted
-        if muted {
-            autoFinishArmed = false
-            stopListening(cancel: true)
-            if case .listening = phase { phase = .idle }
-            liveTranscript = ""
+        if format.sampleRate <= 0 || format.channelCount <= 0 {
+            throw ListenError.micNotReady
         }
     }
 
@@ -320,6 +277,32 @@ final class VoiceService: NSObject, ObservableObject {
 
         try activateBackgroundAudioSession()
 
+        let bg = UIApplication.shared.applicationState != .active
+        // Prefer on-device in background (cloud STT often dies when suspended).
+        var preferOnDevice = false
+        if #available(iOS 17.0, *) {
+            preferOnDevice = bg && speechRecognizer.supportsOnDeviceRecognition
+        }
+
+        do {
+            try installRecognitionPipeline(preferOnDevice: preferOnDevice, speechRecognizer: speechRecognizer)
+        } catch {
+            if preferOnDevice {
+                VoiceDebugLog.event("VOICE_RECOVERY", "on_device_failed_try_cloud")
+                try installRecognitionPipeline(preferOnDevice: false, speechRecognizer: speechRecognizer)
+                preferOnDevice = false
+            } else {
+                throw error
+            }
+        }
+        VoiceDebugLog.event("LISTENING_START", bg ? "background onDevice=\(preferOnDevice)" : "foreground")
+        VoiceDebugLog.event("RECOGNITION_STARTED", preferOnDevice ? "on_device" : "cloud")
+    }
+
+    private func installRecognitionPipeline(
+        preferOnDevice: Bool,
+        speechRecognizer: SFSpeechRecognizer
+    ) throws {
         recognitionRequest = SFSpeechAudioBufferRecognitionRequest()
         guard let recognitionRequest else {
             throw ListenError.unavailable
@@ -327,20 +310,13 @@ final class VoiceService: NSObject, ObservableObject {
         recognitionRequest.shouldReportPartialResults = true
         recognitionRequest.taskHint = .dictation
         recognitionRequest.addsPunctuation = true
-        // Background: on-device is more reliable (cloud STT often stalls when suspended).
         if #available(iOS 17.0, *) {
-            let bg = UIApplication.shared.applicationState != .active
-            if bg, speechRecognizer.supportsOnDeviceRecognition {
-                recognitionRequest.requiresOnDeviceRecognition = true
-            } else {
-                recognitionRequest.requiresOnDeviceRecognition = false
-            }
+            recognitionRequest.requiresOnDeviceRecognition = preferOnDevice
         }
 
         let input = audioEngine.inputNode
         var format = input.outputFormat(forBus: 0)
         if format.sampleRate <= 0 || format.channelCount <= 0 {
-            // Route may still be settling after TTS — one soft retry after category re-assert.
             try activateBackgroundAudioSession()
             format = input.outputFormat(forBus: 0)
         }
@@ -374,42 +350,121 @@ final class VoiceService: NSObject, ObservableObject {
         recognitionTask = speechRecognizer.recognitionTask(with: recognitionRequest) { [weak self] result, error in
             guard let self else { return }
             Task { @MainActor in
-                guard !self.isMuted else { return }
-                if let result {
-                    let text = result.bestTranscription.formattedString
-                    if text != self.liveTranscript {
-                        self.liveTranscript = text
-                        self.lastTranscriptChangeAt = Date()
-                        if !text.isEmpty {
-                            self.speechStarted = true
-                        }
-                    }
-                    if result.isFinal, self.autoFinishArmed, !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
-                        // Soft hint only — never cut mid-thought on Apple's isFinal.
-                        self.emitAutoUtteranceIfNeeded(force: false)
-                    }
-                }
-                if let error {
-                    let ns = error as NSError
-                    if ns.domain == "kAFAssistantErrorDomain" || ns.code == 216 || ns.code == 203 {
-                        // Soft recognition end — timers decide, don't force-send.
-                        if self.autoFinishArmed,
-                           !self.liveTranscript.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
-                            self.emitAutoUtteranceIfNeeded(force: false)
-                        }
-                        return
-                    }
-                    if case .listening = self.phase {
-                        let partial = self.liveTranscript.trimmingCharacters(in: .whitespacesAndNewlines)
-                        if !partial.isEmpty, self.autoFinishArmed {
-                            self.emitAutoUtteranceIfNeeded(force: false)
-                        } else if ns.code == 1110 || ns.code == 1101 || ns.localizedDescription.lowercased().contains("no speech") {
-                            // Session died / timed out — drop to idle so health watchdog reopens mic.
-                            self.phase = .idle
-                        }
-                    }
+                self.handleRecognitionCallback(result: result, error: error)
+            }
+        }
+    }
+
+    private func handleRecognitionCallback(result: SFSpeechRecognitionResult?, error: Error?) {
+        guard !isMuted else { return }
+        if let result {
+            let text = result.bestTranscription.formattedString
+            if text != liveTranscript {
+                liveTranscript = text
+                lastTranscriptChangeAt = Date()
+                if !text.isEmpty {
+                    speechStarted = true
                 }
             }
+            if result.isFinal, autoFinishArmed, !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                emitAutoUtteranceIfNeeded(force: false)
+            }
+        }
+        if let error {
+            let ns = error as NSError
+            let partial = liveTranscript.trimmingCharacters(in: .whitespacesAndNewlines)
+            if !partial.isEmpty, autoFinishArmed,
+               (ns.domain == "kAFAssistantErrorDomain" || ns.code == 216 || ns.code == 203) {
+                emitAutoUtteranceIfNeeded(force: false)
+            }
+            // CRITICAL: assistant errors leave a dead task while phase stayed .listening —
+            // Island showed 🎙 but no audio was captured until the app was opened again.
+            tearDownDeadRecognition(reason: "err_\(ns.code)")
+        }
+    }
+
+    /// Clear a finished/failed recognition pipeline so health can reopen for real.
+    private func tearDownDeadRecognition(reason: String) {
+        guard case .listening = phase else { return }
+        silenceTask?.cancel()
+        silenceTask = nil
+        if audioEngine.isRunning {
+            audioEngine.stop()
+            audioEngine.inputNode.removeTap(onBus: 0)
+        }
+        recognitionRequest?.endAudio()
+        recognitionTask?.cancel()
+        recognitionRequest = nil
+        recognitionTask = nil
+        autoFinishArmed = false
+        phase = .idle
+        VoiceDebugLog.event("RECOGNITION_STOPPED", reason)
+        VoiceDebugLog.event("BACKGROUND_RECOVERY", "pipeline_cleared")
+    }
+
+    enum ListenError: LocalizedError {
+        case micNotReady
+        case unavailable
+        case muted
+
+        var errorDescription: String? {
+            switch self {
+            case .micNotReady: return "Mikrofon nicht bereit"
+            case .unavailable: return "Spracherkennung nicht verfügbar"
+            case .muted: return "Stumm"
+            }
+        }
+    }
+
+    /// True while the mic + recognition pipeline is actually capturing speech.
+    var isActivelyListening: Bool {
+        guard case .listening = phase else { return false }
+        guard !isMuted, autoFinishArmed else { return false }
+        return audioEngine.isRunning && recognitionRequest != nil && recognitionTask != nil
+    }
+
+    func verifyListeningPipeline() -> Bool { isActivelyListening }
+
+    /// STT tasks die in background — refresh / reopen so follow-ups still land.
+    func refreshRecognitionIfStale(maxAge: TimeInterval = 45) {
+        guard !isMuted else { return }
+        if case .listening = phase, !isActivelyListening {
+            VoiceDebugLog.event("BACKGROUND_RECOVERY", "stale_dead_pipeline")
+            do {
+                try hardReinitAudioForListen()
+                try startListening(autoEnd: true)
+            } catch {
+                phase = .idle
+                VoiceDebugLog.event("VOICE_ERROR", error.localizedDescription)
+            }
+            return
+        }
+        guard case .listening = phase, autoFinishArmed else { return }
+        let started = recognitionStartedAt ?? .distantPast
+        guard Date().timeIntervalSince(started) >= maxAge else { return }
+        let partial = liveTranscript
+        VoiceDebugLog.event("RECOGNITION_STOPPED", "refresh_age=\(Int(maxAge))")
+        do {
+            try startListening(autoEnd: true)
+            if !partial.isEmpty {
+                liveTranscript = partial
+                lastTranscript = partial
+                speechStarted = true
+            }
+            VoiceDebugLog.event("RECOGNITION_STARTED", "refreshed")
+        } catch {
+            phase = .idle
+            VoiceDebugLog.event("VOICE_ERROR", error.localizedDescription)
+        }
+    }
+
+    func setMuted(_ muted: Bool) {
+        isMuted = muted
+        if muted {
+            autoFinishArmed = false
+            stopListening(cancel: true)
+            if case .listening = phase { phase = .idle }
+            liveTranscript = ""
         }
     }
 
@@ -484,6 +539,7 @@ final class VoiceService: NSObject, ObservableObject {
         phase = .speaking
         HapticService.soft()
 
+        VoiceDebugLog.event("TTS_START", String(cleaned.prefix(48)))
         Task { await animateSpeakingBands() }
         speakAmplified(chunks: chunks, natural: natural, generation: generation)
 
@@ -614,11 +670,33 @@ final class VoiceService: NSObject, ObservableObject {
         guard speakGeneration == generation else { return }
         guard ttsUseAmplified, case .speaking = phase else { return }
         if pendingSpeakChunks > 0 || ttsPendingBuffers > 0 { return }
-        phase = .idle
-        speakingStartedAt = nil
-        HapticService.success()
-        stopTTSEngine()
-        notifySpeakFinishedOnce()
+        // Empty-buffer race: chunk counter can hit 0 before the last PCM is scheduled.
+        // Defer completion until playback is truly idle.
+        Task { @MainActor [weak self] in
+            guard let self else { return }
+            for _ in 0..<8 {
+                try? await Task.sleep(nanoseconds: 120_000_000)
+                guard self.speakGeneration == generation else { return }
+                guard case .speaking = self.phase else { return }
+                if self.pendingSpeakChunks > 0 || self.ttsPendingBuffers > 0 || self.ttsPlayer.isPlaying {
+                    continue
+                }
+                // One extra settle so the last syllable isn't cut.
+                try? await Task.sleep(nanoseconds: 180_000_000)
+                guard self.speakGeneration == generation else { return }
+                guard case .speaking = self.phase else { return }
+                if self.pendingSpeakChunks > 0 || self.ttsPendingBuffers > 0 || self.ttsPlayer.isPlaying {
+                    continue
+                }
+                self.phase = .idle
+                self.speakingStartedAt = nil
+                HapticService.success()
+                self.stopTTSEngine()
+                VoiceDebugLog.event("TTS_AUDIO_COMPLETE")
+                self.notifySpeakFinishedOnce()
+                return
+            }
+        }
     }
 
     private static func copyPCM(_ source: AVAudioPCMBuffer) -> AVAudioPCMBuffer? {
@@ -720,6 +798,7 @@ final class VoiceService: NSObject, ObservableObject {
     private func notifySpeakFinishedOnce() {
         guard !speakFinishedNotified else { return }
         speakFinishedNotified = true
+        VoiceDebugLog.event("TTS_AUDIO_COMPLETE", "notify")
         onSpeakFinished?()
     }
 

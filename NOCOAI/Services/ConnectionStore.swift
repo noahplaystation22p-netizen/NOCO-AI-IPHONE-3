@@ -227,6 +227,7 @@ final class ConnectionStore: ObservableObject {
     func onBackground() {
         images.handleDidEnterBackground()
         if speak.isRunning {
+            VoiceDebugLog.event("BACKGROUND_ENTER", "app_background")
             speak.ensureBackgroundPresence()
         }
     }

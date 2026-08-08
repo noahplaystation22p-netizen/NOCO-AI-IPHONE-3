@@ -135,12 +135,12 @@ enum NOCOSpeakVoiceSettings {
     }
 
     static func resolvedPostPause(naturalBase: Bool) -> TimeInterval {
-        let base = naturalBase ? 0.06 : 0.04
+        let base = naturalBase ? 0.12 : 0.08
         return base * style.pauseScale
     }
 
     static func resolvedInterChunkPause(naturalBase: Bool) -> TimeInterval {
-        let base = naturalBase ? 0.07 : 0.05
+        let base = naturalBase ? 0.10 : 0.07
         return base * style.pauseScale
     }
 

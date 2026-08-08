@@ -10,6 +10,26 @@ enum KeyboardAIClient {
         let channel: String
         let display: String
         let keyboard: Bool
+        /// Optional rewrite-task hint for companions that honor it (ignored if unknown).
+        let task: String?
+        let system: String?
+
+        enum CodingKeys: String, CodingKey {
+            case message, stream, mode, source, channel, display, keyboard, task, system
+        }
+
+        func encode(to encoder: Encoder) throws {
+            var c = encoder.container(keyedBy: CodingKeys.self)
+            try c.encode(message, forKey: .message)
+            try c.encode(stream, forKey: .stream)
+            try c.encode(mode, forKey: .mode)
+            try c.encode(source, forKey: .source)
+            try c.encode(channel, forKey: .channel)
+            try c.encode(display, forKey: .display)
+            try c.encode(keyboard, forKey: .keyboard)
+            try c.encodeIfPresent(task, forKey: .task)
+            try c.encodeIfPresent(system, forKey: .system)
+        }
     }
 
     enum ClientError: LocalizedError {
@@ -55,13 +75,35 @@ enum KeyboardAIClient {
 
     /// Preferred path: single flash response, sanitized — logs into ⌨️ Tastatur channel.
     static func rewrite(action: KeyboardAIAction, text: String, shortenLevel: Int = 1) async throws -> String {
+        let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else { throw ClientError.empty }
+
+        // Verbessern: local passthrough for empty/technical; strict rewrite pipeline.
+        if action == .improve {
+            if let local = KeyboardImprovePipeline.passthroughIfNoAINeeded(trimmed) {
+                guard !local.isEmpty else { throw ClientError.empty }
+                return local
+            }
+            let base: TimeInterval = 14
+            let reply = try await post(
+                message: KeyboardImprovePipeline.userMessage(for: trimmed),
+                display: action.displayLabel(for: trimmed),
+                timeout: timeout(for: trimmed, base: base),
+                system: KeyboardImprovePipeline.systemInstruction,
+                task: "rewrite_improve"
+            )
+            let clean = KeyboardImprovePipeline.finalize(raw: reply, original: trimmed)
+            guard !clean.isEmpty else { throw ClientError.empty }
+            return clean
+        }
+
         let base: TimeInterval = action.isAnswer ? 16 : (action.isPrimary ? 15 : 12)
         let reply = try await post(
-            message: action.prompt(for: text, shortenLevel: shortenLevel),
-            display: action.displayLabel(for: text),
-            timeout: timeout(for: text, base: base)
+            message: action.prompt(for: trimmed, shortenLevel: shortenLevel),
+            display: action.displayLabel(for: trimmed),
+            timeout: timeout(for: trimmed, base: base)
         )
-        let clean = KeyboardAIAction.sanitize(reply, action: action, original: text, shortenLevel: shortenLevel)
+        let clean = KeyboardAIAction.sanitize(reply, action: action, original: trimmed, shortenLevel: shortenLevel)
         guard !clean.isEmpty else { throw ClientError.empty }
         return clean
     }
@@ -71,7 +113,9 @@ enum KeyboardAIClient {
         let reply = try await post(
             message: shortcut.fullPrompt(for: text),
             display: shortcut.displayLabel(for: text),
-            timeout: timeout(for: text, base: 15)
+            timeout: timeout(for: text, base: 15),
+            system: nil,
+            task: nil
         )
         let clean = sanitizeCustom(reply)
         guard !clean.isEmpty else { throw ClientError.empty }
@@ -92,7 +136,9 @@ enum KeyboardAIClient {
         let reply = try await post(
             message: message,
             display: "Frage: \(q.prefix(72))",
-            timeout: 16
+            timeout: 16,
+            system: nil,
+            task: nil
         )
         // Light trim only — Q&A answers must stay intact for the Ask panel.
         let clean = reply.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -100,7 +146,13 @@ enum KeyboardAIClient {
         return clean
     }
 
-    private static func post(message: String, display: String, timeout: TimeInterval) async throws -> String {
+    private static func post(
+        message: String,
+        display: String,
+        timeout: TimeInterval,
+        system: String? = nil,
+        task: String? = nil
+    ) async throws -> String {
         try Task.checkCancellation()
         CompanionCredentials.refreshFromDisk()
         KeyboardChipPreferences.refreshFromDisk()
@@ -115,15 +167,33 @@ enum KeyboardAIClient {
         request.timeoutInterval = timeout
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
         request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
+
+        // Prefer true system/user split when companion supports `system`.
+        // Fallback: bind rules into `message` so improve stays rewrite-only even on older PCs.
+        let wireMessage: String
+        if let system, task == "rewrite_improve" {
+            wireMessage = """
+            [SYSTEM — BINDENDE REGELN]
+            \(system)
+
+            [USER TASK]
+            \(message)
+            """
+        } else {
+            wireMessage = message
+        }
+
         request.httpBody = try JSONEncoder().encode(
             ChatBody(
-                message: message,
+                message: wireMessage,
                 stream: false,
                 mode: "flash",
                 source: "keyboard",
                 channel: "keyboard",
                 display: display,
-                keyboard: true
+                keyboard: true,
+                task: task,
+                system: system
             )
         )
 

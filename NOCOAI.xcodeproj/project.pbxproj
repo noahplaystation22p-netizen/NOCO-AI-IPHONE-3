@@ -17,6 +17,8 @@
 		KBD0000010000000000000005 /* CompanionCredentials.swift in Sources */ = {isa = PBXBuildFile; fileRef = KBD0000020000000000000010 /* CompanionCredentials.swift */; };
 		KBD0000010000000000000006 /* KeyboardAIAction.swift in Sources */ = {isa = PBXBuildFile; fileRef = KBD0000020000000000000011 /* KeyboardAIAction.swift */; };
 		KBD0000010000000000000007 /* KeyboardAIClient.swift in Sources */ = {isa = PBXBuildFile; fileRef = KBD0000020000000000000012 /* KeyboardAIClient.swift */; };
+		KBD00000100000000000000IMP /* KeyboardImprovePipeline.swift in Sources */ = {isa = PBXBuildFile; fileRef = KBD00000200000000000000IMP /* KeyboardImprovePipeline.swift */; };
+		NA00000100000000000000IMP /* KeyboardImprovePipeline.swift in Sources */ = {isa = PBXBuildFile; fileRef = KBD00000200000000000000IMP /* KeyboardImprovePipeline.swift */; };
 		KBD000001000000000000000A /* KeyboardChipPreferences.swift in Sources */ = {isa = PBXBuildFile; fileRef = KBD0000020000000000000013 /* KeyboardChipPreferences.swift */; };
 		NA0000010000000000000071 /* KeyboardChipPreferences.swift in Sources */ = {isa = PBXBuildFile; fileRef = KBD0000020000000000000013 /* KeyboardChipPreferences.swift */; };
 		NA0000010000000000000072 /* KeyboardCustomizationView.swift in Sources */ = {isa = PBXBuildFile; fileRef = NA0000020000000000000090 /* KeyboardCustomizationView.swift */; };
@@ -166,6 +168,7 @@
 		KBD0000020000000000000010 /* CompanionCredentials.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CompanionCredentials.swift; sourceTree = "<group>"; };
 		KBD0000020000000000000011 /* KeyboardAIAction.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = KeyboardAIAction.swift; sourceTree = "<group>"; };
 		KBD0000020000000000000012 /* KeyboardAIClient.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = KeyboardAIClient.swift; sourceTree = "<group>"; };
+		KBD00000200000000000000IMP /* KeyboardImprovePipeline.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = KeyboardImprovePipeline.swift; sourceTree = "<group>"; };
 		KBD0000020000000000000013 /* KeyboardChipPreferences.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = KeyboardChipPreferences.swift; sourceTree = "<group>"; };
 		NA0000020000000000000090 /* KeyboardCustomizationView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = KeyboardCustomizationView.swift; sourceTree = "<group>"; };
 		KBD0000030000000000000001 /* NOCOAIKeyboard.appex */ = {isa = PBXFileReference; explicitFileType = "wrapper.app-extension"; includeInIndex = 0; path = NOCOAIKeyboard.appex; sourceTree = BUILT_PRODUCTS_DIR; };
@@ -556,6 +559,7 @@
 				BC0000020000000000000002 /* SharedBroadcastFrameStore.swift */,
 				KBD0000020000000000000011 /* KeyboardAIAction.swift */,
 				KBD0000020000000000000012 /* KeyboardAIClient.swift */,
+				KBD00000200000000000000IMP /* KeyboardImprovePipeline.swift */,
 				KBD0000020000000000000013 /* KeyboardChipPreferences.swift */,
 			);
 			path = Shared;
@@ -781,6 +785,7 @@
 				KBD0000010000000000000005 /* CompanionCredentials.swift in Sources */,
 				KBD0000010000000000000006 /* KeyboardAIAction.swift in Sources */,
 				KBD0000010000000000000007 /* KeyboardAIClient.swift in Sources */,
+				KBD00000100000000000000IMP /* KeyboardImprovePipeline.swift in Sources */,
 				KBD000001000000000000000A /* KeyboardChipPreferences.swift in Sources */,
 				KBD0000010000000000000008 /* KeychainService.swift in Sources */,
 			);
@@ -798,6 +803,7 @@
 				NA0000010000000000000060 /* CompanionCredentials.swift in Sources */,
 				BC0000010000000000000003 /* SharedBroadcastFrameStore.swift in Sources */,
 				NA0000010000000000000061 /* KeyboardAIAction.swift in Sources */,
+				NA00000100000000000000IMP /* KeyboardImprovePipeline.swift in Sources */,
 				NA0000010000000000000071 /* KeyboardChipPreferences.swift in Sources */,
 				NA0000010000000000000072 /* KeyboardCustomizationView.swift in Sources */,
 				NA0000010000000000000005 /* HapticService.swift in Sources */,
@@ -924,7 +930,7 @@
 				CODE_SIGNING_REQUIRED = NO;
 				CODE_SIGN_IDENTITY = "";
 				CODE_SIGNING_STYLE = Manual;
-				CURRENT_PROJECT_VERSION = 105;
+				CURRENT_PROJECT_VERSION = 106;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = NOCOAIKeyboard/Info.plist;
 				INFOPLIST_KEY_CFBundleDisplayName = "NOCO AI";
@@ -953,7 +959,7 @@
 				CODE_SIGNING_REQUIRED = NO;
 				CODE_SIGN_IDENTITY = "";
 				CODE_SIGNING_STYLE = Manual;
-				CURRENT_PROJECT_VERSION = 105;
+				CURRENT_PROJECT_VERSION = 106;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = NOCOAIKeyboard/Info.plist;
 				INFOPLIST_KEY_CFBundleDisplayName = "NOCO AI";
@@ -1018,7 +1024,7 @@
 				CODE_SIGN_ENTITLEMENTS = NOCOAI/NOCOAI.entitlements;
 				CODE_SIGNING_ALLOWED = NO;
 				CODE_SIGNING_REQUIRED = NO;
-				CURRENT_PROJECT_VERSION = 105;
+				CURRENT_PROJECT_VERSION = 106;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = NOCOAI/Info.plist;
@@ -1052,7 +1058,7 @@
 				CODE_SIGN_ENTITLEMENTS = NOCOAI/NOCOAI.entitlements;
 				CODE_SIGNING_ALLOWED = NO;
 				CODE_SIGNING_REQUIRED = NO;
-				CURRENT_PROJECT_VERSION = 105;
+				CURRENT_PROJECT_VERSION = 106;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = NOCOAI/Info.plist;
@@ -1085,7 +1091,7 @@
 				CODE_SIGN_ENTITLEMENTS = NOCOAISpeakWidget/NOCOAISpeakWidget.entitlements;
 				CODE_SIGNING_ALLOWED = NO;
 				CODE_SIGNING_REQUIRED = NO;
-				CURRENT_PROJECT_VERSION = 105;
+				CURRENT_PROJECT_VERSION = 106;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = NOCOAISpeakWidget/Info.plist;
 				INFOPLIST_KEY_CFBundleDisplayName = "NOCO Voice AI";
@@ -1113,7 +1119,7 @@
 				CODE_SIGN_ENTITLEMENTS = NOCOAISpeakWidget/NOCOAISpeakWidget.entitlements;
 				CODE_SIGNING_ALLOWED = NO;
 				CODE_SIGNING_REQUIRED = NO;
-				CURRENT_PROJECT_VERSION = 105;
+				CURRENT_PROJECT_VERSION = 106;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = NOCOAISpeakWidget/Info.plist;
 				INFOPLIST_KEY_CFBundleDisplayName = "NOCO Voice AI";
@@ -1145,7 +1151,7 @@
 				CODE_SIGNING_REQUIRED = NO;
 				CODE_SIGN_IDENTITY = "";
 				CODE_SIGNING_STYLE = Manual;
-				CURRENT_PROJECT_VERSION = 105;
+				CURRENT_PROJECT_VERSION = 106;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = NOCOAIBroadcast/Info.plist;
 				INFOPLIST_KEY_CFBundleDisplayName = "NOCO Live Screen";
@@ -1174,7 +1180,7 @@
 				CODE_SIGNING_REQUIRED = NO;
 				CODE_SIGN_IDENTITY = "";
 				CODE_SIGNING_STYLE = Manual;
-				CURRENT_PROJECT_VERSION = 105;
+				CURRENT_PROJECT_VERSION = 106;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = NOCOAIBroadcast/Info.plist;
 				INFOPLIST_KEY_CFBundleDisplayName = "NOCO Live Screen";

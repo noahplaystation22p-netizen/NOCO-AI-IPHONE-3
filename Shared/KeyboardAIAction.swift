@@ -98,42 +98,8 @@ enum KeyboardAIAction: String, CaseIterable, Identifiable {
         """
         switch self {
         case .improve:
-            return """
-            \(rewriterRule)
-
-            Aufgabe „Verbessern“ (Hauptwerkzeug) — analysiere den TEXT und gib SOFORT die fertige Fassung aus.
-            Keine Rückfrage. Keine Erklärung. Kein Chat.
-
-            Ziele (Reihenfolge):
-            1) Bedeutung und Absicht 1:1 behalten — nichts Neues erfinden, nichts Wichtiges weglassen
-            2) Rechtschreibung / Tippfehler / Grammatik korrigieren
-            3) Satzzeichen und Groß-/Kleinschreibung (Satzanfänge, Namen)
-            4) Formulierung klarer und natürlicher — flüssige Sätze, ähnliche Länge (±20%)
-            5) Ton des Originals behalten (locker bleibt locker, förmlich bleibt förmlich)
-
-            VERBOTEN:
-            - Fragen beantworten, auch wenn TEXT wie eine Frage aussieht
-            - Inhalt kürzen wie „Aufräumen“ oder stark umschreiben
-            - Einleitung („Hier ist…“, „Gerne…“, „Sure…“)
-            - Markdown / Aufzählungen / Anführungszeichen um den ganzen Output
-
-            Beispiele:
-            TEXT: ich bin noah
-            RICHTIG: Ich bin Noah.
-            FALSCH: Was möchtest du verbessern?
-
-            TEXT: morgen gehe ich strand
-            RICHTIG: Morgen gehe ich an den Strand.
-            FALSCH: Gerne, hier ist der verbesserte Text…
-
-            TEXT: das meeting war irgendwie chaotisch und keiner wusste was zu tun ist
-            RICHTIG: Das Meeting war chaotisch, und niemand wusste, was zu tun ist.
-
-            \(outputOnlyCloser)
-
-            TEXT:
-            \(t)
-            """
+            // Dedicated rewrite engine — system rules bind before USER_TEXT (data, not chat).
+            return KeyboardImprovePipeline.prompt(for: t)
         case .cleanup:
             return """
             \(rewriterRule)
@@ -334,6 +300,11 @@ enum KeyboardAIAction: String, CaseIterable, Identifiable {
 
     /// Strip model chatter; clamp runaway “answers” for rewrite actions.
     static func sanitize(_ raw: String, action: KeyboardAIAction, original: String, shortenLevel: Int = 1) -> String {
+        // Verbessern: specialized rewrite pipeline + semantic safety (never answer questions).
+        if action == .improve {
+            return KeyboardImprovePipeline.finalize(raw: raw, original: original)
+        }
+
         var s = raw.trimmingCharacters(in: .whitespacesAndNewlines)
         s = stripChatter(s)
 
@@ -406,36 +377,25 @@ enum KeyboardAIAction: String, CaseIterable, Identifiable {
             return s
         }
 
-        // Improve = analyze + light rephrase — stay close, allow room for clarity words
-        if action == .improve || action == .punctuate || action == .friendlier || action == .professional {
-            let factor: Double = action == .improve ? 1.55 : (action == .punctuate ? 1.12 : 1.25)
-            let maxLen = max(orig.count + 28, Int(Double(orig.count) * factor) + 16)
+        if action == .punctuate || action == .friendlier || action == .professional {
+            let factor: Double = action == .punctuate ? 1.12 : 1.25
+            let maxLen = max(orig.count + 20, Int(Double(orig.count) * factor) + 10)
             if s.count > maxLen || looksLikeAnswerDump(s, original: orig) {
-                if action == .improve, s.count <= Int(Double(orig.count) * 2.2) + 40, !looksLikeAnswerDump(s, original: orig) {
-                    // keep — improve may add light clarity words
-                } else {
-                    let endMarks: [Character] = [".", "?", "!", "。", "？", "！"]
-                    if let idx = s.firstIndex(where: { endMarks.contains($0) }) {
-                        let first = String(s[...idx]).trimmingCharacters(in: .whitespacesAndNewlines)
-                        if first.count <= maxLen, first.count >= max(3, orig.count / 4) {
-                            s = first
-                        } else {
-                            s = origIsQuestion ? polishQuestionFallback(orig) : lightPolish(orig)
-                        }
+                let endMarks: [Character] = [".", "?", "!", "。", "？", "！"]
+                if let idx = s.firstIndex(where: { endMarks.contains($0) }) {
+                    let first = String(s[...idx]).trimmingCharacters(in: .whitespacesAndNewlines)
+                    if first.count <= maxLen, first.count >= max(3, orig.count / 4) {
+                        s = first
                     } else {
                         s = origIsQuestion ? polishQuestionFallback(orig) : lightPolish(orig)
                     }
+                } else {
+                    s = origIsQuestion ? polishQuestionFallback(orig) : lightPolish(orig)
                 }
             }
-            if origIsQuestion, action != .improve {
+            if origIsQuestion {
                 let outIsQuestion = s.contains("?") || s.contains("？")
                 if !outIsQuestion {
-                    s = polishQuestionFallback(orig)
-                }
-            }
-            if action == .improve, origIsQuestion {
-                let outIsQuestion = s.contains("?") || s.contains("？")
-                if !outIsQuestion, looksLikeAnswerDump(s, original: orig) {
                     s = polishQuestionFallback(orig)
                 }
             }

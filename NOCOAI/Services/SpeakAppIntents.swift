@@ -193,7 +193,8 @@ struct ToggleVoiceAIIntent: AppIntent {
 
     @MainActor
     func perform() async throws -> some IntentResult & ProvidesDialog {
-        if VoiceAISessionState.isActive || SpeakLaunchBridge.pendingStart {
+        // Only stop when a real session is active — pendingStart alone must NOT cancel a new start.
+        if VoiceAISessionState.isActive {
             await VoiceAIBackgroundControl.stopSilently()
             try? await Task.sleep(nanoseconds: 60_000_000)
             return .result(dialog: "NOCO Voice AI beendet.")

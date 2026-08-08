@@ -4,11 +4,23 @@ import UIKit
 import Combine
 
 /// App-scoped Speak session so audio + Live Activity survive leaving the Speak UI.
+/// Session authority lives here — Dynamic Island is status-only, never the voice engine.
 @MainActor
 final class SpeakSessionController: ObservableObject {
     let voice = VoiceService()
 
+    /// Hard session state machine (controller-owned). Engine `voice.phase` is subordinate.
+    enum SessionPhase: Equatable {
+        case idle
+        case listening
+        case processing
+        case speaking
+        case recovering
+        case exiting
+    }
+
     @Published var isRunning = false
+    @Published private(set) var sessionPhase: SessionPhase = .idle
     @Published var lastReply = ""
     @Published var statusLine = "Voice AI bereit"
     @Published var showSpeakUI = false
@@ -33,6 +45,7 @@ final class SpeakSessionController: ObservableObject {
     private var wired = false
     private var bgTask: UIBackgroundTaskIdentifier = .invalid
     private var resumeTask: Task<Void, Never>?
+    private var resumeTaskStartedAt: Date?
     private var listenHealthTask: Task<Void, Never>?
     private var bgRenewTask: Task<Void, Never>?
     /// One queued utterance while NOCO is processing / speaking.
@@ -42,12 +55,17 @@ final class SpeakSessionController: ObservableObject {
     private var cancellables = Set<AnyCancellable>()
     /// While true: never reopen the mic (reply TTS / farewell in progress).
     private var holdMicForTTS = false
+    private var holdMicStartedAt: Date?
     /// Set when shutting down Voice AI — skip resume-listening.
     private var isExiting = false
 
     /// Live Screen / vision gate — true while Speak is busy or TTS is playing.
     var isBusyForVision: Bool {
         if isBusy { return true }
+        switch sessionPhase {
+        case .processing, .speaking, .exiting: return true
+        default: break
+        }
         if case .speaking = voice.phase { return true }
         if case .processing = voice.phase { return true }
         return false
@@ -73,6 +91,12 @@ final class SpeakSessionController: ObservableObject {
         busySince = on ? Date() : nil
     }
 
+    private func setHoldMicForTTS(_ on: Bool) {
+        holdMicForTTS = on
+        holdMicStartedAt = on ? Date() : nil
+        if on { sessionPhase = .speaking }
+    }
+
     func bind(connection: ConnectionStore) {
         self.connection = connection
         guard !wired else { return }
@@ -90,7 +114,8 @@ final class SpeakSessionController: ObservableObject {
             // Sync cancel so the TTS watchdog cannot reopen the mic mid-barge-in.
             self.resumeTask?.cancel()
             self.resumeTask = nil
-            self.holdMicForTTS = false
+            self.resumeTaskStartedAt = nil
+            self.setHoldMicForTTS(false)
             self.setBusy(false)
             self.invalidateTurn()
             self.connection?.chat.cancelSpeakSend()
@@ -100,26 +125,22 @@ final class SpeakSessionController: ObservableObject {
         }
         voice.onSpeakFinished = { [weak self] in
             guard let self else { return }
-            // Don't reopen mic while TTS hold / exit — watchdog owns the delayed resume
-            // so the last syllable isn't cut and the user can't barge in too early.
             if self.isExiting || !self.isRunning {
-                self.holdMicForTTS = false
+                self.setHoldMicForTTS(false)
                 return
             }
-            if self.holdMicForTTS {
-                // Keep holdMicForTTS until startSpeakWatchdog clears it after tail silence.
+            // TTS finished — always ensure a return-to-listen path is alive.
+            // Never leave holdMicForTTS without a live resume task (root cause of "2nd question dies").
+            if self.holdMicForTTS || self.sessionPhase == .speaking {
+                if self.resumeTask == nil {
+                    self.beginReturnToListening(settleSeconds: 0.28)
+                }
                 self.objectWillChange.send()
                 return
             }
             self.connection?.liveScreen.suppressAutoVision = false
             self.connection?.liveScreen.resumeQueuedAnalysisIfNeeded()
-            self.scheduleResumeListening(after: 0.28)
-            Task { @MainActor in
-                try? await Task.sleep(nanoseconds: 280_000_000)
-                guard self.isRunning, !self.holdMicForTTS, !self.isExiting else { return }
-                await self.drainPendingUtterance()
-            }
-            self.objectWillChange.send()
+            self.beginReturnToListening(settleSeconds: 0.22)
         }
     }
 
@@ -128,6 +149,12 @@ final class SpeakSessionController: ObservableObject {
     }
 
     func start() {
+        // Single session — never spawn a second Voice engine.
+        if isRunning, !isExiting {
+            ensureBackgroundPresence()
+            statusLine = "NOCO Voice AI läuft bereits"
+            return
+        }
         guard let connection, connection.isOnline else {
             statusLine = "PC offline — erst verbinden"
             return
@@ -138,24 +165,31 @@ final class SpeakSessionController: ObservableObject {
     }
 
     private func startAsync(connection: ConnectionStore) async {
+        if isRunning, !isExiting {
+            ensureBackgroundPresence()
+            return
+        }
         isExiting = false
-        holdMicForTTS = false
-        // 1) Live Activity FIRST — Lock Screen banner + Dynamic Island
+        setHoldMicForTTS(false)
+        setBusy(false)
+        sessionPhase = .recovering
+        // Live Activity = status mirror only (not the voice engine).
         let liveOk = await SpeakLiveActivityManager.startAndWait(sessionLabel: "NOCO Voice AI")
         do {
             try voice.activateBackgroundAudioSession()
             isRunning = true
-            setBusy(false)
             isMuted = false
             voice.setMuted(false)
             voice.sessionActive = true
-            // Voice AI always speaks replies — that's the product.
             voice.autoSpeakReplies = true
+            connection.liveScreen.suppressAutoVision = true
             beginBackgroundKeepAlive()
             startBackgroundRenewLoop()
             startListenHealthLoop()
+            try voice.hardReinitAudioForListen()
             try voice.startListening(autoEnd: true)
             HapticService.speakCue()
+            sessionPhase = .listening
             assistantPhase = .listening
             statusLine = liveOk
                 ? "NOCO Voice AI aktiviert"
@@ -164,17 +198,17 @@ final class SpeakSessionController: ObservableObject {
                     : "Zuhören aktiv · Live Activities aktivieren")
             VoiceAISessionState.publish(active: true, micOn: true, islandOn: liveOk)
             pushLiveActivity(force: true)
-            // Second ensure — some devices need a follow-up update
             try? await Task.sleep(nanoseconds: 200_000_000)
             if isRunning {
                 if !SpeakLiveActivityManager.isActive {
                     _ = await SpeakLiveActivityManager.startAndWait(sessionLabel: "NOCO Voice AI")
                 }
-                statusLine = "NOCO Voice AI aktiviert"
+                statusLine = "NOCO Voice AI aktiviert — sprich"
                 pushLiveActivity(force: true)
                 VoiceAISessionState.publish(active: true, micOn: true, islandOn: SpeakLiveActivityManager.isActive)
             }
         } catch {
+            sessionPhase = .idle
             isRunning = false
             listenHealthTask?.cancel()
             listenHealthTask = nil
@@ -191,11 +225,14 @@ final class SpeakSessionController: ObservableObject {
     func stop(playCue: Bool = true) {
         if playCue { HapticService.speakCue() }
         isExiting = true
-        holdMicForTTS = false
+        sessionPhase = .exiting
+        setHoldMicForTTS(false)
         invalidateTurn()
         connection?.chat.cancelSpeakSend()
+        connection?.liveScreen.suppressAutoVision = false
         resumeTask?.cancel()
         resumeTask = nil
+        resumeTaskStartedAt = nil
         listenHealthTask?.cancel()
         listenHealthTask = nil
         bgRenewTask?.cancel()
@@ -218,21 +255,22 @@ final class SpeakSessionController: ObservableObject {
         pendingToolConfirm = nil
         pendingToolOriginal = nil
         pendingUtterance = nil
+        sessionPhase = .idle
         assistantPhase = .idle
-        connection?.liveScreen.suppressAutoVision = false
-        voice.setMuted(false)
-        endBackgroundKeepAlive()
+        statusLine = "Voice AI beendet"
         SpeakLiveActivityManager.end()
         ImageLiveActivityManager.end(immediate: true, onlyIfOwner: .speakVision)
         voice.phase = .idle
-        statusLine = "Voice AI beendet"
+        endBackgroundKeepAlive()
+        showSpeakUI = false
         isExiting = false
+        objectWillChange.send()
     }
 
     /// Stop button / Shortcut / Action Button — instant, silent, no farewell.
     func exitVoiceAISilent() {
         isExiting = true
-        holdMicForTTS = false
+        setHoldMicForTTS(false)
         invalidateTurn()
         connection?.chat.cancelSpeakSend()
         resumeTask?.cancel()
@@ -289,7 +327,7 @@ final class SpeakSessionController: ObservableObject {
         }
 
         isExiting = true
-        holdMicForTTS = true
+        setHoldMicForTTS(true)
         resumeTask?.cancel()
         voice.stopListening(cancel: true)
         assistantPhase = .idle
@@ -391,7 +429,7 @@ final class SpeakSessionController: ObservableObject {
         listenHealthTask = Task { [weak self] in
             while !Task.isCancelled {
                 let bg = await MainActor.run { UIApplication.shared.applicationState != .active }
-                try? await Task.sleep(nanoseconds: bg ? 450_000_000 : 700_000_000)
+                try? await Task.sleep(nanoseconds: bg ? 400_000_000 : 550_000_000)
                 guard let self, !Task.isCancelled else { return }
                 await MainActor.run {
                     self.ensureListeningHealthy()
@@ -404,36 +442,43 @@ final class SpeakSessionController: ObservableObject {
         guard isRunning, !isExiting, !isMuted else { return }
 
         // Stuck busy without TTS → recover so the next question can send.
-        if isBusy, holdMicForTTS == false,
+        if isBusy, !holdMicForTTS,
            let since = busySince,
-           Date().timeIntervalSince(since) > 48 {
+           Date().timeIntervalSince(since) > 36 {
             if case .speaking = voice.phase {
-                voice.forceFinishIfSpeakingStuck(maxDuration: 120)
+                voice.forceFinishIfSpeakingStuck(maxDuration: 90)
                 return
             }
             setBusy(false)
-            holdMicForTTS = false
+            setHoldMicForTTS(false)
             invalidateTurn()
             connection?.chat.cancelSpeakSend()
             statusLine = "NOCO hört wieder zu…"
-            scheduleResumeListening(after: 0.1)
+            sessionPhase = .recovering
+            beginReturnToListening(settleSeconds: 0.08)
             return
         }
 
-        // TTS hold stuck forever → force end and reopen mic.
-        if holdMicForTTS {
+        // Speaking hold: force return to listen if TTS ended or watchdog is stuck.
+        if holdMicForTTS || sessionPhase == .speaking {
             if case .speaking = voice.phase {
-                voice.forceFinishIfSpeakingStuck(maxDuration: 120)
+                voice.forceFinishIfSpeakingStuck(maxDuration: 90)
                 return
             }
-            // Watchdog still running — let it reopen the mic cleanly.
-            if resumeTask != nil { return }
-            // TTS already ended but hold flag stuck (common on home screen / Island).
-            holdMicForTTS = false
+            let holdAge = holdMicStartedAt.map { Date().timeIntervalSince($0) } ?? 99
+            let resumeAge = resumeTaskStartedAt.map { Date().timeIntervalSince($0) } ?? 99
+            // Brief grace while watchdog settles — then ALWAYS recover (never stuck deaf).
+            if resumeTask != nil, resumeAge < 1.6, holdAge < 2.4 {
+                return
+            }
+            resumeTask?.cancel()
+            resumeTask = nil
+            resumeTaskStartedAt = nil
+            setHoldMicForTTS(false)
             setBusy(false)
+            sessionPhase = .recovering
             statusLine = "NOCO hört wieder zu…"
-            try? voice.activateListeningAfterTTS()
-            scheduleResumeListening(after: 0.05)
+            beginReturnToListening(settleSeconds: 0.05)
             return
         }
 
@@ -442,13 +487,14 @@ final class SpeakSessionController: ObservableObject {
         if case .processing = voice.phase { return }
         if voice.isActivelyListening {
             let bg = UIApplication.shared.applicationState != .active
-            voice.refreshRecognitionIfStale(maxAge: bg ? 10 : 24)
+            voice.refreshRecognitionIfStale(maxAge: bg ? 8 : 20)
+            sessionPhase = .listening
             return
         }
         // Idle / error / dead recognition → reopen mic (common after background TTS).
+        sessionPhase = .recovering
         statusLine = "NOCO hört wieder zu…"
-        try? voice.activateListeningAfterTTS()
-        scheduleResumeListening(after: 0.05)
+        beginReturnToListening(settleSeconds: 0.05)
     }
 
     func ensureBackgroundPresence() {
@@ -464,7 +510,7 @@ final class SpeakSessionController: ObservableObject {
         // Critical: reopen mic if TTS→listen failed while app was backgrounded.
         if !isMuted, !holdMicForTTS, !isBusy, !voice.isActivelyListening {
             if case .speaking = voice.phase { return }
-            scheduleResumeListening(after: 0.15)
+            beginReturnToListening(settleSeconds: 0.12)
         }
         statusLine = isMuted
             ? "Stumm · Live Activity aktiv"
@@ -473,99 +519,105 @@ final class SpeakSessionController: ObservableObject {
                 : "NOCO hört zu…")
     }
 
-    /// Reliable re-listen after TTS (debounce + settle delay). Longer in background.
+    /// Reliable re-listen after TTS (debounce + settle delay).
     private func scheduleResumeListening(after delay: TimeInterval) {
+        beginReturnToListening(settleSeconds: delay)
+    }
+
+    /// Single owner of speak→listen: wait for TTS to leave speaking, hard-reinit audio, open mic.
+    private func beginReturnToListening(settleSeconds: TimeInterval) {
         resumeTask?.cancel()
-        let bgBoost = UIApplication.shared.applicationState != .active ? 0.22 : 0
+        resumeTaskStartedAt = Date()
+        let settle = max(0.05, settleSeconds)
         resumeTask = Task { [weak self] in
-            let ns = UInt64(max(0, delay + bgBoost) * 1_000_000_000)
-            try? await Task.sleep(nanoseconds: ns)
+            for _ in 0..<200 {
+                try? await Task.sleep(nanoseconds: 80_000_000)
+                guard let self, !Task.isCancelled else { return }
+                let stillSpeaking = await MainActor.run { () -> Bool in
+                    self.voice.forceFinishIfSpeakingStuck(maxDuration: 90)
+                    if case .speaking = self.voice.phase { return true }
+                    return false
+                }
+                if !stillSpeaking { break }
+            }
+            let bg = await MainActor.run { UIApplication.shared.applicationState != .active }
+            let tail = settle + (bg ? 0.12 : 0)
+            try? await Task.sleep(nanoseconds: UInt64(tail * 1_000_000_000))
             guard !Task.isCancelled else { return }
             await MainActor.run {
-                self?.resumeListening()
+                guard let self else { return }
+                self.finishReturnToListening()
             }
         }
+    }
+
+    private func finishReturnToListening() {
+        guard isRunning, !isExiting else {
+            setHoldMicForTTS(false)
+            resumeTask = nil
+            resumeTaskStartedAt = nil
+            return
+        }
+        if case .speaking = voice.phase {
+            voice.stopSpeaking(notifyFinished: false)
+        }
+        setHoldMicForTTS(false)
+        setBusy(false)
+        listenRetryCount = 0
+        connection?.liveScreen.suppressAutoVision = true
+        resumeListening(forceHardReinit: true)
+        // Second chance — background audio route often settles late.
+        Task { @MainActor [weak self] in
+            try? await Task.sleep(nanoseconds: 400_000_000)
+            guard let self, self.isRunning, !self.isExiting, !self.holdMicForTTS, !self.isMuted else { return }
+            if !self.voice.isActivelyListening {
+                self.resumeListening(forceHardReinit: true)
+            }
+            await self.drainPendingUtterance()
+        }
+        resumeTask = nil
+        resumeTaskStartedAt = nil
     }
 
     /// Poll until TTS leaves speaking, then resume mic (only if still in session).
     private func startSpeakWatchdog() {
-        resumeTask?.cancel()
-        resumeTask = Task { [weak self] in
-            for _ in 0..<500 {
-                try? await Task.sleep(nanoseconds: 80_000_000)
-                guard let self, !Task.isCancelled else { return }
-                let speaking = await MainActor.run { () -> Bool in
-                    self.voice.forceFinishIfSpeakingStuck(maxDuration: 120)
-                    if case .speaking = self.voice.phase { return true }
-                    return false
-                }
-                if !speaking { break }
-            }
-            // Short settle — then reopen mic aggressively (Island / home screen).
-            let tail: UInt64 = UIApplication.shared.applicationState != .active
-                ? 380_000_000
-                : 280_000_000
-            try? await Task.sleep(nanoseconds: tail)
-            guard !Task.isCancelled else { return }
-            await MainActor.run {
-                guard let self else { return }
-                if self.isExiting || !self.isRunning {
-                    self.holdMicForTTS = false
-                    return
-                }
-                // Hard clear if TTS still marked speaking (stuck synthesizer / buffer).
-                if case .speaking = self.voice.phase {
-                    self.voice.stopSpeaking(notifyFinished: true)
-                }
-                self.holdMicForTTS = false
-                self.setBusy(false)
-                self.listenRetryCount = 0
-                self.connection?.liveScreen.suppressAutoVision = false
-                self.connection?.liveScreen.resumeQueuedAnalysisIfNeeded()
-                // Re-assert audio before mic — background route after TTS is fragile.
-                try? self.voice.activateListeningAfterTTS()
-                self.resumeListening()
-                // Second chance — background audio route often settles late.
-                Task { @MainActor in
-                    try? await Task.sleep(nanoseconds: 450_000_000)
-                    guard self.isRunning, !self.isExiting, !self.holdMicForTTS, !self.isMuted else { return }
-                    if !self.voice.isActivelyListening {
-                        try? self.voice.activateListeningAfterTTS()
-                        self.resumeListening()
-                    }
-                }
-                Task { await self.drainPendingUtterance() }
-            }
-        }
+        beginReturnToListening(settleSeconds: 0.28)
     }
 
-    private func resumeListening() {
+    private func resumeListening(forceHardReinit: Bool = false) {
         // Allow mic reopen even during brief PC blips — utterance send handles offline.
         guard isRunning else { return }
         guard !isExiting, !holdMicForTTS else { return }
         guard !isMuted else {
             statusLine = "Stumm — tippe Mute aus zum Sprechen"
             voice.phase = .idle
+            sessionPhase = .idle
             pushLiveActivity(force: true)
             return
         }
         guard !isBusy else {
-            scheduleResumeListening(after: 0.15)
+            beginReturnToListening(settleSeconds: 0.15)
             return
         }
         if case .speaking = voice.phase {
-            scheduleResumeListening(after: 0.2)
+            beginReturnToListening(settleSeconds: 0.2)
             return
         }
-        if voice.isActivelyListening {
+        if voice.isActivelyListening, !forceHardReinit {
             listenRetryCount = 0
+            sessionPhase = .listening
             assistantPhase = pendingToolConfirm == nil ? .listening : .awaitingConfirm
             return
         }
         do {
-            try voice.activateListeningAfterTTS()
+            if forceHardReinit {
+                try voice.hardReinitAudioForListen()
+            } else {
+                try voice.activateListeningAfterTTS()
+            }
             try voice.startListening(autoEnd: true)
             listenRetryCount = 0
+            sessionPhase = .listening
             assistantPhase = pendingToolConfirm == nil ? .listening : .awaitingConfirm
             statusLine = pendingToolConfirm?.confirmationQuestion ?? "NOCO hört zu"
             VoiceAISessionState.publish(active: true, micOn: true, islandOn: SpeakLiveActivityManager.isActive)
@@ -573,11 +625,12 @@ final class SpeakSessionController: ObservableObject {
             Task { await drainPendingUtterance() }
         } catch {
             listenRetryCount += 1
+            sessionPhase = .recovering
             statusLine = listenRetryCount <= 2
                 ? "Zuhören unterbrochen — nochmal…"
                 : "NOCO hört wieder zu…"
-            let backoff = min(1.2, 0.2 + Double(listenRetryCount) * 0.18)
-            scheduleResumeListening(after: backoff)
+            let backoff = min(1.0, 0.15 + Double(listenRetryCount) * 0.15)
+            beginReturnToListening(settleSeconds: backoff)
         }
     }
 
@@ -586,8 +639,8 @@ final class SpeakSessionController: ObservableObject {
         guard !trimmed.isEmpty else { return }
         // Never accept speech while shutting down.
         if isExiting { return }
-        // During TTS hold: only exit phrases can interrupt (barge-in handler owns the rest).
-        if holdMicForTTS {
+        // During TTS: only exit phrases interrupt; otherwise queue one follow-up.
+        if holdMicForTTS || sessionPhase == .speaking || (voice.phase == .speaking) {
             let intent = SpeakIntentEngine.classify(
                 trimmed,
                 cameraOn: visionCameraEnabled,
@@ -595,21 +648,21 @@ final class SpeakSessionController: ObservableObject {
                 hasPendingFrame: pendingVisionJPEG != nil
             )
             if case .endSpeak = intent.action {
-                holdMicForTTS = false
+                setHoldMicForTTS(false)
                 setBusy(false)
                 invalidateTurn()
                 connection?.chat.cancelSpeakSend()
                 voice.softStopSpeaking(notifyFinished: false)
                 await exitVoiceAI(spokenFarewell: true)
+                return
             }
-            return
-        }
-        if case .speaking = voice.phase {
+            pendingUtterance = trimmed
+            statusLine = "Merke mir das…"
             return
         }
         // Only gate on real work — VoiceService sets .processing before callback,
         // which previously parked every utterance forever in pendingUtterance.
-        if isBusy {
+        if isBusy || sessionPhase == .processing {
             pendingUtterance = trimmed
             statusLine = "Einen Moment…"
             return
@@ -624,7 +677,8 @@ final class SpeakSessionController: ObservableObject {
     /// User spoke over the assistant — soft-stop reply, prioritize their turn.
     private func handleBargeIn(_ text: String) async {
         guard isRunning, !isExiting else { return }
-        statusLine = "Ich hÃ¶re zu…"
+        statusLine = "Ich höre zu…"
+        sessionPhase = .listening
         assistantPhase = .listening
         pushLiveActivity(force: true)
 
@@ -710,6 +764,7 @@ final class SpeakSessionController: ObservableObject {
     ) async {
         let turn = beginTurn()
         setBusy(true)
+        sessionPhase = .processing
         mapAssistantPhase(for: intent)
         statusLine = intent.statusLine
         voice.phase = .processing
@@ -1017,7 +1072,7 @@ final class SpeakSessionController: ObservableObject {
                 voice.phase = .error(msg)
                 pushLiveActivity(force: true)
                 if voice.autoSpeakReplies, consecutiveFailures <= 2 {
-                    holdMicForTTS = true
+                    setHoldMicForTTS(true)
                     setBusy(true)
                     assistantPhase = .speaking
                     // No barge-in — echo was cutting TTS mid-sentence on Island/home.
@@ -1043,7 +1098,7 @@ final class SpeakSessionController: ObservableObject {
             assistantPhase = .speaking
             pushLiveActivity(force: true)
             resumeTask?.cancel()
-            holdMicForTTS = true
+            setHoldMicForTTS(true)
             setBusy(true)
             connection.liveScreen.suppressAutoVision = true
             // Barge-in off: prevents TTS cutoff from mic echo while speaking on home screen.
@@ -1051,6 +1106,7 @@ final class SpeakSessionController: ObservableObject {
             startSpeakWatchdog()
         } else {
             setBusy(false)
+            sessionPhase = .listening
             assistantPhase = .listening
             scheduleResumeListening(after: 0.2)
             await drainPendingUtterance()
@@ -1094,7 +1150,7 @@ final class SpeakSessionController: ObservableObject {
         statusLine = text
         pushLiveActivity(force: true)
         if voice.autoSpeakReplies {
-            holdMicForTTS = true
+            setHoldMicForTTS(true)
             setBusy(true)
             voice.speak(text, allowBargeIn: false)
             startSpeakWatchdog()
@@ -1108,7 +1164,7 @@ final class SpeakSessionController: ObservableObject {
     // Legacy path removed — intent engine owns routing.
 
     private func drainPendingUtterance() async {
-        guard let next = pendingUtterance, isRunning, !isBusy else { return }
+        guard let next = pendingUtterance, isRunning, !isBusy, !holdMicForTTS, !isExiting else { return }
         pendingUtterance = nil
         await handleUtterance(next)
     }

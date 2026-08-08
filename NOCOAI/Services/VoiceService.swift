@@ -55,11 +55,11 @@ final class VoiceService: NSObject, ObservableObject {
     private var ttsPendingBuffers = 0
 
     /// Wait for a clear end of speech — responsive, but not mid-thought.
-    private let silenceToEnd: TimeInterval = 0.92
-    private let transcriptStableToEnd: TimeInterval = 0.68
-    private let minSpeechSeconds: TimeInterval = 0.42
-    private let naturalEndQuiet: TimeInterval = 0.78
-    private let endConfirmGrace: TimeInterval = 0.18
+    private let silenceToEnd: TimeInterval = 0.86
+    private let transcriptStableToEnd: TimeInterval = 0.62
+    private let minSpeechSeconds: TimeInterval = 0.38
+    private let naturalEndQuiet: TimeInterval = 0.72
+    private let endConfirmGrace: TimeInterval = 0.16
     private let speechLevelFactor: CGFloat = 2.35
 
     private var pendingEndCandidateAt: Date?
@@ -230,6 +230,30 @@ final class VoiceService: NSObject, ObservableObject {
         )
         try session.overrideOutputAudioPort(.speaker)
         try session.setActive(true, options: [])
+    }
+
+    /// Tear down TTS + recognition, then rebuild a clean duplex session for the next listen turn.
+    /// Call this after every reply before `startListening` — do not reuse a damaged post-TTS route.
+    func hardReinitAudioForListen() throws {
+        cancelBargeIn()
+        speakGeneration &+= 1
+        if synthesizer.isSpeaking {
+            synthesizer.stopSpeaking(at: .immediate)
+        }
+        stopTTSEngine()
+        ttsUseAmplified = false
+        pendingSpeakChunks = 0
+        ttsPendingBuffers = 0
+        speakingStartedAt = nil
+        speakingTextLower = ""
+        stopListening(cancel: true)
+        if case .speaking = phase { phase = .idle }
+        try activateListeningAfterTTS()
+        // Validate input hardware settled after route flip.
+        let format = audioEngine.inputNode.outputFormat(forBus: 0)
+        if format.sampleRate <= 0 || format.channelCount <= 0 {
+            try activateBackgroundAudioSession()
+        }
     }
 
     enum ListenError: LocalizedError {

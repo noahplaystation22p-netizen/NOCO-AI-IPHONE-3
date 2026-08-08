@@ -46,6 +46,8 @@ final class SpeakSessionController: ObservableObject {
     private var bgTask: UIBackgroundTaskIdentifier = .invalid
     private var resumeTask: Task<Void, Never>?
     private var resumeTaskStartedAt: Date?
+    /// Bumped on every return-to-listen schedule so stale finishes are ignored.
+    private var resumeGeneration: UInt64 = 0
     private var listenHealthTask: Task<Void, Never>?
     private var bgRenewTask: Task<Void, Never>?
     /// One queued utterance while NOCO is processing / speaking.
@@ -135,11 +137,13 @@ final class SpeakSessionController: ObservableObject {
                 if self.resumeTask == nil {
                     self.beginReturnToListening(settleSeconds: 0.28)
                 }
+                VoiceDebugLog.event("TTS_END", "hold→listen")
                 self.objectWillChange.send()
                 return
             }
-            self.connection?.liveScreen.suppressAutoVision = false
-            self.connection?.liveScreen.resumeQueuedAnalysisIfNeeded()
+            // Keep Live Screen quiet for the whole Speak session — Island is status only.
+            self.connection?.liveScreen.suppressAutoVision = true
+            VoiceDebugLog.event("TTS_END", "resume")
             self.beginReturnToListening(settleSeconds: 0.22)
         }
     }
@@ -191,6 +195,8 @@ final class SpeakSessionController: ObservableObject {
             HapticService.speakCue()
             sessionPhase = .listening
             assistantPhase = .listening
+            VoiceDebugLog.event("VOICE_START", liveOk ? "island=on" : "island=off")
+            VoiceDebugLog.event("LISTENING")
             statusLine = liveOk
                 ? "NOCO Voice AI aktiviert"
                 : (SpeakLiveActivityManager.areActivitiesEnabled
@@ -258,6 +264,7 @@ final class SpeakSessionController: ObservableObject {
         sessionPhase = .idle
         assistantPhase = .idle
         statusLine = "Voice AI beendet"
+        VoiceDebugLog.event("VOICE_EXIT")
         SpeakLiveActivityManager.end()
         ImageLiveActivityManager.end(immediate: true, onlyIfOwner: .speakVision)
         voice.phase = .idle
@@ -478,6 +485,8 @@ final class SpeakSessionController: ObservableObject {
             setBusy(false)
             sessionPhase = .recovering
             statusLine = "NOCO hört wieder zu…"
+            VoiceDebugLog.event("ERROR", "stuck_hold_forced")
+            VoiceDebugLog.event("RECOVERY", "health_force_listen")
             beginReturnToListening(settleSeconds: 0.05)
             return
         }
@@ -527,12 +536,16 @@ final class SpeakSessionController: ObservableObject {
     /// Single owner of speak→listen: wait for TTS to leave speaking, hard-reinit audio, open mic.
     private func beginReturnToListening(settleSeconds: TimeInterval) {
         resumeTask?.cancel()
+        resumeGeneration &+= 1
+        let generation = resumeGeneration
         resumeTaskStartedAt = Date()
         let settle = max(0.05, settleSeconds)
+        VoiceDebugLog.event("RECOVERY", "return_to_listen gen=\(generation)")
         resumeTask = Task { [weak self] in
             for _ in 0..<200 {
                 try? await Task.sleep(nanoseconds: 80_000_000)
                 guard let self, !Task.isCancelled else { return }
+                guard await MainActor.run(body: { self.resumeGeneration == generation }) else { return }
                 let stillSpeaking = await MainActor.run { () -> Bool in
                     self.voice.forceFinishIfSpeakingStuck(maxDuration: 90)
                     if case .speaking = self.voice.phase { return true }
@@ -546,16 +559,20 @@ final class SpeakSessionController: ObservableObject {
             guard !Task.isCancelled else { return }
             await MainActor.run {
                 guard let self else { return }
-                self.finishReturnToListening()
+                guard self.resumeGeneration == generation else { return }
+                self.finishReturnToListening(generation: generation)
             }
         }
     }
 
-    private func finishReturnToListening() {
+    private func finishReturnToListening(generation: UInt64) {
+        guard resumeGeneration == generation else { return }
         guard isRunning, !isExiting else {
             setHoldMicForTTS(false)
-            resumeTask = nil
-            resumeTaskStartedAt = nil
+            if resumeGeneration == generation {
+                resumeTask = nil
+                resumeTaskStartedAt = nil
+            }
             return
         }
         if case .speaking = voice.phase {
@@ -565,18 +582,30 @@ final class SpeakSessionController: ObservableObject {
         setBusy(false)
         listenRetryCount = 0
         connection?.liveScreen.suppressAutoVision = true
+        VoiceDebugLog.event("LISTENING_RESTART", "hard_reinit")
         resumeListening(forceHardReinit: true)
-        // Second chance — background audio route often settles late.
-        Task { @MainActor [weak self] in
+        // Keep resumeTask alive until second-chance settles (prevents health-loop double schedule).
+        resumeTask = Task { @MainActor [weak self] in
             try? await Task.sleep(nanoseconds: 400_000_000)
-            guard let self, self.isRunning, !self.isExiting, !self.holdMicForTTS, !self.isMuted else { return }
+            guard let self else { return }
+            guard self.resumeGeneration == generation else { return }
+            guard self.isRunning, !self.isExiting, !self.holdMicForTTS, !self.isMuted else {
+                if self.resumeGeneration == generation {
+                    self.resumeTask = nil
+                    self.resumeTaskStartedAt = nil
+                }
+                return
+            }
             if !self.voice.isActivelyListening {
+                VoiceDebugLog.event("RECOVERY", "second_chance_mic")
                 self.resumeListening(forceHardReinit: true)
             }
             await self.drainPendingUtterance()
+            if self.resumeGeneration == generation {
+                self.resumeTask = nil
+                self.resumeTaskStartedAt = nil
+            }
         }
-        resumeTask = nil
-        resumeTaskStartedAt = nil
     }
 
     /// Poll until TTS leaves speaking, then resume mic (only if still in session).
@@ -637,6 +666,13 @@ final class SpeakSessionController: ObservableObject {
     private func enqueueUtterance(_ text: String) async {
         let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty else { return }
+        // Drop empty/noise fragments — never send blank Speak requests.
+        let meaningful = trimmed.filter { $0.isLetter || $0.isNumber }
+        guard meaningful.count >= 2 || trimmed.count >= 3 else {
+            VoiceDebugLog.event("SPEECH_END", "ignored_noise")
+            return
+        }
+        VoiceDebugLog.event("SPEECH_END", String(trimmed.prefix(48)))
         // Never accept speech while shutting down.
         if isExiting { return }
         // During TTS: only exit phrases interrupt; otherwise queue one follow-up.
@@ -765,6 +801,7 @@ final class SpeakSessionController: ObservableObject {
         let turn = beginTurn()
         setBusy(true)
         sessionPhase = .processing
+        VoiceDebugLog.event("REQUEST_SENT", String(originalText.prefix(48)))
         mapAssistantPhase(for: intent)
         statusLine = intent.statusLine
         voice.phase = .processing
@@ -1101,6 +1138,8 @@ final class SpeakSessionController: ObservableObject {
             setHoldMicForTTS(true)
             setBusy(true)
             connection.liveScreen.suppressAutoVision = true
+            VoiceDebugLog.event("TTS_START", String(resolved.prefix(48)))
+            VoiceDebugLog.event("REQUEST_RECEIVED", "chars=\(resolved.count)")
             // Barge-in off: prevents TTS cutoff from mic echo while speaking on home screen.
             voice.speak(resolved, allowBargeIn: false)
             startSpeakWatchdog()
@@ -1239,9 +1278,9 @@ final class SpeakSessionController: ObservableObject {
     func disableScreenShare() {
         screenShareEnabled = false
         if let live = connection?.liveScreen, live.isActive {
-            // Keep session if user opened Live Screen UI separately; only clear Speak flag
             live.autoAssistEnabled = true
-            live.suppressAutoVision = false
+            // While Voice AI runs, keep vision quiet so it cannot steal the audio turn.
+            live.suppressAutoVision = isRunning
         }
         statusLine = isRunning ? "Bildschirm aus · nur Sprache" : "Voice AI bereit"
         HapticService.soft()

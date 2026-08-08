@@ -59,7 +59,8 @@ struct CompanionAPI {
         config.timeoutIntervalForRequest = 45
         // Think image gen + long agent/vision jobs need headroom.
         config.timeoutIntervalForResource = 960
-        config.waitsForConnectivity = true
+        // Never hang forever waiting for a path — fail fast so Voice/status can recover.
+        config.waitsForConnectivity = false
         config.allowsExpensiveNetworkAccess = true
         config.allowsConstrainedNetworkAccess = true
         return URLSession(configuration: config)

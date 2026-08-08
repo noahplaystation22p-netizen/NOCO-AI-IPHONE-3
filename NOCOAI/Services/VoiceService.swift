@@ -810,6 +810,7 @@ final class VoiceService: NSObject, ObservableObject {
         let finished = finishUtterance()
         guard !finished.isEmpty else {
             // Empty recognition — keep listening instead of hanging in processing.
+            VoiceDebugLog.event("SPEECH_END", "empty")
             autoFinishArmed = true
             if case .processing = phase { phase = .listening }
             do {
@@ -820,6 +821,7 @@ final class VoiceService: NSObject, ObservableObject {
             }
             return
         }
+        VoiceDebugLog.event("SPEECH_DETECTED", String(finished.prefix(48)))
         HapticService.selection()
         onAutoUtterance?(finished)
     }

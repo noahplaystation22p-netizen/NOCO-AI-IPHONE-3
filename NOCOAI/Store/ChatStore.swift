@@ -213,12 +213,29 @@ final class ChatStore: ObservableObject {
         // Speak must never get stuck behind a previous send
         if isSending {
             if speak {
+                speakSendEpoch &+= 1
                 sendTask?.cancel()
                 sendTask = nil
                 workPhase = .idle
                 isSending = false
             } else {
                 return nil
+            }
+        }
+
+        // Hard-cap growth during long Voice sessions (UI + memory).
+        if speak, messages.count >= softMessageLimit + 10 {
+            let drop = max(0, messages.count - keepAfterCompact)
+            if drop > 0 {
+                messages.removeFirst(min(drop, messages.count - 2))
+            }
+        }
+
+        // Don't start Speak while compact is rewriting the thread.
+        if speak, isCompacting {
+            for _ in 0..<40 {
+                if !isCompacting { break }
+                try? await Task.sleep(nanoseconds: 100_000_000)
             }
         }
 

@@ -80,6 +80,8 @@ final class ConnectionStore: ObservableObject {
     /// Prefer remote while the phone has no Wi‑Fi (cellular / expensive path).
     private var prefersRemotePath = false
     private var pathMonitor: NWPathMonitor?
+    /// Coalesce overlapping status refreshes (UI + poll + reconnect).
+    private var refreshInFlight: Task<Void, Never>?
 
     private enum Keys {
         static let host = "nocoai.host"
@@ -759,6 +761,19 @@ final class ConnectionStore: ObservableObject {
     }
 
     func refreshStatus(showLoading: Bool = false) async {
+        if let existing = refreshInFlight {
+            await existing.value
+            return
+        }
+        let task = Task { @MainActor in
+            await self.refreshStatusUncoalesced(showLoading: showLoading)
+        }
+        refreshInFlight = task
+        await task.value
+        refreshInFlight = nil
+    }
+
+    private func refreshStatusUncoalesced(showLoading: Bool = false) async {
         guard let api else {
             // Paired but API missing — rebuild and try Tailscale if we have it.
             if isPaired, !serverHost.isEmpty {

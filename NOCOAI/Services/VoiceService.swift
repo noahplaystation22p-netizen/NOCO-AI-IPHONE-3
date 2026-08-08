@@ -133,13 +133,13 @@ final class VoiceService: NSObject, ObservableObject {
               let type = AVAudioSession.InterruptionType(rawValue: typeVal) else { return }
         switch type {
         case .began:
-            VoiceDebugLog.event("AUDIO_INTERRUPTION", "began")
+            VoiceDebugLog.event("AUDIO_INTERRUPTION", "began \(pipelineDebugSummary())")
             if case .listening = phase {
                 stopListening(cancel: true)
                 phase = .idle
             }
         case .ended:
-            VoiceDebugLog.event("AUDIO_INTERRUPTION", "ended")
+            VoiceDebugLog.event("AUDIO_INTERRUPTION", "ended \(pipelineDebugSummary())")
             let opts = (info[AVAudioSessionInterruptionOptionKey] as? UInt)
                 .flatMap { AVAudioSession.InterruptionOptions(rawValue: $0) } ?? []
             guard opts.contains(.shouldResume), sessionActive, !isMuted else { return }
@@ -156,7 +156,7 @@ final class VoiceService: NSObject, ObservableObject {
 
     private func handleRouteChange() {
         guard sessionActive, !isMuted else { return }
-        VoiceDebugLog.event("AUDIO_ROUTE_CHANGE")
+        VoiceDebugLog.event("AUDIO_ROUTE_CHANGE", pipelineDebugSummary())
         if case .speaking = phase { return }
         // After BT / speaker flips, recognition often dies silently.
         if case .listening = phase, !audioEngine.isRunning {
@@ -309,8 +309,8 @@ final class VoiceService: NSObject, ObservableObject {
                 throw error
             }
         }
-        VoiceDebugLog.event("LISTENING_START", bg ? "background onDevice=\(preferOnDevice)" : "foreground")
-        VoiceDebugLog.event("RECOGNITION_STARTED", preferOnDevice ? "on_device" : "cloud")
+        VoiceDebugLog.event("LISTENING_START", "\(appStateDebugName) onDevice=\(preferOnDevice) \(pipelineDebugSummary())")
+        VoiceDebugLog.event("RECOGNITION_STARTED", "\(preferOnDevice ? "on_device" : "cloud") \(pipelineDebugSummary())")
     }
 
     private func installRecognitionPipeline(
@@ -394,6 +394,7 @@ final class VoiceService: NSObject, ObservableObject {
         }
         if let error {
             let ns = error as NSError
+            VoiceDebugLog.event("VOICE_ERROR", "speech_error code=\(ns.code) domain=\(ns.domain) \(pipelineDebugSummary())")
             let partial = liveTranscript.trimmingCharacters(in: .whitespacesAndNewlines)
             if !partial.isEmpty, autoFinishArmed,
                (ns.domain == "kAFAssistantErrorDomain" || ns.code == 216 || ns.code == 203) {
@@ -447,7 +448,7 @@ final class VoiceService: NSObject, ObservableObject {
     func pipelineDebugSummary() -> String {
         let session = AVAudioSession.sharedInstance()
         let bufferAge = lastAudioBufferAt.map { String(format: "%.1f", Date().timeIntervalSince($0)) } ?? "nil"
-        return "phase=\(phaseDebugName) sessionActive=\(sessionActive) engine=\(audioEngine.isRunning) tap=\(inputTapInstalled) request=\(recognitionRequest != nil) task=\(recognitionTask != nil) input=\(session.isInputAvailable) flow=\(isInputFlowing) bufferAge=\(bufferAge) buffers=\(audioBufferCount) tts=\(ttsPlayer.isPlaying || synthesizer.isSpeaking) muted=\(isMuted)"
+        return "app=\(appStateDebugName) phase=\(phaseDebugName) sessionActive=\(sessionActive) engine=\(audioEngine.isRunning) tap=\(inputTapInstalled) request=\(recognitionRequest != nil) task=\(recognitionTask != nil) input=\(session.isInputAvailable) flow=\(isInputFlowing) bufferAge=\(bufferAge) buffers=\(audioBufferCount) tts=\(ttsPlayer.isPlaying || synthesizer.isSpeaking) muted=\(isMuted)"
     }
 
     private var isInputFlowing: Bool {
@@ -457,6 +458,15 @@ final class VoiceService: NSObject, ObservableObject {
         }
         guard let lastAudioBufferAt else { return false }
         return now.timeIntervalSince(lastAudioBufferAt) < 1.7
+    }
+
+    private var appStateDebugName: String {
+        switch UIApplication.shared.applicationState {
+        case .active: return "FOREGROUND"
+        case .inactive: return "INACTIVE"
+        case .background: return "BACKGROUND"
+        @unknown default: return "UNKNOWN"
+        }
     }
 
     private var phaseDebugName: String {
@@ -798,7 +808,7 @@ final class VoiceService: NSObject, ObservableObject {
             self.speakingStartedAt = nil
             HapticService.success()
             self.stopTTSEngine()
-            VoiceDebugLog.event("TTS_PLAYBACK_COMPLETE")
+            VoiceDebugLog.event("TTS_PLAYBACK_COMPLETE", self.pipelineDebugSummary())
             self.notifySpeakFinishedOnce()
         }
     }
@@ -902,7 +912,7 @@ final class VoiceService: NSObject, ObservableObject {
     private func notifySpeakFinishedOnce() {
         guard !speakFinishedNotified else { return }
         speakFinishedNotified = true
-        VoiceDebugLog.event("TTS_AUDIO_COMPLETE", "notify")
+        VoiceDebugLog.event("TTS_AUDIO_COMPLETE", "notify \(pipelineDebugSummary())")
         onSpeakFinished?()
     }
 
@@ -1415,6 +1425,7 @@ extension VoiceService: AVSpeechSynthesizerDelegate {
                 self.phase = .idle
                 self.speakingStartedAt = nil
                 HapticService.success()
+                VoiceDebugLog.event("TTS_PLAYBACK_COMPLETE", self.pipelineDebugSummary())
                 self.notifySpeakFinishedOnce()
             }
         }

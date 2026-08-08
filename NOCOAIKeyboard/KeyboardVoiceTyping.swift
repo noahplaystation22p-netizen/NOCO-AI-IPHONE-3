@@ -74,13 +74,19 @@ final class KeyboardVoiceTyping: ObservableObject {
     private var speechStarted = false
     private var lastVoiceAt: Date?
     private var onAutoEnd: (() -> Void)?
+    private let keyboardAudioDisabled = true
 
     var hasPermission: Bool {
+        guard !keyboardAudioDisabled else { return false }
         SFSpeechRecognizer.authorizationStatus() == .authorized
             && AVAudioSession.sharedInstance().recordPermission == .granted
     }
 
     func requestPermissions() async -> Bool {
+        guard !keyboardAudioDisabled else {
+            lastError = "Tastatur-Diktat vorübergehend deaktiviert"
+            return false
+        }
         let speechOK: Bool = await withCheckedContinuation { cont in
             SFSpeechRecognizer.requestAuthorization { status in
                 cont.resume(returning: status == .authorized)
@@ -108,6 +114,11 @@ final class KeyboardVoiceTyping: ObservableObject {
         liveTranscript = ""
         speechStarted = false
         lastVoiceAt = nil
+
+        guard !keyboardAudioDisabled else {
+            lastError = "Tastatur-Diktat vorübergehend deaktiviert"
+            throw DictationError.unavailable
+        }
 
         guard let speechRecognizer, speechRecognizer.isAvailable else {
             lastError = "Spracherkennung nicht verfügbar"
@@ -189,7 +200,6 @@ final class KeyboardVoiceTyping: ObservableObject {
         recognitionTask = nil
         isRecording = false
         level = 0
-        try? AVAudioSession.sharedInstance().setActive(false, options: .notifyOthersOnDeactivation)
         let text = liveTranscript.trimmingCharacters(in: .whitespacesAndNewlines)
         return text
     }

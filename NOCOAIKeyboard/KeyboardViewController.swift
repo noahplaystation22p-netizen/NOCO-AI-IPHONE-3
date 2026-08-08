@@ -59,13 +59,13 @@ final class KeyboardViewController: UIInputViewController {
         let hasAsk = model.showAskPanel
         let hasReply = !model.askReply.isEmpty
         let needed: CGFloat
-        // Keep height tight so the board doesn't overflow the host app.
+        // Compact chrome — keep board height close to Apple so host content stays visible.
         if hasAsk && hasReply {
-            needed = 430
+            needed = 400
         } else if hasAsk {
-            needed = 360
+            needed = 338
         } else {
-            needed = 292
+            needed = 268
         }
         if let heightConstraint {
             heightConstraint.constant = needed
@@ -76,7 +76,7 @@ final class KeyboardViewController: UIInputViewController {
             heightConstraint = c
         }
         view.setNeedsUpdateConstraints()
-        UIView.animate(withDuration: 0.25) {
+        UIView.animate(withDuration: 0.22) {
             self.view.superview?.layoutIfNeeded()
         }
     }

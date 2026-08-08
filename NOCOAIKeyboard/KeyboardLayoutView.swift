@@ -14,9 +14,9 @@ struct KeyboardLayoutView: View {
     private let num3 = Array(".,?!ß'")
 
     /// Tight Apple-like rhythm — fits custom keyboard height without clipping.
-    private let rowSpacing: CGFloat = 8
-    private let keySpacing: CGFloat = 5.5
-    private let keyHeight: CGFloat = 40
+    private let rowSpacing: CGFloat = 9
+    private let keySpacing: CGFloat = 6
+    private let keyHeight: CGFloat = 42
 
     var body: some View {
         VStack(spacing: rowSpacing) {
@@ -27,8 +27,8 @@ struct KeyboardLayoutView: View {
             }
         }
         .padding(.horizontal, 3)
-        .padding(.top, 2)
-        .padding(.bottom, 2)
+        .padding(.top, 1)
+        .padding(.bottom, 4)
         .animation(.easeOut(duration: 0.15), value: model.showingNumbers)
     }
 
@@ -76,23 +76,32 @@ struct KeyboardLayoutView: View {
     }
 
     private func bottomRow(leftTitle: String) -> some View {
-        // Apple-like: [123] [punct] ——— Leertaste ——— [return]
+        // Apple-like: [123] [.] ——— space ——— [return]
         HStack(spacing: keySpacing) {
-            ModifierKey(title: leftTitle, width: 42, height: keyHeight, glyphLift: 1.5) {
+            ModifierKey(title: leftTitle, width: 42, height: keyHeight) {
                 model.toggleNumbers()
             }
-            PunctuationKey(width: 42, height: keyHeight, glyphLift: 1.5) { inserted in
+            PunctuationKey(width: 42, height: keyHeight) { inserted in
                 model.insert(inserted)
             }
-            SpaceKey(height: keyHeight, glyphLift: 1.5) {
+            SpaceKey(height: keyHeight) {
                 model.space()
             } onCursorMove: { model.moveCursor(by: $0) }
-            ModifierKey(title: "return", width: 88, height: keyHeight, prominent: true, glyphLift: 1.5) {
+            ModifierKey(
+                title: returnTitle,
+                width: 88,
+                height: keyHeight,
+                prominent: false
+            ) {
                 model.returnKey()
             }
         }
         .padding(.horizontal, 1)
-        .offset(y: -2)
+    }
+
+    private var returnTitle: String {
+        // Spotlight/search hosts often use search — keep a short Apple-like label.
+        model.showAskPanel ? "senden" : "return"
     }
 
     private func letterRow(_ chars: [Character], sidePad: CGFloat = 0, letterBoost: Bool = false) -> some View {
@@ -304,10 +313,11 @@ private struct LetterKey: View {
     }
 
     private var keyFill: Color {
+        // Apple dark keyboard key tone
         if pressed {
-            return Color(red: 0.38, green: 0.40, blue: 0.46)
+            return Color(white: 0.55)
         }
-        return Color(red: 0.28, green: 0.29, blue: 0.34)
+        return Color(red: 0.39, green: 0.39, blue: 0.41)
     }
 
     private var popupFill: Color {
@@ -385,10 +395,10 @@ private struct PunctuationKey: View {
             .foregroundStyle(.white.opacity(0.95))
             .background(
                 RoundedRectangle(cornerRadius: 8.5, style: .continuous)
-                    .fill(Color(red: 0.18, green: 0.19, blue: 0.23))
+                    .fill(Color(red: 0.30, green: 0.30, blue: 0.32))
                     .overlay(
                         RoundedRectangle(cornerRadius: 8.5, style: .continuous)
-                            .stroke(Color.white.opacity(0.1), lineWidth: 0.5)
+                            .stroke(Color.white.opacity(0.08), lineWidth: 0.5)
                     )
             )
             .overlay(alignment: .top) {
@@ -504,10 +514,10 @@ private struct DeleteKey: View {
             .foregroundStyle(.white.opacity(0.9))
             .background(
                 RoundedRectangle(cornerRadius: 8.5, style: .continuous)
-                    .fill(Color(red: 0.18, green: 0.19, blue: 0.23))
+                    .fill(Color(red: 0.30, green: 0.30, blue: 0.32))
                     .overlay(
                         RoundedRectangle(cornerRadius: 8.5, style: .continuous)
-                            .stroke(Color.white.opacity(0.1), lineWidth: 0.5)
+                            .stroke(Color.white.opacity(0.08), lineWidth: 0.5)
                     )
             )
             .scaleEffect(pressed ? 0.96 : 1)
@@ -548,7 +558,7 @@ private struct ModifierKey: View {
                     .font(.system(size: 16, weight: .semibold))
             } else if let title {
                 Text(title)
-                    .font(.system(size: title == "return" ? 15 : 13, weight: .semibold, design: .rounded))
+                    .font(.system(size: title.count > 6 ? 12 : (title == "return" ? 15 : 13), weight: .semibold, design: .rounded))
             }
         }
         .offset(y: -glyphLift)
@@ -597,11 +607,10 @@ private struct ModifierKey: View {
             )
         }
         if active || pressed {
-            return AnyShapeStyle(scheme == .dark ? Color.white.opacity(0.52) : Color.white)
+            return AnyShapeStyle(Color(white: 0.55))
         }
-        return AnyShapeStyle(
-            Color(red: 0.18, green: 0.19, blue: 0.23)
-        )
+        // Apple modifier key (darker than letters)
+        return AnyShapeStyle(Color(red: 0.30, green: 0.30, blue: 0.32))
     }
 }
 
@@ -620,8 +629,8 @@ private struct SpaceKey: View {
 
     var body: some View {
         Text(trackpad ? "Cursor" : "Leertaste")
-            .font(.system(size: 15, weight: .medium, design: .rounded))
-            .foregroundStyle(.white.opacity(0.9))
+            .font(.system(size: 14, weight: .medium, design: .rounded))
+            .foregroundStyle(.white.opacity(0.85))
             .offset(y: -glyphLift)
             .frame(maxWidth: .infinity)
             .frame(height: height)
@@ -629,14 +638,14 @@ private struct SpaceKey: View {
                 RoundedRectangle(cornerRadius: 8.5, style: .continuous)
                     .fill(
                         trackpad
-                        ? Color(red: 0.18, green: 0.32, blue: 0.55)
-                        : Color(red: 0.26, green: 0.27, blue: 0.32).opacity(pressed ? 0.85 : 1)
+                        ? Color(red: 0.28, green: 0.38, blue: 0.55)
+                        : Color(red: 0.39, green: 0.39, blue: 0.41).opacity(pressed ? 0.88 : 1)
                     )
                     .overlay(
                         RoundedRectangle(cornerRadius: 8.5, style: .continuous)
-                            .stroke(Color.white.opacity(trackpad ? 0.28 : 0.1), lineWidth: 0.5)
+                            .stroke(Color.white.opacity(trackpad ? 0.22 : 0.08), lineWidth: 0.5)
                     )
-                    .shadow(color: .black.opacity(0.25), radius: 0.4, y: 1)
+                    .shadow(color: .black.opacity(0.22), radius: 0.4, y: 1)
             )
             .padding(.vertical, 2)
             .contentShape(Rectangle())

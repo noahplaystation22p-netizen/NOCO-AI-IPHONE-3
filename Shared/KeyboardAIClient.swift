@@ -84,6 +84,7 @@ enum KeyboardAIClient {
         let message = """
         Du bist NOCO AI auf einer iPhone-Tastatur. Antworte knapp und klar (1–4 Sätze).
         Kein Intro, kein „Gerne“, kein Markdown außer nötig. Sprache der Frage übernehmen.
+        Antworte auf die FRAGE selbst — nicht den Text umschreiben.
 
         FRAGE:
         \(q)
@@ -93,7 +94,8 @@ enum KeyboardAIClient {
             display: "Frage: \(q.prefix(72))",
             timeout: 16
         )
-        let clean = sanitizeCustom(reply)
+        // Light trim only — Q&A answers must stay intact for the Ask panel.
+        let clean = reply.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !clean.isEmpty else { throw ClientError.empty }
         return clean
     }

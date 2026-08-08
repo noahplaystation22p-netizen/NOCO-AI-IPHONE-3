@@ -6,7 +6,7 @@ final class KeyboardViewModel: ObservableObject {
     @Published var hasFullAccess = false
     @Published var isConfigured = false
     @Published var isProcessing = false
-    @Published var statusLine = "Markiere Text oder tippe — dann Aktion wählen"
+    @Published var statusLine = "NOCO AI bereit"
     @Published var shiftOn = false
     @Published var capsLock = false
     @Published var showingNumbers = false
@@ -14,11 +14,16 @@ final class KeyboardViewModel: ObservableObject {
     @Published var showIntelligenceBurst = false
     @Published var animationPhase: AnimationPhase = .idle
     @Published var overlayTitle = "…"
-    @Published var toolbarChips: [KeyboardToolbarChip] = KeyboardChipPreferences.resolvedChips()
+    @Published var toolbarChips: [KeyboardToolbarChip] = []
     @Published var showAskPanel = false
     @Published var askDraft = ""
     @Published var askReply = ""
     @Published var isAsking = false
+
+    /// Compact rewrite actions shown only inside the NOCO AI panel.
+    var quickAIActions: [KeyboardAIAction] {
+        [.improve, .cleanup, .complete, .shorten, .answer]
+    }
 
     // MARK: NOCO AI Diktat
     @Published var isDictating = false
@@ -61,7 +66,7 @@ final class KeyboardViewModel: ObservableObject {
     func refreshAccess() {
         CompanionCredentials.refreshFromDisk()
         KeyboardChipPreferences.refreshFromDisk()
-        toolbarChips = KeyboardChipPreferences.resolvedChips()
+        toolbarChips = []
         hasFullAccess = controller?.hasFullAccess == true
         isConfigured = CompanionCredentials.isConfigured
         dictationStyle = .current
@@ -69,8 +74,10 @@ final class KeyboardViewModel: ObservableObject {
             statusLine = "Vollzugriff in iPhone-Einstellungen aktivieren"
         } else if !isConfigured {
             statusLine = "In der App: Zugangsdaten aktualisieren"
+        } else if showAskPanel {
+            statusLine = "Tippe deine Frage — Return sendet"
         } else {
-            statusLine = "Text tippen/markieren → Aktion tippen"
+            statusLine = "NOCO AI bereit"
         }
     }
 
@@ -230,6 +237,10 @@ final class KeyboardViewModel: ObservableObject {
 
     /// Double-tap space → period + space (iOS-style).
     func space() {
+        if showAskPanel {
+            insert(" ")
+            return
+        }
         let now = Date()
         if let last = lastSpaceAt, now.timeIntervalSince(last) < 0.35 {
             lastSpaceAt = nil
@@ -251,15 +262,35 @@ final class KeyboardViewModel: ObservableObject {
         selectHaptic.selectionChanged()
     }
 
-    func toggleAskPanel() {
-        withAnimation(.spring(response: 0.38, dampingFraction: 0.86)) {
-            showAskPanel.toggle()
-        }
+    /// Opens the compact NOCO AI field and focuses typing into it (blinking cursor).
+    func openNOCOAI() {
         if showAskPanel {
-            statusLine = "Tippe deine Frage auf der Tastatur"
-            selectHaptic.selectionChanged()
+            closeNOCOAI()
+            return
         }
+        withAnimation(.spring(response: 0.34, dampingFraction: 0.88)) {
+            showAskPanel = true
+        }
+        askReply = ""
+        statusLine = "Tippe deine Frage — Return sendet"
+        selectHaptic.selectionChanged()
         controller?.updateKeyboardHeight()
+    }
+
+    func closeNOCOAI() {
+        withAnimation(.spring(response: 0.34, dampingFraction: 0.88)) {
+            showAskPanel = false
+        }
+        statusLine = "NOCO AI bereit"
+        controller?.updateKeyboardHeight()
+    }
+
+    func toggleAskPanel() {
+        openNOCOAI()
+    }
+
+    func runBuiltinAction(_ action: KeyboardAIAction) {
+        runChip(.builtin(action))
     }
 
     func sendAsk() {
@@ -286,12 +317,13 @@ final class KeyboardViewModel: ObservableObject {
                 let reply = try await KeyboardAIClient.ask(question: q)
                 if Task.isCancelled { return }
                 animationPhase = .success
-                askReply = reply
+                // Keep the full answer visible — don't over-sanitize Q&A replies.
+                askReply = reply.trimmingCharacters(in: .whitespacesAndNewlines)
                 statusLine = "Antwort bereit"
                 notifyHaptic.notificationOccurred(.success)
                 controller?.updateKeyboardHeight()
-                try? await Task.sleep(nanoseconds: 350_000_000)
-                withAnimation(.easeOut(duration: 0.28)) {
+                try? await Task.sleep(nanoseconds: 280_000_000)
+                withAnimation(.easeOut(duration: 0.22)) {
                     showIntelligenceBurst = false
                     animationPhase = .idle
                 }

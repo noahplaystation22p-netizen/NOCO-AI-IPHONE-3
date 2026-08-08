@@ -33,7 +33,7 @@ enum CompanionAPIError: LocalizedError {
                 case .timedOut:
                     return CompanionAPIError.unreachable.errorDescription
                 case .appTransportSecurityRequiresSecureConnection:
-                    return "iOS blockiert HTTP — bitte neues NOCO AI IPA installieren (ATS). Nicht https:// eingeben."
+                    return "Verbindung blockiert (HTTP). Bitte Build 85+ neu installieren. Nur die IP eingeben, z. B. 100.x.x.x — ohne https://"
                 case .secureConnectionFailed, .serverCertificateUntrusted, .clientCertificateRejected:
                     return "Sichere Verbindung fehlgeschlagen — nutze die WLAN-IP (192.168.x.x) vom PC, nicht https://. Tailscale-VPN am iPhone prüfen, falls 100.x."
                 case .cannotConnectToHost, .networkConnectionLost, .notConnectedToInternet:

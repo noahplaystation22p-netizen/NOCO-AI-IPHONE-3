@@ -103,6 +103,27 @@ jobs:
           echo "Found Live Activity widget: $WIDGET_APEX"
           echo "Found AI keyboard: $KEYBOARD_APEX"
 
+          # Force ATS cleartext allow — Tailscale 100.x is not "local networking".
+          # GENERATE_INFOPLIST_FILE merges can drop nested ATS dicts; inject explicitly.
+          APP_PLIST="$APP_PATH/Info.plist"
+          /usr/libexec/PlistBuddy -c "Delete :NSAppTransportSecurity" "$APP_PLIST" 2>/dev/null || true
+          /usr/libexec/PlistBuddy -c "Add :NSAppTransportSecurity dict" "$APP_PLIST"
+          /usr/libexec/PlistBuddy -c "Add :NSAppTransportSecurity:NSAllowsArbitraryLoads bool true" "$APP_PLIST"
+          /usr/libexec/PlistBuddy -c "Add :NSAppTransportSecurity:NSAllowsLocalNetworking bool true" "$APP_PLIST"
+          /usr/libexec/PlistBuddy -c "Add :NSAppTransportSecurity:NSAllowsArbitraryLoadsInWebContent bool true" "$APP_PLIST"
+          echo "=== ATS in app Info.plist ==="
+          /usr/libexec/PlistBuddy -c "Print :NSAppTransportSecurity" "$APP_PLIST"
+          /usr/libexec/PlistBuddy -c "Print :CFBundleVersion" "$APP_PLIST"
+
+          # Same for keyboard extension (HTTP to companion)
+          if [ -n "$KEYBOARD_APEX" ]; then
+            KBD_PLIST="$KEYBOARD_APEX/Info.plist"
+            /usr/libexec/PlistBuddy -c "Delete :NSAppTransportSecurity" "$KBD_PLIST" 2>/dev/null || true
+            /usr/libexec/PlistBuddy -c "Add :NSAppTransportSecurity dict" "$KBD_PLIST"
+            /usr/libexec/PlistBuddy -c "Add :NSAppTransportSecurity:NSAllowsArbitraryLoads bool true" "$KBD_PLIST"
+            /usr/libexec/PlistBuddy -c "Add :NSAppTransportSecurity:NSAllowsLocalNetworking bool true" "$KBD_PLIST"
+          fi
+
           # Sign nested extension first, then the app (ad-hoc)
           find "$APP_PATH" -name "*.appex" -type d -print0 | while IFS= read -r -d '' ext; do
             case "$(basename "$ext")" in

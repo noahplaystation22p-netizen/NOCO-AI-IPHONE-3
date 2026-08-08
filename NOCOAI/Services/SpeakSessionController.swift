@@ -517,7 +517,7 @@ final class SpeakSessionController: ObservableObject {
         // Phase said listening but pipeline is dead — reopen for real.
         sessionPhase = .restartingListening
         statusLine = "NOCO hört wieder zu…"
-        VoiceDebugLog.event("BACKGROUND_RECOVERY", "pipeline_not_active")
+        VoiceDebugLog.event("BACKGROUND_RECOVERY", "pipeline_not_active \(voice.pipelineDebugSummary())")
         beginReturnToListening(settleSeconds: bg ? 0.12 : 0.05)
     }
 

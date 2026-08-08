@@ -47,6 +47,8 @@ final class VoiceService: NSObject, ObservableObject {
     private var recognitionStartedAt: Date?
     private var audioObserversInstalled = false
     private var inputTapInstalled = false
+    private var lastAudioBufferAt: Date?
+    private var audioBufferCount: UInt64 = 0
 
     /// Amplified TTS path (gain > 1.0 — AVSpeechUtterance.volume alone caps at 1).
     private let ttsEngine = AVAudioEngine()
@@ -361,6 +363,8 @@ final class VoiceService: NSObject, ObservableObject {
         lastTranscriptChangeAt = nil
         pendingEndCandidateAt = nil
         recognitionStartedAt = Date()
+        lastAudioBufferAt = Date()
+        audioBufferCount = 0
         phase = .listening
         HapticService.medium()
         startSilenceWatcher()
@@ -435,13 +439,24 @@ final class VoiceService: NSObject, ObservableObject {
             && recognitionRequest != nil
             && recognitionTask != nil
             && AVAudioSession.sharedInstance().isInputAvailable
+            && isInputFlowing
     }
 
     func verifyListeningPipeline() -> Bool { isActivelyListening }
 
     func pipelineDebugSummary() -> String {
         let session = AVAudioSession.sharedInstance()
-        return "phase=\(phaseDebugName) sessionActive=\(sessionActive) engine=\(audioEngine.isRunning) tap=\(inputTapInstalled) request=\(recognitionRequest != nil) task=\(recognitionTask != nil) input=\(session.isInputAvailable) tts=\(ttsPlayer.isPlaying || synthesizer.isSpeaking) muted=\(isMuted)"
+        let bufferAge = lastAudioBufferAt.map { String(format: "%.1f", Date().timeIntervalSince($0)) } ?? "nil"
+        return "phase=\(phaseDebugName) sessionActive=\(sessionActive) engine=\(audioEngine.isRunning) tap=\(inputTapInstalled) request=\(recognitionRequest != nil) task=\(recognitionTask != nil) input=\(session.isInputAvailable) flow=\(isInputFlowing) bufferAge=\(bufferAge) buffers=\(audioBufferCount) tts=\(ttsPlayer.isPlaying || synthesizer.isSpeaking) muted=\(isMuted)"
+    }
+
+    private var isInputFlowing: Bool {
+        let now = Date()
+        if let started = recognitionStartedAt, now.timeIntervalSince(started) < 1.7 {
+            return true
+        }
+        guard let lastAudioBufferAt else { return false }
+        return now.timeIntervalSince(lastAudioBufferAt) < 1.7
     }
 
     private var phaseDebugName: String {
@@ -458,7 +473,7 @@ final class VoiceService: NSObject, ObservableObject {
     func refreshRecognitionIfStale(maxAge: TimeInterval = 45) {
         guard !isMuted else { return }
         if case .listening = phase, !isActivelyListening {
-            VoiceDebugLog.event("BACKGROUND_RECOVERY", "stale_dead_pipeline")
+            VoiceDebugLog.event("BACKGROUND_RECOVERY", "stale_dead_pipeline \(pipelineDebugSummary())")
             do {
                 try hardReinitAudioForListen()
                 try startListening(autoEnd: true)
@@ -533,6 +548,8 @@ final class VoiceService: NSObject, ObservableObject {
             audioEngine.inputNode.removeTap(onBus: 0)
             inputTapInstalled = false
         }
+        lastAudioBufferAt = nil
+        audioBufferCount = 0
     }
 
     private func pauseRecognitionForSessionTTS() {
@@ -568,6 +585,9 @@ final class VoiceService: NSObject, ObservableObject {
         if !audioEngine.isRunning {
             audioEngine.prepare()
             try audioEngine.start()
+        }
+        if lastAudioBufferAt == nil {
+            lastAudioBufferAt = Date()
         }
         VoiceDebugLog.event("MIC_WARM_SESSION", "engine=\(audioEngine.isRunning) tap=\(inputTapInstalled)")
     }
@@ -1121,6 +1141,8 @@ final class VoiceService: NSObject, ObservableObject {
         guard let channel = buffer.floatChannelData?[0] else { return }
         let frames = Int(buffer.frameLength)
         guard frames > 0 else { return }
+        lastAudioBufferAt = Date()
+        audioBufferCount &+= 1
 
         var sum: Float = 0
         for i in 0..<frames {

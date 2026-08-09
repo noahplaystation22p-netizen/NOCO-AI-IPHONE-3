@@ -206,13 +206,20 @@ enum CompanionCredentials {
     @discardableResult
     static func refreshFromDisk() -> Bool {
         if let disk = readDisk(), !disk.token.isEmpty, !disk.host.isEmpty {
+            // Promote into App Group suite — keyboard process otherwise keeps a stale LAN host
+            // while disk already has the Tailscale IP (getter prefers suite first).
+            suite?.set(disk.host, forKey: Keys.host)
+            suite?.set(disk.port == 0 ? 4747 : disk.port, forKey: Keys.port)
+            suite?.set(disk.token, forKey: Keys.token)
+            suite?.set(disk.device, forKey: Keys.device)
+            suite?.synchronize()
             cacheLocally(disk)
             return true
         }
         if let pb = readPasteboard(), !pb.token.isEmpty, !pb.host.isEmpty {
             cacheLocally(pb)
             suite?.set(pb.host, forKey: Keys.host)
-            suite?.set(pb.port, forKey: Keys.port)
+            suite?.set(pb.port == 0 ? 4747 : pb.port, forKey: Keys.port)
             suite?.set(pb.token, forKey: Keys.token)
             suite?.set(pb.device, forKey: Keys.device)
             suite?.synchronize()

@@ -396,30 +396,23 @@ struct SpeakIslandExpandedGlassPanel: View {
     }
 }
 
-/// Expanded Island reply: wrap + follow spoken tail (no hard single-line cut).
+/// Expanded Island reply: TTS-synced text with soft marquee when it overflows.
 struct SpeakSpeakingDetailText: View {
     let state: SpeakActivityAttributes.ContentState
 
     var body: some View {
         let text = SpeakPhasePalette.statusDetail(for: state)
-        if state.phaseRaw == "speaking" {
-            Text(text)
-                .font(.system(size: 11, weight: .medium, design: .rounded))
-                .foregroundStyle(.white.opacity(0.92))
-                .multilineTextAlignment(.leading)
-                .lineLimit(3)
-                .frame(maxWidth: .infinity, alignment: .leading)
-                .animation(.easeInOut(duration: 0.18), value: text)
-        } else {
-            SpeakMarqueeText(
-                text: text,
-                font: .system(size: 11, weight: .medium, design: .rounded),
-                foreground: .white.opacity(0.9),
-                speed: 26,
-                forceScroll: false,
-                lineCount: 1
-            )
-        }
+        let speaking = state.phaseRaw == "speaking"
+        let long = text.count > 36
+        SpeakMarqueeText(
+            text: text,
+            font: .system(size: 11, weight: .medium, design: .rounded),
+            foreground: .white.opacity(0.92),
+            speed: speaking ? 28 : 24,
+            forceScroll: speaking && long,
+            lineCount: speaking && text.count > 90 ? 2 : 1
+        )
+        .animation(.easeInOut(duration: 0.16), value: text)
     }
 }
 

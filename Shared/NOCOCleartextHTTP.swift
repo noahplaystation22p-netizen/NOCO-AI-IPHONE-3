@@ -32,7 +32,14 @@ enum NOCOCleartextHTTP {
 
     static func shouldUseCleartext(for url: URL?) -> Bool {
         guard let host = url?.host, !host.isEmpty else { return false }
+        // Tailscale always; private LAN also uses NW when URLSession/ATS is flaky in extensions.
         return isTailscaleIP(host)
+    }
+
+    /// Prefer cleartext for any private mesh host (keyboard + Tailscale).
+    static func shouldPreferCleartext(for url: URL?) -> Bool {
+        guard let host = url?.host, !host.isEmpty else { return false }
+        return isTailscaleIP(host) || isPrivateLanIP(host)
     }
 
     static func isTailscaleIP(_ host: String) -> Bool {

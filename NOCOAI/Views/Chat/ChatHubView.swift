@@ -135,6 +135,9 @@ struct ChatHubView: View {
             .animation(.spring(response: 0.35, dampingFraction: 0.82), value: connection.chat.peerTyping)
             .nocoBackground()
             .navigationTitle(titleText)
+            .navigationBarTitleDisplayMode(.inline)
+            // Same chat canvas under the Island — no extra gray chrome / second bar.
+            .toolbarBackground(.hidden, for: .navigationBar)
             .toolbar {
                 ToolbarItem(placement: .topBarLeading) {
                     Button {
@@ -160,12 +163,10 @@ struct ChatHubView: View {
                         }
                         StatusBadge(
                             online: connection.isOnline,
-                            label: connection.isReconnecting
-                                ? "Verbindung…"
-                                : (connection.isOnline ? "Online" : "Offline"),
-                            detail: connection.isReconnecting
-                                ? "wird wiederhergestellt"
-                                : (connection.isOnline ? connection.onlineBadgeDetail : nil)
+                            label: connection.isOnline
+                                ? (connection.activePath == .remote ? "Remote" : "Online")
+                                : (connection.isReconnecting ? "…" : "Offline"),
+                            detail: connection.isOnline ? connection.onlineBadgeDetail : nil
                         )
                     }
                 }
@@ -483,7 +484,14 @@ private struct ChatBubble: View {
                                 ? .understanding
                                 : connection.chat.workPhase,
                             isFile: lastUserLooksLikeFile,
-                            statusOverride: connection.reconnectStatusLine ?? connection.chat.reconnectHint
+                            statusOverride: {
+                                // Don't flash reconnect hiccups over thinking UI.
+                                if let hint = connection.chat.reconnectHint,
+                                   hint.contains("Internet") || hint.contains("Ergebnisse") {
+                                    return hint
+                                }
+                                return nil
+                            }()
                         )
                     } else {
                         bubbleText

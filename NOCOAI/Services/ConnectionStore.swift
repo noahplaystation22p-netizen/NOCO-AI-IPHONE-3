@@ -892,17 +892,18 @@ final class ConnectionStore: ObservableObject {
                         ConnectionDiagnostics.shared.log(
                             "REMOTE_STREAM_INTERRUPTED — Session behalten (retry \(consecutiveFailures)/\(softLimit))"
                         )
+                    } else {
+                        ConnectionDiagnostics.shared.log(
+                            "TEMPORARILY_INTERRUPTED — silent retry \(consecutiveFailures)/\(softLimit)"
+                        )
                     }
-                    // Quiet for first blips — no banner/Voice kill on 1–2s hiccups.
-                    if consecutiveFailures >= 3 {
-                        beginReconnectBanner()
-                    }
+                    // Internal only — never show "Verbindung unterbrochen" for brief hiccups.
                     return
                 }
             }
 
             if consecutiveFailures == 1 {
-                beginReconnectBanner()
+                // Still quiet on first hard failure while retries run.
             }
             // Hysteresis: require sustained LAN failure before Tailscale (avoids flip-flop).
             if !connectionPathLocked,
@@ -914,7 +915,7 @@ final class ConnectionStore: ObservableObject {
                     return
                 }
             }
-            if consecutiveFailures >= offlineFailureThreshold {
+            if consecutiveFailures >= softFailureOfflineThreshold {
                 // Voice lock: don't flip Offline→OFF on Island for a hiccup.
                 if !connectionPathLocked {
                     isOnline = false
@@ -922,8 +923,7 @@ final class ConnectionStore: ObservableObject {
                     publishWidgetStatus()
                     await handleOfflinePathRecovery()
                 } else {
-                    beginReconnectBanner()
-                    // Re-assert same host without path flip.
+                    // Soft reconnect same host — no user-facing disconnect.
                     if activePath == .remote, !preferredRemoteHost.isEmpty {
                         _ = await trySwitchToHost(preferredRemoteHost, path: .remote, allowWithoutPing: true)
                     } else if !preferredLocalHost.isEmpty {
@@ -950,6 +950,9 @@ final class ConnectionStore: ObservableObject {
                         }
                     }
                 }
+            } else if consecutiveFailures >= offlineFailureThreshold {
+                // Intermediate: reconnecting internally, still no scary banner.
+                ConnectionDiagnostics.shared.log("RECONNECTING — silent (\(consecutiveFailures))")
             }
             if let err = error as? CompanionAPIError {
                 let code = err.failureCode
@@ -1310,8 +1313,9 @@ final class ConnectionStore: ObservableObject {
             reconnectStatusLine = "Verbindung wird wiederhergestellt…"
         }
         chat.applyReconnectStatus(reconnectStatusLine)
+        // Voice stays quiet — hiccups must not rewrite Island / status mid-session.
         if speak.isRunning {
-            speak.statusLine = reconnectStatusLine ?? "Verbindung wird wiederhergestellt…"
+            // Keep existing Voice statusLine (listening/thinking/speaking).
         }
     }
 
@@ -1321,9 +1325,7 @@ final class ConnectionStore: ObservableObject {
         reconnectStatusLine = nil
         if restored {
             chat.clearReconnectStatus()
-            if speak.isRunning, speak.statusLine.contains("Verbindung") || speak.statusLine.contains("Netzwerk") {
-                speak.statusLine = "Wieder verbunden"
-            }
+            // Never flash "Wieder verbunden" over Voice listening/speaking.
         }
     }
 

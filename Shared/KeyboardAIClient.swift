@@ -206,13 +206,24 @@ enum KeyboardAIClient {
         do {
             let data: Data
             let response: URLResponse
-            if NOCOCleartextHTTP.shouldUseCleartext(for: url) {
-                // Same ATS bypass as main app — Tailscale CGNAT is not "local networking".
+            let host = url.host ?? ""
+            if NOCOCleartextHTTP.isTailscaleIP(host) {
                 let (body, http) = try await NOCOCleartextHTTP.data(for: request, timeout: timeout)
                 data = body
                 response = http
             } else {
-                (data, response) = try await session.data(for: request)
+                do {
+                    (data, response) = try await session.data(for: request)
+                } catch {
+                    // ATS / unreachable LAN → cleartext if private mesh host.
+                    if NOCOCleartextHTTP.isPrivateLanIP(host) || NOCOCleartextHTTP.isTailscaleIP(host) {
+                        let (body, http) = try await NOCOCleartextHTTP.data(for: request, timeout: timeout)
+                        data = body
+                        response = http
+                    } else {
+                        throw error
+                    }
+                }
             }
             try Task.checkCancellation()
             let code = (response as? HTTPURLResponse)?.statusCode ?? 0

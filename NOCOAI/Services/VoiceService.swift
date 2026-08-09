@@ -713,7 +713,16 @@ final class VoiceService: NSObject, ObservableObject {
         VoiceDebugLog.event("TTS_PREPARED", "chunks=\(chunks.count) chars=\(cleaned.count) bridge=\(!notifyWhenFinished)")
         VoiceDebugLog.event("TTS_START", String(cleaned.prefix(48)))
         Task { await animateSpeakingBands() }
-        speakAmplified(chunks: chunks, natural: natural, generation: generation)
+
+        // Short replies ("Ja.", "Nein.") often yield zero PCM buffers via synthesizer.write —
+        // play them through the reliable AVSpeech path so they are never skipped.
+        let shortReply = cleaned.count <= 48 || chunks.allSatisfy({ $0.count <= 28 })
+        if shortReply {
+            ttsUseAmplified = false
+            fallbackSpeak(chunks: chunks, natural: natural)
+        } else {
+            speakAmplified(chunks: chunks, natural: natural, generation: generation)
+        }
 
         if allowBargeIn {
             scheduleBargeInArming()
@@ -860,8 +869,9 @@ final class VoiceService: NSObject, ObservableObject {
                     Task { @MainActor in
                         finishedWrite = true
                         if scheduled == 0 {
-                            self.revealSpeakChunk(index, fraction: 1)
-                            finish(true)
+                            // No audio buffers for this chunk — fail over to AVSpeech (never silent-skip).
+                            VoiceDebugLog.event("TTS_EMPTY_PCM", "chunk=\(index) fallback")
+                            finish(false)
                             return
                         }
                         if played >= scheduled {
@@ -1638,7 +1648,18 @@ extension VoiceService: AVSpeechSynthesizerDelegate {
             if let idx = self.speakChunksOrdered.firstIndex(of: utterance.speechString) {
                 self.revealSpeakChunk(idx, fraction: 1)
             }
+            self.pendingSpeakChunks = max(0, self.pendingSpeakChunks - 1)
             if !synthesizer.isSpeaking {
+                // Ensure even tiny replies stay in speaking long enough to be heard.
+                if let started = self.speakingStartedAt {
+                    let elapsed = Date().timeIntervalSince(started)
+                    let minHold: TimeInterval = 0.35
+                    if elapsed < minHold {
+                        try? await Task.sleep(nanoseconds: UInt64((minHold - elapsed) * 1_000_000_000))
+                    }
+                }
+                guard !self.ttsUseAmplified else { return }
+                guard case .speaking = self.phase else { return }
                 self.revealAllSpokenText()
                 self.phase = .idle
                 self.speakingStartedAt = nil

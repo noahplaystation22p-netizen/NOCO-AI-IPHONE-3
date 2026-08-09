@@ -495,12 +495,15 @@ final class ChatStore: ObservableObject {
                 } catch {
                     // Retry only if we never got tokens — don't duplicate partial replies.
                     if !sawContent, CompanionAPI.isTransient(error), streamAttempt < 3 {
-                        reconnectHint = "Verbindung wird wiederhergestellt…"
-                        if let idx = messages.firstIndex(where: { $0.id == assistantID }),
-                           messages[idx].text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
-                            messages[idx].text = "Verbindung wird wiederhergestellt…"
+                        // First blip: silent retry. Only show hint after repeated failures.
+                        if streamAttempt >= 2 {
+                            reconnectHint = "Verbindung wird wiederhergestellt…"
+                            if let idx = messages.firstIndex(where: { $0.id == assistantID }),
+                               messages[idx].text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                                messages[idx].text = "Verbindung wird wiederhergestellt…"
+                            }
                         }
-                        try? await Task.sleep(nanoseconds: UInt64(streamAttempt) * 1_200_000_000)
+                        try? await Task.sleep(nanoseconds: UInt64(streamAttempt) * 700_000_000)
                         if let idx = messages.firstIndex(where: { $0.id == assistantID }),
                            messages[idx].text == "Verbindung wird wiederhergestellt…" {
                             messages[idx].text = ""

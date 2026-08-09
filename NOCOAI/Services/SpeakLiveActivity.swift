@@ -129,9 +129,18 @@ enum SpeakLiveActivityManager {
         )
 
         Task {
-            await activity.update(
-                .init(state: state, staleDate: Date().addingTimeInterval(60 * 60))
-            )
+            // Update every system activity — background can leave our local ref stale.
+            let activities = Activity<SpeakActivityAttributes>.activities
+            if activities.isEmpty {
+                SpeakLiveActivityManager.start()
+                return
+            }
+            activity = activities.first
+            for act in activities {
+                await act.update(
+                    .init(state: state, staleDate: Date().addingTimeInterval(60 * 60))
+                )
+            }
         }
     }
 

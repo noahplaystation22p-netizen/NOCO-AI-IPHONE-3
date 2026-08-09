@@ -70,6 +70,8 @@ final class SpeakSessionController: ObservableObject {
     private var lastIslandSpokenText: String = ""
     private var listenRetryCount = 0
     private var cancellables = Set<AnyCancellable>()
+    /// Keeps Dynamic Island fresh while the app is backgrounded (ActivityKit updates).
+    private var islandSyncTask: Task<Void, Never>?
     /// While true: never reopen the mic (reply TTS / farewell in progress).
     private var holdMicForTTS = false
     private var holdMicStartedAt: Date?
@@ -137,29 +139,61 @@ final class SpeakSessionController: ObservableObject {
         self.connection = connection
         guard !wired else { return }
         wired = true
-        voice.objectWillChange.sink { [weak self] _ in
-            guard let self else { return }
-            self.objectWillChange.send()
-            // Push Island immediately when the live transcript grows — Lock Screen
-            // already felt snappy; Island was lagging behind throttled meter updates.
-            let live = self.voice.liveTranscript
-            if live != self.lastIslandTranscript {
-                self.lastIslandTranscript = live
-                if self.isRunning, !live.isEmpty,
-                   self.assistantPhase == .listening || self.sessionPhase == .listening {
-                    self.pushLiveActivity(force: true)
+
+        // IMPORTANT: use property publishers — objectWillChange fires *before* values change,
+        // which left the Island stuck on the previous state (especially in background).
+        voice.$liveTranscript
+            .receive(on: RunLoop.main)
+            .sink { [weak self] live in
+                guard let self, self.isRunning else { return }
+                if live != self.lastIslandTranscript {
+                    self.lastIslandTranscript = live
+                    if !live.isEmpty,
+                       self.assistantPhase == .listening || self.sessionPhase == .listening {
+                        self.pushLiveActivity(force: true)
+                    }
                 }
             }
-            // Mirror TTS-synced visible text onto the Island (never dump full lastReply).
-            let spoken = self.voice.spokenVisibleText
-            if spoken != self.lastIslandSpokenText {
-                self.lastIslandSpokenText = spoken
-                if self.isRunning, self.assistantPhase == .speaking || self.sessionPhase == .speaking
-                    || self.voice.phase == .speaking {
-                    self.pushLiveActivity(force: true)
+            .store(in: &cancellables)
+
+        voice.$spokenVisibleText
+            .receive(on: RunLoop.main)
+            .sink { [weak self] spoken in
+                guard let self, self.isRunning else { return }
+                if spoken != self.lastIslandSpokenText {
+                    self.lastIslandSpokenText = spoken
+                    if self.assistantPhase == .speaking || self.sessionPhase == .speaking
+                        || self.voice.phase == .speaking {
+                        self.pushLiveActivity(force: true)
+                    }
                 }
             }
-        }.store(in: &cancellables)
+            .store(in: &cancellables)
+
+        voice.$phase
+            .receive(on: RunLoop.main)
+            .sink { [weak self] _ in
+                guard let self, self.isRunning else { return }
+                self.pushLiveActivity(force: true)
+            }
+            .store(in: &cancellables)
+
+        $assistantPhase
+            .receive(on: RunLoop.main)
+            .sink { [weak self] _ in
+                guard let self, self.isRunning else { return }
+                self.pushLiveActivity(force: true)
+            }
+            .store(in: &cancellables)
+
+        $sessionPhase
+            .receive(on: RunLoop.main)
+            .sink { [weak self] _ in
+                guard let self, self.isRunning else { return }
+                self.pushLiveActivity(force: true)
+            }
+            .store(in: &cancellables)
+
         voice.onAutoUtterance = { [weak self] text in
             Task { @MainActor in
                 await self?.enqueueUtterance(text)
@@ -277,6 +311,7 @@ final class SpeakSessionController: ObservableObject {
             beginBackgroundKeepAlive()
             startBackgroundRenewLoop()
             startListenHealthLoop()
+            startIslandSyncLoop()
             try voice.hardReinitAudioForListen()
             try voice.startListening(autoEnd: true)
             HapticService.speakCue()
@@ -330,6 +365,8 @@ final class SpeakSessionController: ObservableObject {
         listenHealthTask = nil
         bgRenewTask?.cancel()
         bgRenewTask = nil
+        islandSyncTask?.cancel()
+        islandSyncTask = nil
         // Publish closed state immediately so Shortcuts / Action Button never see a stale "on".
         VoiceAISessionState.publish(active: false, micOn: false, islandOn: false)
         // Mute first so nothing else is captured/sent, then tear down
@@ -624,8 +661,10 @@ final class SpeakSessionController: ObservableObject {
 
     func ensureBackgroundPresence() {
         guard isRunning else { return }
+        if islandSyncTask == nil { startIslandSyncLoop() }
         if let last = lastPresenceAt, Date().timeIntervalSince(last) < 1.8 {
             VoiceDebugLog.event("BACKGROUND_ENTER", "ensure_presence_debounced")
+            pushLiveActivity(force: true)
             return
         }
         lastPresenceAt = Date()
@@ -666,6 +705,25 @@ final class SpeakSessionController: ObservableObject {
         statusLine = isMuted
             ? "Stumm · Live Activity aktiv"
             : "NOCO hört zu…"
+    }
+
+    /// Periodic Island refresh so background turns keep Listening/Thinking/Speaking in sync.
+    private func startIslandSyncLoop() {
+        islandSyncTask?.cancel()
+        islandSyncTask = Task { [weak self] in
+            while !Task.isCancelled {
+                try? await Task.sleep(nanoseconds: 450_000_000)
+                guard let self, !Task.isCancelled else { return }
+                let running = await MainActor.run { self.isRunning }
+                guard running else { return }
+                await MainActor.run {
+                    if !SpeakLiveActivityManager.isActive {
+                        SpeakLiveActivityManager.start()
+                    }
+                    self.pushLiveActivity(force: true)
+                }
+            }
+        }
     }
 
     /// Reliable re-listen after TTS (debounce + settle delay).

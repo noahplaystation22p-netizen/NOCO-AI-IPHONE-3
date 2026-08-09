@@ -13,7 +13,11 @@ struct ChatHubView: View {
     var body: some View {
         NavigationStack {
             VStack(spacing: 0) {
-                if let error = connection.chat.lastError {
+                if let error = connection.chat.lastError,
+                   !error.localizedCaseInsensitiveContains("verbindung"),
+                   !error.localizedCaseInsensitiveContains("unterbroch"),
+                   !error.localizedCaseInsensitiveContains("timeout"),
+                   !error.localizedCaseInsensitiveContains("temporary") {
                     Button {
                         connection.chat.lastError = nil
                     } label: {
@@ -134,11 +138,13 @@ struct ChatHubView: View {
             }
             .animation(.spring(response: 0.35, dampingFraction: 0.82), value: connection.chat.peerTyping)
             .nocoBackground()
-            .navigationTitle(titleText)
             .navigationBarTitleDisplayMode(.inline)
             // Same chat canvas under the Island — no extra gray chrome / second bar.
             .toolbarBackground(.hidden, for: .navigationBar)
             .toolbar {
+                ToolbarItem(placement: .principal) {
+                    RainbowChatTitle(title: titleText)
+                }
                 ToolbarItem(placement: .topBarLeading) {
                     Button {
                         HapticService.open()
@@ -165,7 +171,7 @@ struct ChatHubView: View {
                             online: connection.isOnline,
                             label: connection.isOnline
                                 ? (connection.activePath == .remote ? "Remote" : "Online")
-                                : (connection.isReconnecting ? "…" : "Offline"),
+                                : "Offline",
                             detail: connection.isOnline ? connection.onlineBadgeDetail : nil
                         )
                     }

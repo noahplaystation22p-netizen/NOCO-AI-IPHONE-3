@@ -495,19 +495,9 @@ final class ChatStore: ObservableObject {
                 } catch {
                     // Retry only if we never got tokens — don't duplicate partial replies.
                     if !sawContent, CompanionAPI.isTransient(error), streamAttempt < 3 {
-                        // First blip: silent retry. Only show hint after repeated failures.
-                        if streamAttempt >= 2 {
-                            reconnectHint = "Verbindung wird wiederhergestellt…"
-                            if let idx = messages.firstIndex(where: { $0.id == assistantID }),
-                               messages[idx].text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
-                                messages[idx].text = "Verbindung wird wiederhergestellt…"
-                            }
-                        }
-                        try? await Task.sleep(nanoseconds: UInt64(streamAttempt) * 700_000_000)
-                        if let idx = messages.firstIndex(where: { $0.id == assistantID }),
-                           messages[idx].text == "Verbindung wird wiederhergestellt…" {
-                            messages[idx].text = ""
-                        }
+                        // Silent retry — never paint a red connection error for a blip.
+                        reconnectHint = nil
+                        try? await Task.sleep(nanoseconds: UInt64(streamAttempt) * 550_000_000)
                         continue streamLoop
                     }
                     throw error
@@ -545,14 +535,20 @@ final class ChatStore: ObservableObject {
                 }
                 HapticService.success()
                 workPhase = .idle
+                reconnectHint = nil
+                lastError = nil
                 isSending = false
                 return finalReply
             }
+            // Request complete → Send button immediately (don't wait for sync).
+            workPhase = .done
+            reconnectHint = nil
+            lastError = nil
+            isSending = false
             await resolveConversationId(conversationId, preferLatest: isStartingNewChat)
             await syncFromServer()
             evaluateChatLimit()
             HapticService.success()
-            workPhase = .done
             if !speak, let replyText = reply {
                 let basis = uiMode == .auto ? effectiveMode : uiMode
                 if let next = ModeIntelligence.suggestNext(current: basis, userText: trimmed, assistantText: replyText),
@@ -570,19 +566,30 @@ final class ChatStore: ObservableObject {
             }
             reply = nil
             workPhase = .idle
+            reconnectHint = nil
+            isSending = false
         } catch {
             if let idx = messages.firstIndex(where: { $0.id == assistantID }) {
                 messages[idx].text = "Fehler: \((error as? LocalizedError)?.errorDescription ?? error.localizedDescription)"
                 messages[idx].isStreaming = false
             }
-            lastError = (error as? LocalizedError)?.errorDescription
-            HapticService.error()
+            // Soft network blips: keep chat usable — no sticky red banner if we can retry later.
+            let soft = CompanionAPI.isTransient(error)
+            if !soft {
+                lastError = (error as? LocalizedError)?.errorDescription
+                HapticService.error()
+            } else {
+                lastError = nil
+                HapticService.warning()
+            }
             reply = nil
             workPhase = .idle
+            reconnectHint = nil
+            isSending = false
         }
 
         if workPhase == .done {
-            try? await Task.sleep(nanoseconds: 500_000_000)
+            try? await Task.sleep(nanoseconds: 350_000_000)
         }
         workPhase = .idle
         reconnectHint = nil
@@ -1517,24 +1524,18 @@ final class ChatStore: ObservableObject {
     }
 
     func applyReconnectStatus(_ line: String?) {
-        reconnectHint = line
-        guard isSending,
-              let idx = messages.indices.last,
-              messages[idx].role == .assistant,
-              messages[idx].isStreaming,
-              let line, !line.isEmpty else { return }
-        let current = messages[idx].text.trimmingCharacters(in: .whitespacesAndNewlines)
-        if current.isEmpty || current.hasPrefix("🎨") || current.hasPrefix("🧠") || current.hasPrefix("✨")
-            || current.contains("Erstellt Bild") || current.contains("Think-Modell")
-            || current.contains("Verbindung") {
-            // Keep prompt footer if present
-            if let range = messages[idx].text.range(of: "\n\n") {
-                let footer = String(messages[idx].text[range.upperBound...])
-                messages[idx].text = "\(line)\n\n\(footer)"
-            } else if current.isEmpty {
-                messages[idx].text = line
-            }
+        // Request UI must not inherit connection hiccups as a sticky red/error state.
+        // Only keep soft internet progress hints that Chat already set intentionally.
+        guard isSending else {
+            reconnectHint = nil
+            return
         }
+        if let hint = reconnectHint,
+           hint.contains("Internet") || hint.contains("Ergebnisse") {
+            return
+        }
+        _ = line
+        reconnectHint = nil
     }
 
     func clearReconnectStatus() {

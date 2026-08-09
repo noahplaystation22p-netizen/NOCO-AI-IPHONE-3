@@ -46,6 +46,8 @@ final class VoiceService: NSObject, ObservableObject {
     /// Bumped on each `speak()` / stop so late PCM callbacks from a prior utterance are ignored.
     private var speakGeneration: UInt64 = 0
     private var speakingStartedAt: Date?
+    /// Don't mark speaking finished before this (short replies need audible time).
+    private var speakMinFinishAt: Date?
     private var recognitionStartedAt: Date?
     private var audioObserversInstalled = false
     private var inputTapInstalled = false
@@ -700,6 +702,9 @@ final class VoiceService: NSObject, ObservableObject {
         speakGeneration &+= 1
         let generation = speakGeneration
         speakingStartedAt = Date()
+        // ~45ms/char with a floor so "Ja." / "Nein." always get real airtime.
+        let minHold = max(0.55, min(4.5, Double(cleaned.count) * 0.048))
+        speakMinFinishAt = Date().addingTimeInterval(minHold)
         ttsUseAmplified = true
         ttsPendingBuffers = 0
         didLogTTSPlaybackStart = false
@@ -714,9 +719,8 @@ final class VoiceService: NSObject, ObservableObject {
         VoiceDebugLog.event("TTS_START", String(cleaned.prefix(48)))
         Task { await animateSpeakingBands() }
 
-        // Short replies ("Ja.", "Nein.") often yield zero PCM buffers via synthesizer.write —
-        // play them through the reliable AVSpeech path so they are never skipped.
-        let shortReply = cleaned.count <= 48 || chunks.allSatisfy({ $0.count <= 28 })
+        // Prefer reliable AVSpeech for short replies — synthesizer.write often yields 0 PCM.
+        let shortReply = cleaned.count <= 64 || chunks.allSatisfy({ $0.count <= 36 })
         if shortReply {
             ttsUseAmplified = false
             fallbackSpeak(chunks: chunks, natural: natural)
@@ -973,21 +977,37 @@ final class VoiceService: NSObject, ObservableObject {
         // then confirm the node is idle before tearing the engine down (avoids clipped tails).
         Task { @MainActor [weak self] in
             guard let self else { return }
-            for _ in 0..<8 {
-                try? await Task.sleep(nanoseconds: 40_000_000)
+            for _ in 0..<20 {
+                try? await Task.sleep(nanoseconds: 50_000_000)
                 guard self.speakGeneration == generation else { return }
                 guard case .speaking = self.phase else { return }
                 if self.pendingSpeakChunks > 0 || self.ttsPendingBuffers > 0 { return }
-                if !self.ttsPlayer.isPlaying { break }
+                if let minAt = self.speakMinFinishAt, Date() < minAt { continue }
+                if self.ttsPlayer.isPlaying { continue }
+                // Must have actually started audio — otherwise fall back and speak.
+                if !self.didLogTTSPlaybackStart {
+                    VoiceDebugLog.event("TTS_NO_AUDIO", "amplified_empty_fallback")
+                    self.ttsUseAmplified = false
+                    self.fallbackSpeak(chunks: self.speakChunksOrdered, natural: NOCOSpeakVoiceSettings.usesNaturalPipeline)
+                    return
+                }
+                break
             }
             guard self.speakGeneration == generation else { return }
             guard case .speaking = self.phase else { return }
             guard self.pendingSpeakChunks == 0, self.ttsPendingBuffers == 0 else { return }
+            if let minAt = self.speakMinFinishAt, Date() < minAt {
+                let wait = minAt.timeIntervalSinceNow
+                if wait > 0 {
+                    try? await Task.sleep(nanoseconds: UInt64(wait * 1_000_000_000))
+                }
+            }
+            guard self.speakGeneration == generation, case .speaking = self.phase else { return }
             self.revealAllSpokenText()
             self.phase = .idle
             self.speakingStartedAt = nil
+            self.speakMinFinishAt = nil
             HapticService.success()
-            // Soft stop: leave engine attached; hard stop only if still marked playing.
             if self.ttsPlayer.isPlaying {
                 self.ttsPlayer.pause()
             }
@@ -1614,6 +1634,8 @@ extension VoiceService: AVSpeechSynthesizerDelegate {
     nonisolated func speechSynthesizer(_ synthesizer: AVSpeechSynthesizer, didStart utterance: AVSpeechUtterance) {
         Task { @MainActor in
             guard !self.ttsUseAmplified else { return }
+            self.didLogTTSPlaybackStart = true
+            VoiceDebugLog.event("TTS_PLAYBACK_START", self.pipelineDebugSummary())
             if let idx = self.speakChunksOrdered.firstIndex(of: utterance.speechString) {
                 self.fallbackSpeakChunkCursor = idx
             }
@@ -1651,9 +1673,14 @@ extension VoiceService: AVSpeechSynthesizerDelegate {
             self.pendingSpeakChunks = max(0, self.pendingSpeakChunks - 1)
             if !synthesizer.isSpeaking {
                 // Ensure even tiny replies stay in speaking long enough to be heard.
-                if let started = self.speakingStartedAt {
+                if let minAt = self.speakMinFinishAt, Date() < minAt {
+                    let wait = minAt.timeIntervalSinceNow
+                    if wait > 0 {
+                        try? await Task.sleep(nanoseconds: UInt64(wait * 1_000_000_000))
+                    }
+                } else if let started = self.speakingStartedAt {
                     let elapsed = Date().timeIntervalSince(started)
-                    let minHold: TimeInterval = 0.35
+                    let minHold: TimeInterval = 0.45
                     if elapsed < minHold {
                         try? await Task.sleep(nanoseconds: UInt64((minHold - elapsed) * 1_000_000_000))
                     }
@@ -1663,6 +1690,7 @@ extension VoiceService: AVSpeechSynthesizerDelegate {
                 self.revealAllSpokenText()
                 self.phase = .idle
                 self.speakingStartedAt = nil
+                self.speakMinFinishAt = nil
                 HapticService.success()
                 VoiceDebugLog.event("TTS_PLAYBACK_COMPLETE", self.pipelineDebugSummary())
                 self.notifySpeakFinishedOnce()

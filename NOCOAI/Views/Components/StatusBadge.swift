@@ -7,39 +7,101 @@ struct StatusBadge: View {
     var detail: String? = nil
 
     var body: some View {
-        HStack(spacing: 8) {
-            IntelligencePulseDot(
-                color: online ? NOCOAITheme.success : NOCOAITheme.danger,
-                size: 8
-            )
-            VStack(alignment: .leading, spacing: 0) {
-                Text(label)
-                    .font(.subheadline.weight(.semibold))
-                    .contentTransition(.interpolate)
-                if let detail, !detail.isEmpty {
-                    Text(detail)
-                        .font(.caption2)
-                        .foregroundStyle(.secondary)
-                        .contentTransition(.opacity)
+        TimelineView(.animation(minimumInterval: online ? 0.12 : 1.0, paused: !online)) { timeline in
+            let t = timeline.date.timeIntervalSinceReferenceDate
+            let spin = (t.truncatingRemainder(dividingBy: 5.5) / 5.5) * 360
+            let rainbow: [Color] = [
+                Color(red: 0.95, green: 0.42, blue: 0.72),
+                Color(red: 1.0, green: 0.72, blue: 0.32),
+                Color(red: 0.35, green: 0.92, blue: 0.62),
+                Color(red: 0.32, green: 0.72, blue: 1.0),
+                Color(red: 0.58, green: 0.45, blue: 1.0),
+                Color(red: 0.95, green: 0.42, blue: 0.72)
+            ]
+            HStack(spacing: 8) {
+                if online {
+                    Circle()
+                        .fill(
+                            AngularGradient(colors: rainbow, center: .center, angle: .degrees(spin))
+                        )
+                        .frame(width: 8, height: 8)
+                        .shadow(color: rainbow[2].opacity(0.55), radius: 3)
+                } else {
+                    Circle()
+                        .fill(NOCOAITheme.danger)
+                        .frame(width: 8, height: 8)
+                        .opacity(0.9)
+                }
+                VStack(alignment: .leading, spacing: 0) {
+                    Text(label)
+                        .font(.subheadline.weight(.semibold))
+                        .foregroundStyle(
+                            online
+                            ? AnyShapeStyle(
+                                AngularGradient(colors: rainbow, center: .center, angle: .degrees(spin * 0.7))
+                            )
+                            : AnyShapeStyle(Color.primary.opacity(0.75))
+                        )
+                        .contentTransition(.interpolate)
+                    if let detail, !detail.isEmpty {
+                        Text(detail)
+                            .font(.caption2)
+                            .foregroundStyle(.secondary)
+                            .contentTransition(.opacity)
+                    }
                 }
             }
+            .padding(.horizontal, 12)
+            .padding(.vertical, detail == nil ? 8 : 6)
+            .background(
+                Capsule()
+                    .fill(Color.primary.opacity(online ? 0.06 : 0.08))
+                    .overlay(
+                        Capsule()
+                            .stroke(
+                                online
+                                ? AngularGradient(colors: rainbow.map { $0.opacity(0.55) }, center: .center, angle: .degrees(-spin))
+                                : AngularGradient(colors: [NOCOAITheme.danger.opacity(0.45), NOCOAITheme.danger.opacity(0.25)], center: .center),
+                                lineWidth: online ? 1.15 : 1
+                            )
+                    )
+                    .shadow(color: online ? rainbow[3].opacity(0.22) : .clear, radius: online ? 6 : 0)
+            )
         }
-        .padding(.horizontal, 12)
-        .padding(.vertical, detail == nil ? 8 : 6)
-        .background(
-            Capsule()
-                .fill(Color.primary.opacity(0.08))
-                .overlay(
-                    Capsule()
-                        .stroke(
-                            (online ? NOCOAITheme.success : NOCOAITheme.danger).opacity(0.35),
-                            lineWidth: 1
-                        )
-                )
-        )
         .animation(.easeInOut(duration: 0.45), value: online)
         .animation(.easeInOut(duration: 0.45), value: label)
         .animation(.easeInOut(duration: 0.35), value: detail)
+    }
+}
+
+/// Subtle iridescent chat title (e.g. "NOCO Speak") — Apple Intelligence–like, not flashy.
+struct RainbowChatTitle: View {
+    let title: String
+
+    var body: some View {
+        TimelineView(.animation(minimumInterval: 0.14, paused: false)) { timeline in
+            let t = timeline.date.timeIntervalSinceReferenceDate
+            let spin = (t.truncatingRemainder(dividingBy: 7.5) / 7.5) * 360
+            let colors: [Color] = [
+                Color(red: 0.45, green: 0.62, blue: 1.0),
+                Color(red: 0.55, green: 0.88, blue: 0.95),
+                Color(red: 0.72, green: 0.55, blue: 1.0),
+                Color(red: 0.95, green: 0.55, blue: 0.78),
+                Color(red: 0.45, green: 0.62, blue: 1.0)
+            ]
+            Text(title)
+                .font(.headline.weight(.semibold))
+                .foregroundStyle(
+                    LinearGradient(
+                        colors: colors,
+                        startPoint: UnitPoint(x: 0.15 + 0.1 * sin(t * 0.7), y: 0),
+                        endPoint: UnitPoint(x: 0.85 + 0.1 * cos(t * 0.55), y: 1)
+                    )
+                )
+                .shadow(color: colors[Int(spin / 90) % colors.count].opacity(0.28), radius: 5)
+                .lineLimit(1)
+        }
+        .accessibilityAddTraits(.isHeader)
     }
 }
 

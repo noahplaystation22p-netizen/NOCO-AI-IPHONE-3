@@ -159,6 +159,11 @@ final class ConnectionStore: ObservableObject {
             token: token,
             deviceName: deviceName
         )
+        CompanionCredentials.syncPath(
+            localHost: preferredLocalHost,
+            remoteHost: preferredRemoteHost,
+            activePath: activePath.rawValue
+        )
         if isPaired {
             prepareLocalNetworkAccess(host: serverHost, port: serverPort)
             chat.restoreSession()
@@ -199,6 +204,11 @@ final class ConnectionStore: ObservableObject {
             port: serverPort,
             token: token,
             deviceName: deviceName
+        )
+        CompanionCredentials.syncPath(
+            localHost: preferredLocalHost,
+            remoteHost: preferredRemoteHost,
+            activePath: activePath.rawValue
         )
         if isPaired, !serverHost.isEmpty {
             prepareLocalNetworkAccess(host: serverHost, port: serverPort)
@@ -479,6 +489,11 @@ final class ConnectionStore: ObservableObject {
                     token: response.token,
                     deviceName: deviceName
                 )
+                CompanionCredentials.syncPath(
+                    localHost: preferredLocalHost,
+                    remoteHost: preferredRemoteHost,
+                    activePath: activePath.rawValue
+                )
                 isPaired = true
                 consecutiveFailures = 0
                 rebuildAPI()
@@ -516,6 +531,11 @@ final class ConnectionStore: ObservableObject {
                 port: serverPort,
                 token: token ?? KeychainService.load(account: "nocoai.token"),
                 deviceName: deviceName
+            )
+            CompanionCredentials.syncPath(
+                localHost: preferredLocalHost,
+                remoteHost: preferredRemoteHost,
+                activePath: activePath.rawValue
             )
             lastError = nil
             return
@@ -860,6 +880,11 @@ final class ConnectionStore: ObservableObject {
             pathStatusLine = activePath.label
             if wasReconnecting {
                 clearReconnectBanner(restored: true)
+            }
+            // Successful status → never leave a sticky chat connection error.
+            if chat.lastError?.localizedCaseInsensitiveContains("verbindung") == true
+                || chat.lastError?.localizedCaseInsensitiveContains("unterbroch") == true {
+                chat.lastError = nil
             }
             publishWidgetStatus()
             await loadFeatures()
@@ -1230,6 +1255,11 @@ final class ConnectionStore: ObservableObject {
             port: serverPort,
             token: token,
             deviceName: deviceName
+        )
+        CompanionCredentials.syncPath(
+            localHost: preferredLocalHost,
+            remoteHost: preferredRemoteHost,
+            activePath: activePath.rawValue
         )
         consecutiveFailures = 0
         pathStatusLine = path.label

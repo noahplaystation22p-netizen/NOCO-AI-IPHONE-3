@@ -32,6 +32,9 @@ enum CompanionCredentials {
         static let kbPort = "nocoai.kb.port"
         static let kbToken = "nocoai.kb.token"
         static let kbDevice = "nocoai.kb.device"
+        static let localHost = "nocoai.localHost"
+        static let remoteHost = "nocoai.remoteHost"
+        static let activePath = "nocoai.activePath"
     }
 
     private struct DiskPayload: Codable {
@@ -40,15 +43,20 @@ enum CompanionCredentials {
         var token: String
         var device: String
         var updatedAt: TimeInterval?
+        var localHost: String?
+        var remoteHost: String?
+        var activePath: String?
     }
 
     static var host: String {
         get {
-            if let h = suite?.string(forKey: Keys.host), !h.isEmpty { return h }
-            if let h = readDisk()?.host, !h.isEmpty { return h }
-            if let h = UserDefaults.standard.string(forKey: Keys.kbHost), !h.isEmpty { return h }
-            if let h = readPasteboard()?.host, !h.isEmpty { return h }
-            return UserDefaults.standard.string(forKey: Keys.host) ?? ""
+            // Disk is written atomically by the main app on every path switch —
+            // prefer it so the keyboard never sticks on a stale suite LAN IP.
+            if let h = readDisk()?.host, !h.isEmpty { return sanitizedHost(h) }
+            if let h = suite?.string(forKey: Keys.host), !h.isEmpty { return sanitizedHost(h) }
+            if let h = UserDefaults.standard.string(forKey: Keys.kbHost), !h.isEmpty { return sanitizedHost(h) }
+            if let h = readPasteboard()?.host, !h.isEmpty { return sanitizedHost(h) }
+            return sanitizedHost(UserDefaults.standard.string(forKey: Keys.host) ?? "")
         }
         set {
             suite?.set(newValue, forKey: Keys.host)
@@ -122,6 +130,68 @@ enum CompanionCredentials {
         return URL(string: "http://\(h):\(port)/api/v1/")
     }
 
+    /// Ordered hosts for keyboard: active → remote (Tailscale) → local.
+    static func endpointCandidates() -> [(host: String, port: Int)] {
+        refreshFromDisk()
+        let p = port == 0 ? 4747 : port
+        let disk = readDisk()
+        let active = sanitizedHost(disk?.host ?? host)
+        let remote = sanitizedHost(
+            disk?.remoteHost
+                ?? suite?.string(forKey: Keys.remoteHost)
+                ?? ""
+        )
+        let local = sanitizedHost(
+            disk?.localHost
+                ?? suite?.string(forKey: Keys.localHost)
+                ?? ""
+        )
+        let path = disk?.activePath
+            ?? suite?.string(forKey: Keys.activePath)
+            ?? ""
+
+        var ordered: [String] = []
+        if path == "remote", !remote.isEmpty {
+            ordered.append(remote)
+            if !active.isEmpty { ordered.append(active) }
+            if !local.isEmpty { ordered.append(local) }
+        } else {
+            if !active.isEmpty { ordered.append(active) }
+            if !remote.isEmpty { ordered.append(remote) }
+            if !local.isEmpty { ordered.append(local) }
+        }
+
+        var seen = Set<String>()
+        var out: [(String, Int)] = []
+        for h in ordered where !h.isEmpty {
+            let key = "\(h):\(p)"
+            if seen.insert(key).inserted {
+                out.append((h, p))
+            }
+        }
+        return out
+    }
+
+    static func syncPath(localHost: String, remoteHost: String, activePath: String) {
+        let local = sanitizedHost(localHost)
+        let remote = sanitizedHost(remoteHost)
+        suite?.set(local, forKey: Keys.localHost)
+        suite?.set(remote, forKey: Keys.remoteHost)
+        suite?.set(activePath, forKey: Keys.activePath)
+        suite?.synchronize()
+        UserDefaults.standard.set(local, forKey: Keys.localHost)
+        UserDefaults.standard.set(remote, forKey: Keys.remoteHost)
+        UserDefaults.standard.set(activePath, forKey: Keys.activePath)
+        // Merge into disk payload so keyboard refresh sees full path map.
+        if var disk = readDisk() {
+            disk.localHost = local.isEmpty ? nil : local
+            disk.remoteHost = remote.isEmpty ? nil : remote
+            disk.activePath = activePath.isEmpty ? nil : activePath
+            disk.updatedAt = Date().timeIntervalSince1970
+            writeDisk(disk)
+        }
+    }
+
     /// Strip schemes/paths so we never build `http://https://100.x…`.
     private static func sanitizedHost(_ raw: String) -> String {
         var text = raw.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -154,12 +224,16 @@ enum CompanionCredentials {
 
     static func sync(host: String, port: Int, token: String?, deviceName: String) {
         let cleanHost = sanitizedHost(host)
+        let existing = readDisk()
         let payload = DiskPayload(
             host: cleanHost,
             port: port == 0 ? 4747 : port,
             token: token ?? "",
             device: deviceName,
-            updatedAt: Date().timeIntervalSince1970
+            updatedAt: Date().timeIntervalSince1970,
+            localHost: existing?.localHost,
+            remoteHost: existing?.remoteHost,
+            activePath: existing?.activePath
         )
 
         suite?.set(payload.host, forKey: Keys.host)
@@ -272,7 +346,16 @@ enum CompanionCredentials {
                 ?? UserDefaults.standard.string(forKey: Keys.kbDevice)
                 ?? UserDefaults.standard.string(forKey: Keys.device)
                 ?? "iPhone"
-            body = DiskPayload(host: hostVal, port: portVal, token: tokenVal, device: deviceVal, updatedAt: Date().timeIntervalSince1970)
+            body = DiskPayload(
+                host: hostVal,
+                port: portVal,
+                token: tokenVal,
+                device: deviceVal,
+                updatedAt: Date().timeIntervalSince1970,
+                localHost: suite?.string(forKey: Keys.localHost),
+                remoteHost: suite?.string(forKey: Keys.remoteHost),
+                activePath: suite?.string(forKey: Keys.activePath)
+            )
         }
         guard !body.host.isEmpty, !body.token.isEmpty else { return }
         try? FileManager.default.createDirectory(at: url.deletingLastPathComponent(), withIntermediateDirectories: true)

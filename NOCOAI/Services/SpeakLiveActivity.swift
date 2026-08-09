@@ -157,10 +157,18 @@ enum SpeakLiveActivityManager {
     }
 
     static func end() {
-        let activities = Activity<SpeakActivityAttributes>.activities
+        lastLevelUpdate = .distantPast
+        lastPhaseRaw = ""
+        lastDetail = ""
+        lastTitle = ""
         activity = nil
+        let activities = Activity<SpeakActivityAttributes>.activities
         Task {
             for act in activities {
+                await act.end(nil, dismissalPolicy: .immediate)
+            }
+            // Sweep any activity the system still holds after the first end.
+            for act in Activity<SpeakActivityAttributes>.activities {
                 await act.end(nil, dismissalPolicy: .immediate)
             }
         }

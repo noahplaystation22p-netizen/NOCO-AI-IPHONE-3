@@ -163,19 +163,11 @@ enum KeyboardAIClient {
         CompanionCredentials.refreshFromDisk()
         KeyboardChipPreferences.refreshFromDisk()
         guard CompanionCredentials.isConfigured,
-              let base = CompanionCredentials.baseURL,
-              let token = CompanionCredentials.token else {
+              let token = CompanionCredentials.token,
+              !token.isEmpty else {
             throw ClientError.notConfigured
         }
-        let url = base.appendingPathComponent("chat")
-        var request = URLRequest(url: url)
-        request.httpMethod = "POST"
-        request.timeoutInterval = timeout
-        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
-        request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
 
-        // Prefer true system/user split when companion supports `system`.
-        // Fallback: bind rules into `message` so rewrite tools stay on-task on older PCs.
         let wireMessage: String
         if let system, let task, !task.isEmpty {
             wireMessage = """
@@ -189,7 +181,7 @@ enum KeyboardAIClient {
             wireMessage = message
         }
 
-        request.httpBody = try JSONEncoder().encode(
+        let body = try JSONEncoder().encode(
             ChatBody(
                 message: wireMessage,
                 stream: false,
@@ -203,43 +195,79 @@ enum KeyboardAIClient {
             )
         )
 
-        do {
-            let data: Data
-            let response: URLResponse
-            let host = url.host ?? ""
-            if NOCOCleartextHTTP.isTailscaleIP(host) {
-                let (body, http) = try await NOCOCleartextHTTP.data(for: request, timeout: timeout)
-                data = body
-                response = http
-            } else {
-                do {
-                    (data, response) = try await session.data(for: request)
-                } catch {
-                    // ATS / unreachable LAN → cleartext if private mesh host.
-                    if NOCOCleartextHTTP.isPrivateLanIP(host) || NOCOCleartextHTTP.isTailscaleIP(host) {
-                        let (body, http) = try await NOCOCleartextHTTP.data(for: request, timeout: timeout)
-                        data = body
-                        response = http
-                    } else {
-                        throw error
-                    }
-                }
-            }
+        var candidates = CompanionCredentials.endpointCandidates()
+        if candidates.isEmpty, let base = CompanionCredentials.baseURL, let h = base.host {
+            candidates = [(h, CompanionCredentials.port == 0 ? 4747 : CompanionCredentials.port)]
+        }
+        guard !candidates.isEmpty else { throw ClientError.notConfigured }
+
+        // Longer budget on Tailscale / cellular.
+        let remoteTimeout = min(22, max(timeout, 16))
+        var lastError: Error = ClientError.notConfigured
+
+        for (index, endpoint) in candidates.enumerated() {
             try Task.checkCancellation()
-            let code = (response as? HTTPURLResponse)?.statusCode ?? 0
-            guard (200..<300).contains(code) else { throw ClientError.http(code) }
-            guard let reply = extractReply(from: data) else { throw ClientError.decode }
-            return reply
-        } catch is CancellationError {
-            throw ClientError.cancelled
-        } catch let urlError as URLError where urlError.code == .timedOut || urlError.code == .cancelled {
-            throw ClientError.timedOut
-        } catch NOCOCleartextHTTP.TransportError.timeout {
-            throw ClientError.timedOut
-        } catch let error as ClientError {
-            throw error
+            let host = endpoint.host
+            let port = endpoint.port
+            let effectiveTimeout = NOCOCleartextHTTP.isTailscaleIP(host) ? remoteTimeout : timeout
+            guard let url = URL(string: "http://\(host):\(port)/api/v1/chat") else {
+                lastError = ClientError.badURL
+                continue
+            }
+            var request = URLRequest(url: url)
+            request.httpMethod = "POST"
+            request.timeoutInterval = effectiveTimeout
+            request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+            request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
+            request.httpBody = body
+
+            do {
+                let (data, response) = try await perform(request: request, host: host, timeout: effectiveTimeout)
+                try Task.checkCancellation()
+                let code = (response as? HTTPURLResponse)?.statusCode ?? 0
+                guard (200..<300).contains(code) else { throw ClientError.http(code) }
+                guard let reply = extractReply(from: data) else { throw ClientError.decode }
+                // Persist working host so next keyboard call starts with the right path.
+                if index > 0 {
+                    CompanionCredentials.host = host
+                    CompanionCredentials.port = port
+                }
+                return reply
+            } catch is CancellationError {
+                throw ClientError.cancelled
+            } catch let urlError as URLError where urlError.code == .timedOut || urlError.code == .cancelled {
+                lastError = ClientError.timedOut
+            } catch NOCOCleartextHTTP.TransportError.timeout {
+                lastError = ClientError.timedOut
+            } catch let error as ClientError {
+                lastError = error
+                if case .http(401) = error { throw error }
+                if case .http(403) = error { throw error }
+            } catch {
+                lastError = error
+            }
+        }
+
+        if Task.isCancelled { throw ClientError.cancelled }
+        throw lastError
+    }
+
+    private static func perform(
+        request: URLRequest,
+        host: String,
+        timeout: TimeInterval
+    ) async throws -> (Data, URLResponse) {
+        if NOCOCleartextHTTP.isTailscaleIP(host) {
+            let (body, http) = try await NOCOCleartextHTTP.data(for: request, timeout: timeout)
+            return (body, http)
+        }
+        do {
+            return try await session.data(for: request)
         } catch {
-            if Task.isCancelled { throw ClientError.cancelled }
+            if NOCOCleartextHTTP.isPrivateLanIP(host) {
+                let (body, http) = try await NOCOCleartextHTTP.data(for: request, timeout: timeout)
+                return (body, http)
+            }
             throw error
         }
     }

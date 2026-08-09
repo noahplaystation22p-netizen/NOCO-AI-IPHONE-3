@@ -145,7 +145,7 @@ final class SpeakSessionController: ObservableObject {
         voice.$liveTranscript
             .receive(on: RunLoop.main)
             .sink { [weak self] live in
-                guard let self, self.isRunning else { return }
+                guard let self, self.isRunning, !self.isExiting else { return }
                 if live != self.lastIslandTranscript {
                     self.lastIslandTranscript = live
                     if !live.isEmpty,
@@ -159,7 +159,7 @@ final class SpeakSessionController: ObservableObject {
         voice.$spokenVisibleText
             .receive(on: RunLoop.main)
             .sink { [weak self] spoken in
-                guard let self, self.isRunning else { return }
+                guard let self, self.isRunning, !self.isExiting else { return }
                 if spoken != self.lastIslandSpokenText {
                     self.lastIslandSpokenText = spoken
                     if self.assistantPhase == .speaking || self.sessionPhase == .speaking
@@ -173,7 +173,7 @@ final class SpeakSessionController: ObservableObject {
         voice.$phase
             .receive(on: RunLoop.main)
             .sink { [weak self] _ in
-                guard let self, self.isRunning else { return }
+                guard let self, self.isRunning, !self.isExiting else { return }
                 self.pushLiveActivity(force: true)
             }
             .store(in: &cancellables)
@@ -181,7 +181,7 @@ final class SpeakSessionController: ObservableObject {
         $assistantPhase
             .receive(on: RunLoop.main)
             .sink { [weak self] _ in
-                guard let self, self.isRunning else { return }
+                guard let self, self.isRunning, !self.isExiting else { return }
                 self.pushLiveActivity(force: true)
             }
             .store(in: &cancellables)
@@ -189,7 +189,7 @@ final class SpeakSessionController: ObservableObject {
         $sessionPhase
             .receive(on: RunLoop.main)
             .sink { [weak self] _ in
-                guard let self, self.isRunning else { return }
+                guard let self, self.isRunning, !self.isExiting else { return }
                 self.pushLiveActivity(force: true)
             }
             .store(in: &cancellables)
@@ -405,31 +405,26 @@ final class SpeakSessionController: ObservableObject {
     /// Stop button / Shortcut / Action Button — instant, silent, no farewell.
     func exitVoiceAISilent() {
         VoiceDebugLog.event("SHORTCUT_STOP", "silent")
+        // Cancel Island sync first so nothing re-pushes a stale state.
+        islandSyncTask?.cancel()
+        islandSyncTask = nil
+        isExiting = true
         guard isRunning || showSpeakUI || VoiceAISessionState.isActive else {
             VoiceAISessionState.publish(active: false, micOn: false, islandOn: false)
             SpeakLiveActivityManager.end()
+            isExiting = false
             return
         }
-        isExiting = true
         setHoldMicForTTS(false)
         invalidateTurn()
         connection?.chat.cancelSpeakSend()
         resumeTask?.cancel()
         resumeTask = nil
         resumeTaskStartedAt = nil
-        // Do not pre-cancel recognition/TTS here — stop() owns teardown once.
         statusLine = "Voice AI beendet"
         VoiceAISessionState.publish(active: false, micOn: false, islandOn: false)
-        SpeakLiveActivityManager.update(
-            phase: .idle,
-            detail: "Voice AI beendet",
-            level: 0.15,
-            bars: [0.15, 0.18, 0.2, 0.18, 0.15, 0.12, 0.1],
-            isOnline: false,
-            isMuted: false,
-            force: true,
-            titleOverride: "Voice AI beendet"
-        )
+        // End immediately — never leave a "Voice AI beendet" Island frozen on screen.
+        SpeakLiveActivityManager.end()
 
         if let connection {
             connection.liveScreen.suppressAutoVision = true
@@ -472,21 +467,13 @@ final class SpeakSessionController: ObservableObject {
         }
 
         isExiting = true
+        islandSyncTask?.cancel()
+        islandSyncTask = nil
         setHoldMicForTTS(true)
         resumeTask?.cancel()
         voice.stopListening(cancel: true)
         assistantPhase = .idle
         statusLine = "Voice AI beendet"
-        SpeakLiveActivityManager.update(
-            phase: .idle,
-            detail: "Voice AI beendet",
-            level: 0.2,
-            bars: [0.2, 0.25, 0.3, 0.25, 0.2, 0.18, 0.15],
-            isOnline: false,
-            isMuted: false,
-            force: true,
-            titleOverride: "Voice AI beendet"
-        )
         // Brief spoken close — no mic reopen afterward.
         if voice.autoSpeakReplies {
             lastReply = "Alles klar, Voice AI beendet."
@@ -513,6 +500,7 @@ final class SpeakSessionController: ObservableObject {
         visionFrameProvider = nil
         pendingVisionJPEG = nil
 
+        SpeakLiveActivityManager.end()
         stop(playCue: false)
         showSpeakUI = false
         connection?.pendingTab = 0
@@ -714,9 +702,10 @@ final class SpeakSessionController: ObservableObject {
             while !Task.isCancelled {
                 try? await Task.sleep(nanoseconds: 450_000_000)
                 guard let self, !Task.isCancelled else { return }
-                let running = await MainActor.run { self.isRunning }
+                let running = await MainActor.run { self.isRunning && !self.isExiting }
                 guard running else { return }
                 await MainActor.run {
+                    guard self.isRunning, !self.isExiting else { return }
                     if !SpeakLiveActivityManager.isActive {
                         SpeakLiveActivityManager.start()
                     }
@@ -1683,7 +1672,7 @@ final class SpeakSessionController: ObservableObject {
     }
 
     func pushLiveActivity(force: Bool) {
-        guard isRunning else { return }
+        guard isRunning, !isExiting else { return }
         if !SpeakLiveActivityManager.isActive {
             SpeakLiveActivityManager.start()
         }

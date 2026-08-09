@@ -1,5 +1,64 @@
 import SwiftUI
 
+/// Geometry matched to Apple’s system keyboard (measured portrait baselines:
+/// iPhone SE/5: ~39pt keys, iPhone 6/13mini class 375pt: ~43pt, Plus/Max ≥414: ~46pt;
+/// side margin 3–4, inter-key gap 6; German QWERTZ uses 11 equal columns).
+private struct AppleKeyboardMetrics {
+    let boardWidth: CGFloat
+
+    /// Horizontal inset from screen edge to first/last key (Apple: 3 @ ≤399, 4 @ ≥400).
+    var sideMargin: CGFloat { boardWidth >= 400 ? 4 : 3 }
+    /// Gap between adjacent key faces (Apple portrait: 6).
+    var keyGap: CGFloat { 6 }
+    /// Vertical gap between rows (Apple ≈ keyGap − a little).
+    var rowGap: CGFloat { 11 }
+    /// Top padding above first letter row (Apple: ~8–12).
+    var topInset: CGFloat { boardWidth >= 400 ? 8 : 10 }
+    /// Bottom padding under last row (Apple: ~3–4 + home indicator is outside).
+    var bottomInset: CGFloat { boardWidth >= 400 ? 4 : 3 }
+
+    /// Visible key face height — linear fit from Apple measurements (39@320 → 43@375 → 46@414).
+    var keyHeight: CGFloat {
+        let h = boardWidth * (4.0 / 55.0) + 15.727
+        return min(46, max(39, h.rounded()))
+    }
+
+    /// Letter face width for an N-key row that spans the full usable width.
+    func letterWidth(columns: CGFloat = 11) -> CGFloat {
+        let inner = boardWidth - sideMargin * 2
+        let gaps = (columns - 1) * keyGap
+        return (inner - gaps) / columns
+    }
+
+    /// Column pitch (face + trailing gap), used to size Shift/Delete as 2 columns.
+    func pitch(columns: CGFloat = 11) -> CGFloat {
+        letterWidth(columns: columns) + keyGap
+    }
+
+    /// Shift / Delete on German row 3 occupy 2 columns (Apple: ⇧ + 7 letters + ⌫ = 11).
+    func shiftDeleteWidth(letterColumns: CGFloat = 11) -> CGFloat {
+        2 * pitch(columns: letterColumns) - keyGap
+    }
+
+    /// Bottom-row special keys (123 / punct) — Apple ~40.5–46 “including gap”.
+    func specialWidth(letterColumns: CGFloat = 11) -> CGFloat {
+        let p = pitch(columns: letterColumns)
+        return min(max(p * 1.28 - keyGap, 36), 50)
+    }
+
+    /// Return key — Apple ~87.5–97 “including gap” on portrait phones.
+    func returnWidth(letterColumns: CGFloat = 11) -> CGFloat {
+        let p = pitch(columns: letterColumns)
+        return min(max(p * 2.65 - keyGap, 72), 100)
+    }
+
+    var cornerRadius: CGFloat {
+        if boardWidth >= 400 { return 6 }
+        if boardWidth >= 370 { return 5 }
+        return 4.5
+    }
+}
+
 /// German QWERTZ keyboard with Apple-style key popups + long-press accents.
 struct KeyboardLayoutView: View {
     @ObservedObject var model: KeyboardViewModel
@@ -13,112 +72,143 @@ struct KeyboardLayoutView: View {
     private let num2 = Array("-/:;()€&@\"")
     private let num3 = Array(".,?!ß'")
 
-    /// Apple-like rhythm — compact gaps, full-size hit pads (glyphs can be smaller).
-    private let rowSpacing: CGFloat = 7
-    private let keySpacing: CGFloat = 6
-    private let keyHeight: CGFloat = 42
-    private let shiftDeleteWidth: CGFloat = 46
-
     var body: some View {
-        VStack(spacing: rowSpacing) {
-            if model.showingNumbers {
-                numbersLayout
-            } else {
-                lettersLayout
+        GeometryReader { geo in
+            let m = AppleKeyboardMetrics(boardWidth: geo.size.width)
+            VStack(spacing: m.rowGap) {
+                if model.showingNumbers {
+                    numbersLayout(m)
+                } else {
+                    lettersLayout(m)
+                }
             }
+            .padding(.horizontal, m.sideMargin)
+            .padding(.top, m.topInset)
+            .padding(.bottom, m.bottomInset)
+            .frame(width: geo.size.width, height: geo.size.height, alignment: .top)
+            .animation(.easeOut(duration: 0.15), value: model.showingNumbers)
         }
-        .padding(.horizontal, 3)
-        .padding(.top, 2)
-        .padding(.bottom, 3)
-        .animation(.easeOut(duration: 0.15), value: model.showingNumbers)
+        // Letter block ~ 4 rows × keyH + 3 gaps + insets ≈ Apple letter area (~216 without toolbar).
+        .frame(height: letterBlockHeight)
     }
 
-    private var lettersLayout: some View {
-        VStack(spacing: rowSpacing) {
-            // German iOS: row1 + row2 are 11 keys edge-to-edge; row3 inset between Shift/Delete.
-            letterRow(row1, size: .top)
-            letterRow(row2, size: .middle)
-            HStack(spacing: keySpacing) {
+    private var letterBlockHeight: CGFloat {
+        // Approximate with mid-size phone metrics; GeometryReader refines face sizes.
+        let probe = AppleKeyboardMetrics(boardWidth: 390)
+        return probe.topInset + probe.bottomInset
+            + probe.keyHeight * 4
+            + probe.rowGap * 3
+    }
+
+    private func lettersLayout(_ m: AppleKeyboardMetrics) -> some View {
+        let letterW = m.letterWidth(columns: 11)
+        let shiftW = m.shiftDeleteWidth(letterColumns: 11)
+        VStack(spacing: m.rowGap) {
+            // German iOS: rows 1+2 are 11 equal keys, edge-to-edge (no English A-row inset).
+            letterRow(row1, width: letterW, height: m.keyHeight, gap: m.keyGap, radius: m.cornerRadius, size: .top)
+            letterRow(row2, width: letterW, height: m.keyHeight, gap: m.keyGap, radius: m.cornerRadius, size: .middle)
+            HStack(spacing: m.keyGap) {
                 ModifierKey(
                     symbol: model.capsLock ? "capslock.fill" : "shift.fill",
-                    width: shiftDeleteWidth,
-                    height: keyHeight,
+                    width: shiftW,
+                    height: m.keyHeight,
+                    cornerRadius: m.cornerRadius,
                     active: model.shiftOn || model.capsLock
                 ) {
                     model.toggleShift()
                 }
-                letterRowContent(row3, size: .bottom)
-                DeleteKey(width: shiftDeleteWidth, height: keyHeight) {
+                letterRowContent(row3, width: letterW, height: m.keyHeight, gap: m.keyGap, radius: m.cornerRadius, size: .bottom)
+                DeleteKey(width: shiftW, height: m.keyHeight, cornerRadius: m.cornerRadius) {
                     model.beginDeleteHold()
                 } onEnd: {
                     model.endDeleteHold()
                 }
             }
-            bottomRow(leftTitle: "123")
+            bottomRow(leftTitle: "123", metrics: m, letterColumns: 11)
         }
     }
 
-    private var numbersLayout: some View {
-        VStack(spacing: rowSpacing) {
-            letterRow(num1, size: .top)
-            letterRow(num2, size: .middle)
-            HStack(spacing: keySpacing) {
-                ModifierKey(title: "#+=", width: shiftDeleteWidth, height: keyHeight) {
+    private func numbersLayout(_ m: AppleKeyboardMetrics) -> some View {
+        // Numbers pad uses 10 columns (Apple numbers/punctuation layout).
+        let letterW = m.letterWidth(columns: 10)
+        let shiftW = m.shiftDeleteWidth(letterColumns: 10)
+        VStack(spacing: m.rowGap) {
+            letterRow(num1, width: letterW, height: m.keyHeight, gap: m.keyGap, radius: m.cornerRadius, size: .top)
+            letterRow(num2, width: letterW, height: m.keyHeight, gap: m.keyGap, radius: m.cornerRadius, size: .middle)
+            HStack(spacing: m.keyGap) {
+                ModifierKey(title: "#+=", width: shiftW, height: m.keyHeight, cornerRadius: m.cornerRadius) {
                     model.insert("#")
                 }
-                letterRowContent(num3, size: .bottom)
-                DeleteKey(width: shiftDeleteWidth, height: keyHeight) {
+                // 6 symbols + 2-col shift/delete = 10 columns (same span as rows above).
+                letterRowContent(num3, width: letterW, height: m.keyHeight, gap: m.keyGap, radius: m.cornerRadius, size: .bottom)
+                DeleteKey(width: shiftW, height: m.keyHeight, cornerRadius: m.cornerRadius) {
                     model.beginDeleteHold()
                 } onEnd: {
                     model.endDeleteHold()
                 }
             }
-            bottomRow(leftTitle: "ABC")
+            bottomRow(leftTitle: "ABC", metrics: m, letterColumns: 10)
         }
     }
 
-    private func bottomRow(leftTitle: String) -> some View {
-        // Apple-like: [123] [.,?!] ——— space ——— [return]
-        HStack(spacing: keySpacing) {
-            ModifierKey(title: leftTitle, width: shiftDeleteWidth, height: keyHeight) {
+    private func bottomRow(leftTitle: String, metrics m: AppleKeyboardMetrics, letterColumns: CGFloat) -> some View {
+        let special = m.specialWidth(letterColumns: letterColumns)
+        let ret = m.returnWidth(letterColumns: letterColumns)
+        HStack(spacing: m.keyGap) {
+            ModifierKey(title: leftTitle, width: special, height: m.keyHeight, cornerRadius: m.cornerRadius) {
                 model.toggleNumbers()
             }
-            PunctuationKey(width: shiftDeleteWidth, height: keyHeight) { inserted in
+            PunctuationKey(width: special, height: m.keyHeight, cornerRadius: m.cornerRadius) { inserted in
                 model.insert(inserted)
             }
-            SpaceKey(height: keyHeight) {
+            SpaceKey(height: m.keyHeight, cornerRadius: m.cornerRadius) {
                 model.space()
             } onCursorMove: { model.moveCursor(by: $0) }
             ModifierKey(
                 title: returnTitle,
-                width: 92,
-                height: keyHeight,
+                width: ret,
+                height: m.keyHeight,
+                cornerRadius: m.cornerRadius,
                 prominent: false
             ) {
                 model.returnKey()
             }
         }
-        .padding(.horizontal, 1)
     }
 
     private var returnTitle: String {
-        // Spotlight/search hosts often use search — keep a short Apple-like label.
         model.showAskPanel ? "senden" : "return"
     }
 
-    private func letterRow(_ chars: [Character], size: LetterKey.SizeClass = .top) -> some View {
-        HStack(spacing: keySpacing) {
-            letterRowContent(chars, size: size)
+    private func letterRow(
+        _ chars: [Character],
+        width: CGFloat,
+        height: CGFloat,
+        gap: CGFloat,
+        radius: CGFloat,
+        size: LetterKey.SizeClass
+    ) -> some View {
+        HStack(spacing: gap) {
+            letterRowContent(chars, width: width, height: height, gap: gap, radius: radius, size: size)
         }
     }
 
-    private func letterRowContent(_ chars: [Character], size: LetterKey.SizeClass = .top) -> some View {
-        HStack(spacing: keySpacing) {
+    private func letterRowContent(
+        _ chars: [Character],
+        width: CGFloat,
+        height: CGFloat,
+        gap: CGFloat,
+        radius: CGFloat,
+        size: LetterKey.SizeClass
+    ) -> some View {
+        HStack(spacing: gap) {
             ForEach(Array(chars.enumerated()), id: \.offset) { _, ch in
                 let label = display(ch)
                 LetterKey(
                     label: label,
-                    height: keyHeight,
+                    width: width,
+                    height: height,
+                    cornerRadius: radius,
                     size: size,
                     accents: AccentMap.variants(for: label)
                 ) { inserted in
@@ -219,7 +309,9 @@ private struct LetterKey: View {
     }
 
     let label: String
-    var height: CGFloat = 42
+    var width: CGFloat = 28
+    var height: CGFloat = 43
+    var cornerRadius: CGFloat = 5
     var size: SizeClass = .top
     let accents: [String]
     var onInsert: (String) -> Void
@@ -232,17 +324,16 @@ private struct LetterKey: View {
 
     var body: some View {
         Text(label)
-            // Smaller Apple-like glyphs — hit box stays full key size below.
+            // Apple letter glyphs are modest; face size comes from width×height.
             .font(.system(size: letterSize, weight: .regular))
             .offset(y: -0.5)
             .foregroundStyle(.white)
-            .frame(maxWidth: .infinity)
-            .frame(height: height)
+            .frame(width: width, height: height)
             .background(
-                RoundedRectangle(cornerRadius: 7.5, style: .continuous)
+                RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
                     .fill(keyFill)
                     .overlay(
-                        RoundedRectangle(cornerRadius: 7.5, style: .continuous)
+                        RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
                             .stroke(Color.white.opacity(pressed ? 0.06 : 0.12), lineWidth: 0.4)
                     )
                     .shadow(
@@ -260,9 +351,9 @@ private struct LetterKey: View {
                 }
             }
             .zIndex(pressed ? 40 : 0)
-            // Hit pad stays large (into gaps) even when glyphs are smaller.
-            .padding(.horizontal, -3)
-            .padding(.vertical, 2)
+            // Touch target slightly larger than the visible Apple key face.
+            .padding(.horizontal, -keyGapPad)
+            .padding(.vertical, 1.5)
             .contentShape(Rectangle())
             .gesture(
                 DragGesture(minimumDistance: 0)
@@ -271,20 +362,21 @@ private struct LetterKey: View {
             )
     }
 
+    /// Half of Apple’s 6pt gap — expands hit box into the gutter without overlapping neighbors badly.
+    private var keyGapPad: CGFloat { 2.5 }
+
     private var isUppercaseLetter: Bool {
         guard let c = label.first, c.isLetter else { return false }
         return label == label.uppercased() && label != label.lowercased()
     }
 
     private var letterSize: CGFloat {
-        // Smaller Apple-like letter glyphs (touch target unchanged via frame/hit pad).
+        // Slightly smaller than older NOCO keys — closer to system keyboard weight.
         switch size {
         case .middle:
+            return isUppercaseLetter ? 22 : 20.5
+        case .top, .bottom:
             return isUppercaseLetter ? 21 : 19.5
-        case .top:
-            return isUppercaseLetter ? 20 : 18.5
-        case .bottom:
-            return isUppercaseLetter ? 20 : 18.5
         }
     }
 
@@ -386,7 +478,8 @@ private struct LetterKey: View {
 /// Fixed-width `.` key with long-press scrub for `, ; : ! ? …` etc.
 private struct PunctuationKey: View {
     var width: CGFloat = 40
-    var height: CGFloat = 42
+    var height: CGFloat = 43
+    var cornerRadius: CGFloat = 5
     var glyphLift: CGFloat = 0
     var onInsert: (String) -> Void
 
@@ -405,10 +498,10 @@ private struct PunctuationKey: View {
             .frame(width: width, height: height)
             .foregroundStyle(.white.opacity(0.95))
             .background(
-                RoundedRectangle(cornerRadius: 8.5, style: .continuous)
+                RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
                     .fill(Color(red: 0.30, green: 0.30, blue: 0.32))
                     .overlay(
-                        RoundedRectangle(cornerRadius: 8.5, style: .continuous)
+                        RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
                             .stroke(Color.white.opacity(0.08), lineWidth: 0.5)
                     )
             )
@@ -422,7 +515,7 @@ private struct PunctuationKey: View {
             }
             .zIndex(pressed ? 40 : 0)
             .scaleEffect(pressed ? 0.96 : 1)
-            .padding(.vertical, 2)
+            .padding(.vertical, 1.5)
             .contentShape(Rectangle())
             .gesture(
                 DragGesture(minimumDistance: 0)
@@ -437,7 +530,7 @@ private struct PunctuationKey: View {
             HStack(spacing: 2) {
                 ForEach(Array(marks.enumerated()), id: \.offset) { idx, ch in
                     Text(ch)
-                        .font(.system(size: 20, weight: .medium, design: .rounded))
+                        .font(.system(size: 20, weight: .medium))
                         .frame(width: 30, height: 42)
                         .foregroundStyle(idx == pickIndex ? Color.white : Color.primary)
                         .background(
@@ -456,7 +549,7 @@ private struct PunctuationKey: View {
             )
         } else {
             Text(".")
-                .font(.system(size: 28, weight: .semibold, design: .rounded))
+                .font(.system(size: 28, weight: .semibold))
                 .frame(width: 48, height: 52)
                 .background(
                     RoundedRectangle(cornerRadius: 10, style: .continuous)
@@ -512,7 +605,8 @@ private struct PunctuationKey: View {
 
 private struct DeleteKey: View {
     var width: CGFloat = 44
-    var height: CGFloat = 42
+    var height: CGFloat = 43
+    var cornerRadius: CGFloat = 5
     var onBegin: () -> Void
     var onEnd: () -> Void
     @Environment(\.colorScheme) private var scheme
@@ -524,15 +618,15 @@ private struct DeleteKey: View {
             .frame(width: width, height: height)
             .foregroundStyle(.white.opacity(0.9))
             .background(
-                RoundedRectangle(cornerRadius: 8.5, style: .continuous)
+                RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
                     .fill(Color(red: 0.30, green: 0.30, blue: 0.32))
                     .overlay(
-                        RoundedRectangle(cornerRadius: 8.5, style: .continuous)
+                        RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
                             .stroke(Color.white.opacity(0.08), lineWidth: 0.5)
                     )
             )
             .scaleEffect(pressed ? 0.96 : 1)
-            .padding(.vertical, 2)
+            .padding(.vertical, 1.5)
             .contentShape(Rectangle())
             .gesture(
                 DragGesture(minimumDistance: 0)
@@ -554,7 +648,8 @@ private struct ModifierKey: View {
     var title: String? = nil
     var symbol: String? = nil
     var width: CGFloat = 44
-    var height: CGFloat = 42
+    var height: CGFloat = 43
+    var cornerRadius: CGFloat = 5
     var active = false
     var prominent = false
     var glyphLift: CGFloat = 0
@@ -569,17 +664,17 @@ private struct ModifierKey: View {
                     .font(.system(size: 16, weight: .semibold))
             } else if let title {
                 Text(title)
-                    .font(.system(size: title.count > 6 ? 12 : (title == "return" ? 15 : 13), weight: .semibold, design: .rounded))
+                    .font(.system(size: title.count > 6 ? 12 : (title == "return" ? 15 : 13), weight: .semibold))
             }
         }
         .offset(y: -glyphLift)
         .frame(width: width, height: height)
         .foregroundStyle(prominent ? .white : .white.opacity(0.9))
         .background(
-            RoundedRectangle(cornerRadius: 8.5, style: .continuous)
+            RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
                 .fill(fill)
                 .overlay(
-                    RoundedRectangle(cornerRadius: 8.5, style: .continuous)
+                    RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
                         .stroke(
                             prominent
                             ? Color.white.opacity(0.22)
@@ -590,7 +685,7 @@ private struct ModifierKey: View {
                 .shadow(color: .black.opacity(pressed ? 0 : 0.1), radius: 0.4, y: 1)
         )
         .scaleEffect(pressed ? 0.96 : 1)
-        .padding(.vertical, 2)
+        .padding(.vertical, 1.5)
         .contentShape(Rectangle())
         .gesture(
             DragGesture(minimumDistance: 0)
@@ -626,7 +721,8 @@ private struct ModifierKey: View {
 }
 
 private struct SpaceKey: View {
-    var height: CGFloat = 42
+    var height: CGFloat = 43
+    var cornerRadius: CGFloat = 5
     var glyphLift: CGFloat = 0
     var onTap: () -> Void
     var onCursorMove: (Int) -> Void
@@ -640,25 +736,25 @@ private struct SpaceKey: View {
 
     var body: some View {
         Text(trackpad ? "Cursor" : "Leertaste")
-            .font(.system(size: 14, weight: .medium, design: .rounded))
+            .font(.system(size: 14, weight: .medium))
             .foregroundStyle(.white.opacity(0.85))
             .offset(y: -glyphLift)
             .frame(maxWidth: .infinity)
             .frame(height: height)
             .background(
-                RoundedRectangle(cornerRadius: 8.5, style: .continuous)
+                RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
                     .fill(
                         trackpad
                         ? Color(red: 0.28, green: 0.38, blue: 0.55)
                         : Color(red: 0.39, green: 0.39, blue: 0.41).opacity(pressed ? 0.88 : 1)
                     )
                     .overlay(
-                        RoundedRectangle(cornerRadius: 8.5, style: .continuous)
+                        RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
                             .stroke(Color.white.opacity(trackpad ? 0.22 : 0.08), lineWidth: 0.5)
                     )
                     .shadow(color: .black.opacity(0.22), radius: 0.4, y: 1)
             )
-            .padding(.vertical, 2)
+            .padding(.vertical, 1.5)
             .contentShape(Rectangle())
             .gesture(
                 DragGesture(minimumDistance: 0)

@@ -18,6 +18,9 @@ final class KeyboardViewModel: ObservableObject {
     @Published var showAskPanel = false
     /// Separate from ask — tools never steal typing / Apple autocorrect.
     @Published var showToolsPanel = false
+    @Published var showClipboardPanel = false
+    @Published var clipboardItems: [(text: String, isSystem: Bool)] = []
+    @Published var canUndo = false
     @Published var askDraft = ""
     @Published var askReply = ""
     @Published var isAsking = false
@@ -38,6 +41,11 @@ final class KeyboardViewModel: ObservableObject {
         case idle, thinking, writing, success
     }
 
+    private struct UndoEntry {
+        let previousText: String
+        let appliedText: String
+    }
+
     private var shortenStreak = 0
     private var lastShortenFingerprint = ""
     private var longerStreak = 0
@@ -56,6 +64,9 @@ final class KeyboardViewModel: ObservableObject {
     private let voiceTyping = KeyboardVoiceTyping()
     private var dictationTickTask: Task<Void, Never>?
     private var dictationFinishing = false
+    /// In-memory only — cleared when the keyboard session ends.
+    private var undoStack: [UndoEntry] = []
+    private let maxUndoSteps = 12
 
     func bind(controller: KeyboardViewController) {
         self.controller = controller
@@ -72,6 +83,7 @@ final class KeyboardViewModel: ObservableObject {
         hasFullAccess = controller?.hasFullAccess == true
         isConfigured = CompanionCredentials.isConfigured
         dictationStyle = .current
+        refreshClipboardItems()
         if !hasFullAccess {
             statusLine = "Vollzugriff in iPhone-Einstellungen aktivieren"
         } else if !isConfigured {
@@ -300,6 +312,7 @@ final class KeyboardViewModel: ObservableObject {
         }
         withAnimation(.spring(response: 0.34, dampingFraction: 0.88)) {
             showToolsPanel = false
+            showClipboardPanel = false
             showAskPanel = true
         }
         // Fresh field every open — cursor sits at the start (leading edge).
@@ -333,6 +346,7 @@ final class KeyboardViewModel: ObservableObject {
         }
         withAnimation(.spring(response: 0.34, dampingFraction: 0.88)) {
             showAskPanel = false
+            showClipboardPanel = false
             showToolsPanel = true
         }
         statusLine = "AI Tools — Text markieren oder tippen"
@@ -406,9 +420,11 @@ final class KeyboardViewModel: ObservableObject {
         guard !text.isEmpty else { return }
         // Always insert into the host field, not the Ask draft
         controller?.textDocumentProxy.insertText(text)
+        KeyboardClipboardStore.remember(text)
         statusLine = "Eingefügt"
         notifyHaptic.notificationOccurred(.success)
         syncDocumentSnapshot()
+        refreshClipboardItems()
     }
 
     func clearAskDraft() {
@@ -566,7 +582,9 @@ final class KeyboardViewModel: ObservableObject {
                 animationPhase = .writing
                 overlayTitle = ""
                 clearCharacters(inserted.count)
+                pushUndo(previous: inserted, applied: final)
                 await typewriterInsert(final)
+                KeyboardClipboardStore.remember(final)
                 animationPhase = .success
                 statusLine = "Fertig · \(style.title)"
                 notifyHaptic.notificationOccurred(.success)
@@ -705,7 +723,9 @@ final class KeyboardViewModel: ObservableObject {
                 overlayTitle = ""
                 statusLine = chip.title
                 clearCharacters(deleteCount)
+                pushUndo(previous: source, applied: result)
                 await typewriterInsert(result)
+                KeyboardClipboardStore.remember(result)
                 if Task.isCancelled { return }
                 animationPhase = .success
                 overlayTitle = ""
@@ -748,5 +768,113 @@ final class KeyboardViewModel: ObservableObject {
         for _ in 0..<count {
             proxy.deleteBackward()
         }
+    }
+
+    // MARK: - Undo (AI rewrites / dictation polish)
+
+    private func pushUndo(previous: String, applied: String) {
+        let prev = previous.trimmingCharacters(in: .whitespacesAndNewlines)
+        let next = applied.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !prev.isEmpty || !next.isEmpty else { return }
+        guard prev != next else { return }
+        undoStack.append(UndoEntry(previousText: previous, appliedText: applied))
+        if undoStack.count > maxUndoSteps {
+            undoStack.removeFirst(undoStack.count - maxUndoSteps)
+        }
+        canUndo = !undoStack.isEmpty
+    }
+
+    func undoLastChange() {
+        guard !isProcessing, !isDictationPolishing else { return }
+        guard let entry = undoStack.popLast() else {
+            canUndo = false
+            statusLine = "Nichts rückgängig"
+            return
+        }
+        canUndo = !undoStack.isEmpty
+        syncDocumentSnapshot()
+        guard let proxy = controller?.textDocumentProxy else { return }
+        let before = proxy.documentContextBeforeInput ?? ""
+        let applied = entry.appliedText
+        if !applied.isEmpty, before.hasSuffix(applied) {
+            clearCharacters(applied.count)
+            proxy.insertText(entry.previousText)
+            statusLine = "Rückgängig"
+            notifyHaptic.notificationOccurred(.success)
+            syncDocumentSnapshot()
+            selectHaptic.selectionChanged()
+            return
+        }
+        // Selection case (rare after rewrite)
+        if let selected = proxy.selectedText, selected == applied {
+            clearCharacters(selected.count)
+            proxy.insertText(entry.previousText)
+            statusLine = "Rückgängig"
+            notifyHaptic.notificationOccurred(.success)
+            syncDocumentSnapshot()
+            return
+        }
+        statusLine = "Undo nicht möglich — Text wurde weiter geändert"
+        notifyHaptic.notificationOccurred(.warning)
+    }
+
+    // MARK: - Clipboard / Einsetzen
+
+    func toggleClipboardPanel() {
+        if showClipboardPanel {
+            withAnimation(.spring(response: 0.34, dampingFraction: 0.88)) {
+                showClipboardPanel = false
+            }
+            statusLine = showToolsPanel ? "AI Tools — Text markieren oder tippen" : "NOCO AI bereit"
+            controller?.updateKeyboardHeight()
+            return
+        }
+        refreshClipboardItems()
+        withAnimation(.spring(response: 0.34, dampingFraction: 0.88)) {
+            showAskPanel = false
+            showClipboardPanel = true
+        }
+        statusLine = clipboardItems.isEmpty
+            ? "Clipboard leer — kopiere Text oder nutze AI Tools"
+            : "Einsetzen — Text wählen"
+        selectHaptic.selectionChanged()
+        controller?.updateKeyboardHeight()
+    }
+
+    func closeClipboardPanel() {
+        withAnimation(.spring(response: 0.34, dampingFraction: 0.88)) {
+            showClipboardPanel = false
+        }
+        controller?.updateKeyboardHeight()
+    }
+
+    func refreshClipboardItems() {
+        clipboardItems = KeyboardClipboardStore.displayItems(hasFullAccess: hasFullAccess)
+    }
+
+    func insertClipboardItem(_ text: String) {
+        let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else { return }
+        if showAskPanel {
+            askDraft += trimmed
+        } else {
+            controller?.textDocumentProxy.insertText(trimmed)
+        }
+        KeyboardClipboardStore.remember(trimmed)
+        statusLine = "Eingesetzt"
+        notifyHaptic.notificationOccurred(.success)
+        syncDocumentSnapshot()
+        refreshClipboardItems()
+        withAnimation(.spring(response: 0.34, dampingFraction: 0.88)) {
+            showClipboardPanel = false
+        }
+        controller?.updateKeyboardHeight()
+    }
+
+    func clearClipboardHistory() {
+        KeyboardClipboardStore.clear()
+        refreshClipboardItems()
+        statusLine = "Clipboard-Verlauf gelöscht"
+        notifyHaptic.notificationOccurred(.success)
     }
 }

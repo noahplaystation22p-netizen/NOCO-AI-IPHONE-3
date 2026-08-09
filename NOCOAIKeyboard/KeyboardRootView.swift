@@ -6,6 +6,10 @@ struct KeyboardRootView: View {
     var body: some View {
         VStack(spacing: 0) {
             compactChrome
+            if model.showClipboardPanel {
+                clipboardPanel
+                    .transition(.move(edge: .top).combined(with: .opacity))
+            }
             if model.showToolsPanel {
                 toolsBar
                     .transition(.asymmetric(
@@ -42,6 +46,7 @@ struct KeyboardRootView: View {
         .animation(.spring(response: 0.36, dampingFraction: 0.86), value: model.showIntelligenceBurst)
         .animation(.spring(response: 0.34, dampingFraction: 0.88), value: model.showAskPanel)
         .animation(.spring(response: 0.38, dampingFraction: 0.84), value: model.showToolsPanel)
+        .animation(.spring(response: 0.34, dampingFraction: 0.88), value: model.showClipboardPanel)
         .animation(.easeInOut(duration: 0.18), value: model.animationPhase)
         .animation(.easeInOut(duration: 0.12), value: model.isDictating)
     }
@@ -156,6 +161,41 @@ struct KeyboardRootView: View {
 
             Spacer(minLength: 4)
 
+            Button {
+                model.undoLastChange()
+            } label: {
+                Image(systemName: "arrow.uturn.backward")
+                    .font(.system(size: 13, weight: .semibold))
+                    .foregroundStyle(.white.opacity(model.canUndo ? 0.92 : 0.28))
+                    .frame(width: 30, height: 28)
+                    .background(
+                        Circle()
+                            .fill(Color.white.opacity(model.canUndo ? 0.12 : 0.05))
+                    )
+            }
+            .buttonStyle(SoftPressStyle())
+            .disabled(!model.canUndo || model.isProcessing)
+            .accessibilityLabel("Rückgängig")
+
+            Button {
+                model.toggleClipboardPanel()
+            } label: {
+                Image(systemName: model.showClipboardPanel ? "doc.on.clipboard.fill" : "doc.on.clipboard")
+                    .font(.system(size: 13, weight: .semibold))
+                    .foregroundStyle(.white.opacity(0.92))
+                    .frame(width: 30, height: 28)
+                    .background(
+                        Circle()
+                            .fill(Color.white.opacity(model.showClipboardPanel ? 0.2 : 0.12))
+                            .overlay(
+                                Circle()
+                                    .stroke(Color.white.opacity(model.showClipboardPanel ? 0.28 : 0.1), lineWidth: 0.6)
+                            )
+                    )
+            }
+            .buttonStyle(SoftPressStyle())
+            .accessibilityLabel("Einsetzen")
+
             if model.isProcessing && !model.isDictating {
                 Text(model.isDictationPolishing ? "formt…" : "arbeitet…")
                     .font(.system(size: 10, weight: .medium, design: .rounded))
@@ -164,6 +204,82 @@ struct KeyboardRootView: View {
         }
         .padding(.horizontal, 10)
         .padding(.top, 2)
+        .padding(.bottom, 4)
+    }
+
+    // MARK: - Clipboard / Einsetzen
+
+    private var clipboardPanel: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            HStack {
+                Text("Zuletzt kopiert")
+                    .font(.system(size: 11, weight: .semibold, design: .rounded))
+                    .foregroundStyle(.white.opacity(0.55))
+                Spacer()
+                if !model.clipboardItems.isEmpty {
+                    Button("Löschen") {
+                        model.clearClipboardHistory()
+                    }
+                    .font(.system(size: 11, weight: .semibold, design: .rounded))
+                    .foregroundStyle(.white.opacity(0.45))
+                }
+                Button {
+                    model.closeClipboardPanel()
+                } label: {
+                    Image(systemName: "xmark")
+                        .font(.system(size: 10, weight: .bold))
+                        .foregroundStyle(.white.opacity(0.5))
+                        .frame(width: 22, height: 22)
+                }
+            }
+            .padding(.horizontal, 12)
+
+            if model.clipboardItems.isEmpty {
+                Text(model.hasFullAccess
+                     ? "Noch keine Einträge. System-Clipboard erscheint hier, sobald etwas kopiert ist."
+                     : "Vollzugriff aktivieren, um das aktuelle Clipboard zu lesen. NOCO speichert AI-Texte lokal.")
+                    .font(.system(size: 12, weight: .medium, design: .rounded))
+                    .foregroundStyle(.white.opacity(0.45))
+                    .padding(.horizontal, 12)
+                    .padding(.bottom, 6)
+            } else {
+                ScrollView(.vertical, showsIndicators: false) {
+                    VStack(spacing: 6) {
+                        ForEach(Array(model.clipboardItems.enumerated()), id: \.offset) { _, item in
+                            Button {
+                                model.insertClipboardItem(item.text)
+                            } label: {
+                                HStack(alignment: .top, spacing: 8) {
+                                    Image(systemName: item.isSystem ? "doc.on.clipboard" : "sparkles")
+                                        .font(.system(size: 11, weight: .semibold))
+                                        .foregroundStyle(.white.opacity(0.45))
+                                        .padding(.top, 2)
+                                    Text(item.text)
+                                        .font(.system(size: 13, weight: .medium, design: .rounded))
+                                        .foregroundStyle(.white.opacity(0.92))
+                                        .lineLimit(3)
+                                        .multilineTextAlignment(.leading)
+                                        .frame(maxWidth: .infinity, alignment: .leading)
+                                }
+                                .padding(.horizontal, 11)
+                                .padding(.vertical, 9)
+                                .background(
+                                    RoundedRectangle(cornerRadius: 10, style: .continuous)
+                                        .fill(Color.white.opacity(0.1))
+                                        .overlay(
+                                            RoundedRectangle(cornerRadius: 10, style: .continuous)
+                                                .stroke(Color.white.opacity(0.14), lineWidth: 0.6)
+                                        )
+                                )
+                            }
+                            .buttonStyle(SoftPressStyle())
+                        }
+                    }
+                    .padding(.horizontal, 10)
+                }
+                .frame(maxHeight: 120)
+            }
+        }
         .padding(.bottom, 4)
     }
 

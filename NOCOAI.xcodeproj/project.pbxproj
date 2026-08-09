@@ -7,6 +7,7 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		KBD00000100000000000000CB /* KeyboardClipboardStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = KBD00000200000000000000CB /* KeyboardClipboardStore.swift */; };
 		CD0000010000000000000002 /* ConnectionDiagnoseView.swift in Sources */ = {isa = PBXBuildFile; fileRef = CD0000020000000000000002 /* ConnectionDiagnoseView.swift */; };
 		CD0000010000000000000001 /* ConnectionDiagnostics.swift in Sources */ = {isa = PBXBuildFile; fileRef = CD0000020000000000000001 /* ConnectionDiagnostics.swift */; };
 
@@ -155,6 +156,7 @@
 /* End PBXContainerItemProxy section */
 
 /* Begin PBXFileReference section */
+		KBD00000200000000000000CB /* KeyboardClipboardStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = KeyboardClipboardStore.swift; sourceTree = "<group>"; };
 		CD0000020000000000000002 /* ConnectionDiagnoseView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ConnectionDiagnoseView.swift; sourceTree = "<group>"; };
 		CD0000020000000000000001 /* ConnectionDiagnostics.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ConnectionDiagnostics.swift; sourceTree = "<group>"; };
 		BC0000020000000000000001 /* SampleHandler.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SampleHandler.swift; sourceTree = "<group>"; };
@@ -565,6 +567,7 @@
 				NA0000020000000000000037 /* ImageActivityAttributes.swift */,
 				AA0000020000000000000001 /* AgentActivityAttributes.swift */,
 				KBD0000020000000000000010 /* CompanionCredentials.swift */,
+				KBD00000200000000000000CB /* KeyboardClipboardStore.swift */,
 				BC0000020000000000000002 /* SharedBroadcastFrameStore.swift */,
 				KBD0000020000000000000011 /* KeyboardAIAction.swift */,
 				KBD0000020000000000000012 /* KeyboardAIClient.swift */,
@@ -793,6 +796,7 @@
 				KBD0000010000000000000004 /* KeyboardLayoutView.swift in Sources */,
 				KBD00000100000000000000SC /* SoftSpellCorrect.swift in Sources */,
 				KBD0000010000000000000005 /* CompanionCredentials.swift in Sources */,
+				KBD00000100000000000000CB /* KeyboardClipboardStore.swift in Sources */,
 				KBD0000010000000000000006 /* KeyboardAIAction.swift in Sources */,
 				KBD0000010000000000000007 /* KeyboardAIClient.swift in Sources */,
 				KBD00000100000000000000IMP /* KeyboardImprovePipeline.swift in Sources */,
@@ -944,7 +948,7 @@
 				CODE_SIGNING_REQUIRED = NO;
 				CODE_SIGN_IDENTITY = "";
 				CODE_SIGNING_STYLE = Manual;
-				CURRENT_PROJECT_VERSION = 110;
+				CURRENT_PROJECT_VERSION = 111;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_KEY_NSAppTransportSecurity_NSAllowsArbitraryLoads = YES;
 				INFOPLIST_FILE = NOCOAIKeyboard/Info.plist;
@@ -974,7 +978,7 @@
 				CODE_SIGNING_REQUIRED = NO;
 				CODE_SIGN_IDENTITY = "";
 				CODE_SIGNING_STYLE = Manual;
-				CURRENT_PROJECT_VERSION = 110;
+				CURRENT_PROJECT_VERSION = 111;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_KEY_NSAppTransportSecurity_NSAllowsArbitraryLoads = YES;
 				INFOPLIST_FILE = NOCOAIKeyboard/Info.plist;
@@ -1040,7 +1044,7 @@
 				CODE_SIGN_ENTITLEMENTS = NOCOAI/NOCOAI.entitlements;
 				CODE_SIGNING_ALLOWED = NO;
 				CODE_SIGNING_REQUIRED = NO;
-				CURRENT_PROJECT_VERSION = 110;
+				CURRENT_PROJECT_VERSION = 111;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_KEY_NSAppTransportSecurity_NSAllowsArbitraryLoads = YES;
@@ -1075,7 +1079,7 @@
 				CODE_SIGN_ENTITLEMENTS = NOCOAI/NOCOAI.entitlements;
 				CODE_SIGNING_ALLOWED = NO;
 				CODE_SIGNING_REQUIRED = NO;
-				CURRENT_PROJECT_VERSION = 110;
+				CURRENT_PROJECT_VERSION = 111;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_KEY_NSAppTransportSecurity_NSAllowsArbitraryLoads = YES;
@@ -1109,7 +1113,7 @@
 				CODE_SIGN_ENTITLEMENTS = NOCOAISpeakWidget/NOCOAISpeakWidget.entitlements;
 				CODE_SIGNING_ALLOWED = NO;
 				CODE_SIGNING_REQUIRED = NO;
-				CURRENT_PROJECT_VERSION = 110;
+				CURRENT_PROJECT_VERSION = 111;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = NOCOAISpeakWidget/Info.plist;
 				INFOPLIST_KEY_CFBundleDisplayName = "NOCO Voice AI";
@@ -1137,7 +1141,7 @@
 				CODE_SIGN_ENTITLEMENTS = NOCOAISpeakWidget/NOCOAISpeakWidget.entitlements;
 				CODE_SIGNING_ALLOWED = NO;
 				CODE_SIGNING_REQUIRED = NO;
-				CURRENT_PROJECT_VERSION = 110;
+				CURRENT_PROJECT_VERSION = 111;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = NOCOAISpeakWidget/Info.plist;
 				INFOPLIST_KEY_CFBundleDisplayName = "NOCO Voice AI";
@@ -1169,7 +1173,7 @@
 				CODE_SIGNING_REQUIRED = NO;
 				CODE_SIGN_IDENTITY = "";
 				CODE_SIGNING_STYLE = Manual;
-				CURRENT_PROJECT_VERSION = 110;
+				CURRENT_PROJECT_VERSION = 111;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = NOCOAIBroadcast/Info.plist;
 				INFOPLIST_KEY_CFBundleDisplayName = "NOCO Live Screen";
@@ -1198,7 +1202,7 @@
 				CODE_SIGNING_REQUIRED = NO;
 				CODE_SIGN_IDENTITY = "";
 				CODE_SIGNING_STYLE = Manual;
-				CURRENT_PROJECT_VERSION = 110;
+				CURRENT_PROJECT_VERSION = 111;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = NOCOAIBroadcast/Info.plist;
 				INFOPLIST_KEY_CFBundleDisplayName = "NOCO Live Screen";

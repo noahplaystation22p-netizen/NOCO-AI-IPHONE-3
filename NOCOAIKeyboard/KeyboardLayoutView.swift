@@ -103,7 +103,7 @@ struct KeyboardLayoutView: View {
     private func lettersLayout(_ m: AppleKeyboardMetrics) -> some View {
         let letterW = m.letterWidth(columns: 11)
         let shiftW = m.shiftDeleteWidth(letterColumns: 11)
-        VStack(spacing: m.rowGap) {
+        return VStack(spacing: m.rowGap) {
             // German iOS: rows 1+2 are 11 equal keys, edge-to-edge (no English A-row inset).
             letterRow(row1, width: letterW, height: m.keyHeight, gap: m.keyGap, radius: m.cornerRadius, size: .top)
             letterRow(row2, width: letterW, height: m.keyHeight, gap: m.keyGap, radius: m.cornerRadius, size: .middle)
@@ -132,7 +132,7 @@ struct KeyboardLayoutView: View {
         // Numbers pad uses 10 columns (Apple numbers/punctuation layout).
         let letterW = m.letterWidth(columns: 10)
         let shiftW = m.shiftDeleteWidth(letterColumns: 10)
-        VStack(spacing: m.rowGap) {
+        return VStack(spacing: m.rowGap) {
             letterRow(num1, width: letterW, height: m.keyHeight, gap: m.keyGap, radius: m.cornerRadius, size: .top)
             letterRow(num2, width: letterW, height: m.keyHeight, gap: m.keyGap, radius: m.cornerRadius, size: .middle)
             HStack(spacing: m.keyGap) {
@@ -154,7 +154,7 @@ struct KeyboardLayoutView: View {
     private func bottomRow(leftTitle: String, metrics m: AppleKeyboardMetrics, letterColumns: CGFloat) -> some View {
         let special = m.specialWidth(letterColumns: letterColumns)
         let ret = m.returnWidth(letterColumns: letterColumns)
-        HStack(spacing: m.keyGap) {
+        return HStack(spacing: m.keyGap) {
             ModifierKey(title: leftTitle, width: special, height: m.keyHeight, cornerRadius: m.cornerRadius) {
                 model.toggleNumbers()
             }

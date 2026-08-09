@@ -117,7 +117,7 @@ enum ConnectionFailureCode: String, Codable, Equatable {
         case .cannotFindHost, .dnsLookupFailed:
             return .dnsFailure
         case .secureConnectionFailed, .serverCertificateUntrusted,
-             .clientCertificateRejected, .badServerCertificate:
+             .clientCertificateRejected:
             return .tlsError
         case .badURL:
             return .invalidRemoteHost

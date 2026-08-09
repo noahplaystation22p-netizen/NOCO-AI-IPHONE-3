@@ -72,6 +72,26 @@ struct SettingsView: View {
                 }
 
                 Section {
+                    NavigationLink {
+                        ConnectionDiagnoseView()
+                            .environmentObject(connection)
+                    } label: {
+                        Label {
+                            VStack(alignment: .leading, spacing: 2) {
+                                Text("Diagnose")
+                                Text("Local · Tailscale · TCP · HTTP · Log")
+                                    .font(.caption)
+                                    .foregroundStyle(.secondary)
+                            }
+                        } icon: {
+                            Image(systemName: "stethoscope")
+                        }
+                    }
+                } header: {
+                    Text("Verbindung · Diagnose")
+                }
+
+                Section {
                     Picker("Live Knowledge", selection: $liveKnowledge) {
                         ForEach(LiveKnowledgePolicy.allCases) { policy in
                             Text(policy.title).tag(policy)

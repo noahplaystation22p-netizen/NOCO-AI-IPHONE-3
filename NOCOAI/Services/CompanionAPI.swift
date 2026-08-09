@@ -10,6 +10,40 @@ enum CompanionAPIError: LocalizedError {
     case server(String)
     case network(Error)
     case decoding
+    /// Precise classified failure (preferred over collapsing into `.unreachable`).
+    case failure(ConnectionFailureCode, detail: String? = nil)
+
+    var failureCode: ConnectionFailureCode {
+        switch self {
+        case .invalidURL, .badHost:
+            return .invalidRemoteHost
+        case .unauthorized:
+            return .httpError401
+        case .invalidPIN:
+            return .httpError403
+        case .unreachable:
+            return .serverUnreachable
+        case .remoteAccessDisabled:
+            return .remoteAccessDisabled
+        case .decoding:
+            return .noServerResponse
+        case .server(let msg):
+            let low = msg.lowercased()
+            if low.contains("http 5") || low.contains("500") || low.contains("502") || low.contains("503") {
+                return .httpError5xx
+            }
+            if low.contains("404") || low.contains("unbekannte route") {
+                return .httpError404
+            }
+            if low.contains("403") { return .httpError403 }
+            if low.contains("401") { return .httpError401 }
+            return .httpError4xx
+        case .failure(let code, _):
+            return code
+        case .network(let err):
+            return ConnectionFailureCode.classify(err)
+        }
+    }
 
     var errorDescription: String? {
         switch self {
@@ -20,29 +54,26 @@ enum CompanionAPIError: LocalizedError {
         case .invalidPIN:
             return "PIN ungültig oder abgelaufen. Hole eine neue PIN in NOCO AI (Statusleiste → iPhone). Die PIN wechselt alle 15 Min."
         case .unreachable:
-            return "PC nicht erreichbar. Gleiches WLAN? Firewall Port 4747? NOCO AI läuft?"
+            return ConnectionFailureCode.serverUnreachable.userMessage
         case .badHost:
-            return "Ungültige IP — nur die Adresse eingeben, z. B. 192.168.178.197 (ohne http://)"
+            return ConnectionFailureCode.invalidRemoteHost.userMessage
         case .remoteAccessDisabled:
-            return "Remote-Zugriff ist auf dem NOCO-PC deaktiviert. Bitte in der Windows-App „Remote Zugriff aktivieren“ einschalten."
+            return ConnectionFailureCode.remoteAccessDisabled.userMessage
         case .server(let msg):
             return msg
+        case .failure(let code, let detail):
+            if let detail, !detail.isEmpty, code == .unknown {
+                return "\(code.userMessage) (\(detail))"
+            }
+            return code.userMessage
         case .network(let err):
-            if let urlErr = err as? URLError {
-                switch urlErr.code {
-                case .timedOut:
-                    return CompanionAPIError.unreachable.errorDescription
-                case .appTransportSecurityRequiresSecureConnection:
-                    // Tailscale 100.x is private CGNAT, not "public HTTP" — ATS must allow cleartext.
-                    // If this still fires, the installed build lost NSAllowsArbitraryLoads (reinstall).
-                    return "HTTP zum PC blockiert (ATS). Bitte neuestes NOCO-IPA installieren. Nur die IP eingeben, z. B. 100.x.x.x — ohne http://"
-                case .secureConnectionFailed, .serverCertificateUntrusted, .clientCertificateRejected:
-                    return "HTTPS nicht nötig — nur die IP (192.168.x.x oder Tailscale 100.x.x.x), ohne https://. Tailscale-VPN am iPhone prüfen."
-                case .cannotConnectToHost, .networkConnectionLost, .notConnectedToInternet:
-                    return CompanionAPIError.unreachable.errorDescription
-                default:
-                    break
-                }
+            // Classify precisely — never use a generic “HTTP blocked” fallback.
+            let code = ConnectionFailureCode.classify(err)
+            if code == .httpNotAllowedByATS {
+                return code.userMessage
+            }
+            if code != .unknown {
+                return code.userMessage
             }
             return err.localizedDescription
         case .decoding:
@@ -227,13 +258,14 @@ struct CompanionAPI {
     func mapNetworkError(_ error: Error) -> Error {
         if let api = error as? CompanionAPIError { return api }
         if let urlError = error as? URLError {
-            switch urlError.code {
-            case .cannotConnectToHost, .timedOut, .networkConnectionLost:
+            let code = ConnectionFailureCode.from(urlError: urlError)
+            // Preserve precise codes — do not collapse timeout/ATS into generic unreachable.
+            switch code {
+            case .httpNotAllowedByATS, .connectionTimeout, .portUnreachable,
+                 .firewallOrNetworkBlock, .tlsError, .dnsFailure, .invalidRemoteHost:
+                return CompanionAPIError.failure(code, detail: urlError.localizedDescription)
+            case .serverUnreachable:
                 return CompanionAPIError.unreachable
-            case .cannotFindHost:
-                return CompanionAPIError.badHost
-            case .secureConnectionFailed, .serverCertificateUntrusted:
-                return CompanionAPIError.network(urlError)
             default:
                 break
             }
@@ -244,7 +276,14 @@ struct CompanionAPI {
             || ns.code == 64
             || ns.localizedDescription.lowercased().contains("error 64")
             || ns.localizedDescription.lowercased().contains("host is down") {
-            return CompanionAPIError.unreachable
+            return CompanionAPIError.failure(.serverUnreachable, detail: ns.localizedDescription)
+        }
+        if ns.domain == NSPOSIXErrorDomain && (ns.code == 61 || ns.code == 60) {
+            return CompanionAPIError.failure(.portUnreachable, detail: ns.localizedDescription)
+        }
+        let classified = ConnectionFailureCode.classify(error)
+        if classified != .unknown {
+            return CompanionAPIError.failure(classified, detail: error.localizedDescription)
         }
         return CompanionAPIError.network(error)
     }
@@ -254,6 +293,13 @@ struct CompanionAPI {
         if let api = error as? CompanionAPIError {
             switch api {
             case .unreachable, .network: return true
+            case .failure(let code, _):
+                switch code {
+                case .connectionTimeout, .serverUnreachable, .firewallOrNetworkBlock, .portUnreachable:
+                    return true
+                default:
+                    return false
+                }
             case .server(let msg):
                 let low = msg.lowercased()
                 return low.contains("timeout") || low.contains("timed out") || low.contains("connection reset")

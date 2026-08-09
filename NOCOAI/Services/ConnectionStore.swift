@@ -878,10 +878,27 @@ final class ConnectionStore: ObservableObject {
                 beginReconnectBanner()
                 publishWidgetStatus()
                 await handleOfflinePathRecovery()
+                // Auto-diagnose so Settings/Diagnose show the real failure code.
+                Task {
+                    await ConnectionDiagnostics.shared.runFullProbe(connection: self)
+                    let snap = ConnectionDiagnostics.shared.snapshot
+                    if lastError == nil || (lastError?.contains("blockiert") == true) {
+                        lastError = snap.summary.isEmpty ? snap.failureCode.userMessage : snap.summary
+                    }
+                }
             }
-            if let err = error as? CompanionAPIError, case .unauthorized = err {
-                disconnect()
-                lastError = err.localizedDescription
+            if let err = error as? CompanionAPIError {
+                let code = err.failureCode
+                ConnectionDiagnostics.shared.log("Status error: \(code.rawValue)")
+                // Replace stale generic ATS/HTTP-block copy with the classified message.
+                if case .failure(_, _) = err {
+                    lastError = err.localizedDescription
+                } else if code == .httpNotAllowedByATS {
+                    lastError = code.userMessage
+                } else if case .unauthorized = err {
+                    disconnect()
+                    lastError = err.localizedDescription
+                }
             }
         }
     }
@@ -892,14 +909,26 @@ final class ConnectionStore: ObservableObject {
         remoteSessionApproved = true
         remotePromptSuppressedUntil = nil
         guard !preferredRemoteHost.isEmpty else {
-            lastError = "Keine Tailscale-Adresse gespeichert. Zuhause erneut koppeln oder Remote-IP in den Einstellungen setzen."
+            lastError = ConnectionFailureCode.invalidRemoteHost.userMessage
+            pathStatusLine = "Tailscale Verbindung fehlgeschlagen"
+            ConnectionDiagnostics.shared.log("Error: INVALID_REMOTE_HOST (no remote host saved)")
             return
         }
-        pathStatusLine = "Verbinde über Tailscale…"
+        pathStatusLine = "Tailscale wird verbunden…"
+        ConnectionDiagnostics.shared.log("Remote switch requested → \(preferredRemoteHost)")
         let ok = await trySwitchToHost(preferredRemoteHost, path: .remote, allowWithoutPing: true)
-        if !ok {
-            lastError = "Remote nicht erreichbar — PC: „Remote starten“, iPhone: Tailscale VPN an (Exit Node: None)."
-            pathStatusLine = "Remote fehlgeschlagen"
+        if ok {
+            pathStatusLine = "Tailscale verbunden"
+            lastError = nil
+            ConnectionDiagnostics.shared.log("Remote connection established")
+        } else {
+            pathStatusLine = "Tailscale Verbindung fehlgeschlagen"
+            await ConnectionDiagnostics.shared.runFullProbe(connection: self)
+            let code = ConnectionDiagnostics.shared.snapshot.failureCode
+            lastError = ConnectionDiagnostics.shared.snapshot.summary.isEmpty
+                ? code.userMessage
+                : ConnectionDiagnostics.shared.snapshot.summary
+            ConnectionDiagnostics.shared.log("Remote failed: \(code.rawValue)")
         }
     }
 

@@ -7,6 +7,8 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		CD0000010000000000000002 /* ConnectionDiagnoseView.swift in Sources */ = {isa = PBXBuildFile; fileRef = CD0000020000000000000002 /* ConnectionDiagnoseView.swift */; };
+		CD0000010000000000000001 /* ConnectionDiagnostics.swift in Sources */ = {isa = PBXBuildFile; fileRef = CD0000020000000000000001 /* ConnectionDiagnostics.swift */; };
 
 		KBD0000010000000000000001 /* KeyboardViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = KBD0000020000000000000001 /* KeyboardViewController.swift */; };
 		KBD0000010000000000000002 /* KeyboardViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = KBD0000020000000000000002 /* KeyboardViewModel.swift */; };
@@ -153,6 +155,8 @@
 /* End PBXContainerItemProxy section */
 
 /* Begin PBXFileReference section */
+		CD0000020000000000000002 /* ConnectionDiagnoseView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ConnectionDiagnoseView.swift; sourceTree = "<group>"; };
+		CD0000020000000000000001 /* ConnectionDiagnostics.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ConnectionDiagnostics.swift; sourceTree = "<group>"; };
 		BC0000020000000000000001 /* SampleHandler.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SampleHandler.swift; sourceTree = "<group>"; };
 		BC0000020000000000000002 /* SharedBroadcastFrameStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SharedBroadcastFrameStore.swift; sourceTree = "<group>"; };
 		BC0000020000000000000006 /* NOCOAIBroadcast.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = NOCOAIBroadcast.entitlements; sourceTree = "<group>"; };
@@ -398,6 +402,7 @@
 				NA0000020000000000000039 /* SpeakAppIntents.swift */,
 				VA0000020000000000000001 /* VoiceAISessionState.swift */,
 				VD0000020000000000000001 /* VoiceDebugLog.swift */,
+				CD0000020000000000000001 /* ConnectionDiagnostics.swift */,
 				NA00000200000000000000L2 /* LiveScreenImagePipeline.swift */,
 				NA00000200000000000000L3 /* LiveScreenCapture.swift */,
 				NA00000200000000000000L4 /* LiveScreenSessionController.swift */,
@@ -435,6 +440,7 @@
 				CC0000000000000000000100 /* ComputerControl */,
 				NA00000500000000000000VF /* VisionLive */,
 				NA0000020000000000000010 /* SettingsView.swift */,
+				CD0000020000000000000002 /* ConnectionDiagnoseView.swift */,
 				NA0000020000000000000090 /* KeyboardCustomizationView.swift */,
 				NA0000050000000000000008 /* Components */,
 			);
@@ -827,6 +833,7 @@
 				NA00000100000000000000OB /* OnboardingWelcomeView.swift in Sources */,
 				NA000001000000000000000E /* HomeView.swift in Sources */,
 				NA0000010000000000000010 /* SettingsView.swift in Sources */,
+				CD0000010000000000000002 /* ConnectionDiagnoseView.swift in Sources */,
 				NA0000010000000000000020 /* V2Models.swift in Sources */,
 				LK0000010000000000000001 /* LiveKnowledgeSettings.swift in Sources */,
 				NA00000100000000000000L1 /* LiveScreenModels.swift in Sources */,
@@ -880,6 +887,7 @@
 				NA0000010000000000000039 /* SpeakAppIntents.swift in Sources */,
 				VA0000010000000000000001 /* VoiceAISessionState.swift in Sources */,
 				VD0000010000000000000001 /* VoiceDebugLog.swift in Sources */,
+				CD0000010000000000000001 /* ConnectionDiagnostics.swift in Sources */,
 				NA0000010000000000000035 /* SpeakActivityAttributes.swift in Sources */,
 				NA0000010000000000000037 /* ImageActivityAttributes.swift in Sources */,
 				AA0000010000000000000001 /* AgentActivityAttributes.swift in Sources */,
@@ -936,7 +944,7 @@
 				CODE_SIGNING_REQUIRED = NO;
 				CODE_SIGN_IDENTITY = "";
 				CODE_SIGNING_STYLE = Manual;
-				CURRENT_PROJECT_VERSION = 109;
+				CURRENT_PROJECT_VERSION = 110;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_KEY_NSAppTransportSecurity_NSAllowsArbitraryLoads = YES;
 				INFOPLIST_FILE = NOCOAIKeyboard/Info.plist;
@@ -966,7 +974,7 @@
 				CODE_SIGNING_REQUIRED = NO;
 				CODE_SIGN_IDENTITY = "";
 				CODE_SIGNING_STYLE = Manual;
-				CURRENT_PROJECT_VERSION = 109;
+				CURRENT_PROJECT_VERSION = 110;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_KEY_NSAppTransportSecurity_NSAllowsArbitraryLoads = YES;
 				INFOPLIST_FILE = NOCOAIKeyboard/Info.plist;
@@ -1032,7 +1040,7 @@
 				CODE_SIGN_ENTITLEMENTS = NOCOAI/NOCOAI.entitlements;
 				CODE_SIGNING_ALLOWED = NO;
 				CODE_SIGNING_REQUIRED = NO;
-				CURRENT_PROJECT_VERSION = 109;
+				CURRENT_PROJECT_VERSION = 110;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_KEY_NSAppTransportSecurity_NSAllowsArbitraryLoads = YES;
@@ -1067,7 +1075,7 @@
 				CODE_SIGN_ENTITLEMENTS = NOCOAI/NOCOAI.entitlements;
 				CODE_SIGNING_ALLOWED = NO;
 				CODE_SIGNING_REQUIRED = NO;
-				CURRENT_PROJECT_VERSION = 109;
+				CURRENT_PROJECT_VERSION = 110;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_KEY_NSAppTransportSecurity_NSAllowsArbitraryLoads = YES;
@@ -1101,7 +1109,7 @@
 				CODE_SIGN_ENTITLEMENTS = NOCOAISpeakWidget/NOCOAISpeakWidget.entitlements;
 				CODE_SIGNING_ALLOWED = NO;
 				CODE_SIGNING_REQUIRED = NO;
-				CURRENT_PROJECT_VERSION = 109;
+				CURRENT_PROJECT_VERSION = 110;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = NOCOAISpeakWidget/Info.plist;
 				INFOPLIST_KEY_CFBundleDisplayName = "NOCO Voice AI";
@@ -1129,7 +1137,7 @@
 				CODE_SIGN_ENTITLEMENTS = NOCOAISpeakWidget/NOCOAISpeakWidget.entitlements;
 				CODE_SIGNING_ALLOWED = NO;
 				CODE_SIGNING_REQUIRED = NO;
-				CURRENT_PROJECT_VERSION = 109;
+				CURRENT_PROJECT_VERSION = 110;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = NOCOAISpeakWidget/Info.plist;
 				INFOPLIST_KEY_CFBundleDisplayName = "NOCO Voice AI";
@@ -1161,7 +1169,7 @@
 				CODE_SIGNING_REQUIRED = NO;
 				CODE_SIGN_IDENTITY = "";
 				CODE_SIGNING_STYLE = Manual;
-				CURRENT_PROJECT_VERSION = 109;
+				CURRENT_PROJECT_VERSION = 110;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = NOCOAIBroadcast/Info.plist;
 				INFOPLIST_KEY_CFBundleDisplayName = "NOCO Live Screen";
@@ -1190,7 +1198,7 @@
 				CODE_SIGNING_REQUIRED = NO;
 				CODE_SIGN_IDENTITY = "";
 				CODE_SIGNING_STYLE = Manual;
-				CURRENT_PROJECT_VERSION = 109;
+				CURRENT_PROJECT_VERSION = 110;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = NOCOAIBroadcast/Info.plist;
 				INFOPLIST_KEY_CFBundleDisplayName = "NOCO Live Screen";

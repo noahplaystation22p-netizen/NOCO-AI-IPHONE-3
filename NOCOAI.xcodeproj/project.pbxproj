@@ -1,1 +1,1263 @@
--NoNewline
+// !$*UTF8*$!
+{
+	archiveVersion = 1;
+	classes = {
+	};
+	objectVersion = 56;
+	objects = {
+
+/* Begin PBXBuildFile section */
+
+		KBD0000010000000000000001 /* KeyboardViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = KBD0000020000000000000001 /* KeyboardViewController.swift */; };
+		KBD0000010000000000000002 /* KeyboardViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = KBD0000020000000000000002 /* KeyboardViewModel.swift */; };
+		KBD000001000000000000000B /* KeyboardVoiceTyping.swift in Sources */ = {isa = PBXBuildFile; fileRef = KBD000002000000000000001B /* KeyboardVoiceTyping.swift */; };
+		KBD0000010000000000000003 /* KeyboardRootView.swift in Sources */ = {isa = PBXBuildFile; fileRef = KBD0000020000000000000003 /* KeyboardRootView.swift */; };
+		KBD0000010000000000000004 /* KeyboardLayoutView.swift in Sources */ = {isa = PBXBuildFile; fileRef = KBD0000020000000000000004 /* KeyboardLayoutView.swift */; };
+		KBD00000100000000000000SC /* SoftSpellCorrect.swift in Sources */ = {isa = PBXBuildFile; fileRef = KBD00000200000000000000SC /* SoftSpellCorrect.swift */; };
+		KBD0000010000000000000005 /* CompanionCredentials.swift in Sources */ = {isa = PBXBuildFile; fileRef = KBD0000020000000000000010 /* CompanionCredentials.swift */; };
+		KBD0000010000000000000006 /* KeyboardAIAction.swift in Sources */ = {isa = PBXBuildFile; fileRef = KBD0000020000000000000011 /* KeyboardAIAction.swift */; };
+		KBD0000010000000000000007 /* KeyboardAIClient.swift in Sources */ = {isa = PBXBuildFile; fileRef = KBD0000020000000000000012 /* KeyboardAIClient.swift */; };
+		KBD00000100000000000000IMP /* KeyboardImprovePipeline.swift in Sources */ = {isa = PBXBuildFile; fileRef = KBD00000200000000000000IMP /* KeyboardImprovePipeline.swift */; };
+		NA00000100000000000000IMP /* KeyboardImprovePipeline.swift in Sources */ = {isa = PBXBuildFile; fileRef = KBD00000200000000000000IMP /* KeyboardImprovePipeline.swift */; };
+		KBD00000100000000000000TP /* KeyboardToolPipelines.swift in Sources */ = {isa = PBXBuildFile; fileRef = KBD00000200000000000000TP /* KeyboardToolPipelines.swift */; };
+		NA00000100000000000000TP /* KeyboardToolPipelines.swift in Sources */ = {isa = PBXBuildFile; fileRef = KBD00000200000000000000TP /* KeyboardToolPipelines.swift */; };
+		KBD000001000000000000000A /* KeyboardChipPreferences.swift in Sources */ = {isa = PBXBuildFile; fileRef = KBD0000020000000000000013 /* KeyboardChipPreferences.swift */; };
+		NA0000010000000000000071 /* KeyboardChipPreferences.swift in Sources */ = {isa = PBXBuildFile; fileRef = KBD0000020000000000000013 /* KeyboardChipPreferences.swift */; };
+		NA0000010000000000000072 /* KeyboardCustomizationView.swift in Sources */ = {isa = PBXBuildFile; fileRef = NA0000020000000000000090 /* KeyboardCustomizationView.swift */; };
+		KBD0000010000000000000008 /* KeychainService.swift in Sources */ = {isa = PBXBuildFile; fileRef = NA0000020000000000000004 /* KeychainService.swift */; };
+		KBD0000010000000000000009 /* NOCOAIKeyboard.appex in Embed Foundation Extensions */ = {isa = PBXBuildFile; fileRef = KBD0000030000000000000001 /* NOCOAIKeyboard.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
+		NA0000010000000000000060 /* CompanionCredentials.swift in Sources */ = {isa = PBXBuildFile; fileRef = KBD0000020000000000000010 /* CompanionCredentials.swift */; };
+		NA0000010000000000000061 /* KeyboardAIAction.swift in Sources */ = {isa = PBXBuildFile; fileRef = KBD0000020000000000000011 /* KeyboardAIAction.swift */; };
+		NA0000010000000000000051 /* IntelligencePressStyle.swift in Sources */ = {isa = PBXBuildFile; fileRef = NA0000020000000000000051 /* IntelligencePressStyle.swift */; };
+		NA0000010000000000000062 /* ImageAttachIntent.swift in Sources */ = {isa = PBXBuildFile; fileRef = NA0000020000000000000062 /* ImageAttachIntent.swift */; };
+		NA0000010000000000000050 /* UserProfileStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = NA0000020000000000000050 /* UserProfileStore.swift */; };
+		NA0000010000000000000001 /* NOCOAIApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = NA0000020000000000000001 /* NOCOAIApp.swift */; };
+		NA0000010000000000000002 /* APIModels.swift in Sources */ = {isa = PBXBuildFile; fileRef = NA0000020000000000000002 /* APIModels.swift */; };
+		NA0000010000000000000003 /* ChatMessage.swift in Sources */ = {isa = PBXBuildFile; fileRef = NA0000020000000000000003 /* ChatMessage.swift */; };
+		CU0000010000000000000001 /* ChatUserFacingText.swift in Sources */ = {isa = PBXBuildFile; fileRef = CU0000020000000000000001 /* ChatUserFacingText.swift */; };
+		NA0000010000000000000004 /* KeychainService.swift in Sources */ = {isa = PBXBuildFile; fileRef = NA0000020000000000000004 /* KeychainService.swift */; };
+		NA0000010000000000000005 /* HapticService.swift in Sources */ = {isa = PBXBuildFile; fileRef = NA0000020000000000000005 /* HapticService.swift */; };
+		NA0000010000000000000006 /* CompanionAPI.swift in Sources */ = {isa = PBXBuildFile; fileRef = NA0000020000000000000006 /* CompanionAPI.swift */; };
+		NA0000010000000000000007 /* ConnectionStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = NA0000020000000000000007 /* ConnectionStore.swift */; };
+		NA0000010000000000000008 /* NOCOAITheme.swift in Sources */ = {isa = PBXBuildFile; fileRef = NA0000020000000000000008 /* NOCOAITheme.swift */; };
+		NA0000010000000000000009 /* GlassCard.swift in Sources */ = {isa = PBXBuildFile; fileRef = NA0000020000000000000009 /* GlassCard.swift */; };
+		NA000001000000000000000A /* StatusBadge.swift in Sources */ = {isa = PBXBuildFile; fileRef = NA000002000000000000000A /* StatusBadge.swift */; };
+		NA000001000000000000000B /* RootView.swift in Sources */ = {isa = PBXBuildFile; fileRef = NA000002000000000000000B /* RootView.swift */; };
+		NA000001000000000000000C /* MainTabView.swift in Sources */ = {isa = PBXBuildFile; fileRef = NA000002000000000000000C /* MainTabView.swift */; };
+		NA000001000000000000000D /* PairingView.swift in Sources */ = {isa = PBXBuildFile; fileRef = NA000002000000000000000D /* PairingView.swift */; };
+		NA00000100000000000000OB /* OnboardingWelcomeView.swift in Sources */ = {isa = PBXBuildFile; fileRef = NA00000200000000000000OB /* OnboardingWelcomeView.swift */; };
+		NA000001000000000000000E /* HomeView.swift in Sources */ = {isa = PBXBuildFile; fileRef = NA000002000000000000000E /* HomeView.swift */; };
+		NA0000010000000000000010 /* SettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = NA0000020000000000000010 /* SettingsView.swift */; };
+		NA0000010000000000000012 /* BrandLogo.swift in Sources */ = {isa = PBXBuildFile; fileRef = NA0000020000000000000014 /* BrandLogo.swift */; };
+		NA0000010000000000000013 /* QRScannerView.swift in Sources */ = {isa = PBXBuildFile; fileRef = NA0000020000000000000015 /* QRScannerView.swift */; };
+		NA0000010000000000000014 /* HostSanitizer.swift in Sources */ = {isa = PBXBuildFile; fileRef = NA0000020000000000000016 /* HostSanitizer.swift */; };
+		NA0000010000000000000015 /* LocalNetworkService.swift in Sources */ = {isa = PBXBuildFile; fileRef = NA0000020000000000000017 /* LocalNetworkService.swift */; };
+		NA0000010000000000000020 /* V2Models.swift in Sources */ = {isa = PBXBuildFile; fileRef = NA0000020000000000000020 /* V2Models.swift */; };
+		NA00000100000000000000L1 /* LiveScreenModels.swift in Sources */ = {isa = PBXBuildFile; fileRef = NA00000200000000000000L1 /* LiveScreenModels.swift */; };
+		NA00000100000000000000L2 /* LiveScreenImagePipeline.swift in Sources */ = {isa = PBXBuildFile; fileRef = NA00000200000000000000L2 /* LiveScreenImagePipeline.swift */; };
+		NA00000100000000000000L3 /* LiveScreenCapture.swift in Sources */ = {isa = PBXBuildFile; fileRef = NA00000200000000000000L3 /* LiveScreenCapture.swift */; };
+		NA00000100000000000000L4 /* LiveScreenSessionController.swift in Sources */ = {isa = PBXBuildFile; fileRef = NA00000200000000000000L4 /* LiveScreenSessionController.swift */; };
+		NA00000100000000000000L5 /* LiveScreenView.swift in Sources */ = {isa = PBXBuildFile; fileRef = NA00000200000000000000L5 /* LiveScreenView.swift */; };
+		NA00000100000000000000A1 /* AgentModels.swift in Sources */ = {isa = PBXBuildFile; fileRef = NA00000200000000000000A1 /* AgentModels.swift */; };
+		NA00000100000000000000A2 /* AgentSessionController.swift in Sources */ = {isa = PBXBuildFile; fileRef = NA00000200000000000000A2 /* AgentSessionController.swift */; };
+		NA00000100000000000000A3 /* AgentDashboardView.swift in Sources */ = {isa = PBXBuildFile; fileRef = NA00000200000000000000A3 /* AgentDashboardView.swift */; };
+		CC0000000000000000000002 /* ComputerControlModels.swift in Sources */ = {isa = PBXBuildFile; fileRef = CC0000000000000000000001 /* ComputerControlModels.swift */; };
+		MI0000000000000000000004 /* ModeStatusTheater.swift in Sources */ = {isa = PBXBuildFile; fileRef = MI0000000000000000000003 /* ModeStatusTheater.swift */; };
+		MI0000000000000000000002 /* ModeIntelligence.swift in Sources */ = {isa = PBXBuildFile; fileRef = MI0000000000000000000001 /* ModeIntelligence.swift */; };
+		CC0000000000000000000006 /* ComputerControlController.swift in Sources */ = {isa = PBXBuildFile; fileRef = CC0000000000000000000005 /* ComputerControlController.swift */; };
+		CC0000000000000000000004 /* ComputerControlView.swift in Sources */ = {isa = PBXBuildFile; fileRef = CC0000000000000000000003 /* ComputerControlView.swift */; };
+		NA00000100000000000000A4 /* NOCOIntelligenceVisuals.swift in Sources */ = {isa = PBXBuildFile; fileRef = NA00000200000000000000A4 /* NOCOIntelligenceVisuals.swift */; };
+		NA00000100000000000000Q1 /* IntelligenceQuickBar.swift in Sources */ = {isa = PBXBuildFile; fileRef = NA00000200000000000000Q1 /* IntelligenceQuickBar.swift */; };
+		CM0000010000000000000001 /* ChatMediaHelpers.swift in Sources */ = {isa = PBXBuildFile; fileRef = CM0000020000000000000001 /* ChatMediaHelpers.swift */; };
+		PT0000010000000000000001 /* PlusToolsPanel.swift in Sources */ = {isa = PBXBuildFile; fileRef = PT0000020000000000000001 /* PlusToolsPanel.swift */; };
+		PQ0000010000000000000001 /* PlusQuickPicker.swift in Sources */ = {isa = PBXBuildFile; fileRef = PQ0000020000000000000001 /* PlusQuickPicker.swift */; };
+		ST0000010000000000000001 /* SelectableMessageText.swift in Sources */ = {isa = PBXBuildFile; fileRef = ST0000020000000000000001 /* SelectableMessageText.swift */; };
+		AI0000010000000000000001 /* AgentIntake.swift in Sources */ = {isa = PBXBuildFile; fileRef = AI0000020000000000000001 /* AgentIntake.swift */; };
+		NA00000100000000000000V1 /* VisionLiveModels.swift in Sources */ = {isa = PBXBuildFile; fileRef = NA00000200000000000000V1 /* VisionLiveModels.swift */; };
+		NA00000100000000000000V2 /* VisionLiveCamera.swift in Sources */ = {isa = PBXBuildFile; fileRef = NA00000200000000000000V2 /* VisionLiveCamera.swift */; };
+		NA00000100000000000000V3 /* VisionLiveSessionController.swift in Sources */ = {isa = PBXBuildFile; fileRef = NA00000200000000000000V3 /* VisionLiveSessionController.swift */; };
+		NA00000100000000000000V4 /* VisionLiveView.swift in Sources */ = {isa = PBXBuildFile; fileRef = NA00000200000000000000V4 /* VisionLiveView.swift */; };
+		NA0000010000000000000021 /* CompanionAPI+V2.swift in Sources */ = {isa = PBXBuildFile; fileRef = NA0000020000000000000021 /* CompanionAPI+V2.swift */; };
+		NA0000010000000000000022 /* ChatStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = NA0000020000000000000022 /* ChatStore.swift */; };
+		NA0000010000000000000023 /* ImageStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = NA0000020000000000000023 /* ImageStore.swift */; };
+		NA0000010000000000000024 /* CodeStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = NA0000020000000000000024 /* CodeStore.swift */; };
+		NA0000010000000000000025 /* ModePicker.swift in Sources */ = {isa = PBXBuildFile; fileRef = NA0000020000000000000025 /* ModePicker.swift */; };
+		NA0000010000000000000026 /* SyncBadge.swift in Sources */ = {isa = PBXBuildFile; fileRef = NA0000020000000000000026 /* SyncBadge.swift */; };
+		NA0000010000000000000027 /* ChatHubView.swift in Sources */ = {isa = PBXBuildFile; fileRef = NA0000020000000000000027 /* ChatHubView.swift */; };
+		NA0000010000000000000028 /* ChatInputBar.swift in Sources */ = {isa = PBXBuildFile; fileRef = NA0000020000000000000028 /* ChatInputBar.swift */; };
+		NA0000010000000000000029 /* ImagesHubView.swift in Sources */ = {isa = PBXBuildFile; fileRef = NA0000020000000000000029 /* ImagesHubView.swift */; };
+		NA0000010000000000000070 /* MagischerRadiererView.swift in Sources */ = {isa = PBXBuildFile; fileRef = NA0000020000000000000070 /* MagischerRadiererView.swift */; };
+		NA000001000000000000002A /* DashboardView.swift in Sources */ = {isa = PBXBuildFile; fileRef = NA000002000000000000002A /* DashboardView.swift */; };
+		NA000001000000000000002B /* MoreView.swift in Sources */ = {isa = PBXBuildFile; fileRef = NA000002000000000000002B /* MoreView.swift */; };
+		NA000001000000000000002C /* CodeStudioView.swift in Sources */ = {isa = PBXBuildFile; fileRef = NA000002000000000000002C /* CodeStudioView.swift */; };
+		NA000001000000000000002D /* IntelligenceEffects.swift in Sources */ = {isa = PBXBuildFile; fileRef = NA000002000000000000002D /* IntelligenceEffects.swift */; };
+		NA00000100000000000000D1 /* NOCODynamicIntelligence.swift in Sources */ = {isa = PBXBuildFile; fileRef = NA00000200000000000000D1 /* NOCODynamicIntelligence.swift */; };
+		NA000001000000000000002E /* VoiceService.swift in Sources */ = {isa = PBXBuildFile; fileRef = NA000002000000000000002E /* VoiceService.swift */; };
+		SV0000010000000000000001 /* NOCOSpeakVoiceSettings.swift in Sources */ = {isa = PBXBuildFile; fileRef = SV0000020000000000000001 /* NOCOSpeakVoiceSettings.swift */; };
+		NA000001000000000000002F /* VoiceRainbowOrb.swift in Sources */ = {isa = PBXBuildFile; fileRef = NA000002000000000000002F /* VoiceRainbowOrb.swift */; };
+		NA0000010000000000000030 /* VoiceModeView.swift in Sources */ = {isa = PBXBuildFile; fileRef = NA0000020000000000000030 /* VoiceModeView.swift */; };
+		NA0000010000000000000031 /* IntelligenceTools.swift in Sources */ = {isa = PBXBuildFile; fileRef = NA0000020000000000000031 /* IntelligenceTools.swift */; };
+		NA0000010000000000000032 /* WritingToolsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = NA0000020000000000000032 /* WritingToolsView.swift */; };
+		NA0000010000000000000011 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = NA0000020000000000000011 /* Assets.xcassets */; };
+
+		NA0000010000000000000033 /* SpeakLiveActivity.swift in Sources */ = {isa = PBXBuildFile; fileRef = NA0000020000000000000033 /* SpeakLiveActivity.swift */; };
+		NA0000010000000000000034 /* SpeakSessionController.swift in Sources */ = {isa = PBXBuildFile; fileRef = NA0000020000000000000034 /* SpeakSessionController.swift */; };
+		SI0000010000000000000001 /* SpeakIntentEngine.swift in Sources */ = {isa = PBXBuildFile; fileRef = SI0000020000000000000001 /* SpeakIntentEngine.swift */; };
+		SVC000010000000000000001 /* SpeakVisualContext.swift in Sources */ = {isa = PBXBuildFile; fileRef = SVC000020000000000000001 /* SpeakVisualContext.swift */; };
+		NA0000010000000000000035 /* SpeakActivityAttributes.swift in Sources */ = {isa = PBXBuildFile; fileRef = NA0000020000000000000035 /* SpeakActivityAttributes.swift */; };
+		NA0000010000000000000036 /* NotificationService.swift in Sources */ = {isa = PBXBuildFile; fileRef = NA0000020000000000000036 /* NotificationService.swift */; };
+		NA00000100000000000000C1 /* MessageClipboard.swift in Sources */ = {isa = PBXBuildFile; fileRef = NA00000200000000000000C1 /* MessageClipboard.swift */; };
+		NA0000010000000000000037 /* ImageActivityAttributes.swift in Sources */ = {isa = PBXBuildFile; fileRef = NA0000020000000000000037 /* ImageActivityAttributes.swift */; };
+		NA0000010000000000000038 /* ImageLiveActivity.swift in Sources */ = {isa = PBXBuildFile; fileRef = NA0000020000000000000038 /* ImageLiveActivity.swift */; };
+		NA0000010000000000000039 /* SpeakAppIntents.swift in Sources */ = {isa = PBXBuildFile; fileRef = NA0000020000000000000039 /* SpeakAppIntents.swift */; };
+		VA0000010000000000000001 /* VoiceAISessionState.swift in Sources */ = {isa = PBXBuildFile; fileRef = VA0000020000000000000001 /* VoiceAISessionState.swift */; };
+		VD0000010000000000000001 /* VoiceDebugLog.swift in Sources */ = {isa = PBXBuildFile; fileRef = VD0000020000000000000001 /* VoiceDebugLog.swift */; };
+		WDG0000010000000000000001 /* SpeakLiveActivityWidget.swift in Sources */ = {isa = PBXBuildFile; fileRef = WDG0000020000000000000001 /* SpeakLiveActivityWidget.swift */; };
+		WDG0000010000000000000002 /* SpeakActivityAttributes.swift in Sources */ = {isa = PBXBuildFile; fileRef = NA0000020000000000000035 /* SpeakActivityAttributes.swift */; };
+		WDG0000010000000000000004 /* ImageActivityAttributes.swift in Sources */ = {isa = PBXBuildFile; fileRef = NA0000020000000000000037 /* ImageActivityAttributes.swift */; };
+		LK0000010000000000000001 /* LiveKnowledgeSettings.swift in Sources */ = {isa = PBXBuildFile; fileRef = LK0000020000000000000001 /* LiveKnowledgeSettings.swift */; };
+		AA0000010000000000000001 /* AgentActivityAttributes.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA0000020000000000000001 /* AgentActivityAttributes.swift */; };
+		AA0000010000000000000002 /* AgentLiveActivity.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA0000020000000000000002 /* AgentLiveActivity.swift */; };
+		AA0000010000000000000003 /* WidgetCenterReloader.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA0000020000000000000003 /* WidgetCenterReloader.swift */; };
+		WDG0000010000000000000005 /* AgentActivityAttributes.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA0000020000000000000001 /* AgentActivityAttributes.swift */; };
+		WDG0000010000000000000003 /* NOCOAISpeakWidget.appex in Embed Foundation Extensions */ = {isa = PBXBuildFile; fileRef = WDG0000030000000000000001 /* NOCOAISpeakWidget.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
+		BC0000010000000000000001 /* SampleHandler.swift in Sources */ = {isa = PBXBuildFile; fileRef = BC0000020000000000000001 /* SampleHandler.swift */; };
+		BC0000010000000000000002 /* SharedBroadcastFrameStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = BC0000020000000000000002 /* SharedBroadcastFrameStore.swift */; };
+		BC0000010000000000000003 /* SharedBroadcastFrameStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = BC0000020000000000000002 /* SharedBroadcastFrameStore.swift */; };
+		BC0000010000000000000009 /* NOCOAIBroadcast.appex in Embed Foundation Extensions */ = {isa = PBXBuildFile; fileRef = BC0000030000000000000001 /* NOCOAIBroadcast.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
+/* End PBXBuildFile section */
+
+
+/* Begin PBXContainerItemProxy section */
+		KBD00000C000000000000001 /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = NA00000A0000000000000001 /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = KBD0000060000000000000001;
+			remoteInfo = NOCOAIKeyboard;
+		};
+		WDG00000C000000000000001 /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = NA00000A0000000000000001 /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = WDG0000060000000000000001;
+			remoteInfo = NOCOAISpeakWidget;
+		};
+		BC00000C000000000000001 /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = NA00000A0000000000000001 /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = BC0000060000000000000001;
+			remoteInfo = NOCOAIBroadcast;
+		};
+/* End PBXContainerItemProxy section */
+
+/* Begin PBXFileReference section */
+		BC0000020000000000000001 /* SampleHandler.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SampleHandler.swift; sourceTree = "<group>"; };
+		BC0000020000000000000002 /* SharedBroadcastFrameStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SharedBroadcastFrameStore.swift; sourceTree = "<group>"; };
+		BC0000020000000000000006 /* NOCOAIBroadcast.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = NOCOAIBroadcast.entitlements; sourceTree = "<group>"; };
+		BC0000020000000000000007 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
+		BC0000030000000000000001 /* NOCOAIBroadcast.appex */ = {isa = PBXFileReference; explicitFileType = "wrapper.app-extension"; includeInIndex = 0; path = NOCOAIBroadcast.appex; sourceTree = BUILT_PRODUCTS_DIR; };
+
+		KBD0000020000000000000001 /* KeyboardViewController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = KeyboardViewController.swift; sourceTree = "<group>"; };
+		KBD0000020000000000000002 /* KeyboardViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = KeyboardViewModel.swift; sourceTree = "<group>"; };
+		KBD000002000000000000001B /* KeyboardVoiceTyping.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = KeyboardVoiceTyping.swift; sourceTree = "<group>"; };
+		KBD0000020000000000000003 /* KeyboardRootView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = KeyboardRootView.swift; sourceTree = "<group>"; };
+		KBD0000020000000000000004 /* KeyboardLayoutView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = KeyboardLayoutView.swift; sourceTree = "<group>"; };
+		KBD00000200000000000000SC /* SoftSpellCorrect.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SoftSpellCorrect.swift; sourceTree = "<group>"; };
+		KBD0000020000000000000005 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
+		KBD0000020000000000000006 /* NOCOAIKeyboard.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = NOCOAIKeyboard.entitlements; sourceTree = "<group>"; };
+		KBD0000020000000000000010 /* CompanionCredentials.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CompanionCredentials.swift; sourceTree = "<group>"; };
+		KBD0000020000000000000011 /* KeyboardAIAction.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = KeyboardAIAction.swift; sourceTree = "<group>"; };
+		KBD0000020000000000000012 /* KeyboardAIClient.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = KeyboardAIClient.swift; sourceTree = "<group>"; };
+		KBD00000200000000000000IMP /* KeyboardImprovePipeline.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = KeyboardImprovePipeline.swift; sourceTree = "<group>"; };
+		KBD00000200000000000000TP /* KeyboardToolPipelines.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = KeyboardToolPipelines.swift; sourceTree = "<group>"; };
+		KBD0000020000000000000013 /* KeyboardChipPreferences.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = KeyboardChipPreferences.swift; sourceTree = "<group>"; };
+		NA0000020000000000000090 /* KeyboardCustomizationView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = KeyboardCustomizationView.swift; sourceTree = "<group>"; };
+		KBD0000030000000000000001 /* NOCOAIKeyboard.appex */ = {isa = PBXFileReference; explicitFileType = "wrapper.app-extension"; includeInIndex = 0; path = NOCOAIKeyboard.appex; sourceTree = BUILT_PRODUCTS_DIR; };
+		NA0000020000000000000051 /* IntelligencePressStyle.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = IntelligencePressStyle.swift; sourceTree = "<group>"; };
+		NA0000020000000000000062 /* ImageAttachIntent.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ImageAttachIntent.swift; sourceTree = "<group>"; };
+		NA0000020000000000000050 /* UserProfileStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UserProfileStore.swift; sourceTree = "<group>"; };
+		NA0000030000000000000001 /* NOCOAI.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = NOCOAI.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		NA0000020000000000000001 /* NOCOAIApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NOCOAIApp.swift; sourceTree = "<group>"; };
+		NA0000020000000000000002 /* APIModels.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = APIModels.swift; sourceTree = "<group>"; };
+		NA0000020000000000000003 /* ChatMessage.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ChatMessage.swift; sourceTree = "<group>"; };
+		CU0000020000000000000001 /* ChatUserFacingText.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ChatUserFacingText.swift; sourceTree = "<group>"; };
+		NA0000020000000000000004 /* KeychainService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = KeychainService.swift; sourceTree = "<group>"; };
+		NA0000020000000000000005 /* HapticService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HapticService.swift; sourceTree = "<group>"; };
+		NA0000020000000000000006 /* CompanionAPI.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CompanionAPI.swift; sourceTree = "<group>"; };
+		NA0000020000000000000007 /* ConnectionStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ConnectionStore.swift; sourceTree = "<group>"; };
+		NA0000020000000000000008 /* NOCOAITheme.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NOCOAITheme.swift; sourceTree = "<group>"; };
+		NA0000020000000000000009 /* GlassCard.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GlassCard.swift; sourceTree = "<group>"; };
+		NA000002000000000000000A /* StatusBadge.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StatusBadge.swift; sourceTree = "<group>"; };
+		NA000002000000000000000B /* RootView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RootView.swift; sourceTree = "<group>"; };
+		NA000002000000000000000C /* MainTabView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MainTabView.swift; sourceTree = "<group>"; };
+		NA000002000000000000000D /* PairingView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PairingView.swift; sourceTree = "<group>"; };
+		NA00000200000000000000OB /* OnboardingWelcomeView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OnboardingWelcomeView.swift; sourceTree = "<group>"; };
+		NA000002000000000000000E /* HomeView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HomeView.swift; sourceTree = "<group>"; };
+		NA0000020000000000000010 /* SettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsView.swift; sourceTree = "<group>"; };
+		NA0000020000000000000017 /* LocalNetworkService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LocalNetworkService.swift; sourceTree = "<group>"; };
+		NA0000020000000000000016 /* HostSanitizer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HostSanitizer.swift; sourceTree = "<group>"; };
+		NA0000020000000000000015 /* QRScannerView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = QRScannerView.swift; sourceTree = "<group>"; };
+		NA0000020000000000000014 /* BrandLogo.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BrandLogo.swift; sourceTree = "<group>"; };
+		NA0000020000000000000011 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
+		NA0000020000000000000012 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
+		NA0000020000000000000013 /* NOCOAI.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = NOCOAI.entitlements; sourceTree = "<group>"; };
+		NA0000020000000000000020 /* V2Models.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = V2Models.swift; sourceTree = "<group>"; };
+		NA00000200000000000000L1 /* LiveScreenModels.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LiveScreenModels.swift; sourceTree = "<group>"; };
+		NA00000200000000000000L2 /* LiveScreenImagePipeline.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LiveScreenImagePipeline.swift; sourceTree = "<group>"; };
+		NA00000200000000000000L3 /* LiveScreenCapture.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LiveScreenCapture.swift; sourceTree = "<group>"; };
+		NA00000200000000000000L4 /* LiveScreenSessionController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LiveScreenSessionController.swift; sourceTree = "<group>"; };
+		NA00000200000000000000L5 /* LiveScreenView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LiveScreenView.swift; sourceTree = "<group>"; };
+		NA00000200000000000000A1 /* AgentModels.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AgentModels.swift; sourceTree = "<group>"; };
+		NA00000200000000000000A2 /* AgentSessionController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AgentSessionController.swift; sourceTree = "<group>"; };
+		NA00000200000000000000A3 /* AgentDashboardView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AgentDashboardView.swift; sourceTree = "<group>"; };
+		CC0000000000000000000001 /* ComputerControlModels.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ComputerControlModels.swift; sourceTree = "<group>"; };
+		MI0000000000000000000003 /* ModeStatusTheater.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ModeStatusTheater.swift; sourceTree = "<group>"; };
+		MI0000000000000000000001 /* ModeIntelligence.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ModeIntelligence.swift; sourceTree = "<group>"; };
+		CC0000000000000000000005 /* ComputerControlController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ComputerControlController.swift; sourceTree = "<group>"; };
+		CC0000000000000000000003 /* ComputerControlView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ComputerControlView.swift; sourceTree = "<group>"; };
+		NA00000200000000000000A4 /* NOCOIntelligenceVisuals.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NOCOIntelligenceVisuals.swift; sourceTree = "<group>"; };
+		NA00000200000000000000Q1 /* IntelligenceQuickBar.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = IntelligenceQuickBar.swift; sourceTree = "<group>"; };
+		CM0000020000000000000001 /* ChatMediaHelpers.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ChatMediaHelpers.swift; sourceTree = "<group>"; };
+		PT0000020000000000000001 /* PlusToolsPanel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PlusToolsPanel.swift; sourceTree = "<group>"; };
+		PQ0000020000000000000001 /* PlusQuickPicker.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PlusQuickPicker.swift; sourceTree = "<group>"; };
+		ST0000020000000000000001 /* SelectableMessageText.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SelectableMessageText.swift; sourceTree = "<group>"; };
+		AI0000020000000000000001 /* AgentIntake.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AgentIntake.swift; sourceTree = "<group>"; };
+		NA00000200000000000000V1 /* VisionLiveModels.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VisionLiveModels.swift; sourceTree = "<group>"; };
+		NA00000200000000000000V2 /* VisionLiveCamera.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VisionLiveCamera.swift; sourceTree = "<group>"; };
+		NA00000200000000000000V3 /* VisionLiveSessionController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VisionLiveSessionController.swift; sourceTree = "<group>"; };
+		NA00000200000000000000V4 /* VisionLiveView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VisionLiveView.swift; sourceTree = "<group>"; };
+		NA0000020000000000000021 /* CompanionAPI+V2.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "CompanionAPI+V2.swift"; sourceTree = "<group>"; };
+		NA0000020000000000000022 /* ChatStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ChatStore.swift; sourceTree = "<group>"; };
+		NA0000020000000000000023 /* ImageStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ImageStore.swift; sourceTree = "<group>"; };
+		NA0000020000000000000024 /* CodeStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CodeStore.swift; sourceTree = "<group>"; };
+		NA0000020000000000000025 /* ModePicker.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ModePicker.swift; sourceTree = "<group>"; };
+		NA0000020000000000000026 /* SyncBadge.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SyncBadge.swift; sourceTree = "<group>"; };
+		NA0000020000000000000027 /* ChatHubView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ChatHubView.swift; sourceTree = "<group>"; };
+		NA0000020000000000000028 /* ChatInputBar.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ChatInputBar.swift; sourceTree = "<group>"; };
+		NA0000020000000000000029 /* ImagesHubView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ImagesHubView.swift; sourceTree = "<group>"; };
+		NA0000020000000000000070 /* MagischerRadiererView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MagischerRadiererView.swift; sourceTree = "<group>"; };
+		NA000002000000000000002A /* DashboardView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DashboardView.swift; sourceTree = "<group>"; };
+		NA000002000000000000002B /* MoreView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MoreView.swift; sourceTree = "<group>"; };
+		NA000002000000000000002C /* CodeStudioView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CodeStudioView.swift; sourceTree = "<group>"; };
+		NA000002000000000000002D /* IntelligenceEffects.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = IntelligenceEffects.swift; sourceTree = "<group>"; };
+		NA00000200000000000000D1 /* NOCODynamicIntelligence.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NOCODynamicIntelligence.swift; sourceTree = "<group>"; };
+		NA000002000000000000002E /* VoiceService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VoiceService.swift; sourceTree = "<group>"; };
+		SV0000020000000000000001 /* NOCOSpeakVoiceSettings.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NOCOSpeakVoiceSettings.swift; sourceTree = "<group>"; };
+		NA000002000000000000002F /* VoiceRainbowOrb.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VoiceRainbowOrb.swift; sourceTree = "<group>"; };
+		NA0000020000000000000030 /* VoiceModeView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VoiceModeView.swift; sourceTree = "<group>"; };
+		NA0000020000000000000031 /* IntelligenceTools.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = IntelligenceTools.swift; sourceTree = "<group>"; };
+		NA0000020000000000000032 /* WritingToolsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WritingToolsView.swift; sourceTree = "<group>"; };
+
+		NA0000020000000000000033 /* SpeakLiveActivity.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SpeakLiveActivity.swift; sourceTree = "<group>"; };
+		NA0000020000000000000034 /* SpeakSessionController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SpeakSessionController.swift; sourceTree = "<group>"; };
+		SI0000020000000000000001 /* SpeakIntentEngine.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SpeakIntentEngine.swift; sourceTree = "<group>"; };
+		SVC000020000000000000001 /* SpeakVisualContext.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SpeakVisualContext.swift; sourceTree = "<group>"; };
+		NA0000020000000000000035 /* SpeakActivityAttributes.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SpeakActivityAttributes.swift; sourceTree = "<group>"; };
+		NA0000020000000000000036 /* NotificationService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NotificationService.swift; sourceTree = "<group>"; };
+		NA00000200000000000000C1 /* MessageClipboard.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MessageClipboard.swift; sourceTree = "<group>"; };
+		NA0000020000000000000037 /* ImageActivityAttributes.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ImageActivityAttributes.swift; sourceTree = "<group>"; };
+		NA0000020000000000000038 /* ImageLiveActivity.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ImageLiveActivity.swift; sourceTree = "<group>"; };
+		NA0000020000000000000039 /* SpeakAppIntents.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SpeakAppIntents.swift; sourceTree = "<group>"; };
+		VA0000020000000000000001 /* VoiceAISessionState.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VoiceAISessionState.swift; sourceTree = "<group>"; };
+		VD0000020000000000000001 /* VoiceDebugLog.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VoiceDebugLog.swift; sourceTree = "<group>"; };
+		LK0000020000000000000001 /* LiveKnowledgeSettings.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LiveKnowledgeSettings.swift; sourceTree = "<group>"; };
+		AA0000020000000000000001 /* AgentActivityAttributes.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AgentActivityAttributes.swift; sourceTree = "<group>"; };
+		AA0000020000000000000002 /* AgentLiveActivity.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AgentLiveActivity.swift; sourceTree = "<group>"; };
+		AA0000020000000000000003 /* WidgetCenterReloader.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WidgetCenterReloader.swift; sourceTree = "<group>"; };
+		WDG0000020000000000000001 /* SpeakLiveActivityWidget.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SpeakLiveActivityWidget.swift; sourceTree = "<group>"; };
+		WDG0000020000000000000002 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
+		WDG0000020000000000000003 /* NOCOAISpeakWidget.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = NOCOAISpeakWidget.entitlements; sourceTree = "<group>"; };
+		WDG0000030000000000000001 /* NOCOAISpeakWidget.appex */ = {isa = PBXFileReference; explicitFileType = "wrapper.app-extension"; includeInIndex = 0; path = NOCOAISpeakWidget.appex; sourceTree = BUILT_PRODUCTS_DIR; };
+/* End PBXFileReference section */
+
+/* Begin PBXFrameworksBuildPhase section */
+		NA0000040000000000000001 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		WDG0000040000000000000001 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		KBD0000040000000000000001 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		BC0000040000000000000001 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXFrameworksBuildPhase section */
+
+/* Begin PBXGroup section */
+		NA0000050000000000000001 = {
+			isa = PBXGroup;
+			children = (
+				NA0000050000000000000002 /* NOCOAI */,
+				WDG0000050000000000000001 /* NOCOAISpeakWidget */,
+				KBD0000050000000000000001 /* NOCOAIKeyboard */,
+				BC0000050000000000000001 /* NOCOAIBroadcast */,
+				WDG0000050000000000000002 /* Shared */,
+				NA0000050000000000000003 /* Products */,
+			);
+			sourceTree = "<group>";
+		};
+		NA0000050000000000000002 /* NOCOAI */ = {
+			isa = PBXGroup;
+			children = (
+				NA0000020000000000000001 /* NOCOAIApp.swift */,
+				NA0000050000000000000004 /* Models */,
+				NA0000050000000000000009 /* Store */,
+				NA0000050000000000000005 /* Services */,
+				NA0000050000000000000006 /* Theme */,
+				NA0000050000000000000007 /* Views */,
+				NA0000020000000000000011 /* Assets.xcassets */,
+				NA0000020000000000000012 /* Info.plist */,
+				NA0000020000000000000013 /* NOCOAI.entitlements */,
+			);
+			path = NOCOAI;
+			sourceTree = "<group>";
+		};
+		NA0000050000000000000003 /* Products */ = {
+			isa = PBXGroup;
+			children = (
+				NA0000030000000000000001 /* NOCOAI.app */,
+				WDG0000030000000000000001 /* NOCOAISpeakWidget.appex */,
+				KBD0000030000000000000001 /* NOCOAIKeyboard.appex */,
+				BC0000030000000000000001 /* NOCOAIBroadcast.appex */,
+			);
+			name = Products;
+			sourceTree = "<group>";
+		};
+		NA0000050000000000000004 /* Models */ = {
+			isa = PBXGroup;
+			children = (
+				NA0000020000000000000002 /* APIModels.swift */,
+				NA0000020000000000000003 /* ChatMessage.swift */,
+				CU0000020000000000000001 /* ChatUserFacingText.swift */,
+				NA0000020000000000000020 /* V2Models.swift */,
+				LK0000020000000000000001 /* LiveKnowledgeSettings.swift */,
+				NA0000020000000000000031 /* IntelligenceTools.swift */,
+				NA00000200000000000000L1 /* LiveScreenModels.swift */,
+				NA00000200000000000000A1 /* AgentModels.swift */,
+				CC0000000000000000000001 /* ComputerControlModels.swift */,
+				MI0000000000000000000001 /* ModeIntelligence.swift */,
+				AI0000020000000000000001 /* AgentIntake.swift */,
+				NA00000200000000000000V1 /* VisionLiveModels.swift */,
+			);
+			path = Models;
+			sourceTree = "<group>";
+		};
+		NA0000050000000000000009 /* Store */ = {
+			isa = PBXGroup;
+			children = (
+				NA0000020000000000000022 /* ChatStore.swift */,
+				NA0000020000000000000023 /* ImageStore.swift */,
+				NA0000020000000000000024 /* CodeStore.swift */,
+			);
+			path = Store;
+			sourceTree = "<group>";
+		};
+		NA0000050000000000000005 /* Services */ = {
+			isa = PBXGroup;
+			children = (
+				NA0000020000000000000004 /* KeychainService.swift */,
+				NA0000020000000000000005 /* HapticService.swift */,
+				NA0000020000000000000062 /* ImageAttachIntent.swift */,
+				NA0000020000000000000006 /* CompanionAPI.swift */,
+				NA0000020000000000000021 /* CompanionAPI+V2.swift */,
+				NA0000020000000000000007 /* ConnectionStore.swift */,
+				NA0000020000000000000050 /* UserProfileStore.swift */,
+				NA0000020000000000000016 /* HostSanitizer.swift */,
+				NA0000020000000000000017 /* LocalNetworkService.swift */,
+				NA000002000000000000002E /* VoiceService.swift */,
+				SV0000020000000000000001 /* NOCOSpeakVoiceSettings.swift */,
+				NA0000020000000000000033 /* SpeakLiveActivity.swift */,
+				NA0000020000000000000038 /* ImageLiveActivity.swift */,
+				AA0000020000000000000002 /* AgentLiveActivity.swift */,
+				AA0000020000000000000003 /* WidgetCenterReloader.swift */,
+				NA0000020000000000000034 /* SpeakSessionController.swift */,
+				SI0000020000000000000001 /* SpeakIntentEngine.swift */,
+				SVC000020000000000000001 /* SpeakVisualContext.swift */,
+				NA0000020000000000000036 /* NotificationService.swift */,
+				NA00000200000000000000C1 /* MessageClipboard.swift */,
+				NA0000020000000000000039 /* SpeakAppIntents.swift */,
+				VA0000020000000000000001 /* VoiceAISessionState.swift */,
+				VD0000020000000000000001 /* VoiceDebugLog.swift */,
+				NA00000200000000000000L2 /* LiveScreenImagePipeline.swift */,
+				NA00000200000000000000L3 /* LiveScreenCapture.swift */,
+				NA00000200000000000000L4 /* LiveScreenSessionController.swift */,
+				NA00000200000000000000A2 /* AgentSessionController.swift */,
+				CC0000000000000000000005 /* ComputerControlController.swift */,
+				NA00000200000000000000V2 /* VisionLiveCamera.swift */,
+				NA00000200000000000000V3 /* VisionLiveSessionController.swift */,
+			);
+			path = Services;
+			sourceTree = "<group>";
+		};
+		NA0000050000000000000006 /* Theme */ = {
+			isa = PBXGroup;
+			children = (
+				NA0000020000000000000008 /* NOCOAITheme.swift */,
+			);
+			path = Theme;
+			sourceTree = "<group>";
+		};
+		NA0000050000000000000007 /* Views */ = {
+			isa = PBXGroup;
+			children = (
+				NA000002000000000000000B /* RootView.swift */,
+				NA000002000000000000000C /* MainTabView.swift */,
+				NA000002000000000000000D /* PairingView.swift */,
+				NA00000200000000000000OB /* OnboardingWelcomeView.swift */,
+				NA000002000000000000000E /* HomeView.swift */,
+				NA000005000000000000000A /* Chat */,
+				NA000005000000000000000B /* Images */,
+				NA000005000000000000000C /* Dashboard */,
+				NA000005000000000000000D /* Code */,
+				NA000005000000000000000E /* More */,
+				NA00000500000000000000LF /* LiveScreen */,
+				NA00000500000000000000AF /* Agent */,
+				CC0000000000000000000100 /* ComputerControl */,
+				NA00000500000000000000VF /* VisionLive */,
+				NA0000020000000000000010 /* SettingsView.swift */,
+				NA0000020000000000000090 /* KeyboardCustomizationView.swift */,
+				NA0000050000000000000008 /* Components */,
+			);
+			path = Views;
+			sourceTree = "<group>";
+		};
+		NA0000050000000000000008 /* Components */ = {
+			isa = PBXGroup;
+			children = (
+				NA0000020000000000000009 /* GlassCard.swift */,
+				NA0000020000000000000051 /* IntelligencePressStyle.swift */,
+				NA000002000000000000000A /* StatusBadge.swift */,
+				NA0000020000000000000014 /* BrandLogo.swift */,
+				NA0000020000000000000015 /* QRScannerView.swift */,
+				NA0000020000000000000025 /* ModePicker.swift */,
+				MI0000000000000000000003 /* ModeStatusTheater.swift */,
+				NA0000020000000000000026 /* SyncBadge.swift */,
+				NA000002000000000000002D /* IntelligenceEffects.swift */,
+				NA00000200000000000000D1 /* NOCODynamicIntelligence.swift */,
+				NA00000200000000000000A4 /* NOCOIntelligenceVisuals.swift */,
+				NA00000200000000000000Q1 /* IntelligenceQuickBar.swift */,
+				CM0000020000000000000001 /* ChatMediaHelpers.swift */,
+				ST0000020000000000000001 /* SelectableMessageText.swift */,
+				NA000002000000000000002F /* VoiceRainbowOrb.swift */,
+				NA0000020000000000000032 /* WritingToolsView.swift */,
+			);
+			path = Components;
+			sourceTree = "<group>";
+		};
+		NA000005000000000000000A /* Chat */ = {
+			isa = PBXGroup;
+			children = (
+				NA0000020000000000000027 /* ChatHubView.swift */,
+				NA0000020000000000000028 /* ChatInputBar.swift */,
+				PT0000020000000000000001 /* PlusToolsPanel.swift */,
+				PQ0000020000000000000001 /* PlusQuickPicker.swift */,
+				NA0000020000000000000030 /* VoiceModeView.swift */,
+			);
+			path = Chat;
+			sourceTree = "<group>";
+		};
+		NA000005000000000000000B /* Images */ = {
+			isa = PBXGroup;
+			children = (
+				NA0000020000000000000029 /* ImagesHubView.swift */,
+				NA0000020000000000000070 /* MagischerRadiererView.swift */,
+			);
+			path = Images;
+			sourceTree = "<group>";
+		};
+		NA000005000000000000000C /* Dashboard */ = {
+			isa = PBXGroup;
+			children = (
+				NA000002000000000000002A /* DashboardView.swift */,
+			);
+			path = Dashboard;
+			sourceTree = "<group>";
+		};
+		NA000005000000000000000D /* Code */ = {
+			isa = PBXGroup;
+			children = (
+				NA000002000000000000002C /* CodeStudioView.swift */,
+			);
+			path = Code;
+			sourceTree = "<group>";
+		};
+		NA000005000000000000000E /* More */ = {
+			isa = PBXGroup;
+			children = (
+				NA000002000000000000002B /* MoreView.swift */,
+			);
+			path = More;
+			sourceTree = "<group>";
+		};
+		NA00000500000000000000LF /* LiveScreen */ = {
+			isa = PBXGroup;
+			children = (
+				NA00000200000000000000L5 /* LiveScreenView.swift */,
+			);
+			path = LiveScreen;
+			sourceTree = "<group>";
+		};
+		CC0000000000000000000100 /* ComputerControl */ = {
+			isa = PBXGroup;
+			children = (
+				CC0000000000000000000003 /* ComputerControlView.swift */,
+			);
+			path = ComputerControl;
+			sourceTree = "<group>";
+		};
+		NA00000500000000000000AF /* Agent */ = {
+			isa = PBXGroup;
+			children = (
+				NA00000200000000000000A3 /* AgentDashboardView.swift */,
+			);
+			path = Agent;
+			sourceTree = "<group>";
+		};
+		NA00000500000000000000VF /* VisionLive */ = {
+			isa = PBXGroup;
+			children = (
+				NA00000200000000000000V4 /* VisionLiveView.swift */,
+			);
+			path = VisionLive;
+			sourceTree = "<group>";
+		};
+
+		WDG0000050000000000000001 /* NOCOAISpeakWidget */ = {
+			isa = PBXGroup;
+			children = (
+				WDG0000020000000000000001 /* SpeakLiveActivityWidget.swift */,
+				WDG0000020000000000000002 /* Info.plist */,
+				WDG0000020000000000000003 /* NOCOAISpeakWidget.entitlements */,
+			);
+			path = NOCOAISpeakWidget;
+			sourceTree = "<group>";
+		};
+		WDG0000050000000000000002 /* Shared */ = {
+			isa = PBXGroup;
+			children = (
+				NA0000020000000000000035 /* SpeakActivityAttributes.swift */,
+				NA0000020000000000000037 /* ImageActivityAttributes.swift */,
+				AA0000020000000000000001 /* AgentActivityAttributes.swift */,
+				KBD0000020000000000000010 /* CompanionCredentials.swift */,
+				BC0000020000000000000002 /* SharedBroadcastFrameStore.swift */,
+				KBD0000020000000000000011 /* KeyboardAIAction.swift */,
+				KBD0000020000000000000012 /* KeyboardAIClient.swift */,
+				KBD00000200000000000000IMP /* KeyboardImprovePipeline.swift */,
+				KBD00000200000000000000TP /* KeyboardToolPipelines.swift */,
+				KBD0000020000000000000013 /* KeyboardChipPreferences.swift */,
+			);
+			path = Shared;
+			sourceTree = "<group>";
+		};
+		KBD0000050000000000000001 /* NOCOAIKeyboard */ = {
+			isa = PBXGroup;
+			children = (
+				KBD0000020000000000000001 /* KeyboardViewController.swift */,
+				KBD0000020000000000000002 /* KeyboardViewModel.swift */,
+				KBD000002000000000000001B /* KeyboardVoiceTyping.swift */,
+				KBD0000020000000000000003 /* KeyboardRootView.swift */,
+				KBD0000020000000000000004 /* KeyboardLayoutView.swift */,
+				KBD00000200000000000000SC /* SoftSpellCorrect.swift */,
+				KBD0000020000000000000005 /* Info.plist */,
+				KBD0000020000000000000006 /* NOCOAIKeyboard.entitlements */,
+			);
+			path = NOCOAIKeyboard;
+			sourceTree = "<group>";
+		};
+		BC0000050000000000000001 /* NOCOAIBroadcast */ = {
+			isa = PBXGroup;
+			children = (
+				BC0000020000000000000001 /* SampleHandler.swift */,
+				BC0000020000000000000007 /* Info.plist */,
+				BC0000020000000000000006 /* NOCOAIBroadcast.entitlements */,
+			);
+			path = NOCOAIBroadcast;
+			sourceTree = "<group>";
+		};
+/* End PBXGroup section */
+
+/* Begin PBXNativeTarget section */
+		NA0000060000000000000001 /* NOCOAI */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = NA0000090000000000000002 /* Build configuration list for PBXNativeTarget "NOCOAI" */;
+			buildPhases = (
+				NA0000070000000000000001 /* Sources */,
+				NA0000040000000000000001 /* Frameworks */,
+				NA0000080000000000000001 /* Resources */,
+				WDG00000E0000000000000001 /* Embed Foundation Extensions */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+				WDG00000D000000000000001 /* PBXTargetDependency */,
+				KBD00000D000000000000001 /* PBXTargetDependency */,
+				BC00000D000000000000001 /* PBXTargetDependency */,
+			);
+			name = NOCOAI;
+			productName = NOCOAI;
+			productReference = NA0000030000000000000001 /* NOCOAI.app */;
+			productType = "com.apple.product-type.application";
+		};
+		WDG0000060000000000000001 /* NOCOAISpeakWidget */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = WDG0000090000000000000002 /* Build configuration list for PBXNativeTarget "NOCOAISpeakWidget" */;
+			buildPhases = (
+				WDG0000070000000000000001 /* Sources */,
+				WDG0000040000000000000001 /* Frameworks */,
+				WDG0000080000000000000002 /* Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			name = NOCOAISpeakWidget;
+			productName = NOCOAISpeakWidget;
+			productReference = WDG0000030000000000000001 /* NOCOAISpeakWidget.appex */;
+			productType = "com.apple.product-type.app-extension";
+		};
+		KBD0000060000000000000001 /* NOCOAIKeyboard */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = KBD0000090000000000000002 /* Build configuration list for PBXNativeTarget "NOCOAIKeyboard" */;
+			buildPhases = (
+				KBD0000070000000000000001 /* Sources */,
+				KBD0000040000000000000001 /* Frameworks */,
+				KBD0000080000000000000002 /* Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			name = NOCOAIKeyboard;
+			productName = NOCOAIKeyboard;
+			productReference = KBD0000030000000000000001 /* NOCOAIKeyboard.appex */;
+			productType = "com.apple.product-type.app-extension";
+		};
+		BC0000060000000000000001 /* NOCOAIBroadcast */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = BC0000090000000000000002 /* Build configuration list for PBXNativeTarget "NOCOAIBroadcast" */;
+			buildPhases = (
+				BC0000070000000000000001 /* Sources */,
+				BC0000040000000000000001 /* Frameworks */,
+				BC0000080000000000000002 /* Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			name = NOCOAIBroadcast;
+			productName = NOCOAIBroadcast;
+			productReference = BC0000030000000000000001 /* NOCOAIBroadcast.appex */;
+			productType = "com.apple.product-type.app-extension";
+		};
+/* End PBXNativeTarget section */
+
+/* Begin PBXProject section */
+		NA00000A0000000000000001 /* Project object */ = {
+			isa = PBXProject;
+			attributes = {
+				BuildIndependentTargetsInParallel = 1;
+				LastSwiftUpdateCheck = 1500;
+				LastUpgradeCheck = 1500;
+				TargetAttributes = {
+					NA0000060000000000000001 = {
+						CreatedOnToolsVersion = 15.0;
+					};
+					WDG0000060000000000000001 = {
+						CreatedOnToolsVersion = 15.0;
+					};
+					KBD0000060000000000000001 = {
+						CreatedOnToolsVersion = 15.0;
+					};
+					BC0000060000000000000001 = {
+						CreatedOnToolsVersion = 15.0;
+					};
+				};
+			};
+			buildConfigurationList = NA0000090000000000000001 /* Build configuration list for PBXProject "NOCOAI" */;
+			compatibilityVersion = "Xcode 14.0";
+			developmentRegion = de;
+			hasScannedForEncodings = 0;
+			knownRegions = (
+				en,
+				de,
+				Base,
+			);
+			mainGroup = NA0000050000000000000001;
+			productRefGroup = NA0000050000000000000003 /* Products */;
+			projectDirPath = "";
+			projectRoot = "";
+			targets = (
+				NA0000060000000000000001 /* NOCOAI */,
+				WDG0000060000000000000001 /* NOCOAISpeakWidget */,
+				KBD0000060000000000000001 /* NOCOAIKeyboard */,
+				BC0000060000000000000001 /* NOCOAIBroadcast */,
+			);
+		};
+/* End PBXProject section */
+
+/* Begin PBXCopyFilesBuildPhase section */
+		WDG00000E0000000000000001 /* Embed Foundation Extensions */ = {
+			isa = PBXCopyFilesBuildPhase;
+			buildActionMask = 2147483647;
+			dstPath = "";
+			dstSubfolderSpec = 13;
+			files = (
+				WDG0000010000000000000003 /* NOCOAISpeakWidget.appex in Embed Foundation Extensions */,
+				KBD0000010000000000000009 /* NOCOAIKeyboard.appex in Embed Foundation Extensions */,
+				BC0000010000000000000009 /* NOCOAIBroadcast.appex in Embed Foundation Extensions */,
+			);
+			name = "Embed Foundation Extensions";
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXCopyFilesBuildPhase section */
+
+/* Begin PBXResourcesBuildPhase section */
+		KBD0000080000000000000002 /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		NA0000080000000000000001 /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				NA0000010000000000000011 /* Assets.xcassets in Resources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		BC0000080000000000000002 /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXResourcesBuildPhase section */
+
+
+/* Begin PBXTargetDependency section */
+		WDG00000D000000000000001 /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = WDG0000060000000000000001 /* NOCOAISpeakWidget */;
+			targetProxy = WDG00000C000000000000001 /* PBXContainerItemProxy */;
+		};
+		KBD00000D000000000000001 /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = KBD0000060000000000000001 /* NOCOAIKeyboard */;
+			targetProxy = KBD00000C000000000000001 /* PBXContainerItemProxy */;
+		};
+		BC00000D000000000000001 /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = BC0000060000000000000001 /* NOCOAIBroadcast */;
+			targetProxy = BC00000C000000000000001 /* PBXContainerItemProxy */;
+		};
+/* End PBXTargetDependency section */
+
+/* Begin PBXSourcesBuildPhase section */
+		KBD0000070000000000000001 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				KBD0000010000000000000001 /* KeyboardViewController.swift in Sources */,
+				KBD0000010000000000000002 /* KeyboardViewModel.swift in Sources */,
+				KBD000001000000000000000B /* KeyboardVoiceTyping.swift in Sources */,
+				KBD0000010000000000000003 /* KeyboardRootView.swift in Sources */,
+				KBD0000010000000000000004 /* KeyboardLayoutView.swift in Sources */,
+				KBD00000100000000000000SC /* SoftSpellCorrect.swift in Sources */,
+				KBD0000010000000000000005 /* CompanionCredentials.swift in Sources */,
+				KBD0000010000000000000006 /* KeyboardAIAction.swift in Sources */,
+				KBD0000010000000000000007 /* KeyboardAIClient.swift in Sources */,
+				KBD00000100000000000000IMP /* KeyboardImprovePipeline.swift in Sources */,
+				KBD00000100000000000000TP /* KeyboardToolPipelines.swift in Sources */,
+				KBD000001000000000000000A /* KeyboardChipPreferences.swift in Sources */,
+				KBD0000010000000000000008 /* KeychainService.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		NA0000070000000000000001 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				NA0000010000000000000001 /* NOCOAIApp.swift in Sources */,
+				NA0000010000000000000002 /* APIModels.swift in Sources */,
+				NA0000010000000000000003 /* ChatMessage.swift in Sources */,
+				CU0000010000000000000001 /* ChatUserFacingText.swift in Sources */,
+				NA0000010000000000000004 /* KeychainService.swift in Sources */,
+				NA0000010000000000000060 /* CompanionCredentials.swift in Sources */,
+				BC0000010000000000000003 /* SharedBroadcastFrameStore.swift in Sources */,
+				NA0000010000000000000061 /* KeyboardAIAction.swift in Sources */,
+				NA00000100000000000000IMP /* KeyboardImprovePipeline.swift in Sources */,
+				NA00000100000000000000TP /* KeyboardToolPipelines.swift in Sources */,
+				NA0000010000000000000071 /* KeyboardChipPreferences.swift in Sources */,
+				NA0000010000000000000072 /* KeyboardCustomizationView.swift in Sources */,
+				NA0000010000000000000005 /* HapticService.swift in Sources */,
+				NA0000010000000000000062 /* ImageAttachIntent.swift in Sources */,
+				NA0000010000000000000006 /* CompanionAPI.swift in Sources */,
+				NA0000010000000000000007 /* ConnectionStore.swift in Sources */,
+				NA0000010000000000000050 /* UserProfileStore.swift in Sources */,
+				NA0000010000000000000008 /* NOCOAITheme.swift in Sources */,
+				NA0000010000000000000009 /* GlassCard.swift in Sources */,
+				NA0000010000000000000051 /* IntelligencePressStyle.swift in Sources */,
+				NA000001000000000000000A /* StatusBadge.swift in Sources */,
+				NA000001000000000000000B /* RootView.swift in Sources */,
+				NA000001000000000000000C /* MainTabView.swift in Sources */,
+				NA000001000000000000000D /* PairingView.swift in Sources */,
+				NA00000100000000000000OB /* OnboardingWelcomeView.swift in Sources */,
+				NA000001000000000000000E /* HomeView.swift in Sources */,
+				NA0000010000000000000010 /* SettingsView.swift in Sources */,
+				NA0000010000000000000020 /* V2Models.swift in Sources */,
+				LK0000010000000000000001 /* LiveKnowledgeSettings.swift in Sources */,
+				NA00000100000000000000L1 /* LiveScreenModels.swift in Sources */,
+				NA00000100000000000000L2 /* LiveScreenImagePipeline.swift in Sources */,
+				NA00000100000000000000L3 /* LiveScreenCapture.swift in Sources */,
+				NA00000100000000000000L4 /* LiveScreenSessionController.swift in Sources */,
+				NA00000100000000000000L5 /* LiveScreenView.swift in Sources */,
+				NA00000100000000000000A1 /* AgentModels.swift in Sources */,
+				NA00000100000000000000A2 /* AgentSessionController.swift in Sources */,
+				NA00000100000000000000A3 /* AgentDashboardView.swift in Sources */,
+				CC0000000000000000000002 /* ComputerControlModels.swift in Sources */,
+				MI0000000000000000000004 /* ModeStatusTheater.swift in Sources */,
+				MI0000000000000000000002 /* ModeIntelligence.swift in Sources */,
+				CC0000000000000000000006 /* ComputerControlController.swift in Sources */,
+				CC0000000000000000000004 /* ComputerControlView.swift in Sources */,
+				NA00000100000000000000A4 /* NOCOIntelligenceVisuals.swift in Sources */,
+				NA00000100000000000000Q1 /* IntelligenceQuickBar.swift in Sources */,
+				CM0000010000000000000001 /* ChatMediaHelpers.swift in Sources */,
+				PT0000010000000000000001 /* PlusToolsPanel.swift in Sources */,
+				PQ0000010000000000000001 /* PlusQuickPicker.swift in Sources */,
+				ST0000010000000000000001 /* SelectableMessageText.swift in Sources */,
+				AI0000010000000000000001 /* AgentIntake.swift in Sources */,
+				NA00000100000000000000V1 /* VisionLiveModels.swift in Sources */,
+				NA00000100000000000000V2 /* VisionLiveCamera.swift in Sources */,
+				NA00000100000000000000V3 /* VisionLiveSessionController.swift in Sources */,
+				NA00000100000000000000V4 /* VisionLiveView.swift in Sources */,
+				NA0000010000000000000021 /* CompanionAPI+V2.swift in Sources */,
+				NA0000010000000000000022 /* ChatStore.swift in Sources */,
+				NA0000010000000000000023 /* ImageStore.swift in Sources */,
+				NA0000010000000000000024 /* CodeStore.swift in Sources */,
+				NA0000010000000000000025 /* ModePicker.swift in Sources */,
+				NA0000010000000000000026 /* SyncBadge.swift in Sources */,
+				NA0000010000000000000027 /* ChatHubView.swift in Sources */,
+				NA0000010000000000000028 /* ChatInputBar.swift in Sources */,
+				NA0000010000000000000029 /* ImagesHubView.swift in Sources */,
+				NA0000010000000000000070 /* MagischerRadiererView.swift in Sources */,
+				NA000001000000000000002A /* DashboardView.swift in Sources */,
+				NA000001000000000000002B /* MoreView.swift in Sources */,
+				NA000001000000000000002C /* CodeStudioView.swift in Sources */,
+				NA000001000000000000002D /* IntelligenceEffects.swift in Sources */,
+				NA00000100000000000000D1 /* NOCODynamicIntelligence.swift in Sources */,
+				NA000001000000000000002E /* VoiceService.swift in Sources */,
+				NA0000010000000000000033 /* SpeakLiveActivity.swift in Sources */,
+				NA0000010000000000000038 /* ImageLiveActivity.swift in Sources */,
+				AA0000010000000000000002 /* AgentLiveActivity.swift in Sources */,
+				AA0000010000000000000003 /* WidgetCenterReloader.swift in Sources */,
+				NA0000010000000000000034 /* SpeakSessionController.swift in Sources */,
+				SI0000010000000000000001 /* SpeakIntentEngine.swift in Sources */,
+				SVC000010000000000000001 /* SpeakVisualContext.swift in Sources */,
+				SV0000010000000000000001 /* NOCOSpeakVoiceSettings.swift in Sources */,
+				NA0000010000000000000039 /* SpeakAppIntents.swift in Sources */,
+				VA0000010000000000000001 /* VoiceAISessionState.swift in Sources */,
+				VD0000010000000000000001 /* VoiceDebugLog.swift in Sources */,
+				NA0000010000000000000035 /* SpeakActivityAttributes.swift in Sources */,
+				NA0000010000000000000037 /* ImageActivityAttributes.swift in Sources */,
+				AA0000010000000000000001 /* AgentActivityAttributes.swift in Sources */,
+				NA0000010000000000000036 /* NotificationService.swift in Sources */,
+				NA00000100000000000000C1 /* MessageClipboard.swift in Sources */,
+				NA000001000000000000002F /* VoiceRainbowOrb.swift in Sources */,
+				NA0000010000000000000030 /* VoiceModeView.swift in Sources */,
+				NA0000010000000000000031 /* IntelligenceTools.swift in Sources */,
+				NA0000010000000000000032 /* WritingToolsView.swift in Sources */,
+				NA0000010000000000000012 /* BrandLogo.swift in Sources */,
+				NA0000010000000000000013 /* QRScannerView.swift in Sources */,
+				NA0000010000000000000014 /* HostSanitizer.swift in Sources */,
+				NA0000010000000000000015 /* LocalNetworkService.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+
+		WDG0000070000000000000001 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				WDG0000010000000000000001 /* SpeakLiveActivityWidget.swift in Sources */,
+				WDG0000010000000000000002 /* SpeakActivityAttributes.swift in Sources */,
+				WDG0000010000000000000004 /* ImageActivityAttributes.swift in Sources */,
+				WDG0000010000000000000005 /* AgentActivityAttributes.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		WDG0000080000000000000002 /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		BC0000070000000000000001 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				BC0000010000000000000001 /* SampleHandler.swift in Sources */,
+				BC0000010000000000000002 /* SharedBroadcastFrameStore.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXSourcesBuildPhase section */
+
+/* Begin XCBuildConfiguration section */
+
+		KBD00000A0000000000000001 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CODE_SIGN_ENTITLEMENTS = NOCOAIKeyboard/NOCOAIKeyboard.entitlements;
+				CODE_SIGNING_ALLOWED = NO;
+				CODE_SIGNING_REQUIRED = NO;
+				CODE_SIGN_IDENTITY = "";
+				CODE_SIGNING_STYLE = Manual;
+				CURRENT_PROJECT_VERSION = 108;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = NOCOAIKeyboard/Info.plist;
+				INFOPLIST_KEY_CFBundleDisplayName = "NOCO AI";
+				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@executable_path/../../Frameworks",
+				);
+				MARKETING_VERSION = 8.9;
+				PRODUCT_BUNDLE_IDENTIFIER = de.noco.nocoai.keyboard;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SKIP_INSTALL = YES;
+				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator";
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = 1;
+			};
+			name = Debug;
+		};
+		KBD00000A0000000000000002 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CODE_SIGN_ENTITLEMENTS = NOCOAIKeyboard/NOCOAIKeyboard.entitlements;
+				CODE_SIGNING_ALLOWED = NO;
+				CODE_SIGNING_REQUIRED = NO;
+				CODE_SIGN_IDENTITY = "";
+				CODE_SIGNING_STYLE = Manual;
+				CURRENT_PROJECT_VERSION = 108;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = NOCOAIKeyboard/Info.plist;
+				INFOPLIST_KEY_CFBundleDisplayName = "NOCO AI";
+				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@executable_path/../../Frameworks",
+				);
+				MARKETING_VERSION = 8.9;
+				PRODUCT_BUNDLE_IDENTIFIER = de.noco.nocoai.keyboard;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SKIP_INSTALL = YES;
+				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator";
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = 1;
+				VALIDATE_PRODUCT = NO;
+			};
+			name = Release;
+		};
+		NA00000B0000000000000001 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ALWAYS_SEARCH_USER_PATHS = NO;
+				CLANG_ENABLE_MODULES = YES;
+				CLANG_ENABLE_OBJC_ARC = YES;
+				COPY_PHASE_STRIP = NO;
+				DEBUG_INFORMATION_FORMAT = dwarf;
+				ENABLE_TESTABILITY = YES;
+				GCC_DYNAMIC_NO_PIC = NO;
+				GCC_OPTIMIZATION_LEVEL = 0;
+				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
+				SDKROOT = iphoneos;
+				SWIFT_ACTIVE_COMPILATION_CONDITIONS = DEBUG;
+				SWIFT_OPTIMIZATION_LEVEL = "-Onone";
+			};
+			name = Debug;
+		};
+		NA00000B0000000000000002 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ALWAYS_SEARCH_USER_PATHS = NO;
+				CLANG_ENABLE_MODULES = YES;
+				CLANG_ENABLE_OBJC_ARC = YES;
+				COPY_PHASE_STRIP = NO;
+				DEBUG_INFORMATION_FORMAT = "dwarf-with-dsym";
+				ENABLE_NS_ASSERTIONS = NO;
+				ENABLE_STRICT_OBJC_MSGSEND = YES;
+				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
+				SDKROOT = iphoneos;
+				SWIFT_COMPILATION_MODE = wholemodule;
+				VALIDATE_PRODUCT = NO;
+			};
+			name = Release;
+		};
+		NA00000B0000000000000003 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+				CODE_SIGN_ENTITLEMENTS = NOCOAI/NOCOAI.entitlements;
+				CODE_SIGNING_ALLOWED = NO;
+				CODE_SIGNING_REQUIRED = NO;
+				CURRENT_PROJECT_VERSION = 108;
+				ENABLE_PREVIEWS = YES;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = NOCOAI/Info.plist;
+				INFOPLIST_KEY_CFBundleDisplayName = "NOCO AI";
+				INFOPLIST_KEY_ITSAppUsesNonExemptEncryption = NO;
+				INFOPLIST_KEY_NSSupportsLiveActivities = YES;
+				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
+				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
+				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
+				INFOPLIST_KEY_UISupportedInterfaceOrientations = UIInterfaceOrientationPortrait;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+				);
+				MARKETING_VERSION = 8.9;
+				PRODUCT_BUNDLE_IDENTIFIER = de.noco.nocoai;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator";
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = 1;
+				VALIDATE_PRODUCT = NO;
+			};
+			name = Debug;
+		};
+		NA00000B0000000000000004 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+				CODE_SIGN_ENTITLEMENTS = NOCOAI/NOCOAI.entitlements;
+				CODE_SIGNING_ALLOWED = NO;
+				CODE_SIGNING_REQUIRED = NO;
+				CURRENT_PROJECT_VERSION = 108;
+				ENABLE_PREVIEWS = YES;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = NOCOAI/Info.plist;
+				INFOPLIST_KEY_CFBundleDisplayName = "NOCO AI";
+				INFOPLIST_KEY_ITSAppUsesNonExemptEncryption = NO;
+				INFOPLIST_KEY_NSSupportsLiveActivities = YES;
+				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
+				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
+				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
+				INFOPLIST_KEY_UISupportedInterfaceOrientations = UIInterfaceOrientationPortrait;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+				);
+				MARKETING_VERSION = 8.9;
+				PRODUCT_BUNDLE_IDENTIFIER = de.noco.nocoai;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator";
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = 1;
+				VALIDATE_PRODUCT = NO;
+			};
+			name = Release;
+		};
+
+		WDG00000B0000000000000003 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CODE_SIGN_ENTITLEMENTS = NOCOAISpeakWidget/NOCOAISpeakWidget.entitlements;
+				CODE_SIGNING_ALLOWED = NO;
+				CODE_SIGNING_REQUIRED = NO;
+				CURRENT_PROJECT_VERSION = 108;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = NOCOAISpeakWidget/Info.plist;
+				INFOPLIST_KEY_CFBundleDisplayName = "NOCO Voice AI";
+				INFOPLIST_KEY_NSSupportsLiveActivities = YES;
+				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@executable_path/../../Frameworks",
+				);
+				MARKETING_VERSION = 8.9;
+				PRODUCT_BUNDLE_IDENTIFIER = de.noco.nocoai.SpeakWidget;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SKIP_INSTALL = YES;
+				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator";
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = 1;
+			};
+			name = Debug;
+		};
+		WDG00000B0000000000000004 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CODE_SIGN_ENTITLEMENTS = NOCOAISpeakWidget/NOCOAISpeakWidget.entitlements;
+				CODE_SIGNING_ALLOWED = NO;
+				CODE_SIGNING_REQUIRED = NO;
+				CURRENT_PROJECT_VERSION = 108;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = NOCOAISpeakWidget/Info.plist;
+				INFOPLIST_KEY_CFBundleDisplayName = "NOCO Voice AI";
+				INFOPLIST_KEY_NSSupportsLiveActivities = YES;
+				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@executable_path/../../Frameworks",
+				);
+				MARKETING_VERSION = 8.9;
+				PRODUCT_BUNDLE_IDENTIFIER = de.noco.nocoai.SpeakWidget;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SKIP_INSTALL = YES;
+				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator";
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = 1;
+				VALIDATE_PRODUCT = NO;
+			};
+			name = Release;
+		};
+
+		BC00000A0000000000000001 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CODE_SIGN_ENTITLEMENTS = NOCOAIBroadcast/NOCOAIBroadcast.entitlements;
+				CODE_SIGNING_ALLOWED = NO;
+				CODE_SIGNING_REQUIRED = NO;
+				CODE_SIGN_IDENTITY = "";
+				CODE_SIGNING_STYLE = Manual;
+				CURRENT_PROJECT_VERSION = 108;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = NOCOAIBroadcast/Info.plist;
+				INFOPLIST_KEY_CFBundleDisplayName = "NOCO Live Screen";
+				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@executable_path/../../Frameworks",
+				);
+				MARKETING_VERSION = 8.9;
+				PRODUCT_BUNDLE_IDENTIFIER = de.noco.nocoai.broadcast;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SKIP_INSTALL = YES;
+				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator";
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = 1;
+			};
+			name = Debug;
+		};
+		BC00000A0000000000000002 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CODE_SIGN_ENTITLEMENTS = NOCOAIBroadcast/NOCOAIBroadcast.entitlements;
+				CODE_SIGNING_ALLOWED = NO;
+				CODE_SIGNING_REQUIRED = NO;
+				CODE_SIGN_IDENTITY = "";
+				CODE_SIGNING_STYLE = Manual;
+				CURRENT_PROJECT_VERSION = 108;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = NOCOAIBroadcast/Info.plist;
+				INFOPLIST_KEY_CFBundleDisplayName = "NOCO Live Screen";
+				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@executable_path/../../Frameworks",
+				);
+				MARKETING_VERSION = 8.9;
+				PRODUCT_BUNDLE_IDENTIFIER = de.noco.nocoai.broadcast;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SKIP_INSTALL = YES;
+				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator";
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = 1;
+				VALIDATE_PRODUCT = NO;
+			};
+			name = Release;
+		};
+/* End XCBuildConfiguration section */
+
+/* Begin XCConfigurationList section */
+		KBD0000090000000000000002 /* Build configuration list for PBXNativeTarget "NOCOAIKeyboard" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				KBD00000A0000000000000001 /* Debug */,
+				KBD00000A0000000000000002 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		NA0000090000000000000001 /* Build configuration list for PBXProject "NOCOAI" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				NA00000B0000000000000001 /* Debug */,
+				NA00000B0000000000000002 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		NA0000090000000000000002 /* Build configuration list for PBXNativeTarget "NOCOAI" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				NA00000B0000000000000003 /* Debug */,
+				NA00000B0000000000000004 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+
+		WDG0000090000000000000002 /* Build configuration list for PBXNativeTarget "NOCOAISpeakWidget" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				WDG00000B0000000000000003 /* Debug */,
+				WDG00000B0000000000000004 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		BC0000090000000000000002 /* Build configuration list for PBXNativeTarget "NOCOAIBroadcast" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				BC00000A0000000000000001 /* Debug */,
+				BC00000A0000000000000002 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+/* End XCConfigurationList section */
+	};
+	rootObject = NA00000A0000000000000001 /* Project object */;
+}

@@ -433,6 +433,9 @@ final class ConnectionDiagnostics: ObservableObject {
         }
 
         log("HTTP request started → /api/v1/ping")
+        if HostSanitizer.isTailscaleIP(cleaned) {
+            log("HTTP transport: cleartext NW (Tailscale / ATS bypass)")
+        }
         let started = Date()
         let http = await Self.httpPing(host: cleaned, port: port, timeout: HostSanitizer.isTailscaleIP(cleaned) ? 10 : 3)
         let ms = Int(Date().timeIntervalSince(started) * 1000)
@@ -536,7 +539,27 @@ final class ConnectionDiagnostics: ObservableObject {
         request.timeoutInterval = timeout
         request.cachePolicy = .reloadIgnoringLocalCacheData
         do {
-            let (data, response) = try await URLSession.shared.data(for: request)
+            let data: Data
+            let response: URLResponse
+            if CompanionCleartextHTTP.shouldBypassATS(for: url) {
+                // Tailscale CGNAT is outside ATS “local networking” — use NW cleartext.
+                let (body, http) = try await CompanionCleartextHTTP.data(for: request, timeout: timeout)
+                data = body
+                response = http
+            } else {
+                do {
+                    (data, response) = try await URLSession.shared.data(for: request)
+                } catch {
+                    if CompanionCleartextHTTP.isATSError(error),
+                       HostSanitizer.isTailscaleIP(host) || HostSanitizer.isPrivateLanIP(host) {
+                        let (body, http) = try await CompanionCleartextHTTP.data(for: request, timeout: timeout)
+                        data = body
+                        response = http
+                    } else {
+                        throw error
+                    }
+                }
+            }
             guard let http = response as? HTTPURLResponse else {
                 return HTTPPingOutcome(ok: false, status: nil, code: .noServerResponse, detail: nil)
             }

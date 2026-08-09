@@ -113,6 +113,12 @@ jobs:
           /usr/libexec/PlistBuddy -c "Add :NSAppTransportSecurity:NSAllowsArbitraryLoadsInWebContent bool true" "$APP_PLIST"
           echo "=== ATS in app Info.plist ==="
           /usr/libexec/PlistBuddy -c "Print :NSAppTransportSecurity" "$APP_PLIST"
+          # Fail the build if Tailscale cleartext would still be blocked by a missing ATS flag.
+          ATS_ARB=$(/usr/libexec/PlistBuddy -c "Print :NSAppTransportSecurity:NSAllowsArbitraryLoads" "$APP_PLIST" 2>/dev/null || echo "false")
+          if [ "$ATS_ARB" != "true" ]; then
+            echo "FATAL: NSAllowsArbitraryLoads is not true in app Info.plist (got: $ATS_ARB)"
+            exit 1
+          fi
           /usr/libexec/PlistBuddy -c "Print :CFBundleVersion" "$APP_PLIST"
 
           # Same for keyboard extension (HTTP to companion)

@@ -6,7 +6,7 @@ extension CompanionAPI {
     }
 
     func fetchConversations() async throws -> [ConversationSummary] {
-        let (data, response) = try await session.data(for: authorizedRequest(path: "conversations", method: "GET"))
+        let (data, response) = try await loadData(for: authorizedRequest(path: "conversations", method: "GET"))
         try validate(response: response, data: data, isPairRequest: false)
         if let list = try? decoder.decode(ConversationListResponse.self, from: data) {
             return list.all
@@ -203,7 +203,7 @@ extension CompanionAPI {
                 quality_profile: qualityProfile.rawValue
             )
         )
-        let (data, response) = try await session.data(for: request)
+        let (data, response) = try await loadData(for: request)
         try validate(response: response, data: data, isPairRequest: false)
         let resp = try decoder.decode(AgentTaskResponse.self, from: data)
         guard let task = resp.task else {
@@ -217,7 +217,7 @@ extension CompanionAPI {
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
         request.timeoutInterval = 300
         request.httpBody = Data("{}".utf8)
-        let (data, response) = try await session.data(for: request)
+        let (data, response) = try await loadData(for: request)
         try validate(response: response, data: data, isPairRequest: false)
         let resp = try decoder.decode(AgentTaskResponse.self, from: data)
         guard let task = resp.task else {
@@ -235,7 +235,7 @@ extension CompanionAPI {
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
         request.timeoutInterval = 300
         request.httpBody = try encoder.encode(Body(step_id: stepId, allow: allow))
-        let (data, response) = try await session.data(for: request)
+        let (data, response) = try await loadData(for: request)
         try validate(response: response, data: data, isPairRequest: false)
         let resp = try decoder.decode(AgentTaskResponse.self, from: data)
         guard let task = resp.task else {
@@ -349,7 +349,7 @@ extension CompanionAPI {
                         steps: steps
                     )
                 )
-                let (data, response) = try await session.data(for: request)
+                let (data, response) = try await loadData(for: request)
                 try validate(response: response, data: data, isPairRequest: false)
                 return try decoder.decode(ImageGenerateResponse.self, from: data)
             } catch {
@@ -395,7 +395,7 @@ extension CompanionAPI {
                 denoisingStrength: denoisingStrength
             )
         )
-        let (data, response) = try await session.data(for: request)
+        let (data, response) = try await loadData(for: request)
         try validate(response: response, data: data, isPairRequest: false)
         return try decoder.decode(ImageGenerateResponse.self, from: data)
     }
@@ -440,7 +440,7 @@ extension CompanionAPI {
                 request.setValue("application/json", forHTTPHeaderField: "Content-Type")
                 request.timeoutInterval = 480
                 request.httpBody = try encoder.encode(body)
-                let (data, response) = try await session.data(for: request)
+                let (data, response) = try await loadData(for: request)
                 try validate(response: response, data: data, isPairRequest: false)
                 return try decoder.decode(ImageGenerateResponse.self, from: data)
             } catch {
@@ -471,7 +471,7 @@ extension CompanionAPI {
                 request.setValue("application/json", forHTTPHeaderField: "Content-Type")
                 request.timeoutInterval = 200
                 request.httpBody = try encoder.encode(Empty())
-                let (data, response) = try await session.data(for: request)
+                let (data, response) = try await loadData(for: request)
                 try validate(response: response, data: data, isPairRequest: false)
                 return try decoder.decode(ImageEnginePrepareResponse.self, from: data)
             } catch {
@@ -491,7 +491,7 @@ extension CompanionAPI {
         if let jobId { path += "?job_id=\(jobId)" }
         var request = try authorizedRequest(path: path, method: "GET")
         request.timeoutInterval = 8
-        let (data, response) = try await session.data(for: request)
+        let (data, response) = try await loadData(for: request)
         try validate(response: response, data: data, isPairRequest: false)
         return try decoder.decode(ImageProgressResponse.self, from: data)
     }
@@ -523,7 +523,7 @@ extension CompanionAPI {
     private struct EmptyResponse: Decodable {}
 
     private func get<T: Decodable>(_ path: String, as type: T.Type) async throws -> T {
-        let (data, response) = try await session.data(for: authorizedRequest(path: path, method: "GET"))
+        let (data, response) = try await loadData(for: authorizedRequest(path: path, method: "GET"))
         try validate(response: response, data: data, isPairRequest: false)
         return try decoder.decode(T.self, from: data)
     }
@@ -532,7 +532,7 @@ extension CompanionAPI {
         var request = try authorizedRequest(path: path, method: "POST")
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
         request.httpBody = try encoder.encode(body)
-        let (data, response) = try await session.data(for: request)
+        let (data, response) = try await loadData(for: request)
         try validate(response: response, data: data, isPairRequest: false)
         if data.isEmpty, T.self == EmptyResponse.self { return EmptyResponse() as! T }
         return try decoder.decode(T.self, from: data)
@@ -542,13 +542,13 @@ extension CompanionAPI {
         var request = try authorizedRequest(path: path, method: "PATCH")
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
         request.httpBody = try encoder.encode(body)
-        let (data, response) = try await session.data(for: request)
+        let (data, response) = try await loadData(for: request)
         try validate(response: response, data: data, isPairRequest: false)
         return try decoder.decode(T.self, from: data)
     }
 
     private func delete(_ path: String) async throws {
-        let (data, response) = try await session.data(for: authorizedRequest(path: path, method: "DELETE"))
+        let (data, response) = try await loadData(for: authorizedRequest(path: path, method: "DELETE"))
         try validate(response: response, data: data, isPairRequest: false)
     }
 
@@ -579,7 +579,7 @@ extension CompanionAPI {
         body.append("\r\n--\(boundary)--\r\n".data(using: .utf8)!)
         request.httpBody = body
 
-        let (data, response) = try await session.data(for: request)
+        let (data, response) = try await loadData(for: request)
         try validate(response: response, data: data, isPairRequest: false)
         return try decoder.decode(T.self, from: data)
     }
@@ -614,6 +614,22 @@ extension CompanionAPI {
                     request.timeoutInterval = 600
                     request.httpBody = try encoder.encode(body)
 
+                    if CompanionCleartextHTTP.shouldBypassATS(for: request.url) {
+                        let (lineStream, response) = try await CompanionCleartextHTTP.lines(for: request)
+                        guard (200...299).contains(response.statusCode) else {
+                            if response.statusCode == 401 { throw CompanionAPIError.unauthorized }
+                            throw CompanionAPIError.server("Stream-Fehler HTTP \(response.statusCode)")
+                        }
+                        for try await line in lineStream {
+                            if let chunk = try parseSSEChunk(line) {
+                                continuation.yield(chunk)
+                                if chunk.done == true { break }
+                            }
+                        }
+                        continuation.finish()
+                        return
+                    }
+
                     let (bytes, response) = try await session.bytes(for: request)
                     guard let http = response as? HTTPURLResponse else {
                         throw CompanionAPIError.server("Keine Server-Antwort")
@@ -639,6 +655,34 @@ extension CompanionAPI {
                     }
                     continuation.finish()
                 } catch {
+                    // ATS mid-stream setup: retry once via cleartext for private hosts.
+                    if CompanionCleartextHTTP.isATSError(error),
+                       let url = try? authorizedRequest(path: path, method: "POST").url,
+                       let host = url.host,
+                       HostSanitizer.isTailscaleIP(host) || HostSanitizer.isPrivateLanIP(host) {
+                        do {
+                            var request = try authorizedRequest(path: path, method: "POST")
+                            request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+                            request.setValue("text/event-stream", forHTTPHeaderField: "Accept")
+                            request.timeoutInterval = 600
+                            request.httpBody = try encoder.encode(body)
+                            let (lineStream, response) = try await CompanionCleartextHTTP.lines(for: request)
+                            guard (200...299).contains(response.statusCode) else {
+                                throw CompanionAPIError.server("Stream-Fehler HTTP \(response.statusCode)")
+                            }
+                            for try await line in lineStream {
+                                if let chunk = try parseSSEChunk(line) {
+                                    continuation.yield(chunk)
+                                    if chunk.done == true { break }
+                                }
+                            }
+                            continuation.finish()
+                            return
+                        } catch {
+                            continuation.finish(throwing: mapNetworkError(error))
+                            return
+                        }
+                    }
                     continuation.finish(throwing: mapNetworkError(error))
                 }
             }
@@ -667,6 +711,19 @@ extension CompanionAPI {
                     request.timeoutInterval = 600
                     request.httpBody = try encoder.encode(body)
 
+                    if CompanionCleartextHTTP.shouldBypassATS(for: request.url) {
+                        let (lineStream, response) = try await CompanionCleartextHTTP.lines(for: request)
+                        guard (200...299).contains(response.statusCode) else {
+                            if response.statusCode == 401 { throw CompanionAPIError.unauthorized }
+                            throw CompanionAPIError.server("Stream-Fehler HTTP \(response.statusCode)")
+                        }
+                        for try await line in lineStream {
+                            try processSSELine(line, continuation: continuation)
+                        }
+                        continuation.finish()
+                        return
+                    }
+
                     let (bytes, response) = try await session.bytes(for: request)
                     guard let http = response as? HTTPURLResponse else {
                         throw CompanionAPIError.server("Keine Server-Antwort")
@@ -688,6 +745,29 @@ extension CompanionAPI {
                     }
                     continuation.finish()
                 } catch {
+                    if CompanionCleartextHTTP.isATSError(error),
+                       let host = baseURL.host,
+                       HostSanitizer.isTailscaleIP(host) || HostSanitizer.isPrivateLanIP(host) {
+                        do {
+                            var request = try authorizedRequest(path: path, method: "POST")
+                            request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+                            request.setValue("text/event-stream", forHTTPHeaderField: "Accept")
+                            request.timeoutInterval = 600
+                            request.httpBody = try encoder.encode(body)
+                            let (lineStream, response) = try await CompanionCleartextHTTP.lines(for: request)
+                            guard (200...299).contains(response.statusCode) else {
+                                throw CompanionAPIError.server("Stream-Fehler HTTP \(response.statusCode)")
+                            }
+                            for try await line in lineStream {
+                                try processSSELine(line, continuation: continuation)
+                            }
+                            continuation.finish()
+                            return
+                        } catch {
+                            continuation.finish(throwing: mapNetworkError(error))
+                            return
+                        }
+                    }
                     continuation.finish(throwing: mapNetworkError(error))
                 }
             }

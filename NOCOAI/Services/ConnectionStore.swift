@@ -1179,7 +1179,26 @@ final class ConnectionStore: ObservableObject {
         // Tailscale / mobile hops need more headroom than LAN.
         request.timeoutInterval = HostSanitizer.isTailscaleIP(cleaned) ? 9.0 : 2.4
         do {
-            let (data, response) = try await URLSession.shared.data(for: request)
+            let data: Data
+            let response: URLResponse
+            if CompanionCleartextHTTP.shouldBypassATS(for: url) {
+                let (body, http) = try await CompanionCleartextHTTP.data(for: request)
+                data = body
+                response = http
+            } else {
+                do {
+                    (data, response) = try await URLSession.shared.data(for: request)
+                } catch {
+                    if CompanionCleartextHTTP.isATSError(error),
+                       HostSanitizer.isTailscaleIP(cleaned) || HostSanitizer.isPrivateLanIP(cleaned) {
+                        let (body, http) = try await CompanionCleartextHTTP.data(for: request)
+                        data = body
+                        response = http
+                    } else {
+                        throw error
+                    }
+                }
+            }
             guard let http = response as? HTTPURLResponse else { return false }
             if http.statusCode == 403 {
                 return false

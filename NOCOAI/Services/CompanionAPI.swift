@@ -111,10 +111,36 @@ struct CompanionAPI {
         return e
     }()
 
+    /// URLSession for LAN; Tailscale CGNAT uses Network.framework cleartext (ATS bypass).
+    func loadData(for request: URLRequest) async throws -> (Data, URLResponse) {
+        if CompanionCleartextHTTP.shouldBypassATS(for: request.url) {
+            let (data, http) = try await CompanionCleartextHTTP.data(for: request)
+            return (data, http)
+        }
+        do {
+            return try await session.data(for: request)
+        } catch {
+            // Safety net: if ATS still blocks a private host, retry outside URLSession.
+            if CompanionCleartextHTTP.isATSError(error),
+               let host = request.url?.host,
+               HostSanitizer.isTailscaleIP(host) || HostSanitizer.isPrivateLanIP(host) {
+                let (data, http) = try await CompanionCleartextHTTP.data(for: request)
+                return (data, http)
+            }
+            throw error
+        }
+    }
+
+    func loadData(from url: URL) async throws -> (Data, URLResponse) {
+        var request = URLRequest(url: url)
+        request.timeoutInterval = 45
+        return try await loadData(for: request)
+    }
+
     func ping() async throws {
         let url = baseURL.appendingPathComponent("ping")
         do {
-            let (data, response) = try await session.data(from: url)
+            let (data, response) = try await loadData(from: url)
             try validate(response: response, data: data, isPairRequest: false)
             if let ping = try? decoder.decode(PingResponse.self, from: data), !ping.isAlive {
                 throw CompanionAPIError.server("Server antwortet, aber Ping fehlgeschlagen")
@@ -127,7 +153,7 @@ struct CompanionAPI {
     func fetchPairing() async throws -> PairingInfo {
         let url = baseURL.appendingPathComponent("pairing")
         do {
-            let (data, response) = try await session.data(from: url)
+            let (data, response) = try await loadData(from: url)
             try validate(response: response, data: data, isPairRequest: false)
             return try decoder.decode(PairingInfo.self, from: data)
         } catch {
@@ -142,7 +168,7 @@ struct CompanionAPI {
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
         request.httpBody = try encoder.encode(PairRequest(pin: pin, deviceName: deviceName))
         do {
-            let (data, response) = try await session.data(for: request)
+            let (data, response) = try await loadData(for: request)
             try validate(response: response, data: data, isPairRequest: true)
             return try decoder.decode(PairResponse.self, from: data)
         } catch {
@@ -156,7 +182,7 @@ struct CompanionAPI {
         if let token {
             request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
         }
-        let (data, response) = try await session.data(for: request)
+        let (data, response) = try await loadData(for: request)
         try validate(response: response, data: data, isPairRequest: false)
         return try decoder.decode(ServerStatus.self, from: data)
     }

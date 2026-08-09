@@ -526,7 +526,10 @@ struct VoiceModeView: View {
         case .processing:
             return voice.liveTranscript.isEmpty ? "Einen Moment…" : voice.liveTranscript
         case .speaking:
-            return speak.lastReply.isEmpty ? "…" : speak.lastReply
+            if !voice.spokenVisibleText.isEmpty {
+                return voice.spokenVisibleText
+            }
+            return speak.lastReply.isEmpty ? "…" : "…"
         case .error(let msg):
             return msg
         case .idle:

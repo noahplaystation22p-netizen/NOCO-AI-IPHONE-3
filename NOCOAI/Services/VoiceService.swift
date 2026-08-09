@@ -21,6 +21,8 @@ final class VoiceService: NSObject, ObservableObject {
     @Published var sessionActive = false
     /// When true: mic off, no auto-send — TTS still plays.
     @Published var isMuted = false
+    /// Text revealed in sync with TTS playback (not the full reply up front).
+    @Published var spokenVisibleText = ""
 
     var onAutoUtterance: ((String) -> Void)?
     var onSpeakFinished: (() -> Void)?
@@ -76,6 +78,12 @@ final class VoiceService: NSObject, ObservableObject {
     var onBargeIn: ((String) -> Void)?
     /// Spoken text currently playing — used to ignore TTS echo as barge-in.
     private var speakingTextLower = ""
+    /// Ordered TTS chunks for progressive UI reveal.
+    private var speakChunksOrdered: [String] = []
+    private var revealedSpeakChunkCount = 0
+    private var speakChunkDidReveal: [Bool] = []
+    /// Index of the utterance currently being spoken on the fallback (non-amplified) path.
+    private var fallbackSpeakChunkCursor = 0
 
     var preferredVoiceIdentifier: String {
         get { NOCOSpeakVoiceSettings.voiceIdentifier }
@@ -695,6 +703,10 @@ final class VoiceService: NSObject, ObservableObject {
         ttsUseAmplified = true
         ttsPendingBuffers = 0
         didLogTTSPlaybackStart = false
+        speakChunksOrdered = chunks
+        revealedSpeakChunkCount = 0
+        speakChunkDidReveal = Array(repeating: false, count: chunks.count)
+        spokenVisibleText = ""
         phase = .speaking
         HapticService.soft()
 
@@ -774,36 +786,107 @@ final class VoiceService: NSObject, ObservableObject {
         let gain = NOCOSpeakVoiceSettings.resolvedGain(naturalBase: natural)
         let voice = bestGermanVoice(preferNatural: natural)
 
-        for (index, chunk) in chunks.enumerated() {
+        // Sequential chunks: UI reveal tracks audible playback; pause freezes reveal.
+        Task { @MainActor [weak self] in
+            guard let self else { return }
+            for (index, chunk) in chunks.enumerated() {
+                guard self.speakGeneration == generation else { return }
+                guard case .speaking = self.phase else { return }
+                let ok = await self.playAmplifiedChunk(
+                    chunk,
+                    index: index,
+                    voice: voice,
+                    rate: rate,
+                    pitch: pitch,
+                    pre: index == 0 ? pre : inter,
+                    post: post,
+                    gain: gain,
+                    soft: natural,
+                    generation: generation
+                )
+                guard self.speakGeneration == generation else { return }
+                self.pendingSpeakChunks = max(0, self.pendingSpeakChunks - 1)
+                if !ok {
+                    self.ttsUseAmplified = false
+                    self.fallbackSpeak(chunks: Array(chunks[index...]), natural: natural)
+                    return
+                }
+            }
+            self.finishAmplifiedIfIdle(generation: generation)
+        }
+    }
+
+    /// Write one chunk to PCM, reveal progressively as buffers play, wait until done.
+    private func playAmplifiedChunk(
+        _ chunk: String,
+        index: Int,
+        voice: AVSpeechSynthesisVoice?,
+        rate: Float,
+        pitch: Float,
+        pre: TimeInterval,
+        post: TimeInterval,
+        gain: Float,
+        soft: Bool,
+        generation: UInt64
+    ) async -> Bool {
+        await withCheckedContinuation { (cont: CheckedContinuation<Bool, Never>) in
             let utterance = AVSpeechUtterance(string: chunk)
             utterance.voice = voice
             utterance.rate = rate
             utterance.pitchMultiplier = pitch
             utterance.volume = 1.0
-            utterance.preUtteranceDelay = index == 0 ? pre : inter
+            utterance.preUtteranceDelay = pre
             utterance.postUtteranceDelay = post
 
+            var finishedWrite = false
+            var scheduled = 0
+            var played = 0
+            var resumed = false
+            var didStartReveal = false
+            func finish(_ ok: Bool) {
+                guard !resumed else { return }
+                resumed = true
+                cont.resume(returning: ok)
+            }
+
             synthesizer.write(utterance) { [weak self] buffer in
-                guard let self else { return }
-                // Buffer is only valid inside this callback — copy immediately.
+                guard let self else {
+                    finish(false)
+                    return
+                }
                 guard let pcm = buffer as? AVAudioPCMBuffer else { return }
 
                 if pcm.frameLength == 0 {
                     Task { @MainActor in
-                        guard self.speakGeneration == generation else { return }
-                        self.pendingSpeakChunks = max(0, self.pendingSpeakChunks - 1)
-                        self.finishAmplifiedIfIdle(generation: generation)
+                        finishedWrite = true
+                        if scheduled == 0 {
+                            self.revealSpeakChunk(index, fraction: 1)
+                            finish(true)
+                            return
+                        }
+                        if played >= scheduled {
+                            self.revealSpeakChunk(index, fraction: 1)
+                            finish(true)
+                        }
                     }
                     return
                 }
 
                 guard let copy = Self.copyPCM(pcm) else { return }
-                Self.amplifyPCM(copy, gain: gain, soft: natural)
+                Self.amplifyPCM(copy, gain: gain, soft: soft)
 
                 Task { @MainActor in
-                    guard self.speakGeneration == generation else { return }
+                    guard self.speakGeneration == generation else {
+                        finish(false)
+                        return
+                    }
                     do {
                         try self.ensureTTSEngine(format: copy.format)
+                        if !didStartReveal {
+                            didStartReveal = true
+                            self.revealSpeakChunk(index, fraction: 0.08)
+                        }
+                        scheduled += 1
                         self.ttsPendingBuffers += 1
                         if !self.ttsPlayer.isPlaying {
                             self.ttsPlayer.play()
@@ -819,18 +902,57 @@ final class VoiceService: NSObject, ObservableObject {
                             Task { @MainActor in
                                 guard let self else { return }
                                 guard self.speakGeneration == generation else { return }
+                                played += 1
                                 self.ttsPendingBuffers = max(0, self.ttsPendingBuffers - 1)
-                                self.finishAmplifiedIfIdle(generation: generation)
+                                // Progress from buffers actually played (pauses freeze reveal).
+                                if self.ttsPlayer.isPlaying || finishedWrite {
+                                    let denom = max(scheduled, played, 1)
+                                    let frac = min(1, Double(played) / Double(denom))
+                                    self.revealSpeakChunk(index, fraction: max(0.08, frac))
+                                }
+                                if finishedWrite, played >= scheduled {
+                                    self.revealSpeakChunk(index, fraction: 1)
+                                    finish(true)
+                                }
                             }
                         }
                     } catch {
-                        guard self.speakGeneration == generation else { return }
-                        self.ttsUseAmplified = false
-                        self.fallbackSpeak(chunks: chunks, natural: natural)
+                        finish(false)
                     }
                 }
             }
         }
+    }
+
+    /// Grow visible transcript with TTS playback (never dump full reply up front).
+    private func revealSpeakChunk(_ index: Int, fraction: Double = 1) {
+        guard speakChunksOrdered.indices.contains(index) else { return }
+        if speakChunkDidReveal.indices.contains(index) {
+            speakChunkDidReveal[index] = true
+        }
+        revealedSpeakChunkCount = max(revealedSpeakChunkCount, index + 1)
+        let clamped = min(1, max(0, fraction))
+        var parts: [String] = []
+        for i in 0..<index {
+            parts.append(speakChunksOrdered[i])
+        }
+        let current = speakChunksOrdered[index]
+        if clamped >= 0.999 {
+            parts.append(current)
+        } else {
+            let n = max(1, Int(ceil(Double(current.count) * clamped)))
+            parts.append(String(current.prefix(n)))
+        }
+        spokenVisibleText = parts.joined(separator: " ").trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+
+    private func revealAllSpokenText() {
+        let joined = speakChunksOrdered.joined(separator: " ")
+        let full = joined.trimmingCharacters(in: .whitespacesAndNewlines)
+        if !full.isEmpty {
+            spokenVisibleText = full
+        }
+        revealedSpeakChunkCount = speakChunksOrdered.count
     }
 
     private func finishAmplifiedIfIdle(generation: UInt64) {
@@ -851,6 +973,7 @@ final class VoiceService: NSObject, ObservableObject {
             guard self.speakGeneration == generation else { return }
             guard case .speaking = self.phase else { return }
             guard self.pendingSpeakChunks == 0, self.ttsPendingBuffers == 0 else { return }
+            self.revealAllSpokenText()
             self.phase = .idle
             self.speakingStartedAt = nil
             HapticService.success()
@@ -880,6 +1003,11 @@ final class VoiceService: NSObject, ObservableObject {
 
     private func fallbackSpeak(chunks: [String], natural: Bool) {
         stopTTSEngine()
+        speakChunksOrdered = chunks
+        revealedSpeakChunkCount = 0
+        speakChunkDidReveal = Array(repeating: false, count: chunks.count)
+        spokenVisibleText = ""
+        fallbackSpeakChunkCursor = 0
         pendingSpeakChunks = chunks.count
         let rate = NOCOSpeakVoiceSettings.resolvedRate(naturalBase: natural)
         let pitch = NOCOSpeakVoiceSettings.resolvedPitch(naturalBase: natural)
@@ -895,6 +1023,7 @@ final class VoiceService: NSObject, ObservableObject {
             utterance.volume = 1.0
             utterance.preUtteranceDelay = index == 0 ? pre : inter
             utterance.postUtteranceDelay = post
+            // Reveal is driven by willSpeakRange / didStart — not by queueing.
             synthesizer.speak(utterance)
         }
     }
@@ -1472,11 +1601,45 @@ final class VoiceService: NSObject, ObservableObject {
 }
 
 extension VoiceService: AVSpeechSynthesizerDelegate {
+    nonisolated func speechSynthesizer(_ synthesizer: AVSpeechSynthesizer, didStart utterance: AVSpeechUtterance) {
+        Task { @MainActor in
+            guard !self.ttsUseAmplified else { return }
+            if let idx = self.speakChunksOrdered.firstIndex(of: utterance.speechString) {
+                self.fallbackSpeakChunkCursor = idx
+            }
+            self.revealSpeakChunk(self.fallbackSpeakChunkCursor, fraction: 0.05)
+        }
+    }
+
+    nonisolated func speechSynthesizer(
+        _ synthesizer: AVSpeechSynthesizer,
+        willSpeakRangeOfSpeechString characterRange: NSRange,
+        utterance: AVSpeechUtterance
+    ) {
+        Task { @MainActor in
+            guard !self.ttsUseAmplified else { return }
+            guard case .speaking = self.phase else { return }
+            let full = utterance.speechString as NSString
+            let end = min(full.length, characterRange.location + characterRange.length)
+            let frac = full.length > 0 ? Double(end) / Double(full.length) : 1
+            if let idx = self.speakChunksOrdered.firstIndex(of: utterance.speechString) {
+                self.fallbackSpeakChunkCursor = idx
+                self.revealSpeakChunk(idx, fraction: max(0.05, frac))
+            } else {
+                self.revealSpeakChunk(self.fallbackSpeakChunkCursor, fraction: max(0.05, frac))
+            }
+        }
+    }
+
     nonisolated func speechSynthesizer(_ synthesizer: AVSpeechSynthesizer, didFinish utterance: AVSpeechUtterance) {
         Task { @MainActor in
             // Amplified path finishes via buffer completions
             guard !self.ttsUseAmplified else { return }
+            if let idx = self.speakChunksOrdered.firstIndex(of: utterance.speechString) {
+                self.revealSpeakChunk(idx, fraction: 1)
+            }
             if !synthesizer.isSpeaking {
+                self.revealAllSpokenText()
                 self.phase = .idle
                 self.speakingStartedAt = nil
                 HapticService.success()

@@ -21,8 +21,8 @@ struct KeyboardRootView: View {
                 accessHint
             }
             KeyboardLayoutView(model: model)
-                .padding(.horizontal, 3)
-                .padding(.bottom, 6)
+                .frame(maxWidth: .infinity)
+                .padding(.bottom, 2)
         }
         .padding(.top, 4)
         .background(keyboardBackground)

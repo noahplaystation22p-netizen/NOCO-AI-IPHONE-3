@@ -33,9 +33,11 @@ enum CompanionAPIError: LocalizedError {
                 case .timedOut:
                     return CompanionAPIError.unreachable.errorDescription
                 case .appTransportSecurityRequiresSecureConnection:
-                    return "Verbindung blockiert (HTTP). Bitte Build 85+ neu installieren. Nur die IP eingeben, z. B. 100.x.x.x — ohne https://"
+                    // Tailscale 100.x is private CGNAT, not "public HTTP" — ATS must allow cleartext.
+                    // If this still fires, the installed build lost NSAllowsArbitraryLoads (reinstall).
+                    return "HTTP zum PC blockiert (ATS). Bitte neuestes NOCO-IPA installieren. Nur die IP eingeben, z. B. 100.x.x.x — ohne http://"
                 case .secureConnectionFailed, .serverCertificateUntrusted, .clientCertificateRejected:
-                    return "Sichere Verbindung fehlgeschlagen — nutze die WLAN-IP (192.168.x.x) vom PC, nicht https://. Tailscale-VPN am iPhone prüfen, falls 100.x."
+                    return "HTTPS nicht nötig — nur die IP (192.168.x.x oder Tailscale 100.x.x.x), ohne https://. Tailscale-VPN am iPhone prüfen."
                 case .cannotConnectToHost, .networkConnectionLost, .notConnectedToInternet:
                     return CompanionAPIError.unreachable.errorDescription
                 default:

@@ -6,33 +6,16 @@ enum HostSanitizer {
         let port: Int?
     }
 
-    /// Akzeptiert: `192.168.178.197`, `http://192.168.178.197:4747/api/v1`, `192.168.178.197:4747`
+    /// Akzeptiert: `192.168.178.197`, `http://192.168.178.197:4747/api/v1`, `192.168.178.197:4747`,
+    /// auch kaputte Eingaben wie `http://https://100.x.x.x`.
     static func parse(_ input: String, defaultPort: Int = 4747) -> Parsed? {
-        var text = input.trimmingCharacters(in: .whitespacesAndNewlines)
+        var text = stripSchemesAndPath(input)
         guard !text.isEmpty else { return nil }
-
-        if text.contains("://") {
-            var urlString = text
-            if !urlString.lowercased().hasPrefix("http") {
-                urlString = "http://\(urlString)"
-            }
-            if let url = URL(string: urlString), let host = url.host, !host.isEmpty {
-                return Parsed(host: host, port: url.port ?? defaultPort)
-            }
-        }
-
-        text = text
-            .replacingOccurrences(of: "https://", with: "", options: .caseInsensitive)
-            .replacingOccurrences(of: "http://", with: "", options: .caseInsensitive)
-
-        if let slash = text.firstIndex(of: "/") {
-            text = String(text[..<slash])
-        }
 
         if let colon = text.lastIndex(of: ":"), text.filter({ $0 == ":" }).count == 1 {
             let hostPart = String(text[..<colon]).trimmingCharacters(in: .whitespaces)
             let portPart = String(text[text.index(after: colon)...]).trimmingCharacters(in: .whitespaces)
-            if let port = Int(portPart), !hostPart.isEmpty {
+            if let port = Int(portPart), (1...65535).contains(port), !hostPart.isEmpty {
                 return Parsed(host: hostPart, port: port)
             }
         }
@@ -42,24 +25,62 @@ enum HostSanitizer {
         return Parsed(host: host, port: nil)
     }
 
+    /// Nur Hostname/IP — nie Schema, Port oder Pfad. Ideal für `http://\(host):port/…`.
     static func hostOnly(_ input: String) -> String {
-        parse(input)?.host ?? input
-            .replacingOccurrences(of: "https://", with: "", options: .caseInsensitive)
-            .replacingOccurrences(of: "http://", with: "", options: .caseInsensitive)
-            .split(separator: "/").first.map(String.init)?
-            .trimmingCharacters(in: .whitespaces) ?? input
+        if let parsed = parse(input) {
+            return parsed.host
+        }
+        return stripSchemesAndPath(input)
+    }
+
+    /// Entfernt wiederholte `http(s)://`, Pfade und Whitespace.
+    private static func stripSchemesAndPath(_ input: String) -> String {
+        var text = input.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !text.isEmpty else { return "" }
+
+        // Collapse nested / duplicated schemes: http://https://100.64.0.1
+        var changed = true
+        while changed {
+            changed = false
+            let lower = text.lowercased()
+            if lower.hasPrefix("https://") {
+                text = String(text.dropFirst(8))
+                changed = true
+                continue
+            }
+            if lower.hasPrefix("http://") {
+                text = String(text.dropFirst(7))
+                changed = true
+                continue
+            }
+            // Bare scheme without slashes (rare paste artifacts)
+            if lower.hasPrefix("https:") {
+                text = String(text.dropFirst(6)).trimmingCharacters(in: CharacterSet(charactersIn: "/"))
+                changed = true
+                continue
+            }
+            if lower.hasPrefix("http:") {
+                text = String(text.dropFirst(5)).trimmingCharacters(in: CharacterSet(charactersIn: "/"))
+                changed = true
+            }
+        }
+
+        if let slash = text.firstIndex(of: "/") {
+            text = String(text[..<slash])
+        }
+        return text.trimmingCharacters(in: .whitespacesAndNewlines)
     }
 
     /// Tailscale CGNAT 100.64.0.0/10
     static func isTailscaleIP(_ host: String) -> Bool {
-        let parts = host.split(separator: ".").compactMap { Int($0) }
+        let parts = hostOnly(host).split(separator: ".").compactMap { Int($0) }
         guard parts.count == 4 else { return false }
         return parts[0] == 100 && parts[1] >= 64 && parts[1] <= 127
     }
 
     /// RFC1918 only (no APIPA 169.254 — not reachable for pairing).
     static func isPrivateLanIP(_ host: String) -> Bool {
-        let parts = host.split(separator: ".").compactMap { Int($0) }
+        let parts = hostOnly(host).split(separator: ".").compactMap { Int($0) }
         guard parts.count == 4 else { return false }
         if parts[0] == 10 { return true }
         if parts[0] == 192 && parts[1] == 168 { return true }
@@ -68,7 +89,7 @@ enum HostSanitizer {
     }
 
     static func isLinkLocalIP(_ host: String) -> Bool {
-        let parts = host.split(separator: ".").compactMap { Int($0) }
+        let parts = hostOnly(host).split(separator: ".").compactMap { Int($0) }
         guard parts.count == 4 else { return false }
         return parts[0] == 169 && parts[1] == 254
     }
@@ -93,8 +114,15 @@ enum ConnectionPathKind: String, Codable {
 
     var label: String {
         switch self {
-        case .local: return "Lokal (WLAN)"
-        case .remote: return "Remote (Tailscale)"
+        case .local: return "Lokal verbunden"
+        case .remote: return "Tailscale Remote"
+        }
+    }
+
+    var shortLabel: String {
+        switch self {
+        case .local: return "Local"
+        case .remote: return "Tailscale Remote"
         }
     }
 }

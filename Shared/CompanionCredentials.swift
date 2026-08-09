@@ -117,9 +117,31 @@ enum CompanionCredentials {
     }
 
     static var baseURL: URL? {
-        let h = host.trimmingCharacters(in: .whitespacesAndNewlines)
+        let h = sanitizedHost(host)
         guard !h.isEmpty else { return nil }
         return URL(string: "http://\(h):\(port)/api/v1/")
+    }
+
+    /// Strip schemes/paths so we never build `http://https://100.x…`.
+    private static func sanitizedHost(_ raw: String) -> String {
+        var text = raw.trimmingCharacters(in: .whitespacesAndNewlines)
+        var changed = true
+        while changed {
+            changed = false
+            let lower = text.lowercased()
+            if lower.hasPrefix("https://") { text = String(text.dropFirst(8)); changed = true; continue }
+            if lower.hasPrefix("http://") { text = String(text.dropFirst(7)); changed = true; continue }
+        }
+        if let slash = text.firstIndex(of: "/") {
+            text = String(text[..<slash])
+        }
+        if let colon = text.lastIndex(of: ":"), text.filter({ $0 == ":" }).count == 1 {
+            let hostPart = String(text[..<colon])
+            if Int(String(text[text.index(after: colon)...])) != nil {
+                text = hostPart
+            }
+        }
+        return text.trimmingCharacters(in: .whitespacesAndNewlines)
     }
 
     static var isConfigured: Bool {
@@ -131,8 +153,9 @@ enum CompanionCredentials {
     }
 
     static func sync(host: String, port: Int, token: String?, deviceName: String) {
+        let cleanHost = sanitizedHost(host)
         let payload = DiskPayload(
-            host: host,
+            host: cleanHost,
             port: port == 0 ? 4747 : port,
             token: token ?? "",
             device: deviceName,

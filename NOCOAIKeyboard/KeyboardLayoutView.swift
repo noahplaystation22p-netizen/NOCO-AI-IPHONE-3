@@ -1,61 +1,56 @@
 import SwiftUI
 
-/// Geometry matched to Apple’s system keyboard (measured portrait baselines:
-/// iPhone SE/5: ~39pt keys, iPhone 6/13mini class 375pt: ~43pt, Plus/Max ≥414: ~46pt;
-/// side margin 3–4, inter-key gap 6; German QWERTZ uses 11 equal columns).
+/// Geometry matched to Apple’s German QWERTZ keyboard (portrait).
+/// Reference: system keyboard fills nearly the full width; margins ~3pt; gap ~6pt.
 private struct AppleKeyboardMetrics {
     let boardWidth: CGFloat
 
-    /// Horizontal inset from screen edge to first/last key (Apple: 3 @ ≤399, 4 @ ≥400).
-    var sideMargin: CGFloat { boardWidth >= 400 ? 4 : 3 }
-    /// Gap between adjacent key faces (Apple portrait: 6).
+    /// Apple German portrait: ~2–3pt from screen edge to first/last key.
+    var sideMargin: CGFloat { 2.5 }
+    /// Gap between adjacent key faces (Apple ≈ 5–6).
     var keyGap: CGFloat { 6 }
-    /// Vertical gap between rows (Apple ≈ keyGap − a little).
-    var rowGap: CGFloat { 11 }
-    /// Top padding above first letter row (Apple: ~8–12).
-    var topInset: CGFloat { boardWidth >= 400 ? 8 : 10 }
-    /// Bottom padding under last row (Apple: ~3–4 + home indicator is outside).
-    var bottomInset: CGFloat { boardWidth >= 400 ? 4 : 3 }
+    /// Vertical gap between rows.
+    var rowGap: CGFloat { 10 }
+    var topInset: CGFloat { 8 }
+    var bottomInset: CGFloat { 3 }
 
-    /// Visible key face height — linear fit from Apple measurements (39@320 → 43@375 → 46@414).
+    /// Visible key face height — linear fit (39@320 → 43@375 → 46@414).
     var keyHeight: CGFloat {
         let h = boardWidth * (4.0 / 55.0) + 15.727
         return min(46, max(39, h.rounded()))
     }
 
-    /// Letter face width for an N-key row that spans the full usable width.
+    private var innerWidth: CGFloat { max(0, boardWidth - sideMargin * 2) }
+
+    /// Letter face width for an N-key full-width row.
     func letterWidth(columns: CGFloat = 11) -> CGFloat {
-        let inner = boardWidth - sideMargin * 2
         let gaps = (columns - 1) * keyGap
-        return (inner - gaps) / columns
+        return (innerWidth - gaps) / columns
     }
 
-    /// Column pitch (face + trailing gap), used to size Shift/Delete as 2 columns.
-    func pitch(columns: CGFloat = 11) -> CGFloat {
-        letterWidth(columns: columns) + keyGap
+    /// Shift / Delete width given how many letter keys sit between them.
+    func shiftDeleteWidth(letterColumns: CGFloat = 11, middleLetterCount: CGFloat = 7) -> CGFloat {
+        let letterW = letterWidth(columns: letterColumns)
+        let lettersBlock = letterW * middleLetterCount + keyGap * max(0, middleLetterCount - 1)
+        let flankingGaps = keyGap * 2
+        let remaining = innerWidth - lettersBlock - flankingGaps
+        return max(letterW * 1.35, remaining / 2)
     }
 
-    /// Shift / Delete on German row 3 occupy 2 columns (Apple: ⇧ + 7 letters + ⌫ = 11).
-    func shiftDeleteWidth(letterColumns: CGFloat = 11) -> CGFloat {
-        2 * pitch(columns: letterColumns) - keyGap
-    }
-
-    /// Bottom-row special keys (123 / punct) — Apple ~40.5–46 “including gap”.
+    /// Bottom-row 123 / punct — slightly wider than a letter (Apple special keys).
     func specialWidth(letterColumns: CGFloat = 11) -> CGFloat {
-        let p = pitch(columns: letterColumns)
-        return min(max(p * 1.28 - keyGap, 36), 50)
+        let letterW = letterWidth(columns: letterColumns)
+        return min(max(letterW * 1.35, 38), 52)
     }
 
-    /// Return key — Apple ~87.5–97 “including gap” on portrait phones.
+    /// Return / Suche — Apple search key is ~2–2.5× a letter.
     func returnWidth(letterColumns: CGFloat = 11) -> CGFloat {
-        let p = pitch(columns: letterColumns)
-        return min(max(p * 2.65 - keyGap, 72), 100)
+        let letterW = letterWidth(columns: letterColumns)
+        return min(max(letterW * 2.35, 78), 110)
     }
 
     var cornerRadius: CGFloat {
-        if boardWidth >= 400 { return 6 }
-        if boardWidth >= 370 { return 5 }
-        return 4.5
+        boardWidth >= 400 ? 5.5 : 5
     }
 }
 
@@ -74,7 +69,9 @@ struct KeyboardLayoutView: View {
 
     var body: some View {
         GeometryReader { geo in
-            let m = AppleKeyboardMetrics(boardWidth: geo.size.width)
+            // Use the full offered width (parent must not add extra horizontal padding).
+            let width = max(geo.size.width, 1)
+            let m = AppleKeyboardMetrics(boardWidth: width)
             VStack(spacing: m.rowGap) {
                 if model.showingNumbers {
                     numbersLayout(m)
@@ -82,13 +79,13 @@ struct KeyboardLayoutView: View {
                     lettersLayout(m)
                 }
             }
-            .padding(.horizontal, m.sideMargin)
             .padding(.top, m.topInset)
             .padding(.bottom, m.bottomInset)
-            .frame(width: geo.size.width, height: geo.size.height, alignment: .top)
+            .padding(.horizontal, m.sideMargin)
+            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
             .animation(.easeOut(duration: 0.15), value: model.showingNumbers)
         }
-        // Letter block ~ 4 rows × keyH + 3 gaps + insets ≈ Apple letter area (~216 without toolbar).
+        .frame(maxWidth: .infinity)
         .frame(height: letterBlockHeight)
     }
 
@@ -102,11 +99,13 @@ struct KeyboardLayoutView: View {
 
     private func lettersLayout(_ m: AppleKeyboardMetrics) -> some View {
         let letterW = m.letterWidth(columns: 11)
-        let shiftW = m.shiftDeleteWidth(letterColumns: 11)
+        let shiftW = m.shiftDeleteWidth(letterColumns: 11, middleLetterCount: 7)
         return VStack(spacing: m.rowGap) {
-            // German iOS: rows 1+2 are 11 equal keys, edge-to-edge (no English A-row inset).
+            // German iOS: rows 1+2 are 11 equal keys, edge-to-edge.
             letterRow(row1, width: letterW, height: m.keyHeight, gap: m.keyGap, radius: m.cornerRadius, size: .top)
+                .frame(maxWidth: .infinity)
             letterRow(row2, width: letterW, height: m.keyHeight, gap: m.keyGap, radius: m.cornerRadius, size: .middle)
+                .frame(maxWidth: .infinity)
             HStack(spacing: m.keyGap) {
                 ModifierKey(
                     symbol: model.capsLock ? "capslock.fill" : "shift.fill",
@@ -124,22 +123,25 @@ struct KeyboardLayoutView: View {
                     model.endDeleteHold()
                 }
             }
+            .frame(maxWidth: .infinity)
             bottomRow(leftTitle: "123", metrics: m, letterColumns: 11)
         }
+        .frame(maxWidth: .infinity)
     }
 
     private func numbersLayout(_ m: AppleKeyboardMetrics) -> some View {
         // Numbers pad uses 10 columns (Apple numbers/punctuation layout).
         let letterW = m.letterWidth(columns: 10)
-        let shiftW = m.shiftDeleteWidth(letterColumns: 10)
+        let shiftW = m.shiftDeleteWidth(letterColumns: 10, middleLetterCount: CGFloat(num3.count))
         return VStack(spacing: m.rowGap) {
             letterRow(num1, width: letterW, height: m.keyHeight, gap: m.keyGap, radius: m.cornerRadius, size: .top)
+                .frame(maxWidth: .infinity)
             letterRow(num2, width: letterW, height: m.keyHeight, gap: m.keyGap, radius: m.cornerRadius, size: .middle)
+                .frame(maxWidth: .infinity)
             HStack(spacing: m.keyGap) {
                 ModifierKey(title: "#+=", width: shiftW, height: m.keyHeight, cornerRadius: m.cornerRadius) {
                     model.insert("#")
                 }
-                // 6 symbols + 2-col shift/delete = 10 columns (same span as rows above).
                 letterRowContent(num3, width: letterW, height: m.keyHeight, gap: m.keyGap, radius: m.cornerRadius, size: .bottom)
                 DeleteKey(width: shiftW, height: m.keyHeight, cornerRadius: m.cornerRadius) {
                     model.beginDeleteHold()
@@ -147,8 +149,10 @@ struct KeyboardLayoutView: View {
                     model.endDeleteHold()
                 }
             }
+            .frame(maxWidth: .infinity)
             bottomRow(leftTitle: "ABC", metrics: m, letterColumns: 10)
         }
+        .frame(maxWidth: .infinity)
     }
 
     private func bottomRow(leftTitle: String, metrics m: AppleKeyboardMetrics, letterColumns: CGFloat) -> some View {
@@ -174,6 +178,7 @@ struct KeyboardLayoutView: View {
                 model.returnKey()
             }
         }
+        .frame(maxWidth: .infinity)
     }
 
     private var returnTitle: String {
@@ -351,8 +356,8 @@ private struct LetterKey: View {
                 }
             }
             .zIndex(pressed ? 40 : 0)
-            // Touch target slightly larger than the visible Apple key face.
-            .padding(.horizontal, -keyGapPad)
+            // Extra hit area via contentShape only — negative padding would shrink HStack
+            // layout width and leave empty side margins (keys look “squeezed”).
             .padding(.vertical, 1.5)
             .contentShape(Rectangle())
             .gesture(
@@ -361,9 +366,6 @@ private struct LetterKey: View {
                     .onEnded(handleEnded)
             )
     }
-
-    /// Half of Apple’s 6pt gap — expands hit box into the gutter without overlapping neighbors badly.
-    private var keyGapPad: CGFloat { 2.5 }
 
     private var isUppercaseLetter: Bool {
         guard let c = label.first, c.isLetter else { return false }

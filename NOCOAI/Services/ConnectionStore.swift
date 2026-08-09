@@ -161,7 +161,8 @@ final class ConnectionStore: ObservableObject {
     }
 
     var baseURLString: String {
-        "http://\(serverHost):\(serverPort)/api/v1/"
+        let host = HostSanitizer.hostOnly(serverHost)
+        return "http://\(host):\(serverPort)/api/v1/"
     }
 
     /// Short freshness label for the Online badge (updates as status polls).
@@ -196,8 +197,17 @@ final class ConnectionStore: ObservableObject {
             chat.startSyncLoop()
             Task {
                 await refreshStatus()
-                // Still offline after status → force Tailscale attempt.
-                if !isOnline, !preferredRemoteHost.isEmpty {
+                // Still offline after status → Tailscale only if auto-remote (or already approved).
+                if !isOnline,
+                   autoUseRemote || remoteSessionApproved,
+                   !preferredRemoteHost.isEmpty,
+                   activePath != .remote {
+                    // Prefer local once more before leaving home Wi‑Fi.
+                    if !preferredLocalHost.isEmpty,
+                       await quickPing(host: preferredLocalHost),
+                       await trySwitchToHost(preferredLocalHost, path: .local) {
+                        return
+                    }
                     remoteSessionApproved = true
                     _ = await trySwitchToHost(preferredRemoteHost, path: .remote, allowWithoutPing: true)
                 }
@@ -782,11 +792,16 @@ final class ConnectionStore: ObservableObject {
 
     private func refreshStatusUncoalesced(showLoading: Bool = false) async {
         guard let api else {
-            // Paired but API missing — rebuild and try Tailscale if we have it.
+            // Paired but API missing — rebuild; prefer local, then Tailscale.
             if isPaired, !serverHost.isEmpty {
                 rebuildAPI()
             }
-            if isPaired, !preferredRemoteHost.isEmpty {
+            if isPaired, !preferredLocalHost.isEmpty {
+                if await trySwitchToHost(preferredLocalHost, path: .local) {
+                    return
+                }
+            }
+            if isPaired, autoUseRemote || remoteSessionApproved, !preferredRemoteHost.isEmpty {
                 _ = await trySwitchToHost(preferredRemoteHost, path: .remote)
             }
             return
@@ -794,10 +809,17 @@ final class ConnectionStore: ObservableObject {
         if showLoading { isRefreshing = true }
         defer { if showLoading { isRefreshing = false } }
 
-        // On cellular / no Wi‑Fi: switch to Tailscale BEFORE probing a dead LAN IP.
+        // Cellular / expensive: still try local first when a LAN host is known.
+        // Only then fall back to Tailscale — never flip away from a working local link.
         if prefersRemotePath,
            activePath != .remote,
-           !preferredRemoteHost.isEmpty {
+           !preferredRemoteHost.isEmpty,
+           (autoUseRemote || remoteSessionApproved) {
+            if !preferredLocalHost.isEmpty,
+               await quickPing(host: preferredLocalHost),
+               await trySwitchToHost(preferredLocalHost, path: .local) {
+                return
+            }
             if await trySwitchToHost(preferredRemoteHost, path: .remote) {
                 return
             }
@@ -841,17 +863,12 @@ final class ConnectionStore: ObservableObject {
             consecutiveFailures += 1
             if consecutiveFailures == 1 {
                 beginReconnectBanner()
-                // Immediate Tailscale try — don't wait for a second failure or a dialog.
-                if activePath == .local, !preferredRemoteHost.isEmpty {
-                    if await trySwitchToHost(preferredRemoteHost, path: .remote) {
-                        return
-                    }
-                }
             }
-            // Still offline on LAN — always attempt Tailscale once more with longer patience.
-            if !isOnline || consecutiveFailures >= 1,
-               !preferredRemoteHost.isEmpty,
-               activePath != .remote || consecutiveFailures >= offlineFailureThreshold {
+            // Hysteresis: require sustained LAN failure before Tailscale (avoids flip-flop).
+            if consecutiveFailures >= offlineFailureThreshold,
+               activePath == .local,
+               (autoUseRemote || remoteSessionApproved),
+               !preferredRemoteHost.isEmpty {
                 if await trySwitchToHost(preferredRemoteHost, path: .remote, allowWithoutPing: true) {
                     return
                 }
@@ -982,16 +999,28 @@ final class ConnectionStore: ObservableObject {
             }
         }
 
-        // 2) Local offline → Tailscale automatically (simplest path).
-        if activePath == .local, !preferredRemoteHost.isEmpty {
+        // 2) Local offline → Tailscale when auto-remote is on (or session already approved).
+        if activePath == .local,
+           (autoUseRemote || remoteSessionApproved),
+           !preferredRemoteHost.isEmpty {
             remoteSessionApproved = true
             showRemotePrompt = false
             if await trySwitchToHost(preferredRemoteHost, path: .remote, allowWithoutPing: true) {
-                pathStatusLine = "Remote (Tailscale)"
+                pathStatusLine = "Tailscale Remote"
                 return
             }
-            pathStatusLine = "Nicht erreichbar — PC: Remote starten · iPhone: Tailscale an"
-            reconnectStatusLine = "Nicht erreichbar — PC: Remote starten · iPhone: Tailscale an"
+            pathStatusLine = "Offline — PC: Remote starten · iPhone: Tailscale an"
+            reconnectStatusLine = "Offline — PC: Remote starten · iPhone: Tailscale an"
+            isOnline = false
+            return
+        }
+
+        if activePath == .local, !preferredRemoteHost.isEmpty, !autoUseRemote, !remoteSessionApproved {
+            showRemotePrompt = true
+            pathStatusLine = "Lokal offline — Remote verfügbar?"
+        } else {
+            pathStatusLine = "Offline"
+            isOnline = false
         }
     }
 
@@ -1001,22 +1030,32 @@ final class ConnectionStore: ObservableObject {
         monitor.pathUpdateHandler = { [weak self] path in
             Task { @MainActor in
                 guard let self else { return }
-                // Cellular / expensive / no Wi‑Fi → Tailscale remote automatically.
+                // Cellular / expensive / no Wi‑Fi → prefer Tailscale, but only after local fails.
                 let wifi = path.usesInterfaceType(.wifi)
                 let cellular = path.usesInterfaceType(.cellular)
                 let expensive = path.isExpensive || path.isConstrained
                 self.prefersRemotePath = cellular || expensive || (!wifi && path.status == .satisfied)
-                if self.prefersRemotePath,
-                   self.isPaired,
-                   !self.preferredRemoteHost.isEmpty,
-                   (self.activePath == .local || !self.isOnline) {
-                    self.remoteSessionApproved = true
-                    _ = await self.trySwitchToHost(
-                        self.preferredRemoteHost,
-                        path: .remote,
-                        allowWithoutPing: true
-                    )
+
+                // Never leave a working local connection just because the path looks expensive.
+                if self.isOnline, self.activePath == .local { return }
+
+                guard self.prefersRemotePath,
+                      self.isPaired,
+                      self.autoUseRemote || self.remoteSessionApproved,
+                      !self.preferredRemoteHost.isEmpty,
+                      (self.activePath == .local || !self.isOnline) else { return }
+
+                if !self.preferredLocalHost.isEmpty,
+                   await self.quickPing(host: self.preferredLocalHost) {
+                    _ = await self.trySwitchToHost(self.preferredLocalHost, path: .local)
+                    return
                 }
+                self.remoteSessionApproved = true
+                _ = await self.trySwitchToHost(
+                    self.preferredRemoteHost,
+                    path: .remote,
+                    allowWithoutPing: true
+                )
             }
         }
         monitor.start(queue: DispatchQueue(label: "nocoai.path", qos: .utility))

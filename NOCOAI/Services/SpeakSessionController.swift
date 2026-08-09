@@ -67,6 +67,7 @@ final class SpeakSessionController: ObservableObject {
     private var pendingUtterance: String?
     private var consecutiveFailures = 0
     private var lastIslandTranscript: String = ""
+    private var lastIslandSpokenText: String = ""
     private var listenRetryCount = 0
     private var cancellables = Set<AnyCancellable>()
     /// While true: never reopen the mic (reply TTS / farewell in progress).
@@ -146,6 +147,15 @@ final class SpeakSessionController: ObservableObject {
                 self.lastIslandTranscript = live
                 if self.isRunning, !live.isEmpty,
                    self.assistantPhase == .listening || self.sessionPhase == .listening {
+                    self.pushLiveActivity(force: true)
+                }
+            }
+            // Mirror TTS-synced visible text onto the Island (never dump full lastReply).
+            let spoken = self.voice.spokenVisibleText
+            if spoken != self.lastIslandSpokenText {
+                self.lastIslandSpokenText = spoken
+                if self.isRunning, self.assistantPhase == .speaking || self.sessionPhase == .speaking
+                    || self.voice.phase == .speaking {
                     self.pushLiveActivity(force: true)
                 }
             }
@@ -1710,7 +1720,9 @@ final class SpeakSessionController: ObservableObject {
     private func resolveIslandDetail(for phase: SpeakActivityPhase) -> String {
         if isMuted {
             return phase == .speaking
-                ? (lastReply.isEmpty ? "Stumm · Wiedergabe…" : lastReply)
+                ? (voice.spokenVisibleText.isEmpty
+                   ? (lastReply.isEmpty ? "Stumm · Wiedergabe…" : "Stumm · Wiedergabe…")
+                   : voice.spokenVisibleText)
                 : "Mic stumm — Mute aus zum Sprechen"
         }
         if pendingToolConfirm != nil {
@@ -1726,7 +1738,10 @@ final class SpeakSessionController: ObservableObject {
             case .none: return "Rede natürlich…"
             }
         case .speaking:
-            return lastReply.isEmpty ? "Antwort wird vorgelesen…" : lastReply
+            if !voice.spokenVisibleText.isEmpty {
+                return voice.spokenVisibleText
+            }
+            return lastReply.isEmpty ? "Antwort wird vorgelesen…" : "…"
         case .thinking, .processing:
             return statusLine.isEmpty ? SpeakActivityPhase.thinking.title : statusLine
         case .webSearch:

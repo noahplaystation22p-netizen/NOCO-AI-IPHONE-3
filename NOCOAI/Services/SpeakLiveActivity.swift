@@ -84,10 +84,10 @@ enum SpeakLiveActivityManager {
         force: Bool = false,
         titleOverride: String? = nil
     ) {
-        if activity == nil {
-            activity = Activity<SpeakActivityAttributes>.activities.first
+        if Self.activity == nil {
+            Self.activity = Activity<SpeakActivityAttributes>.activities.first
         }
-        guard let activity else {
+        guard Self.activity != nil || !Activity<SpeakActivityAttributes>.activities.isEmpty else {
             // Recreate if Speak is somehow running without an activity
             start()
             return
@@ -96,7 +96,7 @@ enum SpeakLiveActivityManager {
         let title: String
         if isMuted && phase != .speaking {
             title = "Voice AI stumm"
-        } else         if let titleOverride, !titleOverride.isEmpty {
+        } else if let titleOverride, !titleOverride.isEmpty {
             title = String(titleOverride.prefix(120))
         } else {
             title = phase.title
@@ -135,7 +135,7 @@ enum SpeakLiveActivityManager {
                 SpeakLiveActivityManager.start()
                 return
             }
-            activity = activities.first
+            Self.activity = activities.first
             for act in activities {
                 await act.update(
                     .init(state: state, staleDate: Date().addingTimeInterval(60 * 60))

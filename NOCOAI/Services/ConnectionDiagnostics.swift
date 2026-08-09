@@ -21,6 +21,7 @@ enum ConnectionFailureCode: String, Codable, Equatable {
     case remoteAccessDisabled = "REMOTE_ACCESS_DISABLED"
     case dnsFailure = "DNS_FAILURE"
     case offline = "NO_CONNECTION"
+    case remoteStreamInterrupted = "REMOTE_STREAM_INTERRUPTED"
     case unknown = "UNKNOWN"
 
     var userMessage: String {
@@ -61,8 +62,20 @@ enum ConnectionFailureCode: String, Codable, Equatable {
             return "Hostnamen konnte nicht aufgelöst werden."
         case .offline:
             return "Keine Verbindung (Lokal und Remote nicht erreichbar)."
+        case .remoteStreamInterrupted:
+            return "HTTP-Stream kurz unterbrochen (NWError-96) — Verbindung bleibt aktiv, Retry läuft."
         case .unknown:
             return "Unbekannter Verbindungsfehler — Details im Diagnose-Log."
+        }
+    }
+
+    /// Short-lived blip — keep session/host; retry instead of full reconnect.
+    var isSoftTransient: Bool {
+        switch self {
+        case .remoteStreamInterrupted, .connectionTimeout, .noServerResponse:
+            return true
+        default:
+            return false
         }
     }
 
@@ -86,11 +99,15 @@ enum ConnectionFailureCode: String, Codable, Equatable {
             return from(urlError: url)
         }
         let ns = error as NSError
+        if isRemoteStreamInterrupted(ns) {
+            return .remoteStreamInterrupted
+        }
         if ns.domain == NSPOSIXErrorDomain {
             switch ns.code {
             case 61, 60: return .portUnreachable // ECONNREFUSED / ETIMEDOUT
             case 64, 65: return .serverUnreachable
             case 51, 50: return .firewallOrNetworkBlock
+            case 96: return .remoteStreamInterrupted // ENODATA / STREAM empty
             default: break
             }
         }
@@ -101,7 +118,29 @@ enum ConnectionFailureCode: String, Codable, Equatable {
         if low.contains("timeout") || low.contains("timed out") {
             return .connectionTimeout
         }
+        if low.contains("no message available on stream")
+            || (low.contains("nwerror") && low.contains("96")) {
+            return .remoteStreamInterrupted
+        }
         return .unknown
+    }
+
+    /// Network.NWError 96 / POSIX ENODATA — common on Tailscale cleartext short streams.
+    static func isRemoteStreamInterrupted(_ error: Error) -> Bool {
+        isRemoteStreamInterrupted(error as NSError)
+    }
+
+    static func isRemoteStreamInterrupted(_ ns: NSError) -> Bool {
+        if ns.code == 96 {
+            let domain = ns.domain.lowercased()
+            if domain.contains("network") || domain == NSPOSIXErrorDomain.lowercased() {
+                return true
+            }
+        }
+        let low = ns.localizedDescription.lowercased()
+        return low.contains("no message available on stream")
+            || (low.contains("nwerror") && low.contains("96"))
+            || (low.contains("fehler 96") && low.contains("stream"))
     }
 
     static func from(urlError: URLError) -> ConnectionFailureCode {
@@ -248,6 +287,8 @@ final class ConnectionDiagnostics: ObservableObject {
         let local = HostSanitizer.hostOnly(connection.localHost)
         let remote = HostSanitizer.hostOnly(connection.remoteHost)
         let active = HostSanitizer.hostOnly(connection.serverHost)
+        // Sticky remote session: confirm Tailscale first (avoid LAN timeout spam).
+        let remoteFirst = connection.activePath == .remote
 
         snapshot.port = port
         snapshot.localHost = local
@@ -272,6 +313,34 @@ final class ConnectionDiagnostics: ObservableObject {
             return
         }
 
+        var failedRemote: HostProbeResult?
+
+        if remoteFirst, !remote.isEmpty {
+            if HostSanitizer.isTailscaleIP(remote) {
+                log("Tailscale detected")
+                snapshot.tailscaleDetected = true
+            }
+            log("Tailscale IP: \(remote)")
+            log("Remote Host: \(remote):\(port)")
+            let remoteResult = await probeHost(remote, port: port, label: "Tailscale")
+            snapshot.remoteReachable = remoteResult.serverOK
+            if remoteResult.serverOK {
+                applySuccess(remoteResult, path: "TAILSCALE", host: remote)
+                snapshot.summary = "Tailscale Remote Connected."
+                snapshot.failureCode = .ok
+                if !local.isEmpty {
+                    log("Local Host: \(local):\(port) (check only)")
+                    let localResult = await probeHost(local, port: port, label: "Local")
+                    snapshot.localReachable = localResult.serverOK
+                } else {
+                    snapshot.localReachable = false
+                }
+                return
+            }
+            log("Remote Connection: FAILED (\(remoteResult.code.rawValue))")
+            failedRemote = remoteResult
+        }
+
         if !local.isEmpty {
             log("Local Host: \(local):\(port)")
             let localResult = await probeHost(local, port: port, label: "Local")
@@ -279,11 +348,10 @@ final class ConnectionDiagnostics: ObservableObject {
             if localResult.serverOK {
                 applySuccess(localResult, path: "LOCAL", host: local)
                 log("Local Connection: OK")
-                // Prefer local when available — still report remote status for UI.
-                if !remote.isEmpty {
+                if !remote.isEmpty, !remoteFirst {
                     log("Tailscale IP: \(remote)")
-                    let remoteResult = await probeHost(remote, port: port, label: "Tailscale")
-                    snapshot.remoteReachable = remoteResult.serverOK
+                    let remoteCheck = await probeHost(remote, port: port, label: "Tailscale")
+                    snapshot.remoteReachable = remoteCheck.serverOK
                     snapshot.tailscaleDetected = true
                 }
                 snapshot.summary = "Local Connected — schnellste Verbindung aktiv."
@@ -295,6 +363,11 @@ final class ConnectionDiagnostics: ObservableObject {
         } else {
             log("Local Host: —")
             log("Local Connection: SKIPPED")
+        }
+
+        if let failedRemote {
+            applyFailure(failedRemote, host: remote, port: port)
+            return
         }
 
         if !remote.isEmpty {
@@ -330,7 +403,6 @@ final class ConnectionDiagnostics: ObservableObject {
                 if HostSanitizer.isTailscaleIP(active) || snapshot.tailscaleDetected {
                     var adjusted = result
                     if result.code == .portUnreachable || result.code == .connectionTimeout {
-                        // Could be Tailscale down — keep precise code but add hint.
                         if result.code == .connectionTimeout {
                             adjusted.code = .tailscaleUnavailable
                         }

@@ -615,17 +615,33 @@ extension CompanionAPI {
                     request.httpBody = try encoder.encode(body)
 
                     if CompanionCleartextHTTP.shouldBypassATS(for: request.url) {
-                        let (lineStream, response) = try await CompanionCleartextHTTP.lines(for: request)
-                        guard (200...299).contains(response.statusCode) else {
-                            if response.statusCode == 401 { throw CompanionAPIError.unauthorized }
-                            throw CompanionAPIError.server("Stream-Fehler HTTP \(response.statusCode)")
-                        }
-                        for try await line in lineStream {
-                            if let chunk = try parseSSEChunk(line) {
-                                continuation.yield(chunk)
-                                if chunk.done == true { break }
+                        var lastErr: Error?
+                        var opened = false
+                        for attempt in 0..<3 {
+                            do {
+                                let (lineStream, response) = try await CompanionCleartextHTTP.lines(for: request)
+                                guard (200...299).contains(response.statusCode) else {
+                                    if response.statusCode == 401 { throw CompanionAPIError.unauthorized }
+                                    throw CompanionAPIError.server("Stream-Fehler HTTP \(response.statusCode)")
+                                }
+                                opened = true
+                                for try await line in lineStream {
+                                    if let chunk = try parseSSEChunk(line) {
+                                        continuation.yield(chunk)
+                                        if chunk.done == true { break }
+                                    }
+                                }
+                                continuation.finish()
+                                return
+                            } catch {
+                                lastErr = error
+                                let soft = ConnectionFailureCode.classify(error) == .remoteStreamInterrupted
+                                    || ConnectionFailureCode.isRemoteStreamInterrupted(error)
+                                guard soft, attempt < 2 else { throw error }
+                                try? await Task.sleep(nanoseconds: UInt64(300_000_000 * (attempt + 1)))
                             }
                         }
+                        if !opened, let lastErr { throw lastErr }
                         continuation.finish()
                         return
                     }

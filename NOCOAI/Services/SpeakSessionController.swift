@@ -388,7 +388,7 @@ final class SpeakSessionController: ObservableObject {
             detail: "Voice AI beendet",
             level: 0.15,
             bars: [0.15, 0.18, 0.2, 0.18, 0.15, 0.12, 0.1],
-            isOnline: connection?.isOnline ?? false,
+            isOnline: false,
             isMuted: false,
             force: true,
             titleOverride: "Voice AI beendet"
@@ -445,7 +445,7 @@ final class SpeakSessionController: ObservableObject {
             detail: "Voice AI beendet",
             level: 0.2,
             bars: [0.2, 0.25, 0.3, 0.25, 0.2, 0.18, 0.15],
-            isOnline: connection?.isOnline ?? false,
+            isOnline: false,
             isMuted: false,
             force: true,
             titleOverride: "Voice AI beendet"
@@ -1638,7 +1638,8 @@ final class SpeakSessionController: ObservableObject {
             detail: detail,
             level: level,
             bars: bars,
-            isOnline: connection?.isOnline ?? false,
+            // Voice session active → always LIVE (never OFF from brief connection blips).
+            isOnline: true,
             isMuted: isMuted,
             force: force,
             titleOverride: islandTitle(for: phase)

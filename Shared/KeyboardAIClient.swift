@@ -204,7 +204,16 @@ enum KeyboardAIClient {
         )
 
         do {
-            let (data, response) = try await session.data(for: request)
+            let data: Data
+            let response: URLResponse
+            if NOCOCleartextHTTP.shouldUseCleartext(for: url) {
+                // Same ATS bypass as main app — Tailscale CGNAT is not "local networking".
+                let (body, http) = try await NOCOCleartextHTTP.data(for: request, timeout: timeout)
+                data = body
+                response = http
+            } else {
+                (data, response) = try await session.data(for: request)
+            }
             try Task.checkCancellation()
             let code = (response as? HTTPURLResponse)?.statusCode ?? 0
             guard (200..<300).contains(code) else { throw ClientError.http(code) }
@@ -213,6 +222,8 @@ enum KeyboardAIClient {
         } catch is CancellationError {
             throw ClientError.cancelled
         } catch let urlError as URLError where urlError.code == .timedOut || urlError.code == .cancelled {
+            throw ClientError.timedOut
+        } catch NOCOCleartextHTTP.TransportError.timeout {
             throw ClientError.timedOut
         } catch let error as ClientError {
             throw error

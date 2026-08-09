@@ -101,8 +101,8 @@ enum SpeakLiveActivityManager {
         } else {
             title = phase.title
         }
-        // Keep enough copy for Island marquee — UI scrolls instead of truncating with "…"
-        let clippedDetail = String(detail.prefix(220))
+        // Prefer currently spoken suffix so long replies stay readable on Island.
+        let clippedDetail = Self.speakingDetailWindow(detail, maxChars: 360)
         let phaseChanged = phase.rawValue != lastPhaseRaw
         let textChanged = clippedDetail != lastDetail || title != lastTitle
         let now = Date()
@@ -133,6 +133,18 @@ enum SpeakLiveActivityManager {
                 .init(state: state, staleDate: Date().addingTimeInterval(60 * 60))
             )
         }
+    }
+
+    /// Keep the live spoken tail visible instead of hard-cutting from the start.
+    private static func speakingDetailWindow(_ text: String, maxChars: Int) -> String {
+        let t = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard t.count > maxChars else { return t }
+        let tail = String(t.suffix(maxChars))
+        if let space = tail.firstIndex(of: " ") {
+            let trimmed = String(tail[space...]).trimmingCharacters(in: .whitespacesAndNewlines)
+            return trimmed.isEmpty ? "…" + tail : "…" + trimmed
+        }
+        return "…" + tail
     }
 
     static func end() {

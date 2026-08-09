@@ -337,16 +337,9 @@ struct SpeakIslandExpandedGlassPanel: View {
             let t = timeline.date.timeIntervalSinceReferenceDate
             let drift = (t.truncatingRemainder(dividingBy: 5.5) / 5.5)
             VStack(spacing: 6) {
-                SpeakMarqueeText(
-                    text: SpeakPhasePalette.statusDetail(for: state),
-                    font: .system(size: 11, weight: .medium, design: .rounded),
-                    foreground: .white.opacity(0.9),
-                    speed: state.phaseRaw == "speaking" ? 34 : 26,
-                    forceScroll: state.phaseRaw == "speaking",
-                    lineCount: 1
-                )
+                SpeakSpeakingDetailText(state: state)
                 .frame(maxWidth: .infinity)
-                .frame(height: 16)
+                .frame(minHeight: 16, maxHeight: state.phaseRaw == "speaking" ? 52 : 16)
 
                 SpeakIslandWaveform(state: state)
                     .frame(height: 22)
@@ -399,6 +392,33 @@ struct SpeakIslandExpandedGlassPanel: View {
             }
             .compositingGroup()
             .clipped()
+        }
+    }
+}
+
+/// Expanded Island reply: wrap + follow spoken tail (no hard single-line cut).
+struct SpeakSpeakingDetailText: View {
+    let state: SpeakActivityAttributes.ContentState
+
+    var body: some View {
+        let text = SpeakPhasePalette.statusDetail(for: state)
+        if state.phaseRaw == "speaking" {
+            Text(text)
+                .font(.system(size: 11, weight: .medium, design: .rounded))
+                .foregroundStyle(.white.opacity(0.92))
+                .multilineTextAlignment(.leading)
+                .lineLimit(3)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .animation(.easeInOut(duration: 0.18), value: text)
+        } else {
+            SpeakMarqueeText(
+                text: text,
+                font: .system(size: 11, weight: .medium, design: .rounded),
+                foreground: .white.opacity(0.9),
+                speed: 26,
+                forceScroll: false,
+                lineCount: 1
+            )
         }
     }
 }

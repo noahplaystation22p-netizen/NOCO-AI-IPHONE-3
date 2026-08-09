@@ -70,7 +70,10 @@ final class ConnectionStore: ObservableObject {
     private var cancellables = Set<AnyCancellable>()
     /// Hysteresis: require consecutive failures before marking offline
     private var consecutiveFailures = 0
-    private let offlineFailureThreshold = 2
+    private let offlineFailureThreshold = 3
+    /// Soft stream blips need more strikes before tearing down a healthy remote session.
+    private let softFailureOfflineThreshold = 6
+    private var lastAutoProbeAt: Date?
     /// User confirmed remote for this away stretch (cleared when back on LAN).
     private var remoteSessionApproved = false
     private var lastLocalProbeAt: Date?
@@ -82,6 +85,11 @@ final class ConnectionStore: ObservableObject {
     private var pathMonitor: NWPathMonitor?
     /// Coalesce overlapping status refreshes (UI + poll + reconnect).
     private var refreshInFlight: Task<Void, Never>?
+
+    /// Voice / Live Activity session — freeze LOCAL↔REMOTE host flips.
+    private var connectionPathLocked: Bool {
+        speak.isRunning || VoiceAISessionState.isActive
+    }
 
     private enum Keys {
         static let host = "nocoai.host"
@@ -811,7 +819,9 @@ final class ConnectionStore: ObservableObject {
 
         // Cellular / expensive: still try local first when a LAN host is known.
         // Only then fall back to Tailscale — never flip away from a working local link.
-        if prefersRemotePath,
+        // Voice session: keep the active host sticky (no LOCAL↔REMOTE mid-reply).
+        if !connectionPathLocked,
+           prefersRemotePath,
            activePath != .remote,
            !preferredRemoteHost.isEmpty,
            (autoUseRemote || remoteSessionApproved) {
@@ -825,14 +835,18 @@ final class ConnectionStore: ObservableObject {
             }
         }
 
-        // Prefer local path when away-session can return home.
-        if activePath == .remote {
+        // Prefer local path when away-session can return home — not during Voice.
+        if activePath == .remote, !connectionPathLocked {
             await maybeOfferOrSwitchToLocal()
         }
 
         do {
             let started = Date()
-            let newStatus = try await api.withTransientRetry(attempts: 2, baseDelayNanoseconds: 500_000_000) {
+            let attempts = activePath == .remote ? 4 : 2
+            let newStatus = try await api.withTransientRetry(
+                attempts: attempts,
+                baseDelayNanoseconds: 350_000_000
+            ) {
                 try await api.fetchStatus()
             }
             let rttMs = Date().timeIntervalSince(started) * 1000
@@ -851,21 +865,48 @@ final class ConnectionStore: ObservableObject {
             await loadFeatures()
             learnHosts(from: newStatus)
         } catch {
+            let failureCode: ConnectionFailureCode = {
+                if let err = error as? CompanionAPIError { return err.failureCode }
+                return ConnectionFailureCode.classify(error)
+            }()
+            let soft = failureCode.isSoftTransient
+            ConnectionDiagnostics.shared.log("Status error: \(failureCode.rawValue)")
+
             if let err = error as? CompanionAPIError, case .remoteAccessDisabled = err {
                 lastError = err.localizedDescription
-                if activePath == .remote {
+                if activePath == .remote, !connectionPathLocked {
                     // Fall back to local if possible.
                     if await trySwitchToHost(preferredLocalHost, path: .local) {
                         return
                     }
                 }
             }
+
             consecutiveFailures += 1
+
+            // Soft stream blips: keep healthy remote / voice session — no full reset.
+            if soft, isOnline || connectionPathLocked || activePath == .remote {
+                let softLimit = connectionPathLocked ? softFailureOfflineThreshold : offlineFailureThreshold + 1
+                if consecutiveFailures < softLimit {
+                    if failureCode == .remoteStreamInterrupted {
+                        ConnectionDiagnostics.shared.log(
+                            "REMOTE_STREAM_INTERRUPTED — Session behalten (retry \(consecutiveFailures)/\(softLimit))"
+                        )
+                    }
+                    // Quiet for first blips — no banner/Voice kill on 1–2s hiccups.
+                    if consecutiveFailures >= 3 {
+                        beginReconnectBanner()
+                    }
+                    return
+                }
+            }
+
             if consecutiveFailures == 1 {
                 beginReconnectBanner()
             }
             // Hysteresis: require sustained LAN failure before Tailscale (avoids flip-flop).
-            if consecutiveFailures >= offlineFailureThreshold,
+            if !connectionPathLocked,
+               consecutiveFailures >= offlineFailureThreshold,
                activePath == .local,
                (autoUseRemote || remoteSessionApproved),
                !preferredRemoteHost.isEmpty {
@@ -874,25 +915,49 @@ final class ConnectionStore: ObservableObject {
                 }
             }
             if consecutiveFailures >= offlineFailureThreshold {
-                isOnline = false
-                beginReconnectBanner()
-                publishWidgetStatus()
-                await handleOfflinePathRecovery()
-                // Auto-diagnose so Settings/Diagnose show the real failure code.
-                Task {
-                    await ConnectionDiagnostics.shared.runFullProbe(connection: self)
-                    let snap = ConnectionDiagnostics.shared.snapshot
-                    if lastError == nil || (lastError?.contains("blockiert") == true) {
-                        lastError = snap.summary.isEmpty ? snap.failureCode.userMessage : snap.summary
+                // Voice lock: don't flip Offline→OFF on Island for a hiccup.
+                if !connectionPathLocked {
+                    isOnline = false
+                    beginReconnectBanner()
+                    publishWidgetStatus()
+                    await handleOfflinePathRecovery()
+                } else {
+                    beginReconnectBanner()
+                    // Re-assert same host without path flip.
+                    if activePath == .remote, !preferredRemoteHost.isEmpty {
+                        _ = await trySwitchToHost(preferredRemoteHost, path: .remote, allowWithoutPing: true)
+                    } else if !preferredLocalHost.isEmpty {
+                        _ = await trySwitchToHost(preferredLocalHost, path: .local)
+                    }
+                }
+                // Auto-diagnose throttled — avoid permanent "Connection Manager gestartet" loop.
+                let now = Date()
+                let allowProbe = lastAutoProbeAt.map { now.timeIntervalSince($0) > 60 } ?? true
+                if allowProbe, !connectionPathLocked {
+                    lastAutoProbeAt = now
+                    Task {
+                        await ConnectionDiagnostics.shared.runFullProbe(connection: self)
+                        let snap = ConnectionDiagnostics.shared.snapshot
+                        if snap.failureCode == .ok, snap.remoteReachable == true, self.activePath == .remote {
+                            // Probe proved remote is fine — restore online without flipping to local.
+                            self.isOnline = true
+                            self.consecutiveFailures = 0
+                            self.clearReconnectBanner(restored: true)
+                            return
+                        }
+                        if lastError == nil || (lastError?.contains("blockiert") == true) {
+                            lastError = snap.summary.isEmpty ? snap.failureCode.userMessage : snap.summary
+                        }
                     }
                 }
             }
             if let err = error as? CompanionAPIError {
                 let code = err.failureCode
-                ConnectionDiagnostics.shared.log("Status error: \(code.rawValue)")
                 // Replace stale generic ATS/HTTP-block copy with the classified message.
                 if case .failure(_, _) = err {
-                    lastError = err.localizedDescription
+                    if !code.isSoftTransient {
+                        lastError = err.localizedDescription
+                    }
                 } else if code == .httpNotAllowedByATS {
                     lastError = code.userMessage
                 } else if case .unauthorized = err {
@@ -1021,14 +1086,35 @@ final class ConnectionStore: ObservableObject {
     }
 
     private func handleOfflinePathRecovery() async {
-        // 1) If on remote, try local first (home return / better path).
-        if activePath == .remote, !preferredLocalHost.isEmpty {
-            if await trySwitchToHost(preferredLocalHost, path: .local) {
-                return
+        if connectionPathLocked {
+            // Voice session: re-assert current host only — never LOCAL↔REMOTE flip.
+            if activePath == .remote, !preferredRemoteHost.isEmpty {
+                _ = await trySwitchToHost(preferredRemoteHost, path: .remote, allowWithoutPing: true)
+            } else if !preferredLocalHost.isEmpty {
+                _ = await trySwitchToHost(preferredLocalHost, path: .local)
             }
+            return
         }
 
-        // 2) Local offline → Tailscale when auto-remote is on (or session already approved).
+        // Remote active: stay on remote unless local is actually reachable at home.
+        if activePath == .remote {
+            if !prefersRemotePath,
+               !preferredLocalHost.isEmpty,
+               await quickPing(host: preferredLocalHost),
+               await trySwitchToHost(preferredLocalHost, path: .local) {
+                return
+            }
+            if !preferredRemoteHost.isEmpty,
+               await trySwitchToHost(preferredRemoteHost, path: .remote, allowWithoutPing: true) {
+                pathStatusLine = "Tailscale Remote"
+                return
+            }
+            pathStatusLine = "Offline — Tailscale prüfen"
+            isOnline = false
+            return
+        }
+
+        // Local offline → Tailscale when auto-remote is on (or session already approved).
         if activePath == .local,
            (autoUseRemote || remoteSessionApproved),
            !preferredRemoteHost.isEmpty {
@@ -1067,6 +1153,8 @@ final class ConnectionStore: ObservableObject {
 
                 // Never leave a working local connection just because the path looks expensive.
                 if self.isOnline, self.activePath == .local { return }
+                // Voice session: freeze host path.
+                if self.connectionPathLocked { return }
 
                 guard self.prefersRemotePath,
                       self.isPaired,
@@ -1091,6 +1179,7 @@ final class ConnectionStore: ObservableObject {
     }
 
     private func maybeOfferOrSwitchToLocal() async {
+        guard !connectionPathLocked else { return }
         guard !preferredLocalHost.isEmpty else { return }
         // On cellular / no Wi‑Fi keep Tailscale — don't flip back to LAN IP.
         if prefersRemotePath { return }

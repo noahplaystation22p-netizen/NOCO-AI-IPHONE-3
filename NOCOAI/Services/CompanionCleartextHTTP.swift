@@ -29,9 +29,75 @@ enum CompanionCleartextHTTP {
         let url = try requireURL(request)
         let timeout = timeout ?? request.timeoutInterval
         let effectiveTimeout = timeout > 0 ? timeout : 45
-        let raw = try await perform(request: request, url: url, timeout: effectiveTimeout)
-        let http = try makeHTTPURLResponse(url: url, status: raw.statusCode, headers: raw.headers, body: raw.body)
-        return (raw.body, http)
+        // NWError-96 / empty STREAM is common on Tailscale — retry with backoff, keep session.
+        let delaysNs: [UInt64] = [280_000_000, 700_000_000, 1_400_000_000]
+        var lastError: Error?
+        for attempt in 0...delaysNs.count {
+            do {
+                let raw = try await perform(request: request, url: url, timeout: effectiveTimeout)
+                let http = try makeHTTPURLResponse(url: url, status: raw.statusCode, headers: raw.headers, body: raw.body)
+                if attempt > 0 {
+                    logStreamRecovered(url: url, attempt: attempt, status: raw.statusCode)
+                }
+                return (raw.body, http)
+            } catch {
+                lastError = error
+                let streamBlip = ConnectionFailureCode.isRemoteStreamInterrupted(error)
+                    || ConnectionFailureCode.classify(error) == .remoteStreamInterrupted
+                guard streamBlip, attempt < delaysNs.count else {
+                    if streamBlip {
+                        throw CompanionAPIError.failure(
+                            .remoteStreamInterrupted,
+                            detail: error.localizedDescription
+                        )
+                    }
+                    throw error
+                }
+                let delay = delaysNs[attempt]
+                logStreamInterrupted(
+                    url: url,
+                    request: request,
+                    attempt: attempt + 1,
+                    delayMs: Int(delay / 1_000_000),
+                    error: error
+                )
+                try? await Task.sleep(nanoseconds: delay)
+            }
+        }
+        throw lastError ?? CompanionAPIError.failure(.remoteStreamInterrupted, detail: nil)
+    }
+
+    private static func logStreamInterrupted(
+        url: URL,
+        request: URLRequest,
+        attempt: Int,
+        delayMs: Int,
+        error: Error
+    ) {
+        let host = url.host ?? "?"
+        let port = url.port ?? 4747
+        let path = url.path.isEmpty ? "/" : url.path
+        let stamp = ISO8601DateFormatter().string(from: Date())
+        Task { @MainActor in
+            let d = ConnectionDiagnostics.shared
+            d.log("REMOTE_STREAM_INTERRUPTED")
+            d.log("Host: \(host)")
+            d.log("Port: \(port)")
+            d.log("Request: \(request.httpMethod ?? "GET") \(path)")
+            d.log("Retry number: \(attempt)")
+            d.log("Retry delay: \(delayMs) ms")
+            d.log("timestamp: \(stamp)")
+            d.log("Detail: \(error.localizedDescription)")
+        }
+    }
+
+    private static func logStreamRecovered(url: URL, attempt: Int, status: Int) {
+        Task { @MainActor in
+            let d = ConnectionDiagnostics.shared
+            d.log("REMOTE_STREAM recovered after retry \(attempt)")
+            d.log("Host: \(url.host ?? "?")")
+            d.log("HTTP after retry: \(status)")
+        }
     }
 
     /// Streaming response as UTF-8 lines (SSE).
@@ -268,7 +334,14 @@ enum CompanionCleartextHTTP {
                 maximumLength: maximumLength
             ) { content, _, isComplete, error in
                 if let error {
-                    cont.resume(throwing: error)
+                    if ConnectionFailureCode.isRemoteStreamInterrupted(error) {
+                        cont.resume(throwing: CompanionAPIError.failure(
+                            .remoteStreamInterrupted,
+                            detail: error.localizedDescription
+                        ))
+                    } else {
+                        cont.resume(throwing: error)
+                    }
                     return
                 }
                 if let content {

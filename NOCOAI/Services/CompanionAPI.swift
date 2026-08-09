@@ -297,6 +297,9 @@ struct CompanionAPI {
             }
         }
         let ns = error as NSError
+        if ConnectionFailureCode.isRemoteStreamInterrupted(ns) {
+            return CompanionAPIError.failure(.remoteStreamInterrupted, detail: ns.localizedDescription)
+        }
         // Darwin / CFNetwork: POSIX EHOSTDOWN = 64 ("Host is down")
         if (ns.domain == NSPOSIXErrorDomain && ns.code == 64)
             || ns.code == 64
@@ -321,7 +324,8 @@ struct CompanionAPI {
             case .unreachable, .network: return true
             case .failure(let code, _):
                 switch code {
-                case .connectionTimeout, .serverUnreachable, .firewallOrNetworkBlock, .portUnreachable:
+                case .connectionTimeout, .serverUnreachable, .firewallOrNetworkBlock,
+                     .portUnreachable, .remoteStreamInterrupted, .noServerResponse:
                     return true
                 default:
                     return false
@@ -342,6 +346,7 @@ struct CompanionAPI {
                 return false
             }
         }
+        if ConnectionFailureCode.isRemoteStreamInterrupted(error) { return true }
         let ns = error as NSError
         return ns.domain == NSPOSIXErrorDomain && (ns.code == 64 || ns.code == 57 || ns.code == 54)
     }

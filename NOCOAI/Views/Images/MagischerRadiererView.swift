@@ -2,7 +2,7 @@ import PhotosUI
 import SwiftUI
 import UIKit
 
-/// Magischer AI-Radierer: Foto → bemalen → Standard „Entfernen“ oder eigene Anweisung → nur Maske ändert sich.
+/// Magischer AI-Radierer 2.0: Foto → Auto/Malen → Entfernen/Ersetzen → Theater → Vorher|Nachher.
 struct MagischerRadiererView: View {
     enum Preset: String, CaseIterable, Identifiable {
         case erase
@@ -27,11 +27,18 @@ struct MagischerRadiererView: View {
             }
         }
 
-        /// User-facing instruction (also drives SD prompt).
+        var intentMode: ImageAttachIntent.EraserMode {
+            switch self {
+            case .erase: return .erase
+            case .replace: return .replace
+            case .custom: return .custom
+            }
+        }
+
         var defaultText: String {
             switch self {
             case .erase: return "Entferne den markierten Bereich und fülle natürlich mit dem Hintergrund."
-            case .replace: return "Ersetze den markierten Bereich durch: "
+            case .replace: return ""
             case .custom: return ""
             }
         }
@@ -45,20 +52,27 @@ struct MagischerRadiererView: View {
     @State private var brushSize: CGFloat = 36
     @State private var selectTool: MaskSelectTool = .paint
     @State private var preset: Preset = .erase
+    @State private var quality: ImageGenMode = .think
     @State private var instruction = Preset.erase.defaultText
     @State private var isWorking = false
     @State private var workProgress: Double = 0
+    @State private var theaterStage = 0
     @State private var status = "Foto wählen · bemalen oder Antippen"
     @State private var resultImage: UIImage?
+    @State private var beforeImage: UIImage?
     @State private var canvas = MaskCanvasController()
     @State private var showLibrary = false
     @State private var revealResult = false
+    @State private var compareSplit: CGFloat = 1.0
+    @State private var showBefore = false
     @State private var maskPulse = false
     @State private var isPainting = false
     @State private var maskReady = false
     @State private var errorAlert: String?
     @State private var isAutoSelecting = false
     @State private var appear = false
+    @State private var historyTick = 0
+    @State private var workTask: Task<Void, Never>?
     @FocusState private var promptFocused: Bool
 
     var body: some View {
@@ -80,8 +94,8 @@ struct MagischerRadiererView: View {
                         .padding(.horizontal, 16)
                 }
 
-                if let resultImage {
-                    resultCard(resultImage)
+                if let resultImage, let before = beforeImage ?? sourceImage {
+                    resultCard(before: before, after: resultImage)
                         .padding(.horizontal, 16)
                 }
             }
@@ -116,8 +130,14 @@ struct MagischerRadiererView: View {
         }
         .overlay {
             if isWorking {
-                MagicEraserTheater(progress: workProgress, status: status)
-                    .transition(.opacity.combined(with: .scale(scale: 0.96)))
+                MagicEraserTheater(
+                    progress: workProgress,
+                    status: status,
+                    stage: theaterStage,
+                    preset: preset,
+                    onCancel: { Task { await cancelEraser() } }
+                )
+                .transition(.opacity.combined(with: .scale(scale: 0.96)))
             }
         }
         .animation(.spring(response: 0.45, dampingFraction: 0.82), value: isWorking)
@@ -132,6 +152,10 @@ struct MagischerRadiererView: View {
             withAnimation(.easeInOut(duration: 1.2).repeatForever(autoreverses: true)) {
                 maskPulse = true
             }
+        }
+        .onReceive(NotificationCenter.default.publisher(for: .nocoInpaintSoftReconnect)) { _ in
+            guard isWorking else { return }
+            status = "Verbindung kurz unterbrochen – Verarbeitung wird fortgesetzt…"
         }
         .onDisappear { connection.hideMainTabBar = false }
         .photosPicker(isPresented: $showLibrary, selection: $photoItem, matching: .images)
@@ -187,6 +211,7 @@ struct MagischerRadiererView: View {
                     },
                     onMaskChanged: { painted in
                         maskReady = painted
+                        historyTick &+= 1
                         if painted, selectTool == .auto {
                             status = "Objekt erkannt — Entfernen tippen"
                         }
@@ -196,57 +221,51 @@ struct MagischerRadiererView: View {
                         if busy { status = "Erkenne Kontur…" }
                     }
                 )
-                    .clipShape(RoundedRectangle(cornerRadius: 20, style: .continuous))
-                    .padding(8)
-                    .overlay {
-                        if isAutoSelecting {
-                            ZStack {
-                                RoundedRectangle(cornerRadius: 20, style: .continuous)
-                                    .fill(Color.black.opacity(0.18))
-                                NOCOVisionScanBeam()
-                                    .padding(20)
-                                NOCOIntelligenceCore(energy: .vision, size: .compact, systemImage: "eye")
-                                    .frame(width: 44, height: 44)
-                            }
+                .clipShape(RoundedRectangle(cornerRadius: 20, style: .continuous))
+                .padding(8)
+                .overlay {
+                    if maskReady && !isWorking {
+                        RoundedRectangle(cornerRadius: 20, style: .continuous)
+                            .stroke(
+                                AngularGradient(
+                                    colors: NOCORainbow.flow.map { $0.opacity(maskPulse ? 0.55 : 0.2) },
+                                    center: .center
+                                ),
+                                lineWidth: 1.5
+                            )
                             .padding(8)
                             .allowsHitTesting(false)
-                            .transition(.opacity)
-                        }
                     }
-                    .overlay {
-                        if maskReady {
-                            RoundedRectangle(cornerRadius: 20, style: .continuous)
-                                .stroke(
-                                    AngularGradient(
-                                        colors: NOCORainbow.flow.map { $0.opacity(maskPulse ? 0.85 : 0.45) },
-                                        center: .center
-                                    ),
-                                    lineWidth: 2.5
-                                )
-                                .padding(8)
-                                .allowsHitTesting(false)
-                        }
-                    }
+                }
             } else {
                 VStack(spacing: 14) {
-                    NOCOIntelligenceCore(energy: .idle, size: .medium, systemImage: "photo.on.rectangle.angled")
-                        .frame(height: 90)
+                    Image(systemName: "photo.on.rectangle.angled")
+                        .font(.system(size: 42, weight: .light))
+                        .foregroundStyle(NOCOAITheme.accent.opacity(0.85))
                     Text("Foto wählen")
-                        .font(.subheadline.weight(.semibold))
-                    Text("Dann den Bereich bemalen, den du ändern willst.")
+                        .font(.headline)
+                    Text("Dann bemalen oder Objekt antippen")
                         .font(.caption)
                         .foregroundStyle(.secondary)
-                        .multilineTextAlignment(.center)
                     Button {
-                        HapticService.open()
+                        HapticService.light()
                         showLibrary = true
                     } label: {
-                        Label("Galerie", systemImage: "photo.on.rectangle")
+                        Label("Foto wählen", systemImage: "photo")
                             .font(.subheadline.weight(.semibold))
-                            .padding(.horizontal, 16)
-                            .padding(.vertical, 10)
+                            .padding(.horizontal, 18)
+                            .padding(.vertical, 11)
+                            .background(
+                                LinearGradient(
+                                    colors: Array(NOCORainbow.flow.prefix(4)),
+                                    startPoint: .leading,
+                                    endPoint: .trailing
+                                ),
+                                in: Capsule()
+                            )
+                            .foregroundStyle(.white)
                     }
-                    .buttonStyle(IntelligencePrimaryPressStyle())
+                    .buttonStyle(IntelligencePressStyle())
                 }
                 .padding(36)
             }
@@ -275,9 +294,9 @@ struct MagischerRadiererView: View {
             .pickerStyle(.segmented)
             .onChange(of: preset) { _, p in
                 HapticService.selection()
-                if p != .custom {
+                if p == .erase {
                     instruction = p.defaultText
-                } else if instruction == Preset.erase.defaultText || instruction == Preset.replace.defaultText {
+                } else if instruction == Preset.erase.defaultText {
                     instruction = ""
                 }
                 if p == .custom || p == .replace { promptFocused = true }
@@ -295,6 +314,12 @@ struct MagischerRadiererView: View {
                     ? "Objekt antippen — Kontur wird erkannt"
                     : "Bereich bemalen"
             }
+
+            Picker("Qualität", selection: $quality) {
+                Text(ImageGenMode.flash.title).tag(ImageGenMode.flash)
+                Text(ImageGenMode.think.title).tag(ImageGenMode.think)
+            }
+            .pickerStyle(.segmented)
 
             HStack(spacing: 12) {
                 Image(systemName: selectTool == .auto ? "circle.dashed" : "paintbrush.pointed.fill")
@@ -325,19 +350,38 @@ struct MagischerRadiererView: View {
 
                 Button {
                     HapticService.soft()
-                    canvas.clear()
-                    maskReady = false
-                    status = selectTool == .auto ? "Objekt antippen" : "Bereich bemalen"
+                    canvas.undo()
+                    historyTick &+= 1
+                    maskReady = canvas.hasPaint
+                    status = canvas.hasPaint ? "Maske angepasst" : (selectTool == .auto ? "Objekt antippen" : "Bereich bemalen")
                 } label: {
-                    Label("Maske löschen", systemImage: "trash")
+                    Label("Rückgängig", systemImage: "arrow.uturn.backward")
                         .font(.subheadline.weight(.semibold))
                         .frame(maxWidth: .infinity)
                         .padding(.vertical, 11)
                         .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
                 }
                 .buttonStyle(IntelligencePressStyle())
-                .disabled(sourceImage == nil || isWorking || isAutoSelecting)
+                .disabled(!canvas.canUndo || isWorking || isAutoSelecting)
+                .opacity(canvas.canUndo ? 1 : 0.45)
+
+                Button {
+                    HapticService.soft()
+                    canvas.redo()
+                    historyTick &+= 1
+                    maskReady = canvas.hasPaint
+                } label: {
+                    Label("Wiederholen", systemImage: "arrow.uturn.forward")
+                        .font(.subheadline.weight(.semibold))
+                        .frame(maxWidth: .infinity)
+                        .padding(.vertical, 11)
+                        .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+                }
+                .buttonStyle(IntelligencePressStyle())
+                .disabled(!canvas.canRedo || isWorking || isAutoSelecting)
+                .opacity(canvas.canRedo ? 1 : 0.45)
             }
+            .id(historyTick)
         }
     }
 
@@ -365,7 +409,7 @@ struct MagischerRadiererView: View {
 
     private var actionButtons: some View {
         Button {
-            Task { await runEraser() }
+            workTask = Task { await runEraser() }
         } label: {
             HStack(spacing: 10) {
                 Image(systemName: "wand.and.stars")
@@ -386,21 +430,49 @@ struct MagischerRadiererView: View {
             .foregroundStyle(.white)
         }
         .buttonStyle(IntelligencePrimaryPressStyle(haptic: { HapticService.medium() }))
-        .disabled(isWorking || sourceImage == nil || effectivePrompt.isEmpty || !maskReady)
+        .disabled(isWorking || sourceImage == nil || !canApply || !maskReady)
         .opacity(sourceImage == nil || !maskReady ? 0.5 : 1)
     }
 
-    private var effectivePrompt: String {
-        instruction.trimmingCharacters(in: .whitespacesAndNewlines)
+    private var canApply: Bool {
+        if preset == .replace {
+            return !instruction.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+        }
+        if preset == .custom {
+            return !instruction.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+        }
+        return true
     }
 
-    private func resultCard(_ image: UIImage) -> some View {
+    private var effectivePrompt: String {
+        let trimmed = instruction.trimmingCharacters(in: .whitespacesAndNewlines)
+        if preset == .erase && trimmed.isEmpty {
+            return Preset.erase.defaultText
+        }
+        return trimmed
+    }
+
+    private func resultCard(before: UIImage, after: UIImage) -> some View {
         VStack(alignment: .leading, spacing: 10) {
-            Text("Ergebnis")
-                .font(.subheadline.weight(.semibold))
-            Image(uiImage: image)
-                .resizable()
-                .scaledToFit()
+            HStack {
+                Text("Ergebnis")
+                    .font(.subheadline.weight(.semibold))
+                Spacer()
+                Picker("Vergleich", selection: $showBefore) {
+                    Text("Nachher").tag(false)
+                    Text("Vorher").tag(true)
+                }
+                .pickerStyle(.segmented)
+                .frame(maxWidth: 180)
+                .onChange(of: showBefore) { _, show in
+                    withAnimation(.easeInOut(duration: 0.25)) {
+                        compareSplit = show ? 0 : 1
+                    }
+                }
+            }
+
+            BeforeAfterWipe(before: before, after: after, split: $compareSplit)
+                .frame(minHeight: 220)
                 .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
                 .overlay(
                     RoundedRectangle(cornerRadius: 16, style: .continuous)
@@ -415,14 +487,24 @@ struct MagischerRadiererView: View {
                 .blur(radius: revealResult ? 0 : 12)
                 .animation(.spring(response: 0.6, dampingFraction: 0.8), value: revealResult)
 
+            VStack(alignment: .leading, spacing: 6) {
+                Text("Vergleich ziehen")
+                    .font(.caption2)
+                    .foregroundStyle(.secondary)
+                Slider(value: $compareSplit, in: 0...1)
+                    .tint(NOCOAITheme.accent)
+            }
+
             HStack(spacing: 10) {
                 Button {
                     withAnimation(.spring(response: 0.4, dampingFraction: 0.84)) {
-                        sourceImage = image
+                        sourceImage = after
                         resultImage = nil
+                        beforeImage = nil
                         revealResult = false
                         maskReady = false
                         canvas.clear()
+                        historyTick &+= 1
                         status = "Weiter bearbeiten — neu bemalen"
                     }
                     HapticService.open()
@@ -435,7 +517,7 @@ struct MagischerRadiererView: View {
                 .buttonStyle(IntelligencePressStyle())
 
                 Button {
-                    UIImageWriteToSavedPhotosAlbum(image, nil, nil, nil)
+                    UIImageWriteToSavedPhotosAlbum(after, nil, nil, nil)
                     HapticService.success()
                     status = "In Fotos gespeichert"
                 } label: {
@@ -456,9 +538,11 @@ struct MagischerRadiererView: View {
            let ui = UIImage(data: data) {
             sourceImage = ui
             resultImage = nil
+            beforeImage = nil
             revealResult = false
             maskReady = false
             canvas.clear()
+            historyTick &+= 1
             status = "Bereich bemalen"
             HapticService.success()
         } else {
@@ -490,6 +574,18 @@ struct MagischerRadiererView: View {
             .trimmingCharacters(in: .whitespacesAndNewlines)
     }
 
+    private func cancelEraser() async {
+        workTask?.cancel()
+        try? await connection.images.apiInterrupt()
+        isWorking = false
+        workProgress = 0
+        theaterStage = 0
+        status = "Abgebrochen"
+        ImageLiveActivityManager.fail("Abgebrochen")
+        ImageBackgroundKeeper.shared.end(preserveAudioSession: true)
+        HapticService.warning()
+    }
+
     private func runEraser() async {
         guard let sourceImage else {
             presentError("Kein Foto")
@@ -500,7 +596,12 @@ struct MagischerRadiererView: View {
             return
         }
         let prompt = effectivePrompt
-        guard !prompt.isEmpty else { return }
+        guard !prompt.isEmpty else {
+            if preset == .replace {
+                presentError("Bitte angeben, wodurch ersetzt werden soll")
+            }
+            return
+        }
 
         guard maskReady, canvas.hasPaint,
               canvas.exportMaskPNG(matching: sourceImage) != nil else {
@@ -509,40 +610,61 @@ struct MagischerRadiererView: View {
             return
         }
 
-        let working = sourceImage.resizedToFit(maxSide: 768)
+        let sizeInfo = ImageAttachIntent.inpaintSize(for: sourceImage.size, quality: quality)
+        let working = sourceImage.resizedToFit(maxSide: CGFloat(max(sizeInfo.width, sizeInfo.height)))
         guard let jpeg = working.jpegData(compressionQuality: 0.9),
               let maskForSD = canvas.exportMaskPNG(matching: working) else {
             presentError("Maske konnte nicht exportiert werden — nochmal bemalen")
             return
         }
 
+        let mode = preset.intentMode
+        let sdPrompt = ImageAttachIntent.editPrompt(from: prompt, mode: mode)
+        let denoise = ImageAttachIntent.denoising(for: prompt, mode: mode, quality: quality)
+        let steps = ImageAttachIntent.inpaintSteps(mode: mode, quality: quality)
+        let dims = ImageAttachIntent.inpaintSize(for: working.size, quality: quality)
+
+        beforeImage = sourceImage
         isWorking = true
-        workProgress = 0.08
+        workProgress = 0.06
+        theaterStage = 0
         promptFocused = false
-        status = "Nur Maske wird bearbeitet…"
+        showBefore = false
+        compareSplit = 1
+        status = "NOCO analysiert…"
         HapticService.medium()
 
         _ = await AppNotificationService.requestAuthorizationIfNeeded()
         ImageBackgroundKeeper.shared.begin(reason: "NOCO Magischer Radierer")
         ImageLiveActivityManager.start(prompt: "🪄 \(prompt)", owner: .eraser)
         ImageLiveActivityManager.update(
-            progress: 0.08,
-            status: "Radierer startet…",
+            progress: 0.06,
+            status: "NOCO analysiert…",
             insight: "PC bereitet Stable Diffusion vor…",
-            etaSeconds: 180,
+            etaSeconds: quality == .flash ? 90 : 180,
             phase: .preparing,
             force: true
         )
 
         let progressTask = Task {
             var waitedAtHold = 0
+            var softNoteShown = false
             while !Task.isCancelled {
                 try? await Task.sleep(nanoseconds: 320_000_000)
                 let real = await connection.images.peekProgress()
                 await MainActor.run {
                     if real > 0.05 {
                         workProgress = max(workProgress, min(0.97, 0.2 + real * 0.75))
-                        status = real < 0.9 ? "Stable Diffusion zeichnet…" : "Fast fertig…"
+                        if workProgress < 0.45 {
+                            theaterStage = 1
+                            status = preset == .erase ? "Objekt wird entfernt…" : "Objekt wird ersetzt…"
+                        } else if workProgress < 0.85 {
+                            theaterStage = 2
+                            status = "Details werden rekonstruiert…"
+                        } else {
+                            theaterStage = 3
+                            status = "Fast fertig…"
+                        }
                         ImageLiveActivityManager.update(
                             progress: workProgress,
                             status: status,
@@ -555,28 +677,37 @@ struct MagischerRadiererView: View {
                     }
                     if workProgress < 0.88 {
                         workProgress = min(0.88, workProgress + Double.random(in: 0.02...0.045))
-                        if workProgress < 0.28 {
-                            status = "Bilder-Engine prüfen…"
+                        if workProgress < 0.22 {
+                            theaterStage = 0
+                            status = "NOCO analysiert…"
                         } else if workProgress < 0.55 {
-                            status = preset == .erase ? "Entfernen…" : "Magie…"
+                            theaterStage = 1
+                            status = preset == .erase ? "Objekt wird entfernt…" : "Objekt wird ersetzt…"
                         } else {
-                            status = "Detail neu zeichnen…"
+                            theaterStage = 2
+                            status = "Details werden rekonstruiert…"
                         }
                         ImageLiveActivityManager.update(
                             progress: workProgress,
                             status: status,
                             insight: "Engine kann 1–2 Min brauchen",
-                            etaSeconds: 150,
+                            etaSeconds: quality == .flash ? 90 : 150,
                             phase: workProgress < 0.35 ? .preparing : .rendering,
                             force: false
                         )
                     } else {
                         waitedAtHold += 1
                         workProgress = min(0.97, workProgress + 0.003)
+                        theaterStage = 2
                         if waitedAtHold < 40 {
-                            status = "PC arbeitet noch… bitte warten"
+                            status = "Details werden rekonstruiert…"
                         } else if waitedAtHold < 90 {
-                            status = "Immer noch am PC — oft kalter SD-Start (1–2 Min)"
+                            if !softNoteShown {
+                                softNoteShown = true
+                                status = "Verbindung kurz unterbrochen – Verarbeitung wird fortgesetzt…"
+                            } else {
+                                status = "PC arbeitet noch… bitte warten"
+                            }
                         } else {
                             status = "Lange Wartezeit — bitte kurz warten oder Verbindung prüfen"
                         }
@@ -593,48 +724,62 @@ struct MagischerRadiererView: View {
             }
         }
 
-        let sdPrompt = ImageAttachIntent.editPrompt(from: prompt)
-        let denoise = ImageAttachIntent.denoising(for: prompt)
-
         do {
             if connection.status.stableDiffusion != true {
-                status = "Bilder-Engine startet zuerst…"
-                workProgress = max(workProgress, 0.15)
+                status = "NOCO analysiert…"
+                theaterStage = 0
+                workProgress = max(workProgress, 0.12)
                 _ = await connection.images.prepareEngine()
                 await connection.refreshStatus(showLoading: false)
             }
+
+            try Task.checkCancellation()
 
             let result = try await connection.images.runInpaint(
                 prompt: sdPrompt,
                 imageJPEG: jpeg,
                 maskPNG: maskForSD,
-                denoisingStrength: denoise
+                denoisingStrength: denoise,
+                steps: steps,
+                width: dims.width,
+                height: dims.height,
+                mode: mode.rawValue,
+                quality: quality
             )
             progressTask.cancel()
+            try Task.checkCancellation()
             workProgress = 1
+            theaterStage = 3
             status = "Fertig"
+
+            func finishWith(_ ui: UIImage, data: Data, path: String?) {
+                withAnimation(.spring(response: 0.55, dampingFraction: 0.82)) {
+                    isWorking = false
+                    resultImage = ui
+                    compareSplit = 1
+                    showBefore = false
+                }
+                withAnimation(.spring(response: 0.6, dampingFraction: 0.78).delay(0.05)) {
+                    revealResult = true
+                }
+                status = "Fertig"
+                HapticService.success()
+                connection.images.ingestEditedImage(
+                    prompt: prompt,
+                    localData: data,
+                    path: path
+                )
+                ImageLiveActivityManager.complete(prompt: "🪄 \(prompt)")
+            }
+
             if let b64 = result.imageBase64 {
                 let cleaned = b64
                     .replacingOccurrences(of: "\n", with: "")
                     .replacingOccurrences(of: "data:image/png;base64,", with: "")
                     .replacingOccurrences(of: "data:image/jpeg;base64,", with: "")
                 if let data = Data(base64Encoded: cleaned), let ui = UIImage(data: data) {
-                    try? await Task.sleep(nanoseconds: 320_000_000)
-                    withAnimation(.spring(response: 0.55, dampingFraction: 0.82)) {
-                        isWorking = false
-                        resultImage = ui
-                    }
-                    withAnimation(.spring(response: 0.6, dampingFraction: 0.78).delay(0.05)) {
-                        revealResult = true
-                    }
-                    status = "Fertig ✨"
-                    HapticService.success()
-                    connection.images.ingestEditedImage(
-                        prompt: prompt,
-                        localData: data,
-                        path: result.resolvedPath
-                    )
-                    ImageLiveActivityManager.complete(prompt: "🪄 \(prompt)")
+                    try? await Task.sleep(nanoseconds: 280_000_000)
+                    finishWith(ui, data: data, path: result.resolvedPath)
                     await AppNotificationService.notifyEraserReady(prompt: prompt)
                     ImageBackgroundKeeper.shared.end(preserveAudioSession: true)
                 } else {
@@ -646,26 +791,11 @@ struct MagischerRadiererView: View {
                     HapticService.error()
                 }
             } else if let path = result.resolvedPath, let url = connection.images.mediaURL(for: path) {
-                // Path-only success — download bytes so result canvas is filled.
                 do {
                     let (data, _) = try await URLSession.shared.data(from: url)
                     if let ui = UIImage(data: data) {
-                        try? await Task.sleep(nanoseconds: 320_000_000)
-                        withAnimation(.spring(response: 0.55, dampingFraction: 0.82)) {
-                            isWorking = false
-                            resultImage = ui
-                        }
-                        withAnimation(.spring(response: 0.6, dampingFraction: 0.78).delay(0.05)) {
-                            revealResult = true
-                        }
-                        status = "Fertig ✨"
-                        HapticService.success()
-                        connection.images.ingestEditedImage(
-                            prompt: prompt,
-                            localData: data,
-                            path: path
-                        )
-                        ImageLiveActivityManager.complete(prompt: "🪄 \(prompt)")
+                        try? await Task.sleep(nanoseconds: 280_000_000)
+                        finishWith(ui, data: data, path: path)
                         await AppNotificationService.notifyEraserReady(prompt: prompt)
                         ImageBackgroundKeeper.shared.end(preserveAudioSession: true)
                     } else {
@@ -692,9 +822,19 @@ struct MagischerRadiererView: View {
                 presentError("Keine Bilddaten vom PC")
                 HapticService.error()
             }
+        } catch is CancellationError {
+            progressTask.cancel()
+            isWorking = false
+            status = "Abgebrochen"
+            ImageLiveActivityManager.fail("Abgebrochen")
+            ImageBackgroundKeeper.shared.end(preserveAudioSession: true)
         } catch {
             progressTask.cancel()
             isWorking = false
+            let mapped = error
+            if CompanionAPI.isTransient(mapped) {
+                status = "Verbindung kurz unterbrochen – Verarbeitung wird fortgesetzt…"
+            }
             let msg = (error as? LocalizedError)?.errorDescription ?? error.localizedDescription
             ImageLiveActivityManager.fail(msg)
             await AppNotificationService.notifyImageFailed(msg)
@@ -705,16 +845,74 @@ struct MagischerRadiererView: View {
     }
 }
 
+// MARK: - Before / After wipe
+
+private struct BeforeAfterWipe: View {
+    let before: UIImage
+    let after: UIImage
+    @Binding var split: CGFloat
+
+    var body: some View {
+        GeometryReader { geo in
+            let w = geo.size.width
+            let h = geo.size.height
+            let cut = max(0, min(1, split)) * w
+            ZStack(alignment: .leading) {
+                Image(uiImage: before)
+                    .resizable()
+                    .scaledToFit()
+                    .frame(width: w, height: h)
+
+                Image(uiImage: after)
+                    .resizable()
+                    .scaledToFit()
+                    .frame(width: w, height: h)
+                    .mask(
+                        HStack(spacing: 0) {
+                            Rectangle().frame(width: cut)
+                            Spacer(minLength: 0)
+                        }
+                    )
+
+                Rectangle()
+                    .fill(Color.white.opacity(0.9))
+                    .frame(width: 2, height: h)
+                    .offset(x: cut - 1)
+                    .shadow(color: .black.opacity(0.35), radius: 2)
+            }
+        }
+        .aspectRatio(
+            after.size.width > 0 && after.size.height > 0
+                ? after.size.width / after.size.height
+                : 1,
+            contentMode: .fit
+        )
+    }
+}
+
 // MARK: - Rainbow Intelligence eraser theater
 
 private struct MagicEraserTheater: View {
     var progress: Double
     var status: String
+    var stage: Int
+    var preset: MagischerRadiererView.Preset
+    var onCancel: () -> Void
 
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var pulse = false
+    @State private var glow = false
 
     private var pct: Int { Int((min(max(progress, 0), 1) * 100).rounded()) }
+
+    private var stageLabel: String {
+        switch stage {
+        case 0: return "NOCO analysiert…"
+        case 1: return preset == .erase ? "Objekt wird entfernt…" : "Objekt wird ersetzt…"
+        case 2: return "Details werden rekonstruiert…"
+        default: return "Fast fertig…"
+        }
+    }
 
     var body: some View {
         ZStack {
@@ -729,6 +927,16 @@ private struct MagicEraserTheater: View {
 
             VStack(spacing: 20) {
                 ZStack {
+                    Circle()
+                        .stroke(
+                            AngularGradient(colors: NOCORainbow.flow, center: .center),
+                            lineWidth: 3
+                        )
+                        .frame(width: 168, height: 168)
+                        .blur(radius: glow ? 10 : 2)
+                        .opacity(glow ? 0.85 : 0.45)
+                        .scaleEffect(glow ? 1.08 : 0.96)
+
                     NOCOIntelligenceCore(
                         energy: .working,
                         size: .hero,
@@ -749,13 +957,26 @@ private struct MagicEraserTheater: View {
                         .foregroundStyle(.white.opacity(0.55))
                         .textCase(.uppercase)
                         .tracking(1.1)
-                    Text(status)
+                    Text(status.isEmpty ? stageLabel : status)
                         .font(.subheadline.weight(.semibold))
                         .foregroundStyle(.white.opacity(0.95))
                         .multilineTextAlignment(.center)
+                        .contentTransition(.opacity)
                     NOCORainbowFlowLine(height: 2)
                         .frame(maxWidth: 180)
                         .padding(.top, 4)
+
+                    Button(role: .cancel) {
+                        onCancel()
+                    } label: {
+                        Text("Abbrechen")
+                            .font(.subheadline.weight(.semibold))
+                            .foregroundStyle(.white.opacity(0.9))
+                            .padding(.horizontal, 22)
+                            .padding(.vertical, 10)
+                            .background(.white.opacity(0.12), in: Capsule())
+                    }
+                    .padding(.top, 8)
                 }
                 .padding(.horizontal, 28)
                 .padding(.vertical, 18)
@@ -771,6 +992,7 @@ private struct MagicEraserTheater: View {
         .onAppear {
             guard !reduceMotion else { return }
             withAnimation(.easeInOut(duration: 1.4).repeatForever(autoreverses: true)) { pulse = true }
+            withAnimation(.easeInOut(duration: 1.1).repeatForever(autoreverses: true)) { glow = true }
             HapticService.medium()
         }
     }
@@ -786,7 +1008,7 @@ enum MaskSelectTool: String, CaseIterable, Identifiable {
 
     var title: String {
         switch self {
-        case .paint: return "Pinsel"
+        case .paint: return "Malen"
         case .auto: return "Auto"
         }
     }
@@ -802,9 +1024,21 @@ enum MaskSelectTool: String, CaseIterable, Identifiable {
 final class MaskCanvasController: ObservableObject {
     weak var drawView: MaskDrawView?
     var hasPaint: Bool { drawView?.hasPaint == true }
+    var canUndo: Bool { drawView?.canUndo == true }
+    var canRedo: Bool { drawView?.canRedo == true }
 
     func clear() {
         drawView?.clear()
+        objectWillChange.send()
+    }
+
+    func undo() {
+        drawView?.undo()
+        objectWillChange.send()
+    }
+
+    func redo() {
+        drawView?.redo()
         objectWillChange.send()
     }
 
@@ -861,7 +1095,11 @@ final class MaskDrawView: UIView {
     private var maskLayer = CAShapeLayer()
     private var cursorLayer = CAShapeLayer()
     private var path = UIBezierPath()
+    private var undoStack: [UIBezierPath] = []
+    private var redoStack: [UIBezierPath] = []
     private(set) var hasPaint = false
+    var canUndo: Bool { !undoStack.isEmpty }
+    var canRedo: Bool { !redoStack.isEmpty }
     var brushSize: CGFloat = 36 {
         didSet { updateCursor() }
     }
@@ -878,6 +1116,7 @@ final class MaskDrawView: UIView {
     private var strokeSamples = 0
     private var lastTouch: CGPoint = .zero
     private var autoTask: Task<Void, Never>?
+    private var strokeSnapshotTaken = false
 
     init(image: UIImage) {
         self.baseImage = image
@@ -909,12 +1148,48 @@ final class MaskDrawView: UIView {
 
     func clear() {
         autoTask?.cancel()
+        if hasPaint || !(path.cgPath.isEmpty) {
+            pushUndoIfNeeded()
+        }
         path = UIBezierPath()
         maskLayer.path = nil
         hasPaint = false
         strokeSamples = 0
         onMaskChanged?(false)
         updateCursor()
+    }
+
+    func undo() {
+        guard let previous = undoStack.popLast() else { return }
+        redoStack.append(copyPath(path))
+        applyPath(previous)
+    }
+
+    func redo() {
+        guard let next = redoStack.popLast() else { return }
+        undoStack.append(copyPath(path))
+        applyPath(next)
+    }
+
+    private func copyPath(_ source: UIBezierPath) -> UIBezierPath {
+        (source.copy() as? UIBezierPath) ?? UIBezierPath()
+    }
+
+    private func pushUndoIfNeeded() {
+        undoStack.append(copyPath(path))
+        if undoStack.count > 40 { undoStack.removeFirst() }
+        redoStack.removeAll()
+    }
+
+    private func applyPath(_ next: UIBezierPath) {
+        path = next
+        let empty = path.bounds.isEmpty && path.isEmpty
+        // UIBezierPath.isEmpty is true for empty path; also check CGPath element count via bounds
+        hasPaint = !(path.cgPath.isEmpty)
+        maskLayer.path = hasPaint ? path.cgPath : nil
+        maskLayer.lineWidth = brushSize
+        onMaskChanged?(hasPaint)
+        _ = empty
     }
 
     override func draw(_ rect: CGRect) {
@@ -987,6 +1262,9 @@ final class MaskDrawView: UIView {
 
         setParentScrollEnabled(false)
         strokeSamples = 0
+        strokeSnapshotTaken = false
+        pushUndoIfNeeded()
+        strokeSnapshotTaken = true
         path.move(to: p)
         path.lineWidth = brushSize
         advanceRainbowStroke()
@@ -1024,6 +1302,7 @@ final class MaskDrawView: UIView {
             maskLayer.lineWidth = brushSize
             markPainted()
         }
+        onMaskChanged?(hasPaint)
     }
 
     override func touchesCancelled(_ touches: Set<UITouch>, with event: UIEvent?) {
@@ -1051,11 +1330,13 @@ final class MaskDrawView: UIView {
                     HapticService.warning()
                     return
                 }
+                self.pushUndoIfNeeded()
                 self.advanceRainbowStroke()
                 self.path.append(region)
                 self.maskLayer.path = self.path.cgPath
                 self.maskLayer.lineWidth = max(2, self.brushSize * 0.15)
                 self.markPainted()
+                self.onMaskChanged?(true)
                 HapticService.success()
             }
         }
@@ -1136,7 +1417,7 @@ enum MaskAutoSelect {
         }
 
         let seed = sample(sx, sy)
-        // Local variance → adaptive tolerance (busy textures get a bit more slack).
+        // Local variance ??? adaptive tolerance (busy textures get a bit more slack).
         var varSum = 0
         var varCount = 0
         for dy in -2...2 {
@@ -1163,7 +1444,7 @@ enum MaskAutoSelect {
             let dr = abs(c.r - seed.r)
             let dg = abs(c.g - seed.g)
             let db = abs(c.b - seed.b)
-            // Weighted RGB — green/luma edges stay sharper.
+            // Weighted RGB ??? green/luma edges stay sharper.
             let dist = dr * 2 + dg * 4 + db
             guard dist <= tol * 5 else { continue }
             filled.append((x, y))

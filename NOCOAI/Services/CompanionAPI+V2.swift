@@ -407,7 +407,12 @@ extension CompanionAPI {
         maskPNG: Data,
         conversationId: String?,
         denoisingStrength: Double = 0.82,
-        steps: Int = 14
+        steps: Int = 14,
+        width: Int = 512,
+        height: Int = 512,
+        mode: String = "erase",
+        quality: String = "think",
+        refine: Bool = true
     ) async throws -> ImageGenerateResponse {
         struct Body: Encodable {
             let prompt: String
@@ -418,44 +423,63 @@ extension CompanionAPI {
             let height: Int
             let steps: Int
             let denoisingStrength: Double
+            let mode: String
+            let quality: String
+            let refine: Bool
         }
+        let w = max(64, min(1024, (width / 64) * 64))
+        let h = max(64, min(1024, (height / 64) * 64))
         let body = Body(
             prompt: prompt,
             imageBase64: imageJPEG.base64EncodedString(),
             maskBase64: maskPNG.base64EncodedString(),
             conversationId: conversationId,
-            width: 512,
-            height: 512,
+            width: w,
+            height: h,
             steps: steps,
-            denoisingStrength: denoisingStrength
+            denoisingStrength: denoisingStrength,
+            mode: mode,
+            quality: quality,
+            refine: refine
         )
         guard !body.imageBase64.isEmpty, !body.maskBase64.isEmpty, !prompt.isEmpty else {
             throw CompanionAPIError.server("Bild/Maske leer — erneut bemalen und tippen")
         }
-        // Encoder uses snake_case globally — companion accepts both.
+        // Soft reconnect: long SD jobs can drop the stream while the PC keeps working.
+        let maxAttempts = 3
         var lastError: Error?
-        for path in ["images/inpaint", "images/erase", "images/magic-erase", "inpaint"] {
-            do {
-                var request = try authorizedRequest(path: path, method: "POST")
-                request.setValue("application/json", forHTTPHeaderField: "Content-Type")
-                request.timeoutInterval = 480
-                request.httpBody = try encoder.encode(body)
-                let (data, response) = try await loadData(for: request)
-                try validate(response: response, data: data, isPairRequest: false)
-                return try decoder.decode(ImageGenerateResponse.self, from: data)
-            } catch {
-                lastError = error
-                let msg = (error as? LocalizedError)?.errorDescription?.lowercased() ?? ""
-                if msg.contains("unbekannte") || msg.contains("route") || msg.contains("404") {
-                    continue
+        for attempt in 0..<maxAttempts {
+            for path in ["images/inpaint", "images/erase", "images/magic-erase", "inpaint"] {
+                do {
+                    var request = try authorizedRequest(path: path, method: "POST")
+                    request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+                    request.timeoutInterval = 480
+                    request.httpBody = try encoder.encode(body)
+                    let (data, response) = try await loadData(for: request)
+                    try validate(response: response, data: data, isPairRequest: false)
+                    return try decoder.decode(ImageGenerateResponse.self, from: data)
+                } catch {
+                    lastError = error
+                    let msg = (error as? LocalizedError)?.errorDescription?.lowercased() ?? ""
+                    if msg.contains("unbekannte") || msg.contains("route") || msg.contains("404") {
+                        continue
+                    }
+                    if msg.contains("fehlen") || msg.contains("base64") {
+                        throw CompanionAPIError.server(
+                            "Radierer: Companion erwartet Bild+Maske — NOCO AI X neu starten (snake_case Fix)"
+                        )
+                    }
+                    let mapped = mapNetworkError(error)
+                    if Self.isTransient(mapped), attempt + 1 < maxAttempts {
+                        NotificationCenter.default.post(
+                            name: .nocoInpaintSoftReconnect,
+                            object: nil
+                        )
+                        try? await Task.sleep(nanoseconds: UInt64(attempt + 1) * 1_600_000_000)
+                        break // outer attempt retry — same host, do not drop job silently
+                    }
+                    throw mapped
                 }
-                // Retry next alias only for missing-route; payload errors stop immediately
-                if msg.contains("fehlen") || msg.contains("base64") {
-                    throw CompanionAPIError.server(
-                        "Radierer: Companion erwartet Bild+Maske — NOCO AI X neu starten (snake_case Fix)"
-                    )
-                }
-                throw error
             }
         }
         throw lastError ?? CompanionAPIError.server("Inpaint fehlgeschlagen — Companion neu starten")

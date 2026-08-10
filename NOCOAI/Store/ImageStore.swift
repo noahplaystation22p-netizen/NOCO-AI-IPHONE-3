@@ -273,6 +273,11 @@ final class ImageStore: ObservableObject {
         statusText = "Abgebrochen"
     }
 
+    /// Interrupt SD job without requiring ImageStore.generate state (Magic Eraser).
+    func apiInterrupt() async {
+        try? await api?.interruptImage()
+    }
+
     /// Magischer Radierer result → gallery.
     func ingestEditedImage(prompt: String, localData: Data, path: String?) {
         let url = media?.url(for: path)
@@ -324,18 +329,31 @@ final class ImageStore: ObservableObject {
         prompt: String,
         imageJPEG: Data,
         maskPNG: Data,
-        denoisingStrength: Double = 0.82
+        denoisingStrength: Double = 0.82,
+        steps: Int? = nil,
+        width: Int = 512,
+        height: Int = 512,
+        mode: String = "erase",
+        quality: ImageGenMode = .think
     ) async throws -> ImageGenerateResponse {
         guard let api else {
             throw CompanionAPIError.unreachable
         }
+        let resolvedQuality = quality == .auto ? ImageGenMode.think : quality
+        let qualityWire = resolvedQuality == .flash ? "flash" : "think"
+        let stepCount = steps ?? (resolvedQuality == .flash ? 18 : 28)
         return try await api.inpaintImage(
             prompt: prompt,
             imageJPEG: imageJPEG,
             maskPNG: maskPNG,
             conversationId: nil,
             denoisingStrength: denoisingStrength,
-            steps: denoisingStrength >= 0.7 ? 16 : 12
+            steps: stepCount,
+            width: width,
+            height: height,
+            mode: mode,
+            quality: qualityWire,
+            refine: resolvedQuality != .flash
         )
     }
 

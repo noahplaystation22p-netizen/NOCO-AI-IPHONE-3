@@ -64,6 +64,7 @@ extension Notification.Name {
     static let nocoOpenImages = Notification.Name("nocoai.openImages")
     static let nocoOpenAgent = Notification.Name("nocoai.openAgent")
     static let nocoQuickAction = Notification.Name("nocoai.quickAction")
+    static let nocoInpaintSoftReconnect = Notification.Name("nocoai.inpaintSoftReconnect")
 }
 
 @main

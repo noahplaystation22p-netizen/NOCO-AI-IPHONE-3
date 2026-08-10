@@ -1,12 +1,55 @@
 import SwiftUI
 
+/// Unified connection badge — Online / Remote / Connecting / Reconnecting / Offline
+enum ConnectionVisualState: Equatable {
+    case online
+    case remote
+    case connecting
+    case reconnecting
+    case offline
+
+    var label: String {
+        switch self {
+        case .online: return "Online"
+        case .remote: return "Remote"
+        case .connecting: return "Connecting"
+        case .reconnecting: return "Reconnecting"
+        case .offline: return "Offline"
+        }
+    }
+
+    var isAlive: Bool {
+        self != .offline
+    }
+}
+
 struct StatusBadge: View {
-    let online: Bool
-    let label: String
-    /// Optional freshness hint, e.g. "gerade eben" / "vor 12s"
+    let state: ConnectionVisualState
     var detail: String? = nil
 
+    /// Backward-compatible initializer used by older call sites.
+    init(online: Bool, label: String, detail: String? = nil) {
+        if !online {
+            self.state = .offline
+        } else if label.lowercased().contains("remote") {
+            self.state = .remote
+        } else if label.lowercased().contains("reconnect") {
+            self.state = .reconnecting
+        } else if label.lowercased().contains("connect") {
+            self.state = .connecting
+        } else {
+            self.state = .online
+        }
+        self.detail = detail
+    }
+
+    init(state: ConnectionVisualState, detail: String? = nil) {
+        self.state = state
+        self.detail = detail
+    }
+
     var body: some View {
+        let online = state.isAlive
         TimelineView(.animation(minimumInterval: online ? 0.12 : 1.0, paused: !online)) { timeline in
             let t = timeline.date.timeIntervalSinceReferenceDate
             let spin = (t.truncatingRemainder(dividingBy: 5.5) / 5.5) * 360
@@ -18,8 +61,17 @@ struct StatusBadge: View {
                 Color(red: 0.58, green: 0.45, blue: 1.0),
                 Color(red: 0.95, green: 0.42, blue: 0.72)
             ]
+            let solid: Color = {
+                switch state {
+                case .online: return rainbow[2]
+                case .remote: return Color(red: 0.32, green: 0.62, blue: 1.0)
+                case .connecting: return Color(red: 0.95, green: 0.78, blue: 0.25)
+                case .reconnecting: return Color.orange
+                case .offline: return NOCOAITheme.danger
+                }
+            }()
             HStack(spacing: 8) {
-                if online {
+                if state == .online || state == .remote {
                     Circle()
                         .fill(
                             AngularGradient(colors: rainbow, center: .center, angle: .degrees(spin))
@@ -28,19 +80,19 @@ struct StatusBadge: View {
                         .shadow(color: rainbow[2].opacity(0.55), radius: 3)
                 } else {
                     Circle()
-                        .fill(NOCOAITheme.danger)
+                        .fill(solid)
                         .frame(width: 8, height: 8)
-                        .opacity(0.9)
+                        .opacity(state == .reconnecting || state == .connecting ? 0.95 : 0.9)
                 }
                 VStack(alignment: .leading, spacing: 0) {
-                    Text(label)
+                    Text(state.label)
                         .font(.subheadline.weight(.semibold))
                         .foregroundStyle(
-                            online
+                            state == .online || state == .remote
                             ? AnyShapeStyle(
                                 AngularGradient(colors: rainbow, center: .center, angle: .degrees(spin * 0.7))
                             )
-                            : AnyShapeStyle(Color.primary.opacity(0.75))
+                            : AnyShapeStyle(solid.opacity(0.95))
                         )
                         .contentTransition(.interpolate)
                     if let detail, !detail.isEmpty {
@@ -59,17 +111,16 @@ struct StatusBadge: View {
                     .overlay(
                         Capsule()
                             .stroke(
-                                online
+                                state == .online || state == .remote
                                 ? AngularGradient(colors: rainbow.map { $0.opacity(0.55) }, center: .center, angle: .degrees(-spin))
-                                : AngularGradient(colors: [NOCOAITheme.danger.opacity(0.45), NOCOAITheme.danger.opacity(0.25)], center: .center),
+                                : AngularGradient(colors: [solid.opacity(0.55), solid.opacity(0.25)], center: .center),
                                 lineWidth: online ? 1.15 : 1
                             )
                     )
-                    .shadow(color: online ? rainbow[3].opacity(0.22) : .clear, radius: online ? 6 : 0)
+                    .shadow(color: online ? solid.opacity(0.22) : .clear, radius: online ? 6 : 0)
             )
         }
-        .animation(.easeInOut(duration: 0.45), value: online)
-        .animation(.easeInOut(duration: 0.45), value: label)
+        .animation(.easeInOut(duration: 0.45), value: state)
         .animation(.easeInOut(duration: 0.35), value: detail)
     }
 }

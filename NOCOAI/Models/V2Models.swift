@@ -255,6 +255,38 @@ struct FeaturesResponse: Decodable {
     }
 }
 
+/// Companion Think-model status (FLASH stays separate; no raw model names in Plus menu).
+struct ThinkModelStatusResponse: Decodable {
+    let ok: Bool?
+    let flashModel: String?
+    let thinkModel: String?
+    let thinkInstalled: Bool?
+    let thinkReady: Bool?
+    let recommendedThink: String?
+    let message: String?
+    let installCommand: String?
+    let hardware: ThinkHardwareInfo?
+
+    var isReady: Bool { thinkReady == true || thinkInstalled == true }
+}
+
+struct ThinkHardwareInfo: Decodable {
+    let totalRamGb: Double?
+    let freeRamGb: Double?
+    let cpuCores: Int?
+    let vramMiB: Int?
+    let recommendedThink: String?
+    let thinkReason: String?
+    let avoid14b: Bool?
+}
+
+struct ThinkInstallResponse: Decodable {
+    let ok: Bool?
+    let name: String?
+    let error: String?
+    let think: ThinkModelStatusResponse?
+}
+
 struct ImageGenerateRequest: Encodable {
     let prompt: String
     let conversationId: String?

@@ -113,6 +113,9 @@ struct ServerStatus: Decodable, Equatable {
     let tailscaleHosts: [String]?
     let tailscaleIP: String?
     let remoteAccessEnabled: Bool?
+    /// Companion ConnectionManager — additive (online | remote | connecting | reconnecting | offline)
+    let connectionState: String?
+    let connectionTransport: String?
 
     // camelCase keys — CompanionAPI uses convertFromSnakeCase
     enum CodingKeys: String, CodingKey {
@@ -123,6 +126,7 @@ struct ServerStatus: Decodable, Equatable {
         case gpu, ram, cpu, activeModel, system
         case stableDiffusion, imageEngine, bilderEngine
         case hosts, lanHosts, tailscaleHosts, tailscaleIP, remoteAccessEnabled
+        case connectionState, connectionTransport
     }
 
     init(
@@ -143,7 +147,9 @@ struct ServerStatus: Decodable, Equatable {
         lanHosts: [String]? = nil,
         tailscaleHosts: [String]? = nil,
         tailscaleIP: String? = nil,
-        remoteAccessEnabled: Bool? = nil
+        remoteAccessEnabled: Bool? = nil,
+        connectionState: String? = nil,
+        connectionTransport: String? = nil
     ) {
         self.online = online
         self.model = model
@@ -163,6 +169,8 @@ struct ServerStatus: Decodable, Equatable {
         self.tailscaleHosts = tailscaleHosts
         self.tailscaleIP = tailscaleIP
         self.remoteAccessEnabled = remoteAccessEnabled
+        self.connectionState = connectionState
+        self.connectionTransport = connectionTransport
     }
 
     /// Prefer server latency; otherwise fill with measured round-trip.
@@ -185,7 +193,9 @@ struct ServerStatus: Decodable, Equatable {
             lanHosts: lanHosts,
             tailscaleHosts: tailscaleHosts,
             tailscaleIP: tailscaleIP,
-            remoteAccessEnabled: remoteAccessEnabled
+            remoteAccessEnabled: remoteAccessEnabled,
+            connectionState: connectionState,
+            connectionTransport: connectionTransport
         )
     }
 
@@ -214,6 +224,8 @@ struct ServerStatus: Decodable, Equatable {
         tailscaleHosts = try c.decodeIfPresent([String].self, forKey: .tailscaleHosts)
         tailscaleIP = try c.decodeIfPresent(String.self, forKey: .tailscaleIP)
         remoteAccessEnabled = try c.decodeIfPresent(Bool.self, forKey: .remoteAccessEnabled)
+        connectionState = try c.decodeIfPresent(String.self, forKey: .connectionState)
+        connectionTransport = try c.decodeIfPresent(String.self, forKey: .connectionTransport)
 
         if let v = try c.decodeIfPresent(Bool.self, forKey: .stableDiffusion) {
             stableDiffusion = v

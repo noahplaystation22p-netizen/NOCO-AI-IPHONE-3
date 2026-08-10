@@ -64,6 +64,13 @@ final class VoiceService: NSObject, ObservableObject {
     private var didLogTTSPlaybackStart = false
     /// Bridge/filler TTS must not trigger return-to-listen mid-turn.
     private var suppressSpeakFinishedNotify = false
+    /// Streaming speak: more chunks may arrive while audio plays.
+    private var streamSpeakActive = false
+    private var streamSpeakExpectMore = false
+    private var streamSpeakQueue: [String] = []
+    private var streamSpeakWaitTask: Task<Void, Never>?
+    /// Characters already handed to TTS from a streaming reply.
+    private(set) var streamSpeakConsumedChars = 0
 
     /// Wait for a clear end of speech — responsive, but not mid-thought.
     private let silenceToEnd: TimeInterval = 0.86
@@ -651,12 +658,139 @@ final class VoiceService: NSObject, ObservableObject {
     }
 
     func speak(_ text: String, allowBargeIn: Bool = false) {
+        resetStreamSpeakState()
         speakInternal(text, allowBargeIn: allowBargeIn, notifyWhenFinished: true)
     }
 
     /// Short mid-turn bridge ("Ich schaue kurz nach") — must not reopen the mic.
     func speakBridge(_ text: String) {
+        resetStreamSpeakState()
         speakInternal(text, allowBargeIn: false, notifyWhenFinished: false)
+    }
+
+    /// Start / continue TTS while the model is still streaming. Final call uses expectMore=false.
+    func speakStreaming(_ text: String, expectMore: Bool) {
+        let natural = NOCOSpeakVoiceSettings.usesNaturalPipeline
+        let cleaned = natural
+            ? Self.naturalizeForSpeech(Self.cleanForSpeech(text))
+            : Self.applyVoiceAIPronunciation(Self.cleanForSpeech(text))
+        guard !cleaned.isEmpty else {
+            if !expectMore { finishStreamSpeakIfIdle() }
+            return
+        }
+
+        let chunks = natural
+            ? Self.naturalSpeechChunks(from: cleaned)
+            : Self.speechChunks(from: cleaned)
+        guard !chunks.isEmpty else {
+            if !expectMore { finishStreamSpeakIfIdle() }
+            return
+        }
+
+        streamSpeakExpectMore = expectMore
+        if !streamSpeakActive, phase != .speaking {
+            streamSpeakActive = true
+            streamSpeakQueue = Array(chunks.dropFirst())
+            let first = chunks[0]
+            // notify=true so chunk end drains the stream queue (see notifySpeakFinishedOnce).
+            speakInternal(first, allowBargeIn: false, notifyWhenFinished: true)
+            return
+        }
+
+        streamSpeakQueue.append(contentsOf: chunks)
+        streamSpeakExpectMore = expectMore
+        if !expectMore, phase != .speaking, streamSpeakQueue.isEmpty {
+            finishStreamSpeakIfIdle()
+        }
+    }
+
+    private func resetStreamSpeakState() {
+        streamSpeakWaitTask?.cancel()
+        streamSpeakWaitTask = nil
+        streamSpeakActive = false
+        streamSpeakExpectMore = false
+        streamSpeakQueue.removeAll()
+        streamSpeakConsumedChars = 0
+    }
+
+    private func continueStreamSpeakAfterChunk() {
+        guard streamSpeakActive else {
+            notifySpeakFinishedOnce()
+            return
+        }
+        if !streamSpeakQueue.isEmpty {
+            let next = streamSpeakQueue.removeFirst()
+            speakInternal(next, allowBargeIn: false, notifyWhenFinished: true)
+            return
+        }
+        if streamSpeakExpectMore {
+            streamSpeakWaitTask?.cancel()
+            streamSpeakWaitTask = Task { @MainActor [weak self] in
+                for _ in 0..<80 {
+                    try? await Task.sleep(nanoseconds: 80_000_000)
+                    guard let self, !Task.isCancelled else { return }
+                    if !self.streamSpeakQueue.isEmpty {
+                        self.continueStreamSpeakAfterChunk()
+                        return
+                    }
+                    if !self.streamSpeakExpectMore {
+                        self.finishStreamSpeakIfIdle()
+                        return
+                    }
+                }
+                self?.streamSpeakExpectMore = false
+                self?.finishStreamSpeakIfIdle()
+            }
+            return
+        }
+        finishStreamSpeakIfIdle()
+    }
+
+    private func finishStreamSpeakIfIdle() {
+        streamSpeakWaitTask?.cancel()
+        streamSpeakWaitTask = nil
+        let wasStreaming = streamSpeakActive
+        streamSpeakActive = false
+        streamSpeakExpectMore = false
+        streamSpeakQueue.removeAll()
+        guard wasStreaming else { return }
+        suppressSpeakFinishedNotify = false
+        if case .speaking = phase {
+            // Last audio still playing — normal didFinish will notify.
+            return
+        }
+        notifySpeakFinishedOnce()
+    }
+
+    /// Mark streaming complete and speak any remaining unread text.
+    func speakStreamingFinalize(fullText: String, alreadySpokenNormalized: String) {
+        let natural = NOCOSpeakVoiceSettings.usesNaturalPipeline
+        let full = natural
+            ? Self.naturalizeForSpeech(Self.cleanForSpeech(fullText))
+            : Self.applyVoiceAIPronunciation(Self.cleanForSpeech(fullText))
+        let spoken = alreadySpokenNormalized.trimmingCharacters(in: .whitespacesAndNewlines)
+        var remainder = full
+        if !spoken.isEmpty, full.hasPrefix(spoken) {
+            remainder = String(full.dropFirst(spoken.count))
+                .trimmingCharacters(in: .whitespacesAndNewlines)
+        } else if !spoken.isEmpty, let range = full.range(of: spoken) {
+            remainder = String(full[range.upperBound...]).trimmingCharacters(in: .whitespacesAndNewlines)
+        }
+        streamSpeakExpectMore = false
+        if remainder.isEmpty {
+            if streamSpeakActive {
+                if phase != .speaking {
+                    finishStreamSpeakIfIdle()
+                }
+                // else: wait for current chunk didFinish → continueStream → finish
+            } else if case .speaking = phase {
+                // Non-stream speak in progress — leave it.
+            } else {
+                notifySpeakFinishedOnce()
+            }
+            return
+        }
+        speakStreaming(remainder, expectMore: false)
     }
 
     private func speakInternal(_ text: String, allowBargeIn: Bool, notifyWhenFinished: Bool) {
@@ -702,8 +836,8 @@ final class VoiceService: NSObject, ObservableObject {
         speakGeneration &+= 1
         let generation = speakGeneration
         speakingStartedAt = Date()
-        // ~45ms/char with a floor so "Ja." / "Nein." always get real airtime.
-        let minHold = max(0.55, min(4.5, Double(cleaned.count) * 0.048))
+        // ~55ms/char with a higher floor so "Ja." / "Ok." always finish audibly.
+        let minHold = max(0.72, min(4.5, Double(cleaned.count) * 0.055))
         speakMinFinishAt = Date().addingTimeInterval(minHold)
         ttsUseAmplified = true
         ttsPendingBuffers = 0
@@ -782,6 +916,32 @@ final class VoiceService: NSObject, ObservableObject {
         return false
     }
 
+    /// Hardware + phase — true until utterance audio has fully left the device.
+    var isPlaybackActive: Bool {
+        if synthesizer.isSpeaking { return true }
+        if ttsPlayer.isPlaying { return true }
+        if case .speaking = phase { return true }
+        if let minAt = speakMinFinishAt, Date() < minAt { return true }
+        return false
+    }
+
+    /// Confirm no leftover TTS before reopening the mic.
+    func ensurePlaybackFullyStopped() {
+        if synthesizer.isSpeaking {
+            // Never hard-cut a live reply here — caller waits; only clear stalled idle leftovers.
+            return
+        }
+        if ttsPlayer.isPlaying {
+            ttsPlayer.pause()
+        }
+        if case .speaking = phase, !synthesizer.isSpeaking, !ttsPlayer.isPlaying {
+            if let minAt = speakMinFinishAt, Date() < minAt { return }
+            phase = .idle
+            speakingStartedAt = nil
+            speakMinFinishAt = nil
+        }
+    }
+
     private func speakAmplified(chunks: [String], natural: Bool, generation: UInt64) {
         guard !chunks.isEmpty else {
             phase = .idle
@@ -791,12 +951,6 @@ final class VoiceService: NSObject, ObservableObject {
         }
 
         pendingSpeakChunks = chunks.count
-        let rate = NOCOSpeakVoiceSettings.resolvedRate(naturalBase: natural)
-        let pitch = NOCOSpeakVoiceSettings.resolvedPitch(naturalBase: natural)
-        let pre = NOCOSpeakVoiceSettings.resolvedPrePause(naturalBase: natural)
-        let post = NOCOSpeakVoiceSettings.resolvedPostPause(naturalBase: natural)
-        let inter = NOCOSpeakVoiceSettings.resolvedInterChunkPause(naturalBase: natural)
-        let gain = NOCOSpeakVoiceSettings.resolvedGain(naturalBase: natural)
         let voice = bestGermanVoice(preferNatural: natural)
 
         // Sequential chunks: UI reveal tracks audible playback; pause freezes reveal.
@@ -805,15 +959,21 @@ final class VoiceService: NSObject, ObservableObject {
             for (index, chunk) in chunks.enumerated() {
                 guard self.speakGeneration == generation else { return }
                 guard case .speaking = self.phase else { return }
+                let prosody = NOCOSpeakVoiceSettings.chunkProsody(
+                    text: chunk,
+                    index: index,
+                    total: chunks.count,
+                    naturalBase: natural
+                )
                 let ok = await self.playAmplifiedChunk(
                     chunk,
                     index: index,
                     voice: voice,
-                    rate: rate,
-                    pitch: pitch,
-                    pre: index == 0 ? pre : inter,
-                    post: post,
-                    gain: gain,
+                    rate: prosody.rate,
+                    pitch: prosody.pitch,
+                    pre: prosody.prePause,
+                    post: prosody.postPause,
+                    gain: NOCOSpeakVoiceSettings.resolvedGain(naturalBase: natural),
                     soft: natural,
                     generation: generation
                 )
@@ -1039,20 +1199,21 @@ final class VoiceService: NSObject, ObservableObject {
         spokenVisibleText = ""
         fallbackSpeakChunkCursor = 0
         pendingSpeakChunks = chunks.count
-        let rate = NOCOSpeakVoiceSettings.resolvedRate(naturalBase: natural)
-        let pitch = NOCOSpeakVoiceSettings.resolvedPitch(naturalBase: natural)
-        let pre = NOCOSpeakVoiceSettings.resolvedPrePause(naturalBase: natural)
-        let post = NOCOSpeakVoiceSettings.resolvedPostPause(naturalBase: natural)
-        let inter = NOCOSpeakVoiceSettings.resolvedInterChunkPause(naturalBase: natural)
         let voice = bestGermanVoice(preferNatural: natural)
         for (index, chunk) in chunks.enumerated() {
+            let prosody = NOCOSpeakVoiceSettings.chunkProsody(
+                text: chunk,
+                index: index,
+                total: chunks.count,
+                naturalBase: natural
+            )
             let utterance = AVSpeechUtterance(string: chunk)
             utterance.voice = voice
-            utterance.rate = rate
-            utterance.pitchMultiplier = pitch
+            utterance.rate = prosody.rate
+            utterance.pitchMultiplier = prosody.pitch
             utterance.volume = 1.0
-            utterance.preUtteranceDelay = index == 0 ? pre : inter
-            utterance.postUtteranceDelay = post
+            utterance.preUtteranceDelay = prosody.prePause
+            utterance.postUtteranceDelay = prosody.postPause
             // Reveal is driven by willSpeakRange / didStart — not by queueing.
             synthesizer.speak(utterance)
         }
@@ -1099,9 +1260,18 @@ final class VoiceService: NSObject, ObservableObject {
 
     func stopSpeaking(notifyFinished: Bool = true) {
         cancelBargeIn()
-        let wasSpeaking = synthesizer.isSpeaking || ttsPlayer.isPlaying || phase == .speaking
+        let wasSpeaking = synthesizer.isSpeaking || ttsPlayer.isPlaying || phase == .speaking || streamSpeakActive
         // Invalidate in-flight amplified buffers so they cannot finish a dead utterance.
         speakGeneration &+= 1
+        streamSpeakWaitTask?.cancel()
+        streamSpeakWaitTask = nil
+        streamSpeakActive = false
+        streamSpeakExpectMore = false
+        streamSpeakQueue.removeAll()
+        if !notifyFinished {
+            // Block late didCancel / didFinish from reopening the mic (stop / exit).
+            speakFinishedNotified = true
+        }
         if synthesizer.isSpeaking {
             synthesizer.stopSpeaking(at: .immediate)
         }
@@ -1110,6 +1280,7 @@ final class VoiceService: NSObject, ObservableObject {
         ttsUseAmplified = false
         speakingTextLower = ""
         speakingStartedAt = nil
+        speakMinFinishAt = nil
         if case .speaking = phase {
             phase = .idle
         }
@@ -1119,6 +1290,13 @@ final class VoiceService: NSObject, ObservableObject {
     }
 
     private func notifySpeakFinishedOnce() {
+        // Streaming multi-chunk reply: drain queue before returning to listen.
+        if streamSpeakActive {
+            speakFinishedNotified = false
+            suppressSpeakFinishedNotify = false
+            continueStreamSpeakAfterChunk()
+            return
+        }
         guard !speakFinishedNotified else { return }
         speakFinishedNotified = true
         if suppressSpeakFinishedNotify {
@@ -1507,21 +1685,107 @@ final class VoiceService: NSObject, ObservableObject {
         return result
     }
 
-    /// Light prosody prep — keeps latency low (no network / no heavy models).
+    /// Light conversational prep — keeps latency low (no network / no heavy models).
     static func naturalizeForSpeech(_ text: String) -> String {
-        var s = text
+        var s = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !s.isEmpty else { return s }
+
+        // Strip “read-aloud essay” openers into spoken answers.
+        let openerPatterns = [
+            #"^(?i)die antwort lautet\s*:\s*"#,
+            #"^(?i)die antwort ist\s*:\s*"#,
+            #"^(?i)meine antwort\s*:\s*"#,
+            #"^(?i)kurz gesagt\s*:\s*"#,
+            #"^(?i)zusammengefasst\s*:\s*"#,
+            #"^(?i)hier (ist|die) (die )?antwort\s*:\s*"#,
+            #"^(?i)als ki[- ]?assistent\s*[,:]?\s*"#,
+            #"^(?i)gerne\!?\s+"#,
+            #"^(?i)selbstverständlich\.?\s+"#,
+            #"^(?i)natürlich\.?\s+(?=[A-ZÄÖÜ])"#
+        ]
+        for pattern in openerPatterns {
+            s = s.replacingOccurrences(of: pattern, with: "", options: .regularExpression)
+        }
+
+        // Soften stiff connectors into spoken German.
+        let swaps: [(String, String)] = [
+            ("voraussichtlich", "vermutlich"),
+            ("in der Tat", "genau"),
+            ("Darüber hinaus", "Außerdem"),
+            ("des Weiteren", "und"),
+            ("zusammenfassend lässt sich sagen", "kurz"),
+            ("Es ist zu beachten, dass", ""),
+            ("Ich möchte darauf hinweisen, dass", ""),
+            ("Es empfiehlt sich", "Am besten"),
+            (" z.B. ", " zum Beispiel "),
+            (" z. B. ", " zum Beispiel "),
+            (" usw.", " und so weiter"),
+            (" etc.", " und so weiter"),
+            (" wird's ", " wird es "),
+            (" gibt's ", " gibt es ")
+        ]
+        for (from, to) in swaps {
+            s = s.replacingOccurrences(of: from, with: to, options: .caseInsensitive)
+        }
+
         // Soften list markers into spoken rhythm.
         s = s.replacingOccurrences(of: #"^\s*\d+\.\s+"#, with: "", options: .regularExpression)
-        s = s.replacingOccurrences(of: " z.B. ", with: " zum Beispiel ", options: .caseInsensitive)
-        s = s.replacingOccurrences(of: " z. B. ", with: " zum Beispiel ", options: .caseInsensitive)
-        s = s.replacingOccurrences(of: " usw.", with: " und so weiter", options: .caseInsensitive)
-        s = s.replacingOccurrences(of: " etc.", with: " und so weiter", options: .caseInsensitive)
-        // Gentle breath after commas / dashes without inventing words.
-        s = s.replacingOccurrences(of: #"\s+[–—-]\s+"#, with: ", ", options: .regularExpression)
-        // English product name — German TTS should say "Voice A I", not "Voiz Ei".
+        s = s.replacingOccurrences(of: #"\s+[–—]\s+"#, with: " — ", options: .regularExpression)
+        // Em dash as a short spoken breath (AVSpeech treats — reasonably).
+        s = s.replacingOccurrences(of: #"\s{2,}"#, with: " ", options: .regularExpression)
+
+        // Occasional natural filler — only at start of short replies, never forced every time.
+        s = maybePrefixedConversationalFiller(s)
+
         s = applyVoiceAIPronunciation(s)
         s = s.replacingOccurrences(of: #"\s{2,}"#, with: " ", options: .regularExpression)
         return s.trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+
+    /// Sparse fillers — hash-stable so the same reply stays consistent, ~18% of short answers.
+    private static func maybePrefixedConversationalFiller(_ text: String) -> String {
+        let t = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard t.count >= 12, t.count <= 160 else { return t }
+        let lower = t.lowercased()
+        // Never double-fill.
+        let already = ["also ", "hm ", "genau ", "okay ", "kurz ", "moment "]
+        if already.contains(where: { lower.hasPrefix($0) }) { return t }
+        // Skip if already starts like a crisp answer.
+        if lower.range(of: #"^(ja|nein|klar|super|gut)\b"#, options: .regularExpression) != nil {
+            return t
+        }
+        var hash: UInt64 = 5381
+        for u in t.utf8 { hash = ((hash << 5) &+ hash) &+ UInt64(u) }
+        guard hash % 100 < 18 else { return t }
+        let fillers = ["Also — ", "Kurz: ", "Okay — ", "Genau — "]
+        let pick = fillers[Int(hash % UInt64(fillers.count))]
+        return pick + t
+    }
+
+    /// First complete spoken sentence(s) ready for early TTS while the stream continues.
+    static func speakableStreamingPrefix(from partial: String, alreadySpokenChars: Int) -> String? {
+        let cleaned = cleanForSpeech(partial)
+        guard cleaned.count > alreadySpokenChars + 8 else { return nil }
+        let unread = String(cleaned.dropFirst(alreadySpokenChars))
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !unread.isEmpty else { return nil }
+
+        // Prefer end of a sentence; allow early start after ~28 chars + punctuation/comma.
+        let terminals = CharacterSet(charactersIn: ".!?\n")
+        if let idx = unread.firstIndex(where: { ch in
+            ch.unicodeScalars.allSatisfy { terminals.contains($0) }
+        }) {
+            let end = unread.index(after: idx)
+            let piece = String(unread[..<end]).trimmingCharacters(in: .whitespacesAndNewlines)
+            if piece.count >= 10 { return piece }
+        }
+        // Long clause with comma — start speaking without waiting for the period.
+        if unread.count >= 56, let comma = unread.firstIndex(of: ",") {
+            let end = unread.index(after: comma)
+            let piece = String(unread[..<end]).trimmingCharacters(in: .whitespacesAndNewlines)
+            if piece.count >= 24 { return piece }
+        }
+        return nil
     }
 
     /// Force English-style letter pronunciation for "Voice AI" inside German TTS.
@@ -1552,6 +1816,7 @@ final class VoiceService: NSObject, ObservableObject {
         let rough = text
             .replacingOccurrences(of: ";", with: ".")
             .replacingOccurrences(of: ":", with: ",")
+            .replacingOccurrences(of: " — ", with: ". ")
         let sentenceParts = rough.components(separatedBy: CharacterSet(charactersIn: ".!?\n"))
             .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
             .filter { !$0.isEmpty }
@@ -1562,22 +1827,27 @@ final class VoiceService: NSObject, ObservableObject {
             let commas = sentence.components(separatedBy: ",")
                 .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
                 .filter { !$0.isEmpty }
-            if commas.count <= 1 || sentence.count < 90 {
-                let ended = sentence.hasSuffix(".") ? sentence : sentence + "."
-                result.append(ended)
+            // Keep short sentences whole; split long ones on commas for breath.
+            if commas.count <= 1 || sentence.count < 72 {
+                let punct: String = {
+                    if sentence.hasSuffix("!") || sentence.hasSuffix("?") { return "" }
+                    return sentence.hasSuffix(".") ? "" : "."
+                }()
+                result.append(sentence + punct)
                 continue
             }
             var current = ""
             for (i, part) in commas.enumerated() {
                 let piece = current.isEmpty ? part : current + ", " + part
-                if piece.count > 110, !current.isEmpty {
+                if piece.count > 88, !current.isEmpty {
                     result.append(current + ",")
                     current = part
                 } else {
                     current = piece
                 }
                 if i == commas.count - 1, !current.isEmpty {
-                    result.append(current.hasSuffix(".") ? current : current + ".")
+                    result.append(current.hasSuffix(".") || current.hasSuffix("!") || current.hasSuffix("?")
+                                  ? current : current + ".")
                 }
             }
         }
@@ -1588,10 +1858,11 @@ final class VoiceService: NSObject, ObservableObject {
         let trimmed = userText.trimmingCharacters(in: .whitespacesAndNewlines)
         var lines: [String] = ["[NOCO SPEAK]"]
         if depth == .think || style.prefersDepth {
-            lines.append("Gründliche, klare gesprochene Antwort auf Deutsch. Strukturiert, aber noch gut hörbar — keine endlosen Aufsätze.")
+            lines.append("Gründliche, klar gesprochene Antwort auf Deutsch — natürlich formuliert, gut hörbar, kein Aufsatz-Stil.")
         } else {
-            lines.append("Kurze gesprochene Antwort auf Deutsch. Direkt, klar, 1–4 Sätze. Keine Meta-Kommentare.")
+            lines.append("Kurze gesprochene Antwort auf Deutsch. Natürlich wie im Gespräch (nicht vorgelesener Text). Direkt, klar, 1–4 Sätze.")
         }
+        lines.append("Information behalten. Keine Meta-Kommentare, keine Labels wie System/Voice AI. Füllwörter (also, okay, kurz) nur selten und nur wenn natürlich.")
         if style.shorter { lines.append("Halte dich besonders kurz.") }
         if style.longer { lines.append("Erkläre etwas ausführlicher, bleib aber sprechbar.") }
         if style.creative { lines.append("Sei kreativ und originell.") }
@@ -1700,8 +1971,16 @@ extension VoiceService: AVSpeechSynthesizerDelegate {
 
     nonisolated func speechSynthesizer(_ synthesizer: AVSpeechSynthesizer, didCancel utterance: AVSpeechUtterance) {
         Task { @MainActor in
-            if case .speaking = self.phase {
-                self.phase = .idle
+            guard !self.ttsUseAmplified else { return }
+            self.pendingSpeakChunks = max(0, self.pendingSpeakChunks - 1)
+            // If the whole queue was cancelled, release the speak→listen latch.
+            if !synthesizer.isSpeaking {
+                if case .speaking = self.phase {
+                    self.phase = .idle
+                }
+                self.speakingStartedAt = nil
+                self.speakMinFinishAt = nil
+                self.notifySpeakFinishedOnce()
             }
         }
     }

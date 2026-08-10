@@ -279,12 +279,14 @@ final class ChatStore: ObservableObject {
     /// - Parameters:
     ///   - text: Wire prompt sent to the Companion (may include Speak / mode instructions).
     ///   - displayText: What the user sees in chat. Defaults to a sanitized form of `text`.
+    ///   - onSpeakablePartial: Fired when a complete spoken phrase is ready (early TTS).
     @discardableResult
     func sendAndReturnReply(
         _ text: String,
         modeOverride: AIMode? = nil,
         speak: Bool = false,
-        displayText: String? = nil
+        displayText: String? = nil,
+        onSpeakablePartial: ((String) -> Void)? = nil
     ) async -> String? {
         let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty, let api else { return nil }
@@ -446,6 +448,7 @@ final class ChatStore: ObservableObject {
 
             var sawContent = false
             var streamAttempt = 0
+            var spokenPartialChars = 0
             streamLoop: while true {
                 streamAttempt += 1
                 do {
@@ -484,6 +487,17 @@ final class ChatStore: ObservableObject {
                             }
                             if let idx = messages.firstIndex(where: { $0.id == assistantID }) {
                                 messages[idx].text += text
+                                // Early TTS: speak complete phrases while tokens still arrive.
+                                if speak, let onSpeakablePartial {
+                                    let partial = messages[idx].text
+                                    if let phrase = VoiceService.speakableStreamingPrefix(
+                                        from: partial,
+                                        alreadySpokenChars: spokenPartialChars
+                                    ) {
+                                        spokenPartialChars += phrase.count
+                                        onSpeakablePartial(phrase)
+                                    }
+                                }
                             }
                             HapticService.streamTick()
                         }

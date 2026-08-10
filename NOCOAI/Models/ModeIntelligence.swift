@@ -46,20 +46,54 @@ enum ModeIntelligence {
     private static let favoriteKey = "nocoai.modes.favorites"
 
     /// Depth-only recommendation for Auto (never Vision / Agent / specialty modes).
+    /// Uses complexity signals — not just message length.
     static func recommendDepth(text: String) -> (mode: AIMode, reason: String)? {
         let t = text.lowercased()
-        if matches(t, "analysiere|vergleiche|warum|strategie|gründlich|abwägen|pro und contra|komplex|erkläre ausführlich|wie funktioniert|was bedeutet")
-            || t.count > 160 {
-            return (.think, "Think — tiefere Überlegung")
+        let len = text.count
+        let lines = text.split(whereSeparator: \.isNewline).filter { !$0.trimmingCharacters(in: .whitespaces).isEmpty }.count
+
+        // Hard Flash shortcuts
+        if matches(t, #"^(was ist|wer ist|wann |wo |wie viel|übersetze|translate|danke|ok|okay|ja|nein)\b"#)
+            && len < 80 {
+            return (.flash, "Flash — einfache Faktenfrage")
         }
-        if t.count < 55 || matches(t, "kurz|schnell|ja oder nein|eine zeile|tl;dr|danke|ok|okay") {
-            return (.flash, "Flash — schnelle Antwort")
+        if matches(t, #"^(kurz|schnell|tl;dr|eine zeile|ja oder nein)\b"#) {
+            return (.flash, "Flash — kurze Antwort gewünscht")
         }
-        // Medium questions: slight bias to Think for clearer spoken logic.
-        if t.count > 90 || matches(t, "erkläre|hilfe|soll ich|was meinst|wie kann|warum nicht") {
-            return (.think, "Think — klarere Logik")
+
+        var score = 0
+        if len > 220 { score += 2 }
+        if len > 400 { score += 2 }
+        if lines >= 4 { score += 2 }
+        if lines >= 8 { score += 2 }
+
+        if matches(
+            t,
+            "analysiere|vergleich|strategie|plane |planung|mehrere schritte|schritt für schritt|architektur|refactor|debug|algorithm|komplex|gründlich|abwägen|pro und contra|bewerte|entwirf|implementier|programmier|mathe|berechne|gleichung|beweis|warum funktioniert|wie baue ich|workflow|konzept"
+        ) {
+            score += 3
         }
-        return (.flash, "Flash — kurze Antwort")
+        if matches(t, "code|swift|python|typescript|javascript|sql|bug|fehler") {
+            score += 2
+        }
+        if matches(t, #"\b1[\).\]]|\b2[\).\]]|\b3[\).\]]"#) {
+            score += 2
+        }
+        if matches(t, "und dann.*und dann|danach.*danach") {
+            score += 2
+        }
+
+        if matches(t, "was ist eine |definiere kurz|übersetze|translate|wetter|uhrzeit|witz|hallo") {
+            score -= 2
+        }
+        if len < 55 {
+            score -= 1
+        }
+
+        if score >= 3 {
+            return (.think, "Think — komplexere Aufgabe")
+        }
+        return (.flash, "Flash — schnelle Antwort")
     }
 
     /// Soft specialty hint (chips only) — never auto-activates Vision/Agent from Auto.

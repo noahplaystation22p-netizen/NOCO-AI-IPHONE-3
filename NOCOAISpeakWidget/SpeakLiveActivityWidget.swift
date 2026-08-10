@@ -91,6 +91,7 @@ enum SpeakPhasePalette {
         case "speaking": return "Spricht"
         case "awaitingConfirm": return "OK?"
         case "error": return "Fehler"
+        case "idle": return "Bereit"
         default: return "Voice"
         }
     }
@@ -98,20 +99,21 @@ enum SpeakPhasePalette {
     /// Island-safe status line — never truncated mid-word.
     static func statusHeadline(for state: SpeakActivityAttributes.ContentState) -> String {
         if state.isMuted, state.phaseRaw != "speaking" {
-            return "Voice AI stumm"
+            return "Pausiert"
         }
         let t = state.title.trimmingCharacters(in: .whitespacesAndNewlines)
         if !t.isEmpty { return t }
         switch state.phaseRaw {
-        case "listening": return "NOCO hört zu"
-        case "thinking", "processing": return "NOCO denkt"
-        case "speaking": return "NOCO spricht"
+        case "listening": return "Voice AI hört zu"
+        case "thinking", "processing": return "Voice AI denkt"
+        case "speaking": return "Voice AI spricht"
         case "webSearch": return "Websuche läuft"
         case "creatingImage": return "NOCO erstellt Bild"
         case "agentWorking": return "NOCO arbeitet"
         case "vision": return "NOCO sieht"
         case "awaitingConfirm": return "Bestätigung nötig"
         case "error": return "Fehler"
+        case "idle": return "Voice AI bereit"
         default: return "NOCO Voice AI"
         }
     }
@@ -193,15 +195,15 @@ enum SpeakPhasePalette {
         }
     }
 
-    /// Animation speed factor — higher = faster spin (thinking/web).
+    /// Animation speed factor — higher = faster spin (thinking/web). Soft morphing, not frantic.
     static func spinPeriod(for phaseRaw: String) -> Double {
         switch phaseRaw {
-        case "listening": return 5.8
-        case "thinking", "processing": return 2.8
-        case "webSearch": return 2.4
-        case "speaking": return 3.6
-        case "creatingImage", "agentWorking", "vision": return 3.4
-        default: return 6.2
+        case "listening": return 7.2
+        case "thinking", "processing": return 4.2
+        case "webSearch": return 3.6
+        case "speaking": return 5.0
+        case "creatingImage", "agentWorking", "vision": return 4.8
+        default: return 7.5
         }
     }
 }
@@ -217,10 +219,10 @@ struct SpeakExpandedAuraCore: View {
             let spin = (t.truncatingRemainder(dividingBy: period) / period) * 360
             let pulse: Double = {
                 switch state.phaseRaw {
-                case "listening": return 0.94 + 0.06 * abs(sin(t * 1.8))
-                case "thinking", "processing", "webSearch": return 0.9 + 0.1 * abs(sin(t * 4.2))
-                case "speaking": return 0.92 + 0.08 * abs(sin(t * 3.0))
-                default: return 0.95 + 0.05 * abs(sin(t * 1.4))
+                case "listening": return 0.96 + 0.04 * abs(sin(t * 1.2))
+                case "thinking", "processing", "webSearch": return 0.93 + 0.07 * abs(sin(t * 2.4))
+                case "speaking": return 0.94 + 0.06 * abs(sin(t * 2.0 + Double(state.level) * 2.5))
+                default: return 0.96 + 0.04 * abs(sin(t * 1.0))
                 }
             }()
             ZStack {
@@ -276,11 +278,19 @@ struct SpeakExpandedAuraCore: View {
 struct SpeakIslandLiveBadge: View {
     let state: SpeakActivityAttributes.ContentState
 
+    private var badge: (String, Color) {
+        if state.isMuted { return ("PAUSE", .orange) }
+        if state.phaseRaw == "error" { return ("ERR", .orange) }
+        // Live Activity exists ⇒ Voice session is active. Never show a false "OFF".
+        return ("LIVE", .green)
+    }
+
     var body: some View {
+        let (label, color) = badge
         VStack(alignment: .trailing, spacing: 4) {
-            Text(state.isMuted ? "MUTE" : (state.isOnline ? "LIVE" : "OFF"))
+            Text(label)
                 .font(.system(size: 10, weight: .bold, design: .rounded))
-                .foregroundStyle(state.isMuted ? Color.orange : (state.isOnline ? Color.green : Color.red))
+                .foregroundStyle(color)
                 .padding(.horizontal, 8)
                 .padding(.vertical, 4)
                 .background(

@@ -5,6 +5,21 @@ extension CompanionAPI {
         try await get("features", as: FeaturesResponse.self)
     }
 
+    func fetchThinkModelStatus() async throws -> ThinkModelStatusResponse {
+        try await get("models/think", as: ThinkModelStatusResponse.self)
+    }
+
+    func installThinkModel(model: String? = nil) async throws -> ThinkInstallResponse {
+        struct Body: Encodable { let model: String? }
+        // Long timeout — 7B pull can take several minutes on slow links.
+        var request = try authorizedRequest(path: "models/think/install", method: "POST")
+        request.timeoutInterval = 900
+        request.httpBody = try encoder.encode(Body(model: model))
+        let (data, response) = try await loadData(for: request)
+        try validate(response: response, data: data, isPairRequest: false)
+        return try decoder.decode(ThinkInstallResponse.self, from: data)
+    }
+
     func fetchConversations() async throws -> [ConversationSummary] {
         let (data, response) = try await loadData(for: authorizedRequest(path: "conversations", method: "GET"))
         try validate(response: response, data: data, isPairRequest: false)

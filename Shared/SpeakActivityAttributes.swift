@@ -32,14 +32,14 @@ enum SpeakActivityPhase: String {
     var title: String {
         switch self {
         case .idle: return "Voice AI bereit"
-        case .listening: return "NOCO hört zu"
-        case .processing, .thinking: return "NOCO denkt"
+        case .listening: return "Voice AI hört zu"
+        case .processing, .thinking: return "Voice AI denkt"
         case .webSearch: return "Websuche läuft"
         case .creatingImage: return "NOCO erstellt Bild"
         case .agentWorking: return "NOCO arbeitet"
         case .vision: return "NOCO sieht"
         case .awaitingConfirm: return "Bestätigung nötig"
-        case .speaking: return "NOCO spricht"
+        case .speaking: return "Voice AI spricht"
         case .error: return "Fehler"
         }
     }

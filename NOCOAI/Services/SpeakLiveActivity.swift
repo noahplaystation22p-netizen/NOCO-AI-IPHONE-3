@@ -88,21 +88,23 @@ enum SpeakLiveActivityManager {
             Self.activity = Activity<SpeakActivityAttributes>.activities.first
         }
         guard Self.activity != nil || !Activity<SpeakActivityAttributes>.activities.isEmpty else {
-            // Recreate if Speak is somehow running without an activity
-            start()
+            // Recreate only while Voice session is still marked active — never during exit.
+            if VoiceAISessionState.isActive {
+                start()
+            }
             return
         }
 
         let title: String
         if isMuted && phase != .speaking {
-            title = "Voice AI stumm"
+            title = "Pausiert"
         } else if let titleOverride, !titleOverride.isEmpty {
             title = String(titleOverride.prefix(120))
         } else {
             title = phase.title
         }
         // Prefer currently spoken suffix so long replies stay readable on Island.
-        let clippedDetail = Self.speakingDetailWindow(detail, maxChars: 360)
+        let clippedDetail = Self.speakingDetailWindow(detail, maxChars: 480)
         let phaseChanged = phase.rawValue != lastPhaseRaw
         let textChanged = clippedDetail != lastDetail || title != lastTitle
         let now = Date()
@@ -132,7 +134,9 @@ enum SpeakLiveActivityManager {
             // Update every system activity — background can leave our local ref stale.
             let activities = Activity<SpeakActivityAttributes>.activities
             if activities.isEmpty {
-                SpeakLiveActivityManager.start()
+                if VoiceAISessionState.isActive {
+                    SpeakLiveActivityManager.start()
+                }
                 return
             }
             Self.activity = activities.first

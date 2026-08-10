@@ -191,6 +191,29 @@ final class ConnectionStore: ObservableObject {
         return "\(path) · vor \(min) Min"
     }
 
+    /// Unified 5-state badge for Chat/More/Dashboard.
+    var connectionBadgeState: ConnectionVisualState {
+        if isReconnecting {
+            return isOnline ? .reconnecting : .reconnecting
+        }
+        if !isOnline {
+            return .offline
+        }
+        if let raw = status.connectionState?.lowercased() {
+            switch raw {
+            case "remote": return .remote
+            case "connecting": return .connecting
+            case "reconnecting": return .reconnecting
+            case "offline": return .offline
+            case "online":
+                return activePath == .remote ? .remote : .online
+            default:
+                break
+            }
+        }
+        return activePath == .remote ? .remote : .online
+    }
+
     /// Call when app returns to foreground to keep Local Network permission warm.
     func onForeground() {
         if speak.isRunning {

@@ -45,7 +45,7 @@ struct DashboardView: View {
             VStack(alignment: .leading, spacing: 12) {
                 Text("PC-Status").font(.headline)
                 HStack {
-                    StatusBadge(online: connection.isOnline, label: connection.isOnline ? "Online" : "Offline")
+                    StatusBadge(state: connection.connectionBadgeState)
                     Spacer()
                     if let model = connection.status.model {
                         Text(model).font(.caption).foregroundStyle(.secondary)

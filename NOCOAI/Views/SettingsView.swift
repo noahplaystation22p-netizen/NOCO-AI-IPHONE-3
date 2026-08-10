@@ -19,6 +19,10 @@ struct SettingsView: View {
     @State private var voiceLogStatus = ""
     /// Skip auto-preview when Settings first loads / binds the saved voice.
     @State private var voicePreviewArmed = false
+    @State private var thinkStatus: ThinkModelStatusResponse?
+    @State private var thinkLoading = false
+    @State private var thinkInstalling = false
+    @State private var thinkError = ""
 
     var body: some View {
             List {
@@ -137,7 +141,7 @@ struct SettingsView: View {
                         }
 
                     Picker("Stimme", selection: $voiceId) {
-                        Text("NOCO Natural Voice").tag(NOCOSpeakVoiceID.natural)
+                        Text("Natural AI Voice").tag(NOCOSpeakVoiceID.natural)
                         Text("Automatisch (beste)").tag(NOCOSpeakVoiceID.automatic)
                         ForEach(Array(voices.enumerated()), id: \.element.identifier) { index, voice in
                             Text(voiceLabel(voice, index: index)).tag(voice.identifier)
@@ -347,6 +351,76 @@ struct SettingsView: View {
                     Text("Doppel-Leertaste = Punkt. Entf halten = schneller löschen. Chip „Fragen“ = Mini-Chat.")
                 }
 
+                Section {
+                    if let think = thinkStatus {
+                        LabeledContent("Status") {
+                            Text(think.isReady ? "Bereit" : "Nicht installiert")
+                                .foregroundStyle(think.isReady ? NOCOAITheme.success : Color.orange)
+                        }
+                        if let model = think.thinkModel, !model.isEmpty {
+                            LabeledContent("Installiert", value: model)
+                        }
+                        if let rec = think.recommendedThink, !rec.isEmpty {
+                            LabeledContent("Empfohlen", value: rec)
+                        }
+                        if let flash = think.flashModel, !flash.isEmpty {
+                            LabeledContent("Flash", value: flash)
+                        }
+                        if let hw = think.hardware {
+                            if let ram = hw.totalRamGb {
+                                LabeledContent("RAM", value: String(format: "%.0f GB", ram))
+                            }
+                            if let vram = hw.vramMiB, vram > 0 {
+                                LabeledContent("VRAM", value: "\(vram) MiB")
+                            }
+                            if let reason = hw.thinkReason, !reason.isEmpty {
+                                Text(reason)
+                                    .font(.caption)
+                                    .foregroundStyle(.secondary)
+                            }
+                        }
+                        if let msg = think.message, !msg.isEmpty {
+                            Text(msg)
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                        }
+                    } else if thinkLoading {
+                        ProgressView("Status laden…")
+                    } else if !thinkError.isEmpty {
+                        Text(thinkError)
+                            .font(.caption)
+                            .foregroundStyle(.orange)
+                    } else {
+                        Text("PC verbinden, um Think-Status zu sehen.")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                    }
+
+                    Button {
+                        Task { await refreshThinkStatus() }
+                    } label: {
+                        Label("Status aktualisieren", systemImage: "arrow.clockwise")
+                    }
+                    .disabled(!connection.isOnline || thinkInstalling)
+
+                    if !(thinkStatus?.isReady ?? false) {
+                        Button {
+                            Task { await installThinkModel() }
+                        } label: {
+                            if thinkInstalling {
+                                Label("Installiere Think… (kann dauern)", systemImage: "arrow.down.circle")
+                            } else {
+                                Label("Think einrichten", systemImage: "brain.head.profile")
+                            }
+                        }
+                        .disabled(!connection.isOnline || thinkInstalling || thinkLoading)
+                    }
+                } header: {
+                    Text("Think-Modell")
+                } footer: {
+                    Text("FLASH bleibt das schnelle Modell. THINK ist stärker und wird nur bei komplexen Aufgaben oder manueller Auswahl geladen. Voice AI und Bilder bleiben getrennt.")
+                }
+
                 Section("Erweitert") {
                     NavigationLink {
                         CodeStudioView()
@@ -428,6 +502,7 @@ struct SettingsView: View {
                 Task {
                     await connection.profile.pullRemote()
                     nameDraft = connection.profile.profile.userName
+                    await refreshThinkStatus()
                     // Arm after bind so opening Settings never speaks
                     try? await Task.sleep(nanoseconds: 400_000_000)
                     await MainActor.run { voicePreviewArmed = true }
@@ -437,6 +512,48 @@ struct SettingsView: View {
                 previewSynth.stopSpeaking(at: .immediate)
                 connection.profile.setName(nameDraft)
             }
+    }
+
+    private func refreshThinkStatus() async {
+        guard connection.isOnline, let api = connection.companionAPI() else {
+            thinkError = connection.isOnline ? "API nicht bereit" : "Offline"
+            return
+        }
+        thinkLoading = true
+        thinkError = ""
+        defer { thinkLoading = false }
+        do {
+            thinkStatus = try await api.fetchThinkModelStatus()
+        } catch {
+            thinkError = error.localizedDescription
+        }
+    }
+
+    private func installThinkModel() async {
+        guard connection.isOnline, let api = connection.companionAPI() else {
+            thinkError = "PC offline — Think kann nicht installiert werden"
+            return
+        }
+        thinkInstalling = true
+        thinkError = ""
+        defer { thinkInstalling = false }
+        do {
+            let resp = try await api.installThinkModel()
+            if let think = resp.think {
+                thinkStatus = think
+            } else {
+                await refreshThinkStatus()
+            }
+            if resp.ok != true {
+                thinkError = resp.error ?? "Installation fehlgeschlagen"
+                HapticService.soft()
+            } else {
+                HapticService.success()
+            }
+        } catch {
+            thinkError = error.localizedDescription
+            HapticService.soft()
+        }
     }
 
     private var appVersionLabel: String {
@@ -462,7 +579,7 @@ struct SettingsView: View {
         var parts: [String] = []
         parts.append("Internetzugriff: \(speakLiveKnowledge.title) — bei aktuellen Fragen sagt NOCO „Ich schaue kurz nach.“ und nutzt Live Knowledge.")
         if voiceId == NOCOSpeakVoiceID.natural {
-            parts.append("NOCO Natural Voice: beste Premium-/Neural-Stimme auf dem Gerät + natürlichere Prosodie — ohne Cloud-Latenz.")
+            parts.append("Natural AI Voice: beste Premium-/Neural-Stimme auf dem Gerät, variable Prosodie und Gesprächsstil — ohne Cloud-Latenz und ohne schwere PC-TTS.")
         }
         parts.append(
             speakFullAccess
@@ -543,9 +660,11 @@ struct SettingsView: View {
 
     private func previewVoice(identifier: String) {
         previewSynth.stopSpeaking(at: .immediate)
-        let sample = "Hallo, ich bin NOCO. So klingt diese Stimme im Sprachmodus."
         let natural = identifier == NOCOSpeakVoiceID.natural
             || (identifier.isEmpty && NOCOSpeakVoiceSettings.usesNaturalPipeline)
+        let sample = natural
+            ? "Ja — sieht gut aus. Morgen wird's voraussichtlich sonnig. So klingt Natural AI Voice."
+            : "Hallo, ich bin NOCO. So klingt diese Stimme im Sprachmodus."
         let text = natural ? VoiceService.naturalizeForSpeech(sample) : sample
         let utterance = AVSpeechUtterance(string: text)
 
@@ -558,8 +677,16 @@ struct SettingsView: View {
             utterance.voice = AVSpeechSynthesisVoice(identifier: identifier)
                 ?? AVSpeechSynthesisVoice(language: "de-DE")
         }
-        utterance.rate = NOCOSpeakVoiceSettings.resolvedRate(naturalBase: natural)
-        utterance.pitchMultiplier = NOCOSpeakVoiceSettings.resolvedPitch(naturalBase: natural)
+        let prosody = NOCOSpeakVoiceSettings.chunkProsody(
+            text: text,
+            index: 0,
+            total: 1,
+            naturalBase: natural
+        )
+        utterance.rate = prosody.rate
+        utterance.pitchMultiplier = prosody.pitch
+        utterance.preUtteranceDelay = prosody.prePause
+        utterance.postUtteranceDelay = prosody.postPause
         utterance.volume = 1.0
         do {
             try AVAudioSession.sharedInstance().setCategory(.playback, mode: .spokenAudio, options: [.duckOthers])

@@ -21,7 +21,10 @@ enum ChatUserFacingText {
         }
 
         // Drop leading [NOCO …] instruction blocks.
-        if text.hasPrefix("[") || text.uppercased().contains("[NOCO") {
+        if text.hasPrefix("[") || text.uppercased().contains("[NOCO")
+            || text.lowercased().contains("kurze gesprochene")
+            || (text.lowercased().contains("voice ai") && text.lowercased().contains("antwort"))
+            || text.lowercased().hasPrefix("system:") {
             let lines = text
                 .replacingOccurrences(of: "\r\n", with: "\n")
                 .components(separatedBy: "\n")
@@ -32,7 +35,10 @@ enum ChatUserFacingText {
                 let lower = line.lowercased()
                 if line.hasPrefix("[") && line.contains("]") { return false }
                 if lower.hasPrefix("noco speak") { return false }
+                if lower.hasPrefix("system:") { return false }
+                if lower == "voice ai" || lower.hasPrefix("voice ai:") { return false }
                 if lower.contains("gesprochene antwort") { return false }
+                if lower.contains("kurze gesprochene") { return false }
                 if lower.contains("antworte ausschließlich") { return false }
                 if lower.contains("keine meta") { return false }
                 if lower.contains("halte dich besonders kurz") { return false }
@@ -81,7 +87,10 @@ enum ChatUserFacingText {
     private static func looksLikeInstruction(_ line: String) -> Bool {
         let lower = line.lowercased()
         if lower.hasPrefix("[") { return true }
+        if lower.hasPrefix("system:") { return true }
+        if lower == "voice ai" || lower.hasPrefix("voice ai:") { return true }
         if lower.contains("gesprochene antwort") { return true }
+        if lower.contains("kurze gesprochene") { return true }
         if lower.contains("auf deutsch") && lower.contains("antwort") { return true }
         if lower.contains("1–4 sätze") || lower.contains("1-4 sätze") { return true }
         if lower.contains("keine meta") { return true }

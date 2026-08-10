@@ -168,11 +168,8 @@ struct ChatHubView: View {
                             }
                         }
                         StatusBadge(
-                            online: connection.isOnline,
-                            label: connection.isOnline
-                                ? (connection.activePath == .remote ? "Remote" : "Online")
-                                : "Offline",
-                            detail: connection.isOnline ? connection.onlineBadgeDetail : nil
+                            state: connection.connectionBadgeState,
+                            detail: connection.isOnline ? connection.onlineBadgeDetail : connection.reconnectStatusLine
                         )
                     }
                 }

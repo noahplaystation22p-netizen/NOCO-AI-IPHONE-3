@@ -221,10 +221,7 @@ struct MoreView: View {
                             .foregroundStyle(NOCOAITheme.secondaryText(for: scheme))
                     }
                     Spacer()
-                    StatusBadge(
-                        online: connection.isOnline,
-                        label: connection.isOnline ? "Live" : "Offline"
-                    )
+                    StatusBadge(state: connection.connectionBadgeState)
                 }
 
                 if let features = connection.features, !features.enabled.isEmpty {

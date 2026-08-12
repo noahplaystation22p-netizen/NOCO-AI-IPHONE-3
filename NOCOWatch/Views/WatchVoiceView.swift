@@ -4,7 +4,10 @@ struct WatchVoiceView: View {
     @EnvironmentObject private var controller: WatchController
 
     private var voice: WatchVoiceEngine { controller.voice }
-    private var phase: WatchStatusSnapshot.Phase { voice.phase }
+    private var phase: WatchStatusSnapshot.Phase {
+        if voice.phase == .error { return .listening }
+        return voice.phase
+    }
 
     var body: some View {
         ScrollView {
@@ -15,6 +18,13 @@ struct WatchVoiceView: View {
                     .font(.headline.weight(.semibold))
                     .foregroundStyle(.white)
                     .animation(.easeInOut(duration: 0.25), value: phase)
+
+                if let hint = voice.statusHint {
+                    Text(WatchUserFacingError.sanitize(hint))
+                        .font(.caption2)
+                        .foregroundStyle(.orange)
+                        .multilineTextAlignment(.center)
+                }
 
                 if voice.isActive, phase == .listening || phase == .idle {
                     TextField("Diktieren oder tippen…", text: Binding(
@@ -34,7 +44,7 @@ struct WatchVoiceView: View {
                     }
                     .buttonStyle(.borderedProminent)
                     .tint(WatchRainbow.teal)
-                    .disabled(voice.draft.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+                    .disabled(voice.draft.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || phase == .thinking || phase == .speaking)
                 }
 
                 if !voice.transcript.isEmpty, phase != .speaking {
@@ -82,7 +92,7 @@ struct WatchVoiceView: View {
         case .listening: return "Listening…"
         case .thinking, .connecting: return "Thinking…"
         case .speaking: return "NOCO is speaking"
-        case .error: return "Nicht erreichbar"
+        case .error: return "Ready"
         }
     }
 }

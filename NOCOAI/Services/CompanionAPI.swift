@@ -61,21 +61,13 @@ enum CompanionAPIError: LocalizedError {
             return ConnectionFailureCode.remoteAccessDisabled.userMessage
         case .server(let msg):
             return msg
-        case .failure(let code, let detail):
-            if let detail, !detail.isEmpty, code == .unknown {
-                return "\(code.userMessage) (\(detail))"
-            }
+        case .failure(let code, _):
+            // Never leak raw NWError / POSIX codes into the normal UI.
             return code.userMessage
         case .network(let err):
             // Classify precisely — never use a generic “HTTP blocked” fallback.
             let code = ConnectionFailureCode.classify(err)
-            if code == .httpNotAllowedByATS {
-                return code.userMessage
-            }
-            if code != .unknown {
-                return code.userMessage
-            }
-            return err.localizedDescription
+            return code.userMessage
         case .decoding:
             return "Antwort konnte nicht gelesen werden"
         }

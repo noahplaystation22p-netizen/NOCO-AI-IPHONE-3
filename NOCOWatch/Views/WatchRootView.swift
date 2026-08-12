@@ -3,6 +3,7 @@ import SwiftUI
 struct WatchRootView: View {
     @StateObject private var controller = WatchController()
     @State private var crownIndex: Double = 0
+    @Environment(\.scenePhase) private var scenePhase
 
     var body: some View {
         TabView(selection: $controller.section) {
@@ -18,6 +19,7 @@ struct WatchRootView: View {
         .tabViewStyle(.verticalPage)
         .background(Color.black)
         .onAppear { controller.onAppear() }
+        .onDisappear { controller.onDisappear() }
         .environmentObject(controller)
         .focusable(true)
         .digitalCrownRotation(
@@ -27,7 +29,7 @@ struct WatchRootView: View {
             by: 1,
             sensitivity: .medium,
             isContinuous: false,
-            isHapticFeedbackEnabled: true
+            isHapticFeedbackEnabled: false
         )
         .onChange(of: crownIndex) { _, newValue in
             controller.snapCrown(to: Int(newValue.rounded()))
@@ -35,6 +37,18 @@ struct WatchRootView: View {
         .onChange(of: controller.section) { _, newSection in
             if let idx = WatchSection.allCases.firstIndex(of: newSection) {
                 crownIndex = Double(idx)
+            }
+        }
+        .onChange(of: scenePhase) { _, phase in
+            if phase == .background || phase == .inactive {
+                // Don't leave thinking/speaking animations stuck.
+                if controller.voice.isActive == false,
+                   controller.localPhase == .thinking || controller.localPhase == .speaking {
+                    controller.localPhase = .idle
+                }
+            }
+            if phase == .active {
+                controller.session.refreshStatus()
             }
         }
     }

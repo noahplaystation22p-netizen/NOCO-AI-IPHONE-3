@@ -135,7 +135,7 @@ struct WatchIntelligenceCore: View {
                 .foregroundStyle(
                     LinearGradient(colors: WatchRainbow.flow, startPoint: .topLeading, endPoint: .bottomTrailing)
                 )
-                .symbolEffect(.pulse, isActive: phase == .listening || phase == .thinking)
+                .modifier(WatchPulseIfAvailable(active: phase == .listening || phase == .thinking || phase == .speaking))
         }
         .accessibilityHidden(true)
     }
@@ -147,6 +147,19 @@ struct WatchIntelligenceCore: View {
         case .speaking: return "speaker.wave.2.fill"
         case .error: return "exclamationmark.triangle"
         case .idle: return "brain.head.profile"
+        }
+    }
+}
+
+/// Soft pulse only while active — stops cleanly when phase leaves listening/thinking/speaking.
+private struct WatchPulseIfAvailable: ViewModifier {
+    let active: Bool
+
+    func body(content: Content) -> some View {
+        if #available(watchOS 10.0, *) {
+            content.symbolEffect(.pulse, isActive: active)
+        } else {
+            content.opacity(active ? 1 : 0.85)
         }
     }
 }

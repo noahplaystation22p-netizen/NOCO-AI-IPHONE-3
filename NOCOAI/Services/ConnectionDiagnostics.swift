@@ -29,43 +29,43 @@ enum ConnectionFailureCode: String, Codable, Equatable {
         case .ok:
             return "Verbindung OK"
         case .httpNotAllowedByATS:
-            return "Der Server ist erreichbar bzw. die Anfrage wurde vorbereitet, aber iOS blockiert HTTP (ATS). Bitte neuestes NOCO-IPA installieren."
+            return "NOCO ist gerade nicht erreichbar. Bitte neuestes NOCO-IPA installieren."
         case .serverUnreachable:
-            return "PC nicht erreichbar. Tailscale/WLAN und ob NOCO am PC läuft prüfen."
+            return "NOCO ist gerade nicht erreichbar. WLAN/Tailscale und PC prüfen."
         case .connectionTimeout:
-            return "Zeitüberschreitung — Host antwortet nicht rechtzeitig (Firewall, falscher Port oder PC aus)."
+            return "Verbindung wird wiederhergestellt…"
         case .portUnreachable:
-            return "Port nicht erreichbar — NOCO-Server läuft ggf. nicht, oder Windows-Firewall blockiert den Port."
+            return "NOCO ist gerade nicht erreichbar. Läuft der PC-Server?"
         case .tailscaleUnavailable:
-            return "Tailscale ist nicht aktiv oder die Tailscale-IP fehlt. Auf dem PC „Remote starten“, am iPhone Tailscale-VPN an."
+            return "NOCO ist offline. Tailscale am iPhone und PC prüfen."
         case .firewallOrNetworkBlock:
-            return "Netzwerk/Firewall blockiert die Verbindung (TCP kommt nicht zustande)."
+            return "NOCO ist gerade nicht erreichbar."
         case .httpError4xx:
-            return "Server antwortet, aber die Anfrage wurde abgelehnt (HTTP 4xx)."
+            return "NOCO hat die Anfrage abgelehnt."
         case .httpError5xx:
-            return "Server-Fehler (HTTP 5xx) — NOCO am PC neu starten."
+            return "NOCO hat einen Serverfehler. PC neu starten."
         case .httpError401:
-            return "Nicht autorisiert — bitte erneut koppeln."
+            return "Bitte erneut koppeln."
         case .httpError403:
-            return "Zugriff verweigert — Remote am PC aktivieren oder Token prüfen."
+            return "Zugriff verweigert. Remote am PC prüfen."
         case .httpError404:
-            return "API-Route fehlt — NOCO AI X am PC aktualisieren/neu starten."
+            return "NOCO am PC aktualisieren."
         case .invalidRemoteHost:
-            return "Ungültige Adresse — nur die IP eingeben, z. B. 100.64.0.1 (ohne http://)."
+            return "Ungültige Adresse — nur die IP eingeben."
         case .noServerResponse:
-            return "TCP ggf. ok, aber keine HTTP-Antwort vom NOCO-Server."
+            return "Verbindung wird wiederhergestellt…"
         case .tlsError:
-            return "TLS/HTTPS-Problem — NOCO nutzt HTTP. Nur die IP ohne https:// verwenden."
+            return "NOCO ist gerade nicht erreichbar."
         case .remoteAccessDisabled:
             return "Remote-Zugriff ist auf dem NOCO-PC deaktiviert."
         case .dnsFailure:
-            return "Hostnamen konnte nicht aufgelöst werden."
+            return "NOCO ist gerade nicht erreichbar."
         case .offline:
-            return "Keine Verbindung (Lokal und Remote nicht erreichbar)."
+            return "NOCO ist offline."
         case .remoteStreamInterrupted:
-            return "HTTP-Stream kurz unterbrochen (NWError-96) — Verbindung bleibt aktiv, Retry läuft."
+            return "Verbindung wird wiederhergestellt…"
         case .unknown:
-            return "Unbekannter Verbindungsfehler — Details im Diagnose-Log."
+            return "NOCO ist gerade nicht erreichbar."
         }
     }
 

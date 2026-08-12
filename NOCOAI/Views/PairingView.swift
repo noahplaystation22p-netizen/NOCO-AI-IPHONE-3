@@ -90,7 +90,7 @@ struct PairingView: View {
                 }
 
                 if let error = connection.lastError {
-                    Text(error)
+                    Text(WatchUserFacingError.sanitize(error))
                         .font(.footnote)
                         .foregroundStyle(NOCOAITheme.danger)
                         .multilineTextAlignment(.center)

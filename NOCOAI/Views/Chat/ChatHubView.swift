@@ -22,7 +22,7 @@ struct ChatHubView: View {
                         connection.chat.lastError = nil
                     } label: {
                         HStack(spacing: 8) {
-                            Text(error)
+                            Text(WatchUserFacingError.sanitize(error))
                                 .font(.caption)
                                 .foregroundStyle(.white)
                                 .multilineTextAlignment(.leading)

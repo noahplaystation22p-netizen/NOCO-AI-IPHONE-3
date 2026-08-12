@@ -1,5 +1,6 @@
 import Foundation
 import WatchConnectivity
+import os
 
 /// iPhone-side bridge: Watch sends asks → iPhone relays to Companion (Flash only).
 @MainActor
@@ -8,8 +9,8 @@ final class WatchConnectivityBridge: NSObject, ObservableObject {
 
     private weak var connection: ConnectionStore?
     private var session: WCSession?
-    /// In-flight ask requests keyed by requestId.
-    private var pendingReplies: [String: CheckedContinuation<String?, Never>] = [:]
+    private var inFlightRequestIds = Set<String>()
+    private let log = Logger(subsystem: "de.noco.nocoai", category: "WatchBridge")
 
     func bind(connection: ConnectionStore) {
         self.connection = connection
@@ -18,6 +19,7 @@ final class WatchConnectivityBridge: NSObject, ObservableObject {
         s.delegate = self
         s.activate()
         session = s
+        log.info("Watch bridge bound + activating")
     }
 
     /// Push current status to paired Watch.
@@ -26,8 +28,9 @@ final class WatchConnectivityBridge: NSObject, ObservableObject {
         let msg = WatchBridgeMessage(action: .statusSnapshot, snapshot: snapshot)
         let payload = WatchBridgeCodec.encode(msg)
         if session.isReachable {
-            session.sendMessage(payload, replyHandler: nil) { _ in
+            session.sendMessage(payload, replyHandler: nil) { [weak self] _ in
                 try? session.updateApplicationContext(payload)
+                self?.log.info("Watch push via context fallback")
             }
         } else {
             try? session.updateApplicationContext(payload)
@@ -47,7 +50,7 @@ final class WatchConnectivityBridge: NSObject, ObservableObject {
         var statusLine = connection.isOnline ? "Ready" : "NOCO Offline"
         if connection.isReconnecting {
             phase = .connecting
-            statusLine = "Connecting…"
+            statusLine = WatchUserFacingError.restoring
         }
         if connection.speak.isRunning {
             switch connection.speak.sessionPhase {
@@ -90,6 +93,29 @@ final class WatchConnectivityBridge: NSObject, ObservableObject {
         let chatLast = connection.chat.messages.last(where: { $0.role == .assistant && !$0.isStreaming })?.text ?? ""
         let resolvedLast = !last.isEmpty ? last : chatLast
 
+        let phoneReachable = session?.isReachable ?? false
+        let watchPhone: WatchLinkState = phoneReachable ? .connected : .reconnecting
+        let phoneServer: WatchLinkState = {
+            if connection.isReconnecting { return .reconnecting }
+            if connection.isOnline { return .connected }
+            return .offline
+        }()
+        let ollamaReady = connection.isOnline && !(connection.status.model?.isEmpty ?? true)
+        let latency = connection.status.responseTimeMs.map { Int($0.rounded()) }
+        let rawErr = connection.lastError?.trimmingCharacters(in: .whitespacesAndNewlines)
+        let lastErr: String? = {
+            guard let e = rawErr, !e.isEmpty else { return nil }
+            return WatchUserFacingError.sanitize(e)
+        }()
+        let techErr: String? = {
+            guard let e = rawErr, !e.isEmpty else { return nil }
+            let code = ConnectionDiagnostics.shared.snapshot.failureCode
+            if code != .ok {
+                return "\(code.rawValue): \(e)"
+            }
+            return e
+        }()
+
         return WatchStatusSnapshot(
             isOnline: connection.isOnline,
             connection: path,
@@ -98,17 +124,42 @@ final class WatchConnectivityBridge: NSObject, ObservableObject {
             statusLine: statusLine,
             lastAnswer: String(resolvedLast.prefix(1200)),
             activeJob: job,
-            phoneReachable: session?.isReachable ?? false
+            phoneReachable: phoneReachable,
+            watchPhoneLink: watchPhone,
+            phoneServerLink: phoneServer,
+            ollamaReady: ollamaReady,
+            latencyMs: latency,
+            lastUserError: lastErr,
+            lastTechnicalError: techErr
         )
     }
 
     private func handleAsk(_ text: String, requestId: String, voice: Bool) async {
+        if inFlightRequestIds.contains(requestId) {
+            log.info("Duplicate ask \(requestId, privacy: .public) ignored")
+            return
+        }
+        inFlightRequestIds.insert(requestId)
+        defer { inFlightRequestIds.remove(requestId) }
+
         guard let connection else {
-            reply(requestId: requestId, text: nil, error: "iPhone-App nicht bereit.", voice: voice)
+            reply(requestId: requestId, text: nil, error: WatchUserFacingError.phoneAway, voice: voice)
+            return
+        }
+
+        // Soft wait while iPhone is reconnecting — avoid instant error flash.
+        if connection.isReconnecting || !connection.isOnline {
+            for attempt in 1...4 {
+                try? await Task.sleep(nanoseconds: UInt64(attempt) * 700_000_000)
+                if connection.isOnline && !connection.isReconnecting { break }
+            }
+        }
+        if connection.isReconnecting {
+            reply(requestId: requestId, text: nil, error: WatchUserFacingError.restoring, voice: voice)
             return
         }
         guard connection.isOnline else {
-            reply(requestId: requestId, text: nil, error: "NOCO ist gerade nicht erreichbar.", voice: voice)
+            reply(requestId: requestId, text: nil, error: WatchUserFacingError.unreachable, voice: voice)
             return
         }
 
@@ -124,6 +175,7 @@ final class WatchConnectivityBridge: NSObject, ObservableObject {
             Frage: \(text)
             """
 
+        log.info("Flash relay start voice=\(voice, privacy: .public)")
         let replyText = await connection.chat.sendAndReturnReply(
             prompt,
             modeOverride: .flash,
@@ -132,16 +184,18 @@ final class WatchConnectivityBridge: NSObject, ObservableObject {
         )
         let clean = replyText?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
         if clean.isEmpty {
-            reply(requestId: requestId, text: nil, error: "Keine Antwort erhalten.", voice: voice)
+            reply(requestId: requestId, text: nil, error: WatchUserFacingError.empty, voice: voice)
         } else {
             reply(requestId: requestId, text: clean, error: nil, voice: voice)
             pushSnapshot(buildSnapshot(from: connection))
+            log.info("Flash relay delivered")
         }
     }
 
     private func reply(requestId: String, text: String?, error: String?, voice: Bool) {
         let action: WatchBridgeAction = voice ? .voiceReply : .askReply
-        let msg = WatchBridgeMessage(action: action, requestId: requestId, text: text, error: error)
+        let friendly = error.map { WatchUserFacingError.sanitize($0) }
+        let msg = WatchBridgeMessage(action: action, requestId: requestId, text: text, error: friendly)
         sendToWatch(msg)
         if let t = text, !t.isEmpty {
             sendToWatch(WatchBridgeMessage(action: .lastAnswer, text: t))
@@ -152,7 +206,9 @@ final class WatchConnectivityBridge: NSObject, ObservableObject {
         guard let session, session.activationState == .activated else { return }
         let payload = WatchBridgeCodec.encode(message)
         if session.isReachable {
-            session.sendMessage(payload, replyHandler: nil, errorHandler: nil)
+            session.sendMessage(payload, replyHandler: nil) { _ in
+                try? session.updateApplicationContext(payload)
+            }
         } else {
             try? session.updateApplicationContext(payload)
         }
@@ -166,8 +222,14 @@ extension WatchConnectivityBridge: WCSessionDelegate {
         error: Error?
     ) {
         Task { @MainActor in
+            log.info("WCSession activation \(String(describing: activationState), privacy: .public)")
             if let connection {
                 pushSnapshot(buildSnapshot(from: connection))
+            }
+            // Drain any queued application context from Watch.
+            let ctx = session.receivedApplicationContext
+            if !ctx.isEmpty {
+                await handleIncoming(ctx)
             }
         }
     }
@@ -179,6 +241,7 @@ extension WatchConnectivityBridge: WCSessionDelegate {
 
     nonisolated func sessionReachabilityDidChange(_ session: WCSession) {
         Task { @MainActor in
+            log.info("Watch reachability \(session.isReachable, privacy: .public)")
             if let connection {
                 pushSnapshot(buildSnapshot(from: connection))
             }
@@ -212,7 +275,11 @@ extension WatchConnectivityBridge: WCSessionDelegate {
         }
     }
 
-    nonisolated func session(_ session: WCSession, didReceiveApplicationContext applicationContext: [String: Any]) {}
+    nonisolated func session(_ session: WCSession, didReceiveApplicationContext applicationContext: [String: Any]) {
+        Task { @MainActor in
+            await handleIncoming(applicationContext)
+        }
+    }
 
     @MainActor
     private func handleIncoming(_ dict: [String: Any]) async {

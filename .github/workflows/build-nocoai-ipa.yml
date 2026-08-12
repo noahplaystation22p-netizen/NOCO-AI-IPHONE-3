@@ -40,11 +40,11 @@ jobs:
             local clean_flag="$1"
             rm -rf build/DerivedData
             # shellcheck disable=SC2086
+            # Do NOT force -sdk iphoneos: Watch companion must compile with watchOS SDK.
             xcodebuild $clean_flag build \
               -project NOCOAI.xcodeproj \
               -scheme NOCOAI \
               -configuration Release \
-              -sdk iphoneos \
               -destination 'generic/platform=iOS' \
               -derivedDataPath build/DerivedData \
               -jobs 1 \
@@ -103,6 +103,14 @@ jobs:
           echo "Found Live Activity widget: $WIDGET_APEX"
           echo "Found AI keyboard: $KEYBOARD_APEX"
 
+          WATCH_APP=$(find "$APP_PATH" -path "*/Watch/*.app" -type d 2>/dev/null | head -1 || true)
+          if [ -z "$WATCH_APP" ]; then
+            echo "FATAL: Watch companion app missing under Watch/ — Apple Watch install will not work"
+            find "$APP_PATH" -maxdepth 4 -type d
+            exit 1
+          fi
+          echo "Found Watch app: $WATCH_APP"
+
           # Force ATS cleartext allow — Tailscale 100.x is not "local networking".
           # GENERATE_INFOPLIST_FILE merges can drop nested ATS dicts; inject explicitly.
           APP_PLIST="$APP_PATH/Info.plist"
@@ -130,7 +138,12 @@ jobs:
             /usr/libexec/PlistBuddy -c "Add :NSAppTransportSecurity:NSAllowsLocalNetworking bool true" "$KBD_PLIST"
           fi
 
-          # Sign nested extension first, then the app (ad-hoc)
+          # Sign nested Watch app + extensions first, then the app (ad-hoc)
+          if [ -n "$WATCH_APP" ]; then
+            codesign --force --sign - --timestamp=none \
+              --entitlements NOCOWatch/NOCOWatch.entitlements "$WATCH_APP" || \
+              codesign --force --sign - --timestamp=none "$WATCH_APP"
+          fi
           find "$APP_PATH" -name "*.appex" -type d -print0 | while IFS= read -r -d '' ext; do
             case "$(basename "$ext")" in
               NOCOAIKeyboard.appex)
@@ -171,6 +184,11 @@ jobs:
           }
           unzip -l NOCO-AI.ipa | grep -q "NOCOAIBroadcast.appex" || {
             echo "FATAL: IPA missing NOCOAIBroadcast.appex — Live Screen broadcast cannot work"
+            exit 1
+          }
+          unzip -l NOCO-AI.ipa | grep -q "Watch/NOCOWatch.app" || {
+            echo "FATAL: IPA missing Watch/NOCOWatch.app — Apple Watch companion missing"
+            unzip -l NOCO-AI.ipa | grep -i watch || true
             exit 1
           }
 

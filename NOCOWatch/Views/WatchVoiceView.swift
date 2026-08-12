@@ -16,6 +16,27 @@ struct WatchVoiceView: View {
                     .foregroundStyle(.white)
                     .animation(.easeInOut(duration: 0.25), value: phase)
 
+                if voice.isActive, phase == .listening || phase == .idle {
+                    TextField("Diktieren oder tippen…", text: Binding(
+                        get: { voice.draft },
+                        set: { voice.draft = $0 }
+                    ))
+                    .textInputAutocapitalization(.sentences)
+                    .submitLabel(.send)
+                    .onSubmit {
+                        Task { await voice.submitDraft() }
+                    }
+
+                    Button {
+                        Task { await voice.submitDraft() }
+                    } label: {
+                        Label("Senden", systemImage: "paperplane.fill")
+                    }
+                    .buttonStyle(.borderedProminent)
+                    .tint(WatchRainbow.teal)
+                    .disabled(voice.draft.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+                }
+
                 if !voice.transcript.isEmpty, phase != .speaking {
                     Text(voice.transcript)
                         .font(.caption)
@@ -47,7 +68,7 @@ struct WatchVoiceView: View {
                     .tint(WatchRainbow.teal)
                 }
 
-                Text("Flash · kurze Antworten")
+                Text("Flash · Diktat über Tastatur-Mic")
                     .font(.caption2)
                     .foregroundStyle(.tertiary)
             }

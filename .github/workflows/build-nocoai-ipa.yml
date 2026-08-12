@@ -138,32 +138,49 @@ jobs:
             /usr/libexec/PlistBuddy -c "Add :NSAppTransportSecurity:NSAllowsLocalNetworking bool true" "$KBD_PLIST"
           fi
 
-          # Sign nested Watch app + extensions first, then the app (ad-hoc)
+          # Sign nested Watch app + extensions first, then the app (ad-hoc).
+          # --generate-entitlement-der is required for modern watchOS install checks.
           if [ -n "$WATCH_APP" ]; then
-            codesign --force --sign - --timestamp=none \
+            # Drop stale signature so nested resign is clean for sideloaders.
+            rm -rf "$WATCH_APP/_CodeSignature"
+            codesign --force --sign - --timestamp=none --generate-entitlement-der \
               --entitlements NOCOWatch/NOCOWatch.entitlements "$WATCH_APP" || \
-              codesign --force --sign - --timestamp=none "$WATCH_APP"
+            codesign --force --sign - --timestamp=none --generate-entitlement-der "$WATCH_APP"
+            # Fail early if Watch has no icon catalog (install shows blank + often fails).
+            if [ ! -f "$WATCH_APP/Assets.car" ] && [ ! -d "$WATCH_APP/AppIcon.appiconset" ]; then
+              ls -la "$WATCH_APP"
+              echo "FATAL: Watch app missing Assets.car / AppIcon — icon required for Watch install"
+              exit 1
+            fi
+            # Keep companion + version aligned with what iLoader expects.
+            /usr/libexec/PlistBuddy -c "Set :WKCompanionAppBundleIdentifier de.noco.nocoai.96R99M23VH" "$WATCH_APP/Info.plist" 2>/dev/null || \
+              /usr/libexec/PlistBuddy -c "Add :WKCompanionAppBundleIdentifier string de.noco.nocoai.96R99M23VH" "$WATCH_APP/Info.plist"
+            echo "=== Watch Info.plist ==="
+            /usr/libexec/PlistBuddy -c "Print :CFBundleIdentifier" "$WATCH_APP/Info.plist"
+            /usr/libexec/PlistBuddy -c "Print :WKCompanionAppBundleIdentifier" "$WATCH_APP/Info.plist"
+            /usr/libexec/PlistBuddy -c "Print :CFBundleVersion" "$WATCH_APP/Info.plist"
+            /usr/libexec/PlistBuddy -c "Print :CFBundleShortVersionString" "$WATCH_APP/Info.plist"
           fi
           find "$APP_PATH" -name "*.appex" -type d -print0 | while IFS= read -r -d '' ext; do
             case "$(basename "$ext")" in
               NOCOAIKeyboard.appex)
-                codesign --force --sign - --timestamp=none \
+                codesign --force --sign - --timestamp=none --generate-entitlement-der \
                   --entitlements NOCOAIKeyboard/NOCOAIKeyboard.entitlements "$ext"
                 ;;
               NOCOAISpeakWidget.appex)
-                codesign --force --sign - --timestamp=none \
+                codesign --force --sign - --timestamp=none --generate-entitlement-der \
                   --entitlements NOCOAISpeakWidget/NOCOAISpeakWidget.entitlements "$ext"
                 ;;
               NOCOAIBroadcast.appex)
-                codesign --force --sign - --timestamp=none \
+                codesign --force --sign - --timestamp=none --generate-entitlement-der \
                   --entitlements NOCOAIBroadcast/NOCOAIBroadcast.entitlements "$ext"
                 ;;
               *)
-                codesign --force --sign - --timestamp=none "$ext"
+                codesign --force --sign - --timestamp=none --generate-entitlement-der "$ext"
                 ;;
             esac
           done
-          codesign --force --sign - --timestamp=none \
+          codesign --force --sign - --timestamp=none --generate-entitlement-der \
             --entitlements NOCOAI/NOCOAI.entitlements "$APP_PATH"
 
           mkdir -p build/Payload

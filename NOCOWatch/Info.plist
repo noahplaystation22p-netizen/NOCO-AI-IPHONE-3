@@ -13,13 +13,15 @@
 	<key>CFBundleInfoDictionaryVersion</key>
 	<string>6.0</string>
 	<key>CFBundleName</key>
-	<string>$(PRODUCT_NAME)</string>
+	<string>NOCO AI</string>
 	<key>CFBundlePackageType</key>
 	<string>APPL</string>
 	<key>CFBundleShortVersionString</key>
-	<string>1.0</string>
+	<string>$(MARKETING_VERSION)</string>
 	<key>CFBundleVersion</key>
-	<string>1</string>
+	<string>$(CURRENT_PROJECT_VERSION)</string>
+	<key>MinimumOSVersion</key>
+	<string>$(WATCHOS_DEPLOYMENT_TARGET)</string>
 	<key>NSMicrophoneUsageDescription</key>
 	<string>NOCO Voice AI braucht das Mikro für Spracheingabe.</string>
 	<key>NSSpeechRecognitionUsageDescription</key>
@@ -34,6 +36,8 @@
 	<key>WKCompanionAppBundleIdentifier</key>
 	<string>de.noco.nocoai.96R99M23VH</string>
 	<key>WKRunsIndependentlyOfCompanionApp</key>
+	<false/>
+	<key>WKWatchOnly</key>
 	<false/>
 </dict>
 </plist>

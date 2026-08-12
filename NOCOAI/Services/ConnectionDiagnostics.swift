@@ -277,11 +277,8 @@ final class ConnectionDiagnostics: ObservableObject {
     }
 
     private func lkBool(_ value: Bool?) -> String {
-        switch value {
-        case true: return "Available"
-        case false: return "Unavailable"
-        case nil: return "Unknown"
-        }
+        guard let value else { return "Unknown" }
+        return value ? "Available" : "Unavailable"
     }
 
     private func boolLabel(_ value: Bool?, yes: String = "YES", no: String = "NO") -> String {

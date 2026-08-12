@@ -18,7 +18,6 @@ struct WatchLastAnswerView: View {
                         .font(.body)
                         .foregroundStyle(.white)
                         .multilineTextAlignment(.leading)
-                        .textSelection(.enabled)
                 }
             }
             .padding(.horizontal, 4)

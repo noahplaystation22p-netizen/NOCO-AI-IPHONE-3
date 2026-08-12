@@ -704,13 +704,11 @@
 				NA0000070000000000000001 /* Sources */,
 				NA0000040000000000000001 /* Frameworks */,
 				NA0000080000000000000001 /* Resources */,
-				WCH00000E0000000000000001 /* Embed Watch Content */,
 				WDG00000E0000000000000001 /* Embed Foundation Extensions */,
 			);
 			buildRules = (
 			);
 			dependencies = (
-				WCH00000D000000000000001 /* PBXTargetDependency */,
 				WDG00000D000000000000001 /* PBXTargetDependency */,
 				KBD00000D000000000000001 /* PBXTargetDependency */,
 				BC00000D000000000000001 /* PBXTargetDependency */,
@@ -1410,6 +1408,8 @@
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SDKROOT = watchos;
 				SKIP_INSTALL = YES;
+				SUPPORTED_PLATFORMS = "watchos watchsimulator";
+				SUPPORTS_MACCATALYST = NO;
 				SWIFT_EMIT_LOC_STRINGS = YES;
 				SWIFT_VERSION = 5.0;
 				TARGETED_DEVICE_FAMILY = 4;
@@ -1435,6 +1435,8 @@
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SDKROOT = watchos;
 				SKIP_INSTALL = YES;
+				SUPPORTED_PLATFORMS = "watchos watchsimulator";
+				SUPPORTS_MACCATALYST = NO;
 				SWIFT_EMIT_LOC_STRINGS = YES;
 				SWIFT_VERSION = 5.0;
 				TARGETED_DEVICE_FAMILY = 4;

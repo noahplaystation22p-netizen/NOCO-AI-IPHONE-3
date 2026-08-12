@@ -1,5 +1,7 @@
 import SwiftUI
-import WatchKit — watch-optimized (fewer layers on legacy hardware).
+import WatchKit
+
+/// Watch-optimized rainbow palette (fewer layers on legacy hardware).
 enum WatchRainbow {
     static let blue = Color(red: 0.32, green: 0.72, blue: 1.0)
     static let violet = Color(red: 0.58, green: 0.42, blue: 1.0)

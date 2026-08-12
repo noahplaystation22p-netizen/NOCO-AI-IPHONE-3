@@ -8,7 +8,7 @@ enum SharedBroadcastFrameStore {
     static let appGroupId = "group.de.noco.nocoai"
     static let jpegName = "livescreen-latest.jpg"
     static let metaName = "livescreen-meta.json"
-    static let preferredExtensionBundleId = "de.noco.nocoai.broadcast"
+    static let preferredExtensionBundleId = "de.noco.nocoai.96R99M23VH.broadcast"
 
     private static var containerURL: URL? {
         FileManager.default.containerURL(forSecurityApplicationGroupIdentifier: appGroupId)

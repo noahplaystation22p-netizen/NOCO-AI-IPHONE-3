@@ -130,6 +130,24 @@
 		BC0000010000000000000002 /* SharedBroadcastFrameStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = BC0000020000000000000002 /* SharedBroadcastFrameStore.swift */; };
 		BC0000010000000000000003 /* SharedBroadcastFrameStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = BC0000020000000000000002 /* SharedBroadcastFrameStore.swift */; };
 		BC0000010000000000000009 /* NOCOAIBroadcast.appex in Embed Foundation Extensions */ = {isa = PBXBuildFile; fileRef = BC0000030000000000000001 /* NOCOAIBroadcast.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
+
+		WCH0000010000000000000001 /* WatchBridgeModels.swift in Sources */ = {isa = PBXBuildFile; fileRef = WCH000002000000000000000E /* WatchBridgeModels.swift */; };
+		WCH0000010000000000000002 /* WatchConnectivityBridge.swift in Sources */ = {isa = PBXBuildFile; fileRef = WCH0000020000000000000010 /* WatchConnectivityBridge.swift */; };
+		WCH0000010000000000000003 /* NOCOWatchApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = WCH0000020000000000000001 /* NOCOWatchApp.swift */; };
+		WCH0000010000000000000004 /* WatchRootView.swift in Sources */ = {isa = PBXBuildFile; fileRef = WCH0000020000000000000002 /* WatchRootView.swift */; };
+		WCH0000010000000000000005 /* WatchAskView.swift in Sources */ = {isa = PBXBuildFile; fileRef = WCH0000020000000000000003 /* WatchAskView.swift */; };
+		WCH0000010000000000000006 /* WatchVoiceView.swift in Sources */ = {isa = PBXBuildFile; fileRef = WCH0000020000000000000004 /* WatchVoiceView.swift */; };
+		WCH0000010000000000000007 /* WatchLastAnswerView.swift in Sources */ = {isa = PBXBuildFile; fileRef = WCH0000020000000000000005 /* WatchLastAnswerView.swift */; };
+		WCH0000010000000000000008 /* WatchStatusView.swift in Sources */ = {isa = PBXBuildFile; fileRef = WCH0000020000000000000006 /* WatchStatusView.swift */; };
+		WCH0000010000000000000009 /* WatchRainbowGlow.swift in Sources */ = {isa = PBXBuildFile; fileRef = WCH0000020000000000000007 /* WatchRainbowGlow.swift */; };
+		WCH000001000000000000000A /* WatchVoiceEngine.swift in Sources */ = {isa = PBXBuildFile; fileRef = WCH0000020000000000000008 /* WatchVoiceEngine.swift */; };
+		WCH000001000000000000000B /* WatchSessionClient.swift in Sources */ = {isa = PBXBuildFile; fileRef = WCH0000020000000000000009 /* WatchSessionClient.swift */; };
+		WCH000001000000000000000C /* WatchHaptics.swift in Sources */ = {isa = PBXBuildFile; fileRef = WCH000002000000000000000A /* WatchHaptics.swift */; };
+		WCH000001000000000000000D /* WatchController.swift in Sources */ = {isa = PBXBuildFile; fileRef = WCH000002000000000000000B /* WatchController.swift */; };
+		WCH000001000000000000000E /* WatchAppIntents.swift in Sources */ = {isa = PBXBuildFile; fileRef = WCH000002000000000000000C /* WatchAppIntents.swift */; };
+		WCH000001000000000000000F /* NOCOComplication.swift in Sources */ = {isa = PBXBuildFile; fileRef = WCH000002000000000000000D /* NOCOComplication.swift */; };
+		WCH0000010000000000000010 /* WatchBridgeModels.swift in Sources */ = {isa = PBXBuildFile; fileRef = WCH000002000000000000000E /* WatchBridgeModels.swift */; };
+		WCH0000010000000000000011 /* NOCOWatch.app in Embed Watch Content */ = {isa = PBXBuildFile; fileRef = WCH0000030000000000000001 /* NOCOWatch.app */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
 /* End PBXBuildFile section */
 
 
@@ -154,6 +172,14 @@
 			proxyType = 1;
 			remoteGlobalIDString = BC0000060000000000000001;
 			remoteInfo = NOCOAIBroadcast;
+		};
+
+		WCH00000C000000000000001 /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = NA00000A0000000000000001 /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = WCH0000060000000000000001;
+			remoteInfo = NOCOWatch;
 		};
 /* End PBXContainerItemProxy section */
 
@@ -280,6 +306,25 @@
 		WDG0000020000000000000002 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
 		WDG0000020000000000000003 /* NOCOAISpeakWidget.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = NOCOAISpeakWidget.entitlements; sourceTree = "<group>"; };
 		WDG0000030000000000000001 /* NOCOAISpeakWidget.appex */ = {isa = PBXFileReference; explicitFileType = "wrapper.app-extension"; includeInIndex = 0; path = NOCOAISpeakWidget.appex; sourceTree = BUILT_PRODUCTS_DIR; };
+
+		WCH0000020000000000000001 /* NOCOWatchApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NOCOWatchApp.swift; sourceTree = "<group>"; };
+		WCH0000020000000000000002 /* WatchRootView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WatchRootView.swift; sourceTree = "<group>"; };
+		WCH0000020000000000000003 /* WatchAskView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WatchAskView.swift; sourceTree = "<group>"; };
+		WCH0000020000000000000004 /* WatchVoiceView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WatchVoiceView.swift; sourceTree = "<group>"; };
+		WCH0000020000000000000005 /* WatchLastAnswerView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WatchLastAnswerView.swift; sourceTree = "<group>"; };
+		WCH0000020000000000000006 /* WatchStatusView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WatchStatusView.swift; sourceTree = "<group>"; };
+		WCH0000020000000000000007 /* WatchRainbowGlow.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WatchRainbowGlow.swift; sourceTree = "<group>"; };
+		WCH0000020000000000000008 /* WatchVoiceEngine.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WatchVoiceEngine.swift; sourceTree = "<group>"; };
+		WCH0000020000000000000009 /* WatchSessionClient.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WatchSessionClient.swift; sourceTree = "<group>"; };
+		WCH000002000000000000000A /* WatchHaptics.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WatchHaptics.swift; sourceTree = "<group>"; };
+		WCH000002000000000000000B /* WatchController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WatchController.swift; sourceTree = "<group>"; };
+		WCH000002000000000000000C /* WatchAppIntents.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WatchAppIntents.swift; sourceTree = "<group>"; };
+		WCH000002000000000000000D /* NOCOComplication.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NOCOComplication.swift; sourceTree = "<group>"; };
+		WCH000002000000000000000E /* WatchBridgeModels.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WatchBridgeModels.swift; sourceTree = "<group>"; };
+		WCH0000020000000000000010 /* WatchConnectivityBridge.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WatchConnectivityBridge.swift; sourceTree = "<group>"; };
+		WCH00000200000000000000PL /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
+		WCH00000200000000000000EN /* NOCOWatch.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = NOCOWatch.entitlements; sourceTree = "<group>"; };
+		WCH0000030000000000000001 /* NOCOWatch.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = NOCOWatch.app; sourceTree = BUILT_PRODUCTS_DIR; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -311,6 +356,14 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
+
+		WCH0000040000000000000001 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 /* End PBXFrameworksBuildPhase section */
 
 /* Begin PBXGroup section */
@@ -321,6 +374,7 @@
 				WDG0000050000000000000001 /* NOCOAISpeakWidget */,
 				KBD0000050000000000000001 /* NOCOAIKeyboard */,
 				BC0000050000000000000001 /* NOCOAIBroadcast */,
+				WCH0000050000000000000001 /* NOCOWatch */,
 				WDG0000050000000000000002 /* Shared */,
 				NA0000050000000000000003 /* Products */,
 			);
@@ -349,6 +403,7 @@
 				WDG0000030000000000000001 /* NOCOAISpeakWidget.appex */,
 				KBD0000030000000000000001 /* NOCOAIKeyboard.appex */,
 				BC0000030000000000000001 /* NOCOAIBroadcast.appex */,
+				WCH0000030000000000000001 /* NOCOWatch.app */,
 			);
 			name = Products;
 			sourceTree = "<group>";
@@ -417,6 +472,7 @@
 				CC0000000000000000000005 /* ComputerControlController.swift */,
 				NA00000200000000000000V2 /* VisionLiveCamera.swift */,
 				NA00000200000000000000V3 /* VisionLiveSessionController.swift */,
+				WCH0000020000000000000010 /* WatchConnectivityBridge.swift */,
 			);
 			path = Services;
 			sourceTree = "<group>";
@@ -580,6 +636,7 @@
 				KBD00000200000000000000IMP /* KeyboardImprovePipeline.swift */,
 				KBD00000200000000000000TP /* KeyboardToolPipelines.swift */,
 				KBD0000020000000000000013 /* KeyboardChipPreferences.swift */,
+				WCH000002000000000000000E /* WatchBridgeModels.swift */,
 			);
 			path = Shared;
 			sourceTree = "<group>";
@@ -609,6 +666,34 @@
 			path = NOCOAIBroadcast;
 			sourceTree = "<group>";
 		};
+
+		WCH0000050000000000000001 /* NOCOWatch */ = {
+			isa = PBXGroup;
+			children = (
+				WCH0000050000000000000002 /* App */,
+				WCH0000050000000000000003 /* Views */,
+				WCH0000050000000000000004 /* Animations */,
+				WCH0000050000000000000005 /* Voice */,
+				WCH0000050000000000000006 /* Connectivity */,
+				WCH0000050000000000000007 /* Haptics */,
+				WCH0000050000000000000008 /* Models */,
+				WCH0000050000000000000009 /* AppIntents */,
+				WCH000005000000000000000A /* Complication */,
+				WCH00000200000000000000PL /* Info.plist */,
+				WCH00000200000000000000EN /* NOCOWatch.entitlements */,
+			);
+			path = NOCOWatch;
+			sourceTree = "<group>";
+		};
+		WCH0000050000000000000002 /* App */ = {isa = PBXGroup; children = (WCH0000020000000000000001 /* NOCOWatchApp.swift */); path = App; sourceTree = "<group>"; };
+		WCH0000050000000000000003 /* Views */ = {isa = PBXGroup; children = (WCH0000020000000000000002 /* WatchRootView.swift */, WCH0000020000000000000003 /* WatchAskView.swift */, WCH0000020000000000000004 /* WatchVoiceView.swift */, WCH0000020000000000000005 /* WatchLastAnswerView.swift */, WCH0000020000000000000006 /* WatchStatusView.swift */); path = Views; sourceTree = "<group>"; };
+		WCH0000050000000000000004 /* Animations */ = {isa = PBXGroup; children = (WCH0000020000000000000007 /* WatchRainbowGlow.swift */); path = Animations; sourceTree = "<group>"; };
+		WCH0000050000000000000005 /* Voice */ = {isa = PBXGroup; children = (WCH0000020000000000000008 /* WatchVoiceEngine.swift */); path = Voice; sourceTree = "<group>"; };
+		WCH0000050000000000000006 /* Connectivity */ = {isa = PBXGroup; children = (WCH0000020000000000000009 /* WatchSessionClient.swift */); path = Connectivity; sourceTree = "<group>"; };
+		WCH0000050000000000000007 /* Haptics */ = {isa = PBXGroup; children = (WCH000002000000000000000A /* WatchHaptics.swift */); path = Haptics; sourceTree = "<group>"; };
+		WCH0000050000000000000008 /* Models */ = {isa = PBXGroup; children = (WCH000002000000000000000B /* WatchController.swift */); path = Models; sourceTree = "<group>"; };
+		WCH0000050000000000000009 /* AppIntents */ = {isa = PBXGroup; children = (WCH000002000000000000000C /* WatchAppIntents.swift */); path = AppIntents; sourceTree = "<group>"; };
+		WCH000005000000000000000A /* Complication */ = {isa = PBXGroup; children = (WCH000002000000000000000D /* NOCOComplication.swift */); path = Complication; sourceTree = "<group>"; };
 /* End PBXGroup section */
 
 /* Begin PBXNativeTarget section */
@@ -619,11 +704,13 @@
 				NA0000070000000000000001 /* Sources */,
 				NA0000040000000000000001 /* Frameworks */,
 				NA0000080000000000000001 /* Resources */,
+				WCH00000E0000000000000001 /* Embed Watch Content */,
 				WDG00000E0000000000000001 /* Embed Foundation Extensions */,
 			);
 			buildRules = (
 			);
 			dependencies = (
+				WCH00000D000000000000001 /* PBXTargetDependency */,
 				WDG00000D000000000000001 /* PBXTargetDependency */,
 				KBD00000D000000000000001 /* PBXTargetDependency */,
 				BC00000D000000000000001 /* PBXTargetDependency */,
@@ -684,6 +771,24 @@
 			productReference = BC0000030000000000000001 /* NOCOAIBroadcast.appex */;
 			productType = "com.apple.product-type.app-extension";
 		};
+
+		WCH0000060000000000000001 /* NOCOWatch */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = WCH0000090000000000000002 /* Build configuration list for PBXNativeTarget "NOCOWatch" */;
+			buildPhases = (
+				WCH0000070000000000000001 /* Sources */,
+				WCH0000040000000000000001 /* Frameworks */,
+				WCH0000080000000000000001 /* Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			name = NOCOWatch;
+			productName = NOCOWatch;
+			productReference = WCH0000030000000000000001 /* NOCOWatch.app */;
+			productType = "com.apple.product-type.application";
+		};
 /* End PBXNativeTarget section */
 
 /* Begin PBXProject section */
@@ -706,6 +811,9 @@
 					BC0000060000000000000001 = {
 						CreatedOnToolsVersion = 15.0;
 					};
+					WCH0000060000000000000001 = {
+						CreatedOnToolsVersion = 15.0;
+					};
 				};
 			};
 			buildConfigurationList = NA0000090000000000000001 /* Build configuration list for PBXProject "NOCOAI" */;
@@ -723,6 +831,7 @@
 			projectRoot = "";
 			targets = (
 				NA0000060000000000000001 /* NOCOAI */,
+				WCH0000060000000000000001 /* NOCOWatch */,
 				WDG0000060000000000000001 /* NOCOAISpeakWidget */,
 				KBD0000060000000000000001 /* NOCOAIKeyboard */,
 				BC0000060000000000000001 /* NOCOAIBroadcast */,
@@ -742,6 +851,18 @@
 				BC0000010000000000000009 /* NOCOAIBroadcast.appex in Embed Foundation Extensions */,
 			);
 			name = "Embed Foundation Extensions";
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+
+		WCH00000E0000000000000001 /* Embed Watch Content */ = {
+			isa = PBXCopyFilesBuildPhase;
+			buildActionMask = 2147483647;
+			dstPath = "$(CONTENTS_FOLDER_PATH)/Watch";
+			dstSubfolderSpec = 16;
+			files = (
+				WCH0000010000000000000011 /* NOCOWatch.app in Embed Watch Content */,
+			);
+			name = "Embed Watch Content";
 			runOnlyForDeploymentPostprocessing = 0;
 		};
 /* End PBXCopyFilesBuildPhase section */
@@ -769,6 +890,14 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
+
+		WCH0000080000000000000001 /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 /* End PBXResourcesBuildPhase section */
 
 
@@ -788,9 +917,37 @@
 			target = BC0000060000000000000001 /* NOCOAIBroadcast */;
 			targetProxy = BC00000C000000000000001 /* PBXContainerItemProxy */;
 		};
+
+		WCH00000D000000000000001 /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = WCH0000060000000000000001 /* NOCOWatch */;
+			targetProxy = WCH00000C000000000000001 /* PBXContainerItemProxy */;
+		};
 /* End PBXTargetDependency section */
 
 /* Begin PBXSourcesBuildPhase section */
+		WCH0000070000000000000001 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				WCH0000010000000000000003 /* NOCOWatchApp.swift in Sources */,
+				WCH0000010000000000000004 /* WatchRootView.swift in Sources */,
+				WCH0000010000000000000005 /* WatchAskView.swift in Sources */,
+				WCH0000010000000000000006 /* WatchVoiceView.swift in Sources */,
+				WCH0000010000000000000007 /* WatchLastAnswerView.swift in Sources */,
+				WCH0000010000000000000008 /* WatchStatusView.swift in Sources */,
+				WCH0000010000000000000009 /* WatchRainbowGlow.swift in Sources */,
+				WCH000001000000000000000A /* WatchVoiceEngine.swift in Sources */,
+				WCH000001000000000000000B /* WatchSessionClient.swift in Sources */,
+				WCH000001000000000000000C /* WatchHaptics.swift in Sources */,
+				WCH000001000000000000000D /* WatchController.swift in Sources */,
+				WCH000001000000000000000E /* WatchAppIntents.swift in Sources */,
+				WCH000001000000000000000F /* NOCOComplication.swift in Sources */,
+				WCH0000010000000000000010 /* WatchBridgeModels.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+
 		KBD0000070000000000000001 /* Sources */ = {
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
@@ -913,6 +1070,8 @@
 				NA0000010000000000000013 /* QRScannerView.swift in Sources */,
 				NA0000010000000000000014 /* HostSanitizer.swift in Sources */,
 				NA0000010000000000000015 /* LocalNetworkService.swift in Sources */,
+				WCH0000010000000000000001 /* WatchBridgeModels.swift in Sources */,
+				WCH0000010000000000000002 /* WatchConnectivityBridge.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -1232,6 +1391,57 @@
 			};
 			name = Release;
 		};
+
+		WCH00000A0000000000000001 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CODE_SIGN_ENTITLEMENTS = NOCOWatch/NOCOWatch.entitlements;
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				ENABLE_PREVIEWS = YES;
+				GENERATE_INFOPLIST_FILE = NO;
+				INFOPLIST_FILE = NOCOWatch/Info.plist;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+				);
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = de.noco.nocoai.watchkitapp;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SDKROOT = watchos;
+				SKIP_INSTALL = YES;
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = 4;
+				WATCHOS_DEPLOYMENT_TARGET = 9.0;
+			};
+			name = Debug;
+		};
+		WCH00000A0000000000000002 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CODE_SIGN_ENTITLEMENTS = NOCOWatch/NOCOWatch.entitlements;
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				ENABLE_PREVIEWS = YES;
+				GENERATE_INFOPLIST_FILE = NO;
+				INFOPLIST_FILE = NOCOWatch/Info.plist;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+				);
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = de.noco.nocoai.watchkitapp;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SDKROOT = watchos;
+				SKIP_INSTALL = YES;
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = 4;
+				WATCHOS_DEPLOYMENT_TARGET = 9.0;
+			};
+			name = Release;
+		};
 /* End XCBuildConfiguration section */
 
 /* Begin XCConfigurationList section */
@@ -1277,6 +1487,16 @@
 			buildConfigurations = (
 				BC00000A0000000000000001 /* Debug */,
 				BC00000A0000000000000002 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+
+		WCH0000090000000000000002 /* Build configuration list for PBXNativeTarget "NOCOWatch" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				WCH00000A0000000000000001 /* Debug */,
+				WCH00000A0000000000000002 /* Release */,
 			);
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Release;

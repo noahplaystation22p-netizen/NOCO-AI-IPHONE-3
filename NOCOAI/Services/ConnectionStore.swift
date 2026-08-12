@@ -142,6 +142,8 @@ final class ConnectionStore: ObservableObject {
         isPaired = token != nil && !serverHost.isEmpty
         rebuildAPI()
         speak.bind(connection: self)
+        WatchConnectivityBridge.shared.bind(connection: self)
+        startWatchSync()
         liveScreen.bind(
             apiProvider: { [weak self] in self?.companionAPI() },
             speakBusy: { [weak self] in
@@ -405,6 +407,34 @@ final class ConnectionStore: ObservableObject {
                 self.objectWillChange.send()
             }
         }.store(in: &cancellables)
+    }
+
+    private var watchSyncScheduled = false
+
+    private func startWatchSync() {
+        let bridge = WatchConnectivityBridge.shared
+        bridge.pushSnapshot(bridge.buildSnapshot(from: self))
+        $isOnline.dropFirst().sink { [weak self] _ in self?.scheduleWatchPush() }.store(in: &cancellables)
+        $activePath.dropFirst().sink { [weak self] _ in self?.scheduleWatchPush() }.store(in: &cancellables)
+        $isReconnecting.dropFirst().sink { [weak self] _ in self?.scheduleWatchPush() }.store(in: &cancellables)
+        chat.$isSending.dropFirst().sink { [weak self] _ in self?.scheduleWatchPush() }.store(in: &cancellables)
+        chat.$workPhase.dropFirst().sink { [weak self] _ in self?.scheduleWatchPush() }.store(in: &cancellables)
+        images.$isGenerating.dropFirst().sink { [weak self] _ in self?.scheduleWatchPush() }.store(in: &cancellables)
+        images.$progress.dropFirst().sink { [weak self] _ in self?.scheduleWatchPush() }.store(in: &cancellables)
+        speak.$isRunning.dropFirst().sink { [weak self] _ in self?.scheduleWatchPush() }.store(in: &cancellables)
+        speak.$sessionPhase.dropFirst().sink { [weak self] _ in self?.scheduleWatchPush() }.store(in: &cancellables)
+        speak.$lastReply.dropFirst().sink { [weak self] _ in self?.scheduleWatchPush() }.store(in: &cancellables)
+    }
+
+    private func scheduleWatchPush() {
+        guard !watchSyncScheduled else { return }
+        watchSyncScheduled = true
+        Task { @MainActor in
+            try? await Task.sleep(nanoseconds: 120_000_000)
+            watchSyncScheduled = false
+            let bridge = WatchConnectivityBridge.shared
+            bridge.pushSnapshot(bridge.buildSnapshot(from: self))
+        }
     }
 
     func prepareLocalNetworkAccess(host: String, port: Int) {

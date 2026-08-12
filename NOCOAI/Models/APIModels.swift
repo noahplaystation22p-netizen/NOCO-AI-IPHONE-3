@@ -93,6 +93,19 @@ struct PairResponse: Decodable {
     let deviceId: String?
 }
 
+/// Live Knowledge diagnostics from Companion `/status` (`live_knowledge`).
+struct LiveKnowledgeStatusInfo: Decodable, Equatable {
+    let webAvailable: Bool?
+    let searchAvailable: Bool?
+    let lastSearchAt: String?
+    let lastLatencyMs: Double?
+    let lastQueries: [String]?
+    let lastReason: String?
+    let lastSourceCount: Int?
+    let cacheEntries: Int?
+    let provider: String?
+}
+
 struct ServerStatus: Decodable, Equatable {
     let online: Bool
     let model: String?
@@ -116,6 +129,8 @@ struct ServerStatus: Decodable, Equatable {
     /// Companion ConnectionManager — additive (online | remote | connecting | reconnecting | offline)
     let connectionState: String?
     let connectionTransport: String?
+    /// Live Knowledge layer diagnostics (optional — older companions omit).
+    let liveKnowledge: LiveKnowledgeStatusInfo?
 
     // camelCase keys — CompanionAPI uses convertFromSnakeCase
     enum CodingKeys: String, CodingKey {
@@ -127,6 +142,7 @@ struct ServerStatus: Decodable, Equatable {
         case stableDiffusion, imageEngine, bilderEngine
         case hosts, lanHosts, tailscaleHosts, tailscaleIP, remoteAccessEnabled
         case connectionState, connectionTransport
+        case liveKnowledge
     }
 
     init(
@@ -149,7 +165,8 @@ struct ServerStatus: Decodable, Equatable {
         tailscaleIP: String? = nil,
         remoteAccessEnabled: Bool? = nil,
         connectionState: String? = nil,
-        connectionTransport: String? = nil
+        connectionTransport: String? = nil,
+        liveKnowledge: LiveKnowledgeStatusInfo? = nil
     ) {
         self.online = online
         self.model = model
@@ -171,6 +188,7 @@ struct ServerStatus: Decodable, Equatable {
         self.remoteAccessEnabled = remoteAccessEnabled
         self.connectionState = connectionState
         self.connectionTransport = connectionTransport
+        self.liveKnowledge = liveKnowledge
     }
 
     /// Prefer server latency; otherwise fill with measured round-trip.
@@ -195,7 +213,8 @@ struct ServerStatus: Decodable, Equatable {
             tailscaleIP: tailscaleIP,
             remoteAccessEnabled: remoteAccessEnabled,
             connectionState: connectionState,
-            connectionTransport: connectionTransport
+            connectionTransport: connectionTransport,
+            liveKnowledge: liveKnowledge
         )
     }
 
@@ -226,6 +245,7 @@ struct ServerStatus: Decodable, Equatable {
         remoteAccessEnabled = try c.decodeIfPresent(Bool.self, forKey: .remoteAccessEnabled)
         connectionState = try c.decodeIfPresent(String.self, forKey: .connectionState)
         connectionTransport = try c.decodeIfPresent(String.self, forKey: .connectionTransport)
+        liveKnowledge = try c.decodeIfPresent(LiveKnowledgeStatusInfo.self, forKey: .liveKnowledge)
 
         if let v = try c.decodeIfPresent(Bool.self, forKey: .stableDiffusion) {
             stableDiffusion = v

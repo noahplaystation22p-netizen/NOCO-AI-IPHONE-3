@@ -203,7 +203,7 @@ enum SpeakIntentEngine {
         let needsWeb =
             speakPolicy == .web
             || (speakPolicy == .auto && LiveKnowledgeRouting.likelyNeedsWeb(text))
-            || matches(t, #"\b(schau(e)? nach|recherchier|im (internet|web)|aktuell(e|er|es)?|was gibt.?s neues|wer hat gewonnen)\b"#)
+            || matches(t, #"\b(schau(e)? nach|recherchier|im (internet|web)|aktuell(e|er|es)?|was gibt.?s neues|wer hat gewonnen|nachrichten|wetter|spielstand|preis|kostet)\b"#)
         return SpeakIntent(
             action: .conversation(depth: depth),
             style: style,
@@ -254,10 +254,11 @@ enum SpeakIntentEngine {
 
     static func randomWebAck() -> String {
         [
+            "Ich check das kurz …",
             "Ich schaue kurz nach.",
             "Ich prüfe das gerade.",
             "Einen Moment — ich hole aktuelle Infos."
-        ].randomElement() ?? "Ich schaue kurz nach."
+        ].randomElement() ?? "Ich check das kurz …"
     }
 
     static func isAffirmation(_ text: String) -> Bool {

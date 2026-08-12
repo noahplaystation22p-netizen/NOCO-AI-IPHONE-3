@@ -11,6 +11,7 @@ struct ConnectionDiagnoseView: View {
     var body: some View {
         List {
             statusSection
+            liveKnowledgeSection
             detailsSection
             testSection
             logSection
@@ -22,6 +23,7 @@ struct ConnectionDiagnoseView: View {
             if diagnostics.logLines.isEmpty {
                 await diagnostics.runFullProbe(connection: connection)
             }
+            await connection.refreshStatus(showLoading: false)
         }
     }
 
@@ -70,6 +72,71 @@ struct ConnectionDiagnoseView: View {
             return ("Tailscale", .blue)
         }
         return ("Offline", .red)
+    }
+
+    private var liveKnowledgeSection: some View {
+        let lk = connection.status.liveKnowledge
+        Section("Live Knowledge") {
+            HStack {
+                Circle()
+                    .fill(trafficColor(lk?.webAvailable))
+                    .frame(width: 10, height: 10)
+                Text("Web: \(availLabel(lk?.webAvailable))")
+                Spacer()
+            }
+            HStack {
+                Circle()
+                    .fill(trafficColor(lk?.searchAvailable))
+                    .frame(width: 10, height: 10)
+                Text("Search: \(availLabel(lk?.searchAvailable))")
+                Spacer()
+            }
+            LabeledContent("Last Search", value: shortTime(lk?.lastSearchAt) ?? "—")
+            LabeledContent(
+                "Response Time",
+                value: lk?.lastLatencyMs.map { "\(Int($0)) ms" } ?? "—"
+            )
+            LabeledContent("Provider", value: lk?.provider ?? "—")
+            LabeledContent(
+                "Cache",
+                value: lk?.cacheEntries.map { "\($0) Einträge" } ?? "—"
+            )
+            if let reason = lk?.lastReason, !reason.isEmpty {
+                LabeledContent("Last Reason", value: reason)
+            }
+            if let queries = lk?.lastQueries, !queries.isEmpty {
+                Text(queries.prefix(2).joined(separator: " · "))
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .lineLimit(2)
+            }
+        }
+    }
+
+    private func trafficColor(_ value: Bool?) -> Color {
+        switch value {
+        case true: return NOCOAITheme.success
+        case false: return .red
+        case nil: return .orange
+        }
+    }
+
+    private func availLabel(_ value: Bool?) -> String {
+        switch value {
+        case true: return "Available"
+        case false: return "Unavailable"
+        case nil: return "Unknown"
+        }
+    }
+
+    private func shortTime(_ iso: String?) -> String? {
+        guard let iso, !iso.isEmpty else { return nil }
+        if let d = ISO8601DateFormatter().date(from: iso) {
+            let f = DateFormatter()
+            f.dateFormat = "HH:mm:ss"
+            return f.string(from: d)
+        }
+        return String(iso.suffix(8))
     }
 
     private var detailsSection: some View {

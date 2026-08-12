@@ -503,19 +503,27 @@ private struct ChatBubble: View {
 
                 if !message.isStreaming, !message.text.isEmpty {
                     if message.webUsed {
-                        HStack(spacing: 6) {
-                            Image(systemName: "globe")
-                                .font(.caption2.weight(.bold))
-                            Text("Web verwendet")
-                                .font(.caption2.weight(.semibold))
+                        VStack(alignment: .leading, spacing: 4) {
+                            HStack(spacing: 6) {
+                                Image(systemName: "globe")
+                                    .font(.caption2.weight(.bold))
+                                Text("Live")
+                                    .font(.caption2.weight(.semibold))
+                            }
+                            .foregroundStyle(Color(red: 0.3, green: 0.55, blue: 0.95))
+
                             if !message.webSourceTitles.isEmpty {
-                                Text("· \(message.webSourceTitles.prefix(2).joined(separator: ", "))")
-                                    .font(.caption2)
+                                Text("Quellen")
+                                    .font(.caption2.weight(.semibold))
                                     .foregroundStyle(.secondary)
-                                    .lineLimit(1)
+                                ForEach(Array(message.webSourceTitles.prefix(3).enumerated()), id: \.offset) { _, title in
+                                    Text("• \(title)")
+                                        .font(.caption2)
+                                        .foregroundStyle(.secondary)
+                                        .lineLimit(1)
+                                }
                             }
                         }
-                        .foregroundStyle(Color(red: 0.3, green: 0.55, blue: 0.95))
                         .padding(.top, 2)
                     }
                     MessageActionRow(

@@ -70,6 +70,8 @@ final class ChatStore: ObservableObject {
     private var applyingRemoteMode = false
     /// Gallery ingest after in-chat image generation (wired by ConnectionStore).
     var onImageCreated: ((String, URL?, Data?) -> Void)?
+    /// Image quality preference (synced from ImageStore by ConnectionStore).
+    var imageQualityProvider: (() -> ImageGenMode)?
 
     private var syncIntervalNs: UInt64 {
         if isSending { return 2_500_000_000 }
@@ -350,19 +352,21 @@ final class ChatStore: ObservableObject {
 
         ModeIntelligence.recordUse(speak ? effectiveMode : uiMode)
 
+        let priorAsks = messages
+            .filter { $0.role == .user }
+            .suffix(4)
+            .map(\.text)
         let webWire: String
         if speak {
             webWire = LiveKnowledgeRouting.resolveSpeakWire(once: liveKnowledgeOnce)
         } else {
-            var wire = LiveKnowledgeRouting.resolveWire(once: liveKnowledgeOnce)
-            // Auto + current-events → force Companion web path (no silent local skip).
-            if wire == "auto", LiveKnowledgeRouting.likelyNeedsWeb(visibleAsk) {
-                wire = "on"
-            }
-            webWire = wire
+            // Keep Auto as Auto — Companion decides LOCAL vs LIVE with conversation context.
+            // Plus „Internet“ / policy.web still force `on`.
+            webWire = LiveKnowledgeRouting.resolveWire(once: liveKnowledgeOnce)
         }
         liveKnowledgeOnce = nil
-        let armedWeb = webWire == "on" || (webWire == "auto" && LiveKnowledgeRouting.likelyNeedsWeb(visibleAsk))
+        let looksLive = LiveKnowledgeRouting.likelyNeedsWeb(text: visibleAsk, priorUserAsks: Array(priorAsks))
+        let armedWeb = webWire == "on" || (webWire == "auto" && looksLive)
         if !speak, armedWeb {
             reconnectHint = "NOCO sucht im Internet…"
         }
@@ -529,8 +533,8 @@ final class ChatStore: ObservableObject {
                 }
                 // Forced Internet but Companion never reported web_used
                 if webWire == "on", !messages[idx].webUsed, !final.isEmpty {
-                    let note = "\n\n⚠️ Websuche lieferte keine Quellen — Antwort ggf. ohne aktuelle Daten."
-                    if !final.contains("Websuche lieferte") {
+                    let note = "\n\nLive-Informationen sind gerade nicht verfügbar."
+                    if !final.contains("Live-Informationen sind gerade nicht verfügbar") {
                         messages[idx].text = final + note
                         final = messages[idx].text
                     }
@@ -1322,7 +1326,8 @@ final class ChatStore: ObservableObject {
         workPhase = .analyzing
         let prompt = await refineImagePrompt(idea)
         let displayPrompt = prompt.trimmingCharacters(in: .whitespacesAndNewlines)
-        let resolved = ImageGenMode.auto.resolved(for: idea + " " + displayPrompt)
+        let baseQuality = imageQualityProvider?() ?? .auto
+        let resolved = baseQuality.resolved(for: idea + " " + displayPrompt)
         let params = resolved.engineParams
         let isThink = resolved == .think
         let startedAt = Date()

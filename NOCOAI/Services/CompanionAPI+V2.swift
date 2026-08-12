@@ -113,8 +113,8 @@ extension CompanionAPI {
     ) -> AsyncThrowingStream<ChatStreamChunk, Error> {
         let modeValue: String?
         if speak {
-            // Speak can request Think for complex spoken answers.
-            modeValue = mode.wireModeValue ?? "flash"
+            // Voice AI: always Flash — never send Think to Companion for voice.
+            modeValue = "flash"
         } else if agentPower {
             modeValue = "think"
         } else {

@@ -319,6 +319,9 @@ final class ConnectionStore: ObservableObject {
         chat.onImageCreated = { [weak self] prompt, url, data in
             self?.images.ingestFromChat(prompt: prompt, url: url, data: data)
         }
+        chat.imageQualityProvider = { [weak self] in
+            self?.images.genMode ?? .auto
+        }
         code.bind(api: api)
         profile.bind(api: api)
     }

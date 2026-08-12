@@ -260,11 +260,28 @@ final class ConnectionDiagnostics: ObservableObject {
         Error: \(snap.failureCode.rawValue)
         Summary: \(snap.summary)
 
+        --- Live Knowledge ---
+        Web: \(lkBool(connection.status.liveKnowledge?.webAvailable))
+        Search: \(lkBool(connection.status.liveKnowledge?.searchAvailable))
+        Last Search: \(connection.status.liveKnowledge?.lastSearchAt ?? "—")
+        Last Latency: \(connection.status.liveKnowledge?.lastLatencyMs.map { "\(Int($0)) ms" } ?? "—")
+        Provider: \(connection.status.liveKnowledge?.provider ?? "—")
+        Cache: \(connection.status.liveKnowledge?.cacheEntries.map(String.init) ?? "—")
+        Last Reason: \(connection.status.liveKnowledge?.lastReason ?? "—")
+
         --- Live Log ---
         \(logLines.joined(separator: "\n"))
         """
         lastExport = body
         return body
+    }
+
+    private func lkBool(_ value: Bool?) -> String {
+        switch value {
+        case true: return "Available"
+        case false: return "Unavailable"
+        case nil: return "Unknown"
+        }
     }
 
     private func boolLabel(_ value: Bool?, yes: String = "YES", no: String = "NO") -> String {

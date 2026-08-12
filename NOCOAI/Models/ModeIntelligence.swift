@@ -52,13 +52,15 @@ enum ModeIntelligence {
         let len = text.count
         let lines = text.split(whereSeparator: \.isNewline).filter { !$0.trimmingCharacters(in: .whitespaces).isEmpty }.count
 
-        // Hard Flash shortcuts
-        if matches(t, #"^(was ist|wer ist|wann |wo |wie viel|übersetze|translate|danke|ok|okay|ja|nein)\b"#)
-            && len < 80 {
-            return (.flash, "Flash — einfache Faktenfrage")
-        }
-        if matches(t, #"^(kurz|schnell|tl;dr|eine zeile|ja oder nein)\b"#) {
-            return (.flash, "Flash — kurze Antwort gewünscht")
+        // Hard Flash shortcuts — skip when Live Knowledge is needed
+        if !LiveKnowledgeRouting.likelyNeedsWeb(text) {
+            if matches(t, #"^(was ist|wer ist|wann |wo |wie viel|übersetze|translate|danke|ok|okay|ja|nein)\b"#)
+                && len < 80 {
+                return (.flash, "Flash — einfache Faktenfrage")
+            }
+            if matches(t, #"^(kurz|schnell|tl;dr|eine zeile|ja oder nein)\b"#) {
+                return (.flash, "Flash — kurze Antwort gewünscht")
+            }
         }
 
         var score = 0

@@ -38,7 +38,7 @@ struct WatchShowStatusIntent: AppIntent {
     static var openAppWhenRun: Bool = true
 
     func perform() async throws -> some IntentResult {
-        WatchSessionClient.shared.refreshStatus()
+        await WatchSessionClient.shared.refreshStatus()
         return .result()
     }
 }

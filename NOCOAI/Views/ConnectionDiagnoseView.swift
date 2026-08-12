@@ -76,7 +76,7 @@ struct ConnectionDiagnoseView: View {
 
     private var liveKnowledgeSection: some View {
         let lk = connection.status.liveKnowledge
-        Section("Live Knowledge") {
+        return Section("Live Knowledge") {
             HStack {
                 Circle()
                     .fill(trafficColor(lk?.webAvailable))
@@ -114,19 +114,13 @@ struct ConnectionDiagnoseView: View {
     }
 
     private func trafficColor(_ value: Bool?) -> Color {
-        switch value {
-        case true: return NOCOAITheme.success
-        case false: return .red
-        case nil: return .orange
-        }
+        guard let value else { return .orange }
+        return value ? NOCOAITheme.success : .red
     }
 
     private func availLabel(_ value: Bool?) -> String {
-        switch value {
-        case true: return "Available"
-        case false: return "Unavailable"
-        case nil: return "Unknown"
-        }
+        guard let value else { return "Unknown" }
+        return value ? "Available" : "Unavailable"
     }
 
     private func shortTime(_ iso: String?) -> String? {

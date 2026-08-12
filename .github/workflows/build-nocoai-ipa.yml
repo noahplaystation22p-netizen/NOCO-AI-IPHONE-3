@@ -152,9 +152,16 @@ jobs:
               echo "FATAL: Watch app missing Assets.car / AppIcon — icon required for Watch install"
               exit 1
             fi
+            # Sideload installs are fragile with App Intents metadata on watchOS.
+            rm -rf "$WATCH_APP/Metadata.appintents"
             # Keep companion + version aligned with what iLoader expects.
             /usr/libexec/PlistBuddy -c "Set :WKCompanionAppBundleIdentifier de.noco.nocoai.96R99M23VH" "$WATCH_APP/Info.plist" 2>/dev/null || \
               /usr/libexec/PlistBuddy -c "Add :WKCompanionAppBundleIdentifier string de.noco.nocoai.96R99M23VH" "$WATCH_APP/Info.plist"
+            # Match marketing/build strings to the iPhone app (Watch install rejects mismatches).
+            IPHONE_VER=$(/usr/libexec/PlistBuddy -c "Print :CFBundleShortVersionString" "$APP_PLIST" 2>/dev/null || echo "8.9")
+            IPHONE_BUILD=$(/usr/libexec/PlistBuddy -c "Print :CFBundleVersion" "$APP_PLIST" 2>/dev/null || echo "118")
+            /usr/libexec/PlistBuddy -c "Set :CFBundleShortVersionString $IPHONE_VER" "$WATCH_APP/Info.plist"
+            /usr/libexec/PlistBuddy -c "Set :CFBundleVersion $IPHONE_BUILD" "$WATCH_APP/Info.plist"
             echo "=== Watch Info.plist ==="
             /usr/libexec/PlistBuddy -c "Print :CFBundleIdentifier" "$WATCH_APP/Info.plist"
             /usr/libexec/PlistBuddy -c "Print :WKCompanionAppBundleIdentifier" "$WATCH_APP/Info.plist"

@@ -86,6 +86,22 @@ struct MoreView: View {
                     .opacity(appear ? 1 : 0)
                     .offset(y: appear ? 0 : 14)
 
+                    sectionHeader("Plugins", subtitle: "Erweiterungen auf dem PC")
+                    LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible())], spacing: 14) {
+                        NavigationLink {
+                            RunningPluginView().environmentObject(connection)
+                        } label: {
+                            IntelligenceFeatureTile(
+                                title: "NOCO RUNNING",
+                                subtitle: runningSubtitle,
+                                systemImage: "figure.run",
+                                accent: Color(red: 0.32, green: 0.86, blue: 0.58)
+                            )
+                        }
+                        .buttonStyle(IntelligencePressStyle(haptic: { HapticService.open() }))
+                    }
+                    .opacity(appear ? 1 : 0)
+
                     sectionHeader("Werkzeuge", subtitle: "System und Einstellungen")
                     LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible())], spacing: 14) {
                         NavigationLink {
@@ -165,6 +181,12 @@ struct MoreView: View {
     private var systemSubtitle: String {
         let gpu = connection.status.gpuPercent.map { "\($0)%" } ?? "—"
         return connection.isOnline ? "GPU \(gpu)" : "Offline"
+    }
+
+    private var runningSubtitle: String {
+        if !connection.isOnline { return "Offline" }
+        if connection.features?.hasRunningPlugin == true { return "Läufe · Analyse" }
+        return "Plugin auf dem PC"
     }
 
     private var appVersionLabel: String {
@@ -289,6 +311,7 @@ struct MoreView: View {
         case "livescreen", "live_screen": return "Live Screen"
         case "sync": return "Sync"
         case "typing": return "Tipp-Sync"
+        case "running": return "Running"
         default: return feature
         }
     }

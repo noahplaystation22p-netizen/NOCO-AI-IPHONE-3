@@ -235,6 +235,12 @@ struct TypingPresence: Decodable, Equatable {
     let at: String?
 }
 
+struct CompanionFeatureItem: Decodable, Equatable {
+    let id: String?
+    let name: String?
+    let version: String?
+}
+
 struct FeaturesResponse: Decodable {
     let chat: Bool?
     let images: Bool?
@@ -242,15 +248,38 @@ struct FeaturesResponse: Decodable {
     let vision: Bool?
     let sync: Bool?
     let typing: Bool?
+    /// Catalog from Companion `features: [{ id, name, ... }]`.
+    let catalog: [CompanionFeatureItem]
+
+    enum CodingKeys: String, CodingKey {
+        case chat, images, code, vision, sync, typing, features
+    }
+
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        chat = try c.decodeIfPresent(Bool.self, forKey: .chat)
+        images = try c.decodeIfPresent(Bool.self, forKey: .images)
+        code = try c.decodeIfPresent(Bool.self, forKey: .code)
+        vision = try c.decodeIfPresent(Bool.self, forKey: .vision)
+        sync = try c.decodeIfPresent(Bool.self, forKey: .sync)
+        typing = try c.decodeIfPresent(Bool.self, forKey: .typing)
+        catalog = (try? c.decode([CompanionFeatureItem].self, forKey: .features)) ?? []
+    }
+
+    var hasRunningPlugin: Bool {
+        catalog.contains { ($0.id ?? "").lowercased() == "running" }
+    }
 
     var enabled: [String] {
         var list: [String] = []
-        if chat == true { list.append("Chat") }
-        if images == true { list.append("Bilder") }
-        if code == true { list.append("Code") }
-        if vision == true { list.append("Vision") }
-        if sync == true { list.append("Sync") }
-        if typing == true { list.append("Tipp-Sync") }
+        let ids = Set(catalog.compactMap { $0.id?.lowercased() })
+        if chat == true || ids.contains("chat") { list.append("Chat") }
+        if images == true || ids.contains("images") { list.append("Bilder") }
+        if code == true || ids.contains("code") { list.append("Code") }
+        if vision == true || ids.contains("vision") || ids.contains("vision_live") { list.append("Vision") }
+        if sync == true || ids.contains("sync") { list.append("Sync") }
+        if typing == true || ids.contains("typing") { list.append("Tipp-Sync") }
+        if hasRunningPlugin { list.append("Running") }
         return list
     }
 }

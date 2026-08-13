@@ -556,6 +556,57 @@ extension CompanionAPI {
         streamSSE(path: "code/sessions/\(sessionId)/chat", body: CodeChatRequest(message: message, stream: true))
     }
 
+    // MARK: - NOCO RUNNING plugin
+
+    func fetchRunningStatus() async throws -> RunningStatusResponse {
+        try await get("running/status", as: RunningStatusResponse.self)
+    }
+
+    func fetchRunningData() async throws -> RunningDataResponse {
+        try await get("running/data", as: RunningDataResponse.self)
+    }
+
+    func fetchRunningStats() async throws -> RunningStatsResponse {
+        try await get("running/stats", as: RunningStatsResponse.self)
+    }
+
+    func fetchRunningActivity() async throws -> RunningActivityResponse {
+        try await get("running/activity", as: RunningActivityResponse.self)
+    }
+
+    func loadRunningDemo() async throws -> RunningImportResponse {
+        try await post("running/demo", body: EmptyBody(), as: RunningImportResponse.self)
+    }
+
+    func askRunning(question: String, conversationId: String? = nil, runId: String? = nil) async throws -> RunningAskResponse {
+        struct Body: Encodable {
+            let question: String
+            let conversationId: String?
+            let runId: String?
+        }
+        var request = try authorizedRequest(path: "running/ask", method: "POST")
+        request.timeoutInterval = 180
+        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        request.httpBody = try encoder.encode(Body(question: question, conversationId: conversationId, runId: runId))
+        let (data, response) = try await loadData(for: request)
+        try validate(response: response, data: data, isPairRequest: false)
+        return try decoder.decode(RunningAskResponse.self, from: data)
+    }
+
+    func analyzeRunning(runId: String? = nil, conversationId: String? = nil) async throws -> RunningAnalyzeResponse {
+        struct Body: Encodable {
+            let runId: String?
+            let conversationId: String?
+        }
+        var request = try authorizedRequest(path: "running/analyze", method: "POST")
+        request.timeoutInterval = 180
+        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        request.httpBody = try encoder.encode(Body(runId: runId, conversationId: conversationId))
+        let (data, response) = try await loadData(for: request)
+        try validate(response: response, data: data, isPairRequest: false)
+        return try decoder.decode(RunningAnalyzeResponse.self, from: data)
+    }
+
     // MARK: - HTTP helpers
 
     private struct EmptyBody: Encodable {}

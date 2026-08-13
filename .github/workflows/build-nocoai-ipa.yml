@@ -40,7 +40,7 @@ jobs:
             local clean_flag="$1"
             rm -rf build/DerivedData
             # shellcheck disable=SC2086
-            # Do NOT force -sdk iphoneos: Watch companion must compile with watchOS SDK.
+            # iPhone-only IPA (Watch companion is parked, not embedded).
             xcodebuild $clean_flag build \
               -project NOCOAI.xcodeproj \
               -scheme NOCOAI \
@@ -103,13 +103,9 @@ jobs:
           echo "Found Live Activity widget: $WIDGET_APEX"
           echo "Found AI keyboard: $KEYBOARD_APEX"
 
-          WATCH_APP=$(find "$APP_PATH" -path "*/Watch/*.app" -type d 2>/dev/null | head -1 || true)
-          if [ -z "$WATCH_APP" ]; then
-            echo "FATAL: Watch companion app missing under Watch/ — Apple Watch install will not work"
-            find "$APP_PATH" -maxdepth 4 -type d
-            exit 1
-          fi
-          echo "Found Watch app: $WATCH_APP"
+          # Watch companion is intentionally not embedded (sideload Watch install is unreliable).
+          rm -rf "$APP_PATH/Watch"
+          echo "Watch companion omitted from IPA"
 
           # Force ATS cleartext allow — Tailscale 100.x is not "local networking".
           # GENERATE_INFOPLIST_FILE merges can drop nested ATS dicts; inject explicitly.
@@ -138,36 +134,6 @@ jobs:
             /usr/libexec/PlistBuddy -c "Add :NSAppTransportSecurity:NSAllowsLocalNetworking bool true" "$KBD_PLIST"
           fi
 
-          # Sign nested Watch app + extensions first, then the app (ad-hoc).
-          # --generate-entitlement-der is required for modern watchOS install checks.
-          if [ -n "$WATCH_APP" ]; then
-            # Drop stale signature so nested resign is clean for sideloaders.
-            rm -rf "$WATCH_APP/_CodeSignature"
-            codesign --force --sign - --timestamp=none --generate-entitlement-der \
-              --entitlements NOCOWatch/NOCOWatch.entitlements "$WATCH_APP" || \
-            codesign --force --sign - --timestamp=none --generate-entitlement-der "$WATCH_APP"
-            # Fail early if Watch has no icon catalog (install shows blank + often fails).
-            if [ ! -f "$WATCH_APP/Assets.car" ] && [ ! -d "$WATCH_APP/AppIcon.appiconset" ]; then
-              ls -la "$WATCH_APP"
-              echo "FATAL: Watch app missing Assets.car / AppIcon — icon required for Watch install"
-              exit 1
-            fi
-            # Sideload installs are fragile with App Intents metadata on watchOS.
-            rm -rf "$WATCH_APP/Metadata.appintents"
-            # Keep companion + version aligned with what iLoader expects.
-            /usr/libexec/PlistBuddy -c "Set :WKCompanionAppBundleIdentifier de.noco.nocoai.96R99M23VH" "$WATCH_APP/Info.plist" 2>/dev/null || \
-              /usr/libexec/PlistBuddy -c "Add :WKCompanionAppBundleIdentifier string de.noco.nocoai.96R99M23VH" "$WATCH_APP/Info.plist"
-            # Match marketing/build strings to the iPhone app (Watch install rejects mismatches).
-            IPHONE_VER=$(/usr/libexec/PlistBuddy -c "Print :CFBundleShortVersionString" "$APP_PLIST" 2>/dev/null || echo "8.9")
-            IPHONE_BUILD=$(/usr/libexec/PlistBuddy -c "Print :CFBundleVersion" "$APP_PLIST" 2>/dev/null || echo "118")
-            /usr/libexec/PlistBuddy -c "Set :CFBundleShortVersionString $IPHONE_VER" "$WATCH_APP/Info.plist"
-            /usr/libexec/PlistBuddy -c "Set :CFBundleVersion $IPHONE_BUILD" "$WATCH_APP/Info.plist"
-            echo "=== Watch Info.plist ==="
-            /usr/libexec/PlistBuddy -c "Print :CFBundleIdentifier" "$WATCH_APP/Info.plist"
-            /usr/libexec/PlistBuddy -c "Print :WKCompanionAppBundleIdentifier" "$WATCH_APP/Info.plist"
-            /usr/libexec/PlistBuddy -c "Print :CFBundleVersion" "$WATCH_APP/Info.plist"
-            /usr/libexec/PlistBuddy -c "Print :CFBundleShortVersionString" "$WATCH_APP/Info.plist"
-          fi
           find "$APP_PATH" -name "*.appex" -type d -print0 | while IFS= read -r -d '' ext; do
             case "$(basename "$ext")" in
               NOCOAIKeyboard.appex)
@@ -210,11 +176,11 @@ jobs:
             echo "FATAL: IPA missing NOCOAIBroadcast.appex — Live Screen broadcast cannot work"
             exit 1
           }
-          unzip -l NOCO-AI.ipa | grep -q "Watch/NOCOWatch.app" || {
-            echo "FATAL: IPA missing Watch/NOCOWatch.app — Apple Watch companion missing"
-            unzip -l NOCO-AI.ipa | grep -i watch || true
+          if unzip -l NOCO-AI.ipa | grep -q "Watch/NOCOWatch.app"; then
+            echo "FATAL: IPA still contains Watch companion — iPhone-only build expected"
             exit 1
-          }
+          fi
+          echo "IPA is iPhone-only (Watch omitted)"
 
       - name: Upload build log on failure
         if: failure()
